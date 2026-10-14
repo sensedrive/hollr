@@ -57,14 +57,23 @@ Then:
 
 ```bash
 omp            # once: /login → OpenAI Codex (ChatGPT) – needed for /live
-hollr pair     # shows a QR code; scan it with the iPhone camera or in Hollr
+hollr pair     # asks how the phone connects, shows a QR code; scan it with the iPhone camera or in Hollr
 ```
 
-For the Mac and desktop apps use `hollr pair --link` and paste the link.
+`hollr pair` offers two connection types:
+
+| | |
+|---|---|
+| **Local network** (`--lan`) | iPhone and computer on the same Wi-Fi / behind the same router. Direct, nothing else needed. On a Mac the `.local` name keeps working when the IP changes. |
+| **Tailscale / remote access** (`--tailscale`) | Reach the machine from anywhere – e.g. the Mac in the office from your phone on the go. [Tailscale](https://tailscale.com) connects your devices directly (WireGuard), so no port is opened to the internet. `hollr pair` checks that Tailscale runs, offers to start it and explains what's missing. On the iPhone: install the Tailscale app and sign in with the same account. The local addresses stay in as a fallback at home. |
+
+The connection type can be switched later in the app (Settings → Server & Geräte → server → Verbindung) without pairing again.
+When `hollr pair` runs in a terminal it asks before a scanned code becomes a device key ("'Alex's iPhone' möchte sich koppeln – erlauben?"),
+so a photographed QR code alone is not enough. For the Mac and desktop apps use `hollr pair --link` and paste the link.
 
 | Command | |
 |---|---|
-| `hollr pair [--name L] [--host ADDR] [--port N] [--link]` | pair a device (QR code valid 10 minutes, single use) |
+| `hollr pair [--lan\|--tailscale] [--name L] [--host ADDR] [--port N] [--link]` | pair a device (QR code valid 10 minutes, single use) |
 | `hollr devices` / `hollr revoke <id\|name>` | list / remove paired devices |
 | `hollr doctor` | check the setup, with fixes |
 | `hollr push status\|test` | push notifications (the key is imported once in the iPhone app) |
@@ -84,7 +93,9 @@ Release builds without a Developer ID are ad-hoc signed: on the Mac, open *Hollr
 
 ## Security
 
-- Pairing codes are single-use and expire after 10 minutes. The device key is created on the device and never leaves it.
+- Pairing codes are single-use and expire after 10 minutes; in a terminal, `hollr pair` also asks you to confirm the device.
+  The device key is created on the device (iOS Keychain) and never leaves it.
+- Remote access goes through Tailscale (WireGuard) – no port is opened to the internet; SSH with the pinned host key runs on top.
 - The server's host key fingerprint is part of the pairing code and pinned; a different key aborts the connection.
 - Device keys are restricted in `authorized_keys`: `restrict,port-forwarding,permitopen="localhost:*",…,command="hollr gate"`.
 - Secrets in agent output (tokens, keys) are redacted before they leave the server.

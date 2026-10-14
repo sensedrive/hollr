@@ -26,6 +26,9 @@ pub struct Server {
     pub port: u16,
     pub host_fingerprint: String,
     pub device_id: String,
+    /// lan / tailscale / auto (from the pairing code; older servers: none)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
 }
 
 /// `hollr://pair?c=<base64url(JSON)>`
@@ -39,6 +42,8 @@ struct PairingPayload {
     s: String,
     e: f64,
     l: String,
+    #[serde(default)]
+    n: Option<String>,
 }
 
 pub struct Hollr {
@@ -251,6 +256,10 @@ impl Hollr {
             let code = reply["error"].as_str().unwrap_or("unknown");
             bail!(if code == "expired" || code == "unknown_pairing" {
                 "Der Code wurde schon benutzt oder ist abgelaufen. Auf dem Server neu erzeugen: hollr pair".to_string()
+            } else if code == "denied" {
+                "Am Rechner abgelehnt.".to_string()
+            } else if code == "not_confirmed" {
+                "Am Rechner wurde nicht rechtzeitig bestätigt. Auf dem Server neu erzeugen: hollr pair".to_string()
             } else {
                 format!("Kopplung abgelehnt ({code}).")
             });
@@ -265,6 +274,7 @@ impl Hollr {
             port: p.p,
             host_fingerprint: p.fp,
             device_id: reply["device"].as_str().unwrap_or("").to_string(),
+            network: p.n,
         };
         let mut servers: Vec<Server> = self
             .servers()

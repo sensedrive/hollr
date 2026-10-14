@@ -50,7 +50,7 @@ enum HollrClient {
         var lastError: Error = HollrError.unreachable("keine Adresse")
         for host in addresses {
             do {
-                return try await SSHClient.connect(
+                let client = try await SSHClient.connect(
                     host: host,
                     port: port,
                     authenticationMethod: .ed25519(username: user, privateKey: key),
@@ -58,12 +58,15 @@ enum HollrClient {
                     reconnect: .never,
                     connectTimeout: .seconds(8)
                 )
+                await ConnectionInfo.shared.connected(fingerprint: fingerprint, host: host)
+                return client
             } catch let error as HollrError {
                 throw error // wrong host key: never try the next address
             } catch {
                 lastError = HollrError.unreachable("\(host): \(error.localizedDescription)")
             }
         }
+        await ConnectionInfo.shared.failed(fingerprint: fingerprint)
         throw lastError
     }
 
@@ -94,12 +97,18 @@ enum HollrClient {
             let code = obj["error"] as? String ?? "unknown"
             throw HollrError.server(code == "expired" || code == "unknown_pairing"
                 ? String(localized: "Der Code wurde schon benutzt oder ist abgelaufen. Auf dem Server neu erzeugen: hollr pair")
-                : String(localized: "Kopplung abgelehnt (\(code))."))
+                : code == "denied"
+                    ? String(localized: "Am Rechner abgelehnt.")
+                    : code == "not_confirmed"
+                        ? String(localized: "Am Rechner wurde nicht rechtzeitig bestätigt. Auf dem Server neu erzeugen: hollr pair")
+                        : String(localized: "Kopplung abgelehnt (\(code))."))
         }
-        return Server(
+        var server = Server(
             label: payload.l, user: payload.u, addresses: payload.a, port: payload.p,
             hostFingerprint: payload.fp, deviceId: deviceId
         )
+        server.network = payload.network
+        return server
     }
 
     // MARK: Commands

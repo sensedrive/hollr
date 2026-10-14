@@ -17,6 +17,10 @@ struct PairingPayload: Codable, Equatable {
     let e: TimeInterval
     /// Server label
     let l: String
+    /// How the phone connects (lan / tailscale / auto); older codes have none
+    var n: String?
+
+    var network: NetworkMode { n.flatMap(NetworkMode.init(rawValue:)) ?? .auto }
 
     var isExpired: Bool { Date().timeIntervalSince1970 > e }
 

@@ -44,6 +44,9 @@
           <div class="grow">
             <div class="name">{s.label}</div>
             <div class="small muted mono ellipsis" title={s.addresses.join(", ")}>{address(s)}</div>
+            {#if s.network === "lan" || s.network === "tailscale"}
+              <div class="small dim">{s.network === "tailscale" ? t("Tailscale / Fernzugriff") : t("Lokales Netzwerk")}</div>
+            {/if}
             {#if app.errors[s.id]}
               <div class="small warn">{app.errors[s.id]}</div>
             {:else if app.loaded[s.id]}

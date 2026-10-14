@@ -471,6 +471,16 @@
         }
       }
     },
+    "Adressen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Addresses"
+          }
+        }
+      }
+    },
     "Agent nicht gefunden": {
       "localizations": {
         "en": {
@@ -541,6 +551,16 @@
         }
       }
     },
+    "Alle bekannten Adressen der Reihe nach.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All known addresses in turn."
+          }
+        }
+      }
+    },
     "Alles bereit": {
       "localizations": {
         "en": {
@@ -577,6 +597,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "General"
+          }
+        }
+      }
+    },
+    "Am Rechner abgelehnt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Declined on the computer."
+          }
+        }
+      }
+    },
+    "Am Rechner wurde nicht rechtzeitig bestätigt. Auf dem Server neu erzeugen: hollr pair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not confirmed on the computer in time. Create a new code on the server: hollr pair"
           }
         }
       }
@@ -1113,6 +1153,16 @@
         }
       }
     },
+    "Der Hollr-Server ist zu alt – bitte aktualisieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Hollr server is too old – please update it."
+          }
+        }
+      }
+    },
     "Der Installer erkennt apt, dnf, yum, pacman, zypper und apk und lässt alles Vorhandene in Ruhe.": {
       "localizations": {
         "en": {
@@ -1139,6 +1189,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The pairing code is damaged."
+          }
+        }
+      }
+    },
+    "Der Rechner ist aus, schläft oder Tailscale läuft dort nicht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The computer is off, asleep, or Tailscale isn't running there."
           }
         }
       }
@@ -1249,6 +1309,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dictate"
+          }
+        }
+      }
+    },
+    "Direkt über das Netzwerk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Directly over the network"
           }
         }
       }
@@ -1453,6 +1523,16 @@
         }
       }
     },
+    "Falls der Rechner fragt: dort mit „J“ bestätigen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If the computer asks: confirm there with “J”."
+          }
+        }
+      }
+    },
     "Fast so genau, deutlich schneller": {
       "localizations": {
         "en": {
@@ -1489,6 +1569,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fine tuning"
+          }
+        }
+      }
+    },
+    "Fernzugriff über Tailscale: den Rechner auch von unterwegs erreichen – ohne offene Ports": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote access via Tailscale: reach your computer on the go – without open ports"
           }
         }
       }
@@ -1569,6 +1659,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pair a server first to open localhost addresses."
+          }
+        }
+      }
+    },
+    "Für unterwegs: Tailscale-App auf dem iPhone installieren und mit demselben Konto anmelden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For on the go: install the Tailscale app on the iPhone and sign in with the same account."
           }
         }
       }
@@ -2179,6 +2279,16 @@
         }
       }
     },
+    "Lokales Netzwerk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local network"
+          }
+        }
+      }
+    },
     "Lädt": {
       "localizations": {
         "en": {
@@ -2569,6 +2679,16 @@
         }
       }
     },
+    "Nicht erreichbar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not reachable"
+          }
+        }
+      }
+    },
     "Nicht umbrechen": {
       "localizations": {
         "en": {
@@ -2615,6 +2735,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scan again"
+          }
+        }
+      }
+    },
+    "Nur im selben Netzwerk erreichbar – für unterwegs „Tailscale / Fernzugriff“ wählen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only reachable on the same network – choose “Tailscale / remote access” for on the go."
+          }
+        }
+      }
+    },
+    "Nur im selben WLAN bzw. hinter demselben Router (Cloud-Server: direkt über ihre Adresse).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only on the same Wi-Fi or behind the same router (cloud servers: directly via their address)."
           }
         }
       }
@@ -3325,6 +3465,16 @@
         }
       }
     },
+    "Sicherer koppeln: der Rechner fragt nach, bevor ein gescannter Code ein Gerät freischaltet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safer pairing: the computer asks before a scanned code unlocks a device"
+          }
+        }
+      }
+    },
     "Sicherheit": {
       "localizations": {
         "en": {
@@ -3645,6 +3795,66 @@
         }
       }
     },
+    "Tailscale / Fernzugriff": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale / remote access"
+          }
+        }
+      }
+    },
+    "Tailscale ist auf dem Rechner nicht installiert. Anleitung: hollr pair --tailscale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale isn't installed on the computer. Guide: hollr pair --tailscale"
+          }
+        }
+      }
+    },
+    "Tailscale ist auf dem iPhone aus – Tailscale-App öffnen und verbinden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale is off on the iPhone – open the Tailscale app and connect."
+          }
+        }
+      }
+    },
+    "Tailscale ist auf dem iPhone nicht verbunden – Tailscale-App öffnen, verbinden und nochmal scannen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale isn't connected on the iPhone – open the Tailscale app, connect and scan again."
+          }
+        }
+      }
+    },
+    "Tailscale läuft auf dem Rechner nicht (Status: %@). Dort starten: tailscale up": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale isn't running on the computer (status: %@). Start it there: tailscale up"
+          }
+        }
+      }
+    },
+    "Tailscale – verschlüsselt, ohne offene Ports": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale – encrypted, no open ports"
+          }
+        }
+      }
+    },
     "Tastatur schließen": {
       "localizations": {
         "en": {
@@ -3885,6 +4095,16 @@
         }
       }
     },
+    "Umstellen geht nur, solange der Rechner erreichbar ist: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching only works while the computer is reachable: %@"
+          }
+        }
+      }
+    },
     "Unerwartete Antwort vom Server. Ist hollr dort aktuell? (install.sh erneut ausführen)": {
       "localizations": {
         "en": {
@@ -3921,6 +4141,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Connecting …"
+          }
+        }
+      }
+    },
+    "Verbindung": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection"
           }
         }
       }
@@ -3971,12 +4201,42 @@
         }
       }
     },
+    "Verbindungsart": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection type"
+          }
+        }
+      }
+    },
+    "Verbindungsart pro Server: Lokales Netzwerk oder Tailscale, jederzeit umstellbar – mit Status „verbunden über …“": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection type per server: local network or Tailscale, switchable any time – with “connected via …” status"
+          }
+        }
+      }
+    },
     "Verbrauch pro Tag": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Use per day"
+          }
+        }
+      }
+    },
+    "Verbunden über %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via %@"
           }
         }
       }
@@ -4773,6 +5033,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Via %@"
+          }
+        }
+      }
+    },
+    "Über dein Tailnet – auch von unterwegs, ohne offene Ports. Zu Hause wird zusätzlich das lokale Netzwerk probiert.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Through your tailnet – also on the go, without open ports. At home the local network is tried as well."
           }
         }
       }

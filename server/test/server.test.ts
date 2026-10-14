@@ -658,3 +658,42 @@ describe("live footer", () => {
     expect(hasLiveFooter(" π · ◒ Opus 5.5 · 📁 …/sportpark · ⑂ main")).toBe(false);
   });
 });
+
+describe("network modes", () => {
+  test("tailscale first with LAN fallback, lan without tailscale addresses", async () => {
+    const { addressesFor, isTailscaleIp } = await import("../src/network");
+    const ts = { installed: true, state: "Running", dnsName: "box.tail1.ts.net", ips: ["100.101.1.2"] };
+    const t = addressesFor("tailscale", ts);
+    expect(t.slice(0, 2)).toEqual(["box.tail1.ts.net", "100.101.1.2"]);
+    expect(addressesFor("lan", ts).some(isTailscaleIp)).toBe(false);
+    expect(addressesFor("lan", ts)).not.toContain("box.tail1.ts.net");
+    expect(addressesFor("tailscale", { ...ts, state: "Stopped" })).not.toContain("box.tail1.ts.net");
+    expect(isTailscaleIp("100.64.0.1")).toBe(true);
+    expect(isTailscaleIp("100.128.0.1")).toBe(false);
+  });
+});
+
+describe("pairing confirmation", () => {
+  test("waits for yes, rejects no, skips when not asked", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-confirm-"));
+    Bun.env.HOLLR_STATE_DIR = dir;
+    const p = await import("../src/pairing");
+    await p.awaitConfirmation("nobody", "iPhone", 200); // no confirmation requested → returns at once
+    p.requireConfirmation("abc");
+    const waiting = p.awaitConfirmation("abc", "Alex iPhone", 5000);
+    await Bun.sleep(100);
+    expect(p.pendingRequest("abc")).toEqual({ name: "Alex iPhone" });
+    p.answerRequest("abc", true);
+    await waiting;
+    p.requireConfirmation("def");
+    const denied = p.awaitConfirmation("def", "x", 5000);
+    await Bun.sleep(100);
+    p.answerRequest("def", false);
+    expect(denied).rejects.toThrow("denied");
+    p.requireConfirmation("ghi");
+    expect(p.awaitConfirmation("ghi", "x", 300)).rejects.toThrow("not_confirmed");
+    await Bun.sleep(400);
+    rmSync(dir, { recursive: true, force: true });
+    delete Bun.env.HOLLR_STATE_DIR;
+  });
+});

@@ -10,6 +10,8 @@ export interface Server {
   port: number;
   hostFingerprint: string;
   deviceId: string;
+  /** lan / tailscale / auto */
+  network?: string;
 }
 
 export interface Pane {

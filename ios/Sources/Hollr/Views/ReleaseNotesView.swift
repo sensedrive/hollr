@@ -10,6 +10,11 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 30, date: "14.10.2026", items: [
+            ("globe", String(localized: "Fernzugriff über Tailscale: den Rechner auch von unterwegs erreichen – ohne offene Ports")),
+            ("wifi", String(localized: "Verbindungsart pro Server: Lokales Netzwerk oder Tailscale, jederzeit umstellbar – mit Status „verbunden über …“")),
+            ("checkmark.shield", String(localized: "Sicherer koppeln: der Rechner fragt nach, bevor ein gescannter Code ein Gerät freischaltet")),
+        ]),
         ReleaseNote(build: 29, date: "14.10.2026", items: [
             ("waveform", String(localized: "Live-Sprache jetzt auch mit Macs als Server (einmalig BlackHole installieren, siehe Server-Info)")),
             ("arrow.clockwise", String(localized: "Nutzungslimits laden beim Öffnen frisch und lassen sich jederzeit neu laden")),

@@ -12,6 +12,8 @@ struct Server: Codable, Identifiable, Hashable {
     /// Device id assigned by the server (for `hollr revoke`)
     var deviceId: String
     var pairedAt: Date = Date()
+    /// lan / tailscale / auto – nil for servers paired before connection types existed
+    var network: NetworkMode?
 
     static let placeholder = Server(label: "", user: "", addresses: [], port: 22, hostFingerprint: "", deviceId: "")
 
@@ -117,6 +119,14 @@ final class ServerStore {
 
     func remove(_ server: Server) {
         servers.removeAll { $0.id == server.id }
+        save()
+    }
+
+    /// Connection type changed (addresses re-ordered or extended – same server, same key).
+    func setNetwork(_ server: Server, mode: NetworkMode, addresses: [String]) {
+        guard let i = servers.firstIndex(where: { $0.id == server.id }), !addresses.isEmpty else { return }
+        servers[i].network = mode
+        servers[i].addresses = addresses
         save()
     }
 

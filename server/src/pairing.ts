@@ -32,6 +32,7 @@ export interface PairingPayload {
   s: string; // bootstrap ed25519 seed, base64url
   e: number; // expiry (unix seconds)
   l: string; // server label
+  n?: "lan" | "tailscale" | "auto"; // how the phone connects (older codes: none = auto)
 }
 
 export interface Device {
@@ -237,6 +238,22 @@ export function revokeDevice(idOrName: string): Device[] {
 
 // ---------- payload ----------
 
+/** macOS: "<LocalHostName>.local" – survives changing Wi-Fi/hotspot IPs on the local network. */
+function bonjourName(): string[] {
+  if (hostname().endsWith(".local")) return [hostname()];
+  if (process.platform !== "darwin") return [];
+  try {
+    const r = Bun.spawnSync(["scutil", "--get", "LocalHostName"], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    const name = r.stdout.toString().trim();
+    return r.exitCode === 0 && name ? [`${name}.local`] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function detectAddresses(): string[] {
   const addrs = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
     (list ?? [])
@@ -246,7 +263,7 @@ export function detectAddresses(): string[] {
   const isPrivate = (a: string) =>
     /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(a);
   // macOS: the Bonjour name survives changing Wi-Fi/hotspot IPs on the local network
-  const local = hostname().endsWith(".local") ? [hostname()] : [];
+  const local = bonjourName();
   return [
     ...new Set([...addrs.filter((a) => !isPrivate(a)), ...addrs.filter(isPrivate), ...local]),
   ];
@@ -258,6 +275,7 @@ export function buildPayload(opts: {
   addresses?: string[];
   port?: number;
   label?: string;
+  network?: "lan" | "tailscale" | "auto";
 }): PairingPayload {
   const addresses = opts.addresses?.length ? opts.addresses : detectAddresses();
   if (addresses.length === 0)
@@ -271,7 +289,62 @@ export function buildPayload(opts: {
     s: opts.seed.toString("base64url"),
     e: opts.exp,
     l: opts.label ?? hostname(),
+    ...(opts.network ? { n: opts.network } : {}),
   };
+}
+
+// ---------- confirmation on the server ----------
+// `hollr pair` in a terminal asks before a scanned code turns into a device key, so a
+// photographed QR code alone is not enough. The enroll process (SSH) and the pair process
+// (terminal) talk through small files.
+
+const confirmDir = () =>
+  join(Bun.env.HOLLR_STATE_DIR ?? join(homedir(), ".local", "state", "hollr"), "pairing");
+const confirmFile = (id: string, kind: "confirm" | "request" | "answer") =>
+  join(confirmDir(), `${id.replace(/[^\w]/g, "")}.${kind}`);
+
+export function requireConfirmation(pairingId: string) {
+  mkdirSync(confirmDir(), { recursive: true, mode: 0o700 });
+  writeFileSync(confirmFile(pairingId, "confirm"), "", { mode: 0o600 });
+}
+
+/** The phone's request, while `hollr pair` has not answered yet. */
+export function pendingRequest(pairingId: string): { name: string } | undefined {
+  try {
+    if (existsSync(confirmFile(pairingId, "answer"))) return undefined;
+    return JSON.parse(readFileSync(confirmFile(pairingId, "request"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+export function answerRequest(pairingId: string, allow: boolean) {
+  writeFileSync(confirmFile(pairingId, "answer"), allow ? "yes" : "no", { mode: 0o600 });
+}
+
+/** In `enroll`: waits for the yes in the terminal (only when `hollr pair` asked for it). */
+export async function awaitConfirmation(pairingId: string, name: string, timeoutMs = 120_000) {
+  if (!existsSync(confirmFile(pairingId, "confirm"))) return;
+  writeFileSync(confirmFile(pairingId, "request"), JSON.stringify({ name: sanitizeName(name) }), {
+    mode: 0o600,
+  });
+  const until = Date.now() + timeoutMs;
+  try {
+    while (Date.now() < until) {
+      try {
+        const answer = readFileSync(confirmFile(pairingId, "answer"), "utf8").trim();
+        if (answer === "yes") return;
+        throw new Error("denied");
+      } catch (err) {
+        if (err instanceof Error && err.message === "denied") throw err;
+      }
+      await Bun.sleep(300);
+    }
+    throw new Error("not_confirmed");
+  } finally {
+    for (const k of ["confirm", "request", "answer"] as const)
+      rmSync(confirmFile(pairingId, k), { force: true });
+  }
 }
 
 export function payloadUrl(payload: PairingPayload): string {

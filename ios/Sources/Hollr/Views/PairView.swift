@@ -9,6 +9,7 @@ struct PairView: View {
 
     @State private var deviceName = DeviceKey.defaultDeviceName
     @State private var state: PairState = .scanning
+    @State private var mode: NetworkMode = .auto
     #if targetEnvironment(macCatalyst)
     @State private var scannerAvailable = false
     #else
@@ -34,11 +35,21 @@ struct PairView: View {
                 case .pairing(let label):
                     Spacer()
                     ProgressView("Kopple mit \(label) …")
+                    Label(mode.title, systemImage: mode == .tailscale ? "globe" : "wifi")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text("Falls der Rechner fragt: dort mit „J“ bestätigen.")
+                        .font(.footnote).foregroundStyle(.tertiary).multilineTextAlignment(.center)
                     Spacer()
                 case .done(let label):
                     Spacer()
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundStyle(Theme.live)
                     Text("\(label) ist gekoppelt").font(.title3.bold())
+                    Label(mode.title, systemImage: mode == .tailscale ? "globe" : "wifi")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if mode == .tailscale, !Tailscale.isActiveOnDevice {
+                        Text("Für unterwegs: Tailscale-App auf dem iPhone installieren und mit demselben Konto anmelden.")
+                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    }
                     Spacer()
                     Button("Fertig", action: onDone).buttonStyle(.borderedProminent).controlSize(.large)
                 case .failed(let message):
@@ -101,6 +112,7 @@ struct PairView: View {
             state = .failed(error.localizedDescription)
             return
         }
+        mode = payload.network
         state = .pairing(payload.l)
         let name = deviceName.trimmingCharacters(in: .whitespaces)
         Task {
@@ -109,7 +121,11 @@ struct PairView: View {
                 store.add(server)
                 state = .done(server.label)
             } catch {
-                state = .failed(error.localizedDescription)
+                var message = error.localizedDescription
+                if payload.network == .tailscale, !Tailscale.isActiveOnDevice, case HollrError.unreachable = error {
+                    message += "\n\n" + String(localized: "Tailscale ist auf dem iPhone nicht verbunden – Tailscale-App öffnen, verbinden und nochmal scannen.")
+                }
+                state = .failed(message)
             }
         }
     }

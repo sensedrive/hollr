@@ -23,13 +23,27 @@ import { runLive } from "./live";
 import { LOG_FILE, log } from "./log";
 import { listModels, switchCommand } from "./models";
 import {
+  addressesFor,
+  IPHONE_TAILSCALE_HINT,
+  lanAddresses,
+  type NetworkMode,
+  type TailscaleInfo,
+  tailscaleAddresses,
+  tailscaleInfo,
+  tailscaleSteps,
+} from "./network";
+import {
   addBootstrap,
+  answerRequest,
+  awaitConfirmation,
   buildPayload,
   enroll,
   listDevices,
   newBootstrapKey,
   PAIRING_TTL_SEC,
   payloadUrl,
+  pendingRequest,
+  requireConfirmation,
   revokeDevice,
   upgradeDeviceKeys,
 } from "./pairing";
@@ -60,7 +74,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.20.0";
+export const VERSION = "0.21.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -143,9 +157,23 @@ async function gate(): Promise<number> {
     log("gate", `key upgrade failed: ${err}`);
   }
   switch (cmd) {
-    case "hello":
-      json({ hollr: VERSION, host: (await import("node:os")).hostname() });
+    case "hello": {
+      // the app shows how it is connected and can switch between LAN and Tailscale
+      const ts = tailscaleInfo();
+      json({
+        hollr: VERSION,
+        host: (await import("node:os")).hostname(),
+        network: {
+          lan: lanAddresses(),
+          tailscale: {
+            installed: ts.installed,
+            state: ts.state ?? null,
+            addresses: tailscaleAddresses(ts),
+          },
+        },
+      });
       return 0;
+    }
     case "agents":
       json({ agents: await herdr.agents() });
       return 0;
@@ -355,6 +383,8 @@ async function gate(): Promise<number> {
 async function enrollCmd(id: string): Promise<number> {
   try {
     const input = JSON.parse(await readStdinLine()) as { pub?: string; name?: string };
+    // `hollr pair` in a terminal asks first: a scanned code alone is not enough
+    await awaitConfirmation(id, input.name ?? "iPhone");
     const device = enroll(id, input.pub ?? "", input.name ?? "iPhone");
     json({
       ok: true,
@@ -369,15 +399,89 @@ async function enrollCmd(id: string): Promise<number> {
   }
 }
 
+const MODE_LABEL: Record<NetworkMode, string> = {
+  lan: "Lokales Netzwerk",
+  tailscale: "Tailscale / Fernzugriff",
+  auto: "Automatisch (alle Adressen)",
+};
+
+const ask = (question: string, fallback = "") => (prompt(question) ?? fallback).trim();
+const yes = (question: string) => !/^n/i.test(ask(`${question} [J/n] `));
+
+/** Interactive: which connection the phone should use. */
+function chooseMode(ts: TailscaleInfo): NetworkMode {
+  const tsState = !ts.installed
+    ? "nicht installiert"
+    : ts.state === "Running"
+      ? `läuft – ${ts.dnsName ?? ts.ips[0] ?? ""}`
+      : ts.state === "NeedsLogin"
+        ? "nicht angemeldet"
+        : "gestoppt";
+  console.log("Wie soll sich das iPhone verbinden?\n");
+  console.log(
+    "  1) Lokales Netzwerk        – iPhone und Rechner im selben WLAN, kein Zusatzdienst",
+  );
+  console.log(
+    `  2) Tailscale / Fernzugriff – auch von unterwegs, ohne offene Ports (Tailscale: ${tsState})\n`,
+  );
+  return ask("Auswahl [1]: ", "1") === "2" ? "tailscale" : "lan";
+}
+
+/** Makes Tailscale usable here (start / log in), guiding through what can't be automated. */
+async function ensureTailscale(interactive: boolean): Promise<TailscaleInfo | undefined> {
+  let ts = tailscaleInfo();
+  if (ts.state === "Running" && tailscaleAddresses(ts).length) return ts;
+  console.log("\nTailscale ist hier noch nicht bereit:");
+  for (const step of tailscaleSteps(ts)) console.log(`  • ${step}`);
+  if (!interactive || !ts.installed || !ts.cli) return undefined;
+  if (!yes("\nJetzt „tailscale up“ ausführen (startet die Verbindung, ggf. mit Anmelde-Link)?"))
+    return undefined;
+  const up = Bun.spawn([ts.cli, "up"], { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+  const until = Date.now() + 180_000;
+  while (Date.now() < until) {
+    await Bun.sleep(1500);
+    ts = tailscaleInfo();
+    if (ts.state === "Running" && tailscaleAddresses(ts).length) break;
+  }
+  up.kill();
+  return ts.state === "Running" ? ts : undefined;
+}
+
 async function pair(args: string[]): Promise<number> {
+  const interactive =
+    Boolean(process.stdin.isTTY && process.stdout.isTTY) && !args.includes("--yes");
+  const hosts = flag(args, "--host");
+  let ts = tailscaleInfo();
+  const requested = flag(args, "--network")[0];
+  let mode: NetworkMode = args.includes("--tailscale")
+    ? "tailscale"
+    : args.includes("--lan")
+      ? "lan"
+      : requested === "lan" || requested === "tailscale" || requested === "auto"
+        ? requested
+        : hosts.length || !interactive
+          ? "auto"
+          : chooseMode(ts);
+  if (mode === "tailscale" && !hosts.length) {
+    const ready = await ensureTailscale(interactive);
+    if (ready) ts = ready;
+    else if (interactive && yes("\nStattdessen über das lokale Netzwerk koppeln?")) mode = "lan";
+    else {
+      console.log("\nDanach erneut:  hollr pair --tailscale");
+      return 1;
+    }
+  }
+  const addresses = hosts.length ? hosts : addressesFor(mode, ts);
   const { seed, publicLine } = newBootstrapKey();
-  const { exp } = addBootstrap(publicLine);
+  const { id, exp } = addBootstrap(publicLine);
+  if (interactive) requireConfirmation(id);
   const payload = buildPayload({
     seed,
     exp,
-    addresses: flag(args, "--host"),
+    addresses,
     port: Number(flag(args, "--port")[0] ?? 22),
     label: flag(args, "--name")[0],
+    network: mode,
   });
   const url = payloadUrl(payload);
   console.log(await QRCode.toString(url, { type: "utf8", errorCorrectionLevel: "L", margin: 2 }));
@@ -385,10 +489,37 @@ async function pair(args: string[]): Promise<number> {
     `Mit der iPhone-Kamera oder in Hollr scannen. Gültig ${PAIRING_TTL_SEC / 60} Minuten, einmal nutzbar.`,
   );
   console.log(
-    `Server: ${payload.u}@${payload.a.join(" / ")}:${payload.p}   Host-Key: ${payload.fp}`,
+    `Verbindung: ${MODE_LABEL[mode]} · ${payload.u}@${payload.a.join(" / ")}:${payload.p}`,
   );
+  console.log(`Host-Key: ${payload.fp}`);
+  if (mode === "tailscale") console.log(IPHONE_TAILSCALE_HINT);
   if (args.includes("--link")) console.log(`\nLink (wie ein Passwort behandeln):\n${url}`);
-  return 0;
+  if (!interactive) return 0;
+
+  // wait for the phone: confirm here, then report the result
+  console.log("\nWarte auf das iPhone … (Strg+C zum Abbrechen)");
+  const before = new Set(listDevices().map((d) => d.id));
+  while (Date.now() / 1000 < exp) {
+    const request = pendingRequest(id);
+    if (request) {
+      const allow = yes(`\n„${request.name}“ möchte sich mit diesem Rechner koppeln. Erlauben?`);
+      answerRequest(id, allow);
+      if (!allow) {
+        console.log("Abgelehnt – der Code ist damit verbraucht.");
+        return 1;
+      }
+    }
+    const added = listDevices().find((d) => !before.has(d.id));
+    if (added) {
+      console.log(
+        `\n✓ ${added.name} ist gekoppelt (Gerät ${added.id}). Entfernen jederzeit mit: hollr revoke ${added.id}`,
+      );
+      return 0;
+    }
+    await Bun.sleep(400);
+  }
+  console.log("\nDer Code ist abgelaufen. Neu:  hollr pair");
+  return 1;
 }
 
 async function main(argv: string[]): Promise<number> {

@@ -36,6 +36,10 @@ private struct ServerRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(server.label).font(.headline)
                 Text(server.displayAddress).font(.caption).foregroundStyle(.secondary)
+                if let mode = server.network, mode != .auto {
+                    Label(mode.title, systemImage: mode == .tailscale ? "globe" : "wifi")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
                 if let error = herdr.errors[server.id] {
                     Text(error).font(.caption2).foregroundStyle(Theme.warn).lineLimit(2)
                 } else {
@@ -74,6 +78,11 @@ struct ServerDetailView: View {
     @State private var tools: [ServerTool]?
     @State private var error: String?
     @State private var confirmRemove = false
+    @State private var switching = false
+    @State private var networkError: String?
+
+    /// the stored server (changes when the connection type is switched)
+    private var current: Server { store.servers.first { $0.id == server.id } ?? server }
 
     private var problems: [ServerInfo.Check] { info?.checks.filter { !$0.ok } ?? [] }
     private var updates: Int { tools?.filter { $0.updateAvailable == true }.count ?? 0 }
@@ -129,6 +138,7 @@ struct ServerDetailView: View {
                         Text(problems.map(\.name).joined(separator: " · "))
                     }
                 }
+                connection
                 Section("Dieses Gerät") {
                     LabeledContent("Geräte-ID", value: server.deviceId)
                     LabeledContent("Adresse", value: server.displayAddress)
@@ -148,6 +158,82 @@ struct ServerDetailView: View {
             Button("Abbrechen", role: .cancel) {}
         } message: {
             Text("Auf dem Server bleibt der Schlüssel bis `hollr revoke \(server.deviceId)`.")
+        }
+    }
+
+    // MARK: connection
+
+    private var connection: some View {
+        let via = ConnectionInfo.shared.via[current.hostFingerprint]
+        let mode = current.network ?? .auto
+        return Section {
+            Picker(selection: Binding(get: { mode }, set: { new in Task { await switchNetwork(to: new) } })) {
+                ForEach(NetworkMode.allCases) { Text($0.title).tag($0) }
+            } label: {
+                Label("Verbindungsart", systemImage: mode == .tailscale ? "globe" : "wifi")
+            }
+            .disabled(switching)
+            HStack(spacing: 10) {
+                Circle().fill(via != nil ? Theme.live : Theme.warn).frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let via {
+                        Text("Verbunden über \(via)")
+                        Text(Tailscale.isTailscale(via) ? String(localized: "Tailscale – verschlüsselt, ohne offene Ports") : String(localized: "Direkt über das Netzwerk"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Nicht erreichbar")
+                        Text(unreachableHint(mode)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if switching { Spacer(); ProgressView() }
+            }
+            DisclosureGroup("Adressen") {
+                ForEach(current.addresses, id: \.self) { host in
+                    HStack {
+                        Text(host).font(.caption.monospaced())
+                        Spacer()
+                        if Tailscale.isTailscale(host) { Text("Tailscale").font(.caption2).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        } header: {
+            Text("Verbindung")
+        } footer: {
+            Text(networkError ?? mode.explanation)
+                .foregroundStyle(networkError == nil ? Color.secondary : Theme.warn)
+        }
+    }
+
+    private func unreachableHint(_ mode: NetworkMode) -> String {
+        if mode == .tailscale || current.addresses.contains(where: Tailscale.isTailscale) {
+            if !Tailscale.isActiveOnDevice {
+                return String(localized: "Tailscale ist auf dem iPhone aus – Tailscale-App öffnen und verbinden.")
+            }
+            return String(localized: "Der Rechner ist aus, schläft oder Tailscale läuft dort nicht.")
+        }
+        return String(localized: "Nur im selben Netzwerk erreichbar – für unterwegs „Tailscale / Fernzugriff“ wählen.")
+    }
+
+    /// Re-orders / extends the addresses from what the server reports – no new pairing needed
+    /// (same server: the pinned host key still has to match).
+    private func switchNetwork(to mode: NetworkMode) async {
+        switching = true
+        defer { switching = false }
+        do {
+            let network = try await HollrClient.network(current)
+            if mode == .tailscale, network.tailscale.addresses.isEmpty {
+                networkError = network.tailscale.installed
+                    ? String(localized: "Tailscale läuft auf dem Rechner nicht (Status: \(network.tailscale.state ?? "?")). Dort starten: tailscale up")
+                    : String(localized: "Tailscale ist auf dem Rechner nicht installiert. Anleitung: hollr pair --tailscale")
+                return
+            }
+            let addresses = network.addresses(for: mode)
+            guard !addresses.isEmpty else { throw HollrError.badResponse }
+            store.setNetwork(current, mode: mode, addresses: addresses)
+            await SSHPool.shared.invalidate(current)
+            networkError = nil
+        } catch {
+            networkError = String(localized: "Umstellen geht nur, solange der Rechner erreichbar ist: \(error.localizedDescription)")
         }
     }
 

@@ -3,6 +3,7 @@ import { homedir, platform, userInfo } from "node:os";
 import { join } from "node:path";
 import { herdrBin } from "./herdr";
 import { MAC_SETUP, MIC_DEVICE, macAudioMissing, SPEAKER_DEVICE } from "./macaudio";
+import { tailscaleInfo, tailscaleSteps } from "./network";
 import { authorizedKeysPath, hostKeyFingerprint, listDevices } from "./pairing";
 import { pulseAvailable } from "./pulse";
 
@@ -100,6 +101,17 @@ export async function collectChecks(): Promise<Check[]> {
       fix: `sudo loginctl enable-linger ${userInfo().username}`,
     });
   }
+  // remote access (optional): Tailscale reaches this machine from anywhere without open ports
+  const ts = tailscaleInfo();
+  checks.push({
+    name: "Tailscale (Fernzugriff)",
+    ok: true,
+    detail: !ts.installed
+      ? "nicht installiert (optional)"
+      : ts.state === "Running"
+        ? `läuft · ${ts.dnsName ?? ts.ips[0] ?? ""}`
+        : `${ts.state ?? "?"} – ${tailscaleSteps(ts)[0] ?? ""}`,
+  });
   let fp = "";
   try {
     fp = hostKeyFingerprint();
