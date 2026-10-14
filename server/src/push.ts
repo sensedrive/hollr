@@ -9,10 +9,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "./log";
 
-export const PUSH_DIR = Bun.env.HOLLR_PUSH_DIR ?? join(homedir(), ".config", "hollr");
-const CONFIG = () => join(PUSH_DIR, "push.json");
-const KEY = () => join(PUSH_DIR, "apns.p8");
-const DEVICES = () => join(PUSH_DIR, "push-devices.json");
+/** read on every call, so tests (HOLLR_PUSH_DIR) never touch the real config */
+export const pushDir = () => Bun.env.HOLLR_PUSH_DIR ?? join(homedir(), ".config", "hollr");
+const CONFIG = () => join(pushDir(), "push.json");
+const KEY = () => join(pushDir(), "apns.p8");
+const DEVICES = () => join(pushDir(), "push-devices.json");
 
 export interface PushConfig {
   keyId: string;
@@ -71,7 +72,7 @@ export function setupPushKey(
   if (!/^[A-Z0-9]{10}$/.test(teamId)) throw new Error("Team-ID: 10 Zeichen, z. B. ABCDE12345");
   if (!/^[\w.-]+$/.test(bundleId)) throw new Error("ungültige Bundle-ID");
   createPrivateKey(pem); // fails early on a broken key
-  mkdirSync(PUSH_DIR, { recursive: true, mode: 0o700 });
+  mkdirSync(pushDir(), { recursive: true, mode: 0o700 });
   writeFileSync(KEY(), pem, { mode: 0o600 });
   chmodSync(KEY(), 0o600);
   writeJson(CONFIG(), { keyId, teamId, bundleId });
@@ -81,7 +82,7 @@ export function setupPushKey(
 // ---------- devices ----------
 
 function writeJson(file: string, data: unknown) {
-  mkdirSync(PUSH_DIR, { recursive: true, mode: 0o700 });
+  mkdirSync(pushDir(), { recursive: true, mode: 0o700 });
   const tmp = `${file}.tmp`;
   writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
   renameSync(tmp, file);
