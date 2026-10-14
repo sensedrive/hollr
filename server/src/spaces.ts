@@ -2,6 +2,7 @@
  * Spaces (herdr workspaces grouped by repo / worktree), git info, a read-only file browser,
  * the agent status line (model · folder · branch · context) and provider usage limits.
  */
+
 import {
   existsSync,
   mkdirSync,
@@ -15,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { branches, changes, commitDetails, commitDiff, fileDiff, graph, stage } from "./git";
 import { type Exec, execHerdr } from "./herdr";
+import { dedupeLimits } from "./usagehistory";
 
 export interface Space {
   id: string;
@@ -387,7 +389,7 @@ export async function usageLimits(
       }
     }
   } catch {}
-  const result = { limits, capacity, fetchedAt: Date.now() };
+  const result = { limits: dedupeLimits(limits), capacity, fetchedAt: Date.now() };
   try {
     mkdirSync(join(USAGE_CACHE, ".."), { recursive: true });
     writeFileSync(USAGE_CACHE, JSON.stringify(result));

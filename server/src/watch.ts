@@ -2,6 +2,7 @@
  * `hollr watch`: long-running watcher (systemd --user) that turns herdr agent state
  * changes into push notifications – waiting for you, finished, failed.
  */
+
 import { existsSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,9 @@ import { log } from "./log";
 import { hostKeyFingerprint } from "./pairing";
 import { type Notice, pushConfig, pushDevices, sendNotice } from "./push";
 import { findSessionFile } from "./sessionlog";
+import { usageLimits } from "./spaces";
 import { readTimeline } from "./timeline";
+import { prune, UsageRecorder } from "./usagehistory";
 
 interface Seen {
   status: string;
@@ -159,6 +162,10 @@ export async function runWatch(): Promise<number> {
   } catch {}
   const host = hostname();
   log("watch", `started (push ${pushConfig() ? "ready" : "not configured"})`);
+  // usage history (beta): limits every 10 min, agent working time per hour
+  const recorder = new UsageRecorder();
+  let nextLimits = 0;
+  prune();
   let stopping = false;
   for (const sig of ["SIGTERM", "SIGINT"] as const)
     process.on(sig, () => {
@@ -167,6 +174,13 @@ export async function runWatch(): Promise<number> {
   while (!stopping) {
     try {
       const agents = await herdr.agents();
+      recorder.tick(agents.filter((a) => a.status === "working").map((a) => a.kind || "agent"));
+      if (Date.now() >= nextLimits) {
+        nextLimits = Date.now() + 600_000;
+        usageLimits()
+          .then((u) => recorder.recordLimits(u.limits))
+          .catch(() => {});
+      }
       const events = diffStates(seen, agents, Date.now());
       if (events.length && pushConfig() && pushDevices().length) {
         const tree = await herdr.tree();
@@ -207,5 +221,6 @@ export async function runWatch(): Promise<number> {
     }
     await Bun.sleep(POLL_MS);
   }
+  recorder.flush();
   return 0;
 }

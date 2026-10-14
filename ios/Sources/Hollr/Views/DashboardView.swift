@@ -284,10 +284,23 @@ struct LimitsSheet: View {
     @Environment(HerdrStore.self) private var herdr
 
     var body: some View {
-        let limits = store.servers.flatMap { herdr.usage[$0.id] ?? [] }
+        // several servers report the same accounts: one row per limit (the highest value wins)
+        let limits = Dictionary(grouping: store.servers.flatMap { herdr.usage[$0.id] ?? [] }, by: \.id)
+            .compactMap { $0.value.max { $0.used < $1.used } }
+            .sorted { ($0.label, $0.window) < ($1.label, $1.window) }
         NavigationStack {
             List {
             Group {
+                Section {
+                    NavigationLink { UsageHistoryView() } label: {
+                        HStack {
+                            Label("Verlauf & Statistik", systemImage: "chart.xyaxis.line")
+                            Spacer()
+                            Text("Beta").font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Theme.accent.opacity(0.2), in: Capsule()).foregroundStyle(Theme.accent)
+                        }
+                    }
+                }
                 ForEach(Dictionary(grouping: limits, by: \.providerName).sorted { $0.key < $1.key }, id: \.key) { provider, items in
                     Section(provider) {
                         ForEach(Dictionary(grouping: items, by: { $0.account ?? "" }).sorted { $0.key < $1.key }, id: \.key) { account, rows in

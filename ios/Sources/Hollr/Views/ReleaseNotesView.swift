@@ -10,6 +10,10 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 27, date: "14.10.2026", items: [
+            ("chart.xyaxis.line", String(localized: "Verlauf & Statistik (Beta): Nutzungslimits über die Zeit, Verbrauch pro Tag und Agent-Zeit pro Maschine")),
+            ("checkmark.circle", String(localized: "Nutzungslimits ohne doppelte Einträge")),
+        ]),
         ReleaseNote(build: 26, date: "14.10.2026", items: [
             ("bolt.horizontal", String(localized: "Echtzeit: Neue Workspaces, Tabs und Agent-Status erscheinen sofort – ohne ständiges Nachladen")),
         ]),

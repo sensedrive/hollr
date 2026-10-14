@@ -38,6 +38,7 @@
 		9A322A6B9A15DE7992DA2C8D /* ToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */; };
 		9D058E4BBCBF3F3B20CD881D /* Frames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A4E25D9270177A46475CB74 /* Frames.swift */; };
 		9ED347BE7C6BE7CD221B3BFE /* Spaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD0AF2665A02292636F1A65 /* Spaces.swift */; };
+		9ED7883C647726E54B5F2123 /* UsageHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A6D989EB3307AFD05BD3882 /* UsageHistoryView.swift */; };
 		A0BF4F1DECDBFFDC1548104E /* PairView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76055EDBFA8BC5F8A7E7BDBB /* PairView.swift */; };
 		A604541D3BD8DC89D95DF2E7 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC7D0F3B418EE3043DECA56B /* DashboardView.swift */; };
 		A6DE61EE1B7B43C2BC6EB9A4 /* AgentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9B7EF593C0D1C6A9B89F1F /* AgentSession.swift */; };
@@ -89,6 +90,7 @@
 		3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoView.swift; sourceTree = "<group>"; };
 		436A87439A46CBB4E9A580B7 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
 		45BED9544749EEB0E7476BB5 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
+		4A6D989EB3307AFD05BD3882 /* UsageHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryView.swift; sourceTree = "<group>"; };
 		515576480CDB424E848FA072 /* MySessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySessions.swift; sourceTree = "<group>"; };
 		525EA22BD8EF7FD00CC4BE94 /* HollrLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrLog.swift; sourceTree = "<group>"; };
 		57C0187F573B70F2EFC959C6 /* ReleaseNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotesView.swift; sourceTree = "<group>"; };
@@ -278,6 +280,7 @@
 				350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */,
 				0C577BF328A3A26A824FF673 /* TimelineViews.swift */,
 				6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */,
+				4A6D989EB3307AFD05BD3882 /* UsageHistoryView.swift */,
 				2598F41EFB84959A20866BA9 /* Git */,
 			);
 			path = Views;
@@ -486,6 +489,7 @@
 				831DF3CFA3E88A34A57DA0F3 /* TimelineViews.swift in Sources */,
 				9A322A6B9A15DE7992DA2C8D /* ToolsView.swift in Sources */,
 				1E9B7CB51322142C450623B9 /* Tunnel.swift in Sources */,
+				9ED7883C647726E54B5F2123 /* UsageHistoryView.swift in Sources */,
 				961FD016CC39FD7331ED4530 /* VoiceIO.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -554,7 +558,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -623,7 +627,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

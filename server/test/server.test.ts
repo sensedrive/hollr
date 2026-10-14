@@ -624,3 +624,28 @@ describe("events", () => {
     expect(classify(upd("working", 3), panes)).toBe("tree");
   });
 });
+
+describe("usage history", () => {
+  test("dedupe, record only when moved or hourly, activity per hour", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-usage-"));
+    Bun.env.HOLLR_STATE_DIR = dir;
+    const { dedupeLimits, UsageRecorder, usageHistory } = await import("../src/usagehistory");
+    const row = (used: number) => ({ provider: "claude", account: "a", label: "5 Hour", window: "5h", used });
+    expect(dedupeLimits([row(0.3), row(0.32), { ...row(0.1), label: "7 Day" }])).toHaveLength(2);
+    const r = new UsageRecorder();
+    const t0 = 1_800_000_000_000;
+    r.recordLimits([row(0.3), row(0.3)], t0);
+    r.recordLimits([row(0.3)], t0 + 600_000); // unchanged → skipped
+    r.recordLimits([row(0.35)], t0 + 1_200_000); // moved → stored
+    r.recordLimits([row(0.35)], t0 + 1_200_000 + 3_600_000); // hourly anchor
+    r.tick(["omp"], t0);
+    r.tick(["omp", "claude"], t0 + 2000);
+    r.tick([], t0 + 4000);
+    r.flush();
+    const h = usageHistory(30, t0 + 5_000_000);
+    expect(h.samples.map((s) => s.limits[0]?.u)).toEqual([0.3, 0.35, 0.35]);
+    expect(h.activity[0]?.work).toEqual({ omp: 4, claude: 2 });
+    rmSync(dir, { recursive: true, force: true });
+    delete Bun.env.HOLLR_STATE_DIR;
+  });
+});

@@ -381,6 +381,36 @@
         }
       }
     },
+    "24 Std.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24 h"
+          }
+        }
+      }
+    },
+    "30 Tage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 days"
+          }
+        }
+      }
+    },
+    "7 Tage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 days"
+          }
+        }
+      }
+    },
     ": %@": {
       "localizations": {
         "en": {
@@ -457,6 +487,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Start agent"
+          }
+        }
+      }
+    },
+    "Agent-Zeit pro Maschine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent time per machine"
           }
         }
       }
@@ -752,7 +792,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Load"
+            "value": "Usage"
           }
         }
       }
@@ -833,6 +873,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Best accuracy, 25 languages, German + English mixed"
+          }
+        }
+      }
+    },
+    "Beta. Prozente kommen von den Anbietern (omp usage) und werden vom Hollr-Server aufgezeichnet, Agent-Zeit misst der Server selbst. Gespeichert werden 30 Tage.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta. Percentages come from the providers (omp usage) and are recorded by the Hollr server; agent time is measured by the server itself. 30 days are kept."
           }
         }
       }
@@ -1843,6 +1893,16 @@
         }
       }
     },
+    "Kein Verlauf von: %@ (Hollr-Server aktualisieren)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No history from: %@ (update the Hollr server)"
+          }
+        }
+      }
+    },
     "Kein Whisper-Modell": {
       "localizations": {
         "en": {
@@ -2519,6 +2579,26 @@
         }
       }
     },
+    "Noch kein Verbrauch aufgezeichnet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No use recorded yet."
+          }
+        }
+      }
+    },
+    "Noch keine Daten. Der Hollr-Server zeichnet ab jetzt alle 10 Minuten auf – schau in einer Stunde wieder vorbei.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data yet. The Hollr server records every 10 minutes from now on – check back in an hour."
+          }
+        }
+      }
+    },
     "Nochmal scannen": {
       "localizations": {
         "en": {
@@ -2545,6 +2625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Usage limits"
+          }
+        }
+      }
+    },
+    "Nutzungslimits ohne doppelte Einträge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limits without duplicate entries"
           }
         }
       }
@@ -2765,6 +2855,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hide log"
+          }
+        }
+      }
+    },
+    "Prozentpunkte des längsten Limits (z. B. 7 Tage), die an dem Tag dazukamen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Percentage points of the longest limit (e.g. 7 days) added that day"
           }
         }
       }
@@ -3831,12 +3931,42 @@
         }
       }
     },
+    "Verbrauch pro Tag": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use per day"
+          }
+        }
+      }
+    },
     "Verlauf": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "History"
+          }
+        }
+      }
+    },
+    "Verlauf & Statistik": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History & statistics"
+          }
+        }
+      }
+    },
+    "Verlauf & Statistik (Beta): Nutzungslimits über die Zeit, Verbrauch pro Tag und Agent-Zeit pro Maschine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History & statistics (beta): usage limits over time, use per day and agent time per machine"
           }
         }
       }
@@ -4021,6 +4151,16 @@
         }
       }
     },
+    "Wie lange Agents auf jeder Maschine gearbeitet haben – zeigt, wer die Limits verbraucht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How long agents worked on each machine – shows who uses up the limits."
+          }
+        }
+      }
+    },
     "Wiederholungen bei Unsicherheit": {
       "localizations": {
         "en": {
@@ -4137,6 +4277,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wrap lines"
+          }
+        }
+      }
+    },
+    "Zeitraum": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Period"
           }
         }
       }

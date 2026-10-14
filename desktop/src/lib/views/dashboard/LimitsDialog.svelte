@@ -9,7 +9,16 @@
   let { onClose }: { onClose: () => void } = $props();
   let busy = $state(false);
 
-  const limits = $derived(app.servers.flatMap((s) => usage.limits[s.id] ?? []));
+  // several servers report the same accounts: one row per limit (the highest value wins)
+  const limits = $derived.by(() => {
+    const best = new Map<string, UsageLimit>();
+    for (const l of app.servers.flatMap((s) => usage.limits[s.id] ?? [])) {
+      const key = [l.provider, l.account ?? "", l.label, l.window].join("|");
+      const prev = best.get(key);
+      if (!prev || l.used > prev.used) best.set(key, l);
+    }
+    return [...best.values()];
+  });
   const providers = $derived(
     [...new Set(limits.map((l) => providerName(l.provider)))].sort().map((name) => {
       const items = limits.filter((l) => providerName(l.provider) === name);

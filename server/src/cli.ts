@@ -57,9 +57,10 @@ import {
 import { sysinfo } from "./sysinfo";
 import { readTimeline } from "./timeline";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
+import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.18.1";
+export const VERSION = "0.19.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -311,7 +312,8 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "usage":
-      json(await usageLimits(pane === "refresh"));
+      if (pane === "history") json(usageHistory(Number(rest[0] ?? 7)));
+      else json(await usageLimits(pane === "refresh"));
       return 0;
     case "history": {
       const agent = await herdr.agent(pane);
