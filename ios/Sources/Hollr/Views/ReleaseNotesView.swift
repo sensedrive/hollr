@@ -10,6 +10,10 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 29, date: "14.10.2026", items: [
+            ("waveform", String(localized: "Live-Sprache jetzt auch mit Macs als Server (einmalig BlackHole installieren, siehe Server-Info)")),
+            ("arrow.clockwise", String(localized: "Nutzungslimits laden beim Öffnen frisch und lassen sich jederzeit neu laden")),
+        ]),
         ReleaseNote(build: 28, date: "14.10.2026", items: [
             ("clock", String(localized: "Nutzungslimits: Reset auf die Minute genau (z. B. „in 4 Std., 23 Min.“)")),
         ]),

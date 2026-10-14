@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { homedir, platform, userInfo } from "node:os";
 import { join } from "node:path";
 import { herdrBin } from "./herdr";
+import { MAC_SETUP, MIC_DEVICE, macAudioMissing, SPEAKER_DEVICE } from "./macaudio";
 import { authorizedKeysPath, hostKeyFingerprint, listDevices } from "./pairing";
 import { pulseAvailable } from "./pulse";
 
@@ -47,25 +48,36 @@ export async function collectChecks(): Promise<Check[]> {
     detail: omp ? version(omp, "--version") : "nicht gefunden",
     fix: "curl -fsSL https://omp.sh/install | sh",
   });
-  for (const tool of ["pactl", "pacat"]) {
-    const path = which(tool);
+  if (!mac) {
+    for (const tool of ["pactl", "pacat"]) {
+      const path = which(tool);
+      checks.push({
+        name: tool,
+        ok: Boolean(path),
+        detail: path ?? "nicht gefunden",
+        fix: mac
+          ? "brew install pulseaudio"
+          : "sudo apt-get install -y pulseaudio pulseaudio-utils",
+      });
+    }
+    const pulse = await pulseAvailable();
     checks.push({
-      name: tool,
-      ok: Boolean(path),
-      detail: path ?? "nicht gefunden",
-      fix: mac ? "brew install pulseaudio" : "sudo apt-get install -y pulseaudio pulseaudio-utils",
+      name: "PulseAudio läuft",
+      ok: pulse,
+      detail: pulse ? "ja" : "nein",
+      fix: mac
+        ? 'launchctl kickstart -k "gui/$(id -u)/app.hollr.pulseaudio"  (oder Installer erneut ausführen)'
+        : "systemctl --user enable --now pulseaudio.socket pulseaudio.service",
     });
   }
-  const pulse = await pulseAvailable();
-  checks.push({
-    name: "PulseAudio läuft",
-    ok: pulse,
-    detail: pulse ? "ja" : "nein",
-    fix: mac
-      ? 'launchctl kickstart -k "gui/$(id -u)/app.hollr.pulseaudio"  (oder Installer erneut ausführen)'
-      : "systemctl --user enable --now pulseaudio.socket pulseaudio.service",
-  });
   if (mac) {
+    const missing = macAudioMissing();
+    checks.push({
+      name: "Live-Audio (BlackHole)",
+      ok: missing.length === 0,
+      detail: missing.length ? `fehlt: ${missing.join(", ")}` : `${MIC_DEVICE} · ${SPEAKER_DEVICE}`,
+      fix: MAC_SETUP,
+    });
     const ssh = await sshListening();
     checks.push({
       name: "SSH (Entfernte Anmeldung)",

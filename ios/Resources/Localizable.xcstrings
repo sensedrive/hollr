@@ -2159,6 +2159,16 @@
         }
       }
     },
+    "Live-Sprache jetzt auch mit Macs als Server (einmalig BlackHole installieren, siehe Server-Info)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live voice now also works with Macs as servers (install BlackHole once, see server info)"
+          }
+        }
+      }
+    },
     "Lokale Spracheingabe mit Parakeet, Whisper und Apple – mehrsprachig, mit Fachwörtern": {
       "localizations": {
         "en": {
@@ -2625,6 +2635,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Usage limits"
+          }
+        }
+      }
+    },
+    "Nutzungslimits laden beim Öffnen frisch und lassen sich jederzeit neu laden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limits load fresh when opened and can be reloaded any time"
           }
         }
       }
@@ -3531,6 +3551,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stage"
+          }
+        }
+      }
+    },
+    "Stand %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@"
           }
         }
       }

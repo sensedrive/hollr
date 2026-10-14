@@ -5,6 +5,7 @@ export const toLang = (v?: string): Lang => (v?.toLowerCase().startsWith("en") ?
 
 const EN: Record<string, string> = {
   "nicht gefunden": "not found",
+  "Live-Audio (BlackHole)": "Live audio (BlackHole)",
   "optional – in der iPhone-App unter Mitteilungen importieren":
     "optional – import it in the iPhone app under Notifications",
   "SSH (Entfernte Anmeldung)": "SSH (Remote Login)",

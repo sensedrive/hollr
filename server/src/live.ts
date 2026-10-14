@@ -8,7 +8,18 @@ import { join } from "node:path";
 import { encodeFrame, encodeJson, FRAME_AUDIO, FRAME_JSON, FrameDecoder } from "./frames";
 import type { Herdr } from "./herdr";
 import { log } from "./log";
+import { MAC_SETUP, MacAudioSession, macAudioMissing, restoreMacDefaults } from "./macaudio";
 import { cleanupStale, PulseSession, pulseAvailable } from "./pulse";
+
+/** Virtual mic/speaker for one call: PulseAudio on Linux, BlackHole on macOS. */
+interface AudioRoute {
+  create(): Promise<void>;
+  attach(pid: number): Promise<{ capturing: boolean; playing: boolean }>;
+  spawnMicWriter(): { stdin: { write(data: Uint8Array): unknown }; kill(): void };
+  spawnSpeakerReader(): { stdout: AsyncIterable<Uint8Array>; kill(): void };
+  destroy(): Promise<void>;
+}
+
 import { findSessionFile, SessionTail } from "./sessionlog";
 
 export interface LiveIO {
@@ -76,17 +87,29 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
     rmSync(lock, { force: true });
     return fail("unsupported", `Live gibt es nur für omp (Agent ist ${agent.kind}).`);
   }
-  // macOS: omp talks to CoreAudio directly (the Mac's own mic and speakers), there is no
-  // PulseAudio stream to reroute – starting /live would only open the Mac's microphone
-  if (platform() === "darwin") {
-    rmSync(lock, { force: true });
-    return fail(
-      "unsupported_os",
-      "Live-Sprache geht auf Mac-Servern noch nicht: omp nutzt dort direkt Mikrofon und Lautsprecher des Macs. Chat und Tippen funktionieren ganz normal.",
-    );
+  // macOS: omp uses the default CoreAudio devices – switched to BlackHole for the call
+  const mac = platform() === "darwin";
+  if (mac) {
+    const missing = macAudioMissing();
+    if (missing.length) {
+      rmSync(lock, { force: true });
+      return fail(
+        "mac_setup",
+        `Für Live-Sprache braucht der Mac einmalig virtuelle Audiogeräte (fehlt: ${missing.join(", ")}). Am Mac im Terminal: ${MAC_SETUP}`,
+      );
+    }
+    restoreMacDefaults(); // a crashed call left the Mac switched
+    // omp already live at the Mac itself: that's someone sitting there, don't take it over
+    if (!acquired.stale && (await herdr.liveState(pane).catch(() => undefined))) {
+      rmSync(lock, { force: true });
+      return fail(
+        "busy",
+        "omp ist am Mac gerade selbst live – dort beenden (Esc), dann hier starten.",
+      );
+    }
   }
   const pid = await herdr.agentPid(pane, "omp");
-  if (!pid || !(await pulseAvailable())) {
+  if (!pid || (!mac && !(await pulseAvailable()))) {
     rmSync(lock, { force: true });
     return fail(
       "no_audio",
@@ -94,8 +117,10 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
     );
   }
 
-  await cleanupStale();
-  const pulse = new PulseSession(String(process.pid));
+  if (!mac) await cleanupStale();
+  const pulse: AudioRoute = mac
+    ? new MacAudioSession(() => herdr.liveActive(pane))
+    : new PulseSession(String(process.pid));
   let ending = false;
   // a crashed previous call left /live running – treat it as ours so it gets stopped
   let startedLive = acquired.stale;
@@ -115,8 +140,13 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
   const mic = pulse.spawnMicWriter();
   const speaker = pulse.spawnSpeakerReader();
 
-  const end = async (reason: string) => {
-    if (ending) return;
+  // every caller waits for the same cleanup (restoring devices must finish before the process exits)
+  let ended: Promise<void> | undefined;
+  const end = (reason: string): Promise<void> => {
+    ended ??= finish(reason);
+    return ended;
+  };
+  const finish = async (reason: string) => {
     ending = true;
     log("live", pane, "end", reason, { startedLive, ms: Date.now() - startedAt });
     for (const t of timers) clearInterval(t);

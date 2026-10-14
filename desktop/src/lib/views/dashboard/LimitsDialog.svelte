@@ -1,5 +1,6 @@
 <script lang="ts">
   // Per-account details behind the quiet limits line ("Nutzungslimits").
+  import { onMount } from "svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { t } from "$lib/i18n";
   import { app } from "$lib/store.svelte";
@@ -31,6 +32,8 @@
   const short = (l: UsageLimit) => l.label.replace("Claude ", "");
 
   async function reload() { busy = true; await refreshUsage(true); busy = false; }
+  // fresh numbers every time the dialog opens
+  onMount(() => { reload(); });
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />

@@ -282,6 +282,8 @@ struct LimitBar: View {
 struct LimitsSheet: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
+    @State private var loading = false
+    @State private var updated: Date?
 
     var body: some View {
         // several servers report the same accounts: one row per limit (the highest value wins)
@@ -319,7 +321,32 @@ struct LimitsSheet: View {
         }.themedList()
             .navigationTitle("Nutzungslimits")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { Task { await reload() } } label: {
+                        if loading { ProgressView() } else { Image(systemName: "arrow.clockwise") }
+                    }
+                    .disabled(loading)
+                    .accessibilityLabel("Aktualisieren")
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    if let updated {
+                        Text("Stand \(updated.formatted(date: .omitted, time: .shortened))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .refreshable { await reload() }
+            // fresh numbers every time the sheet opens (the providers' APIs, not the 2-min cache)
+            .task { await reload() }
         }
+    }
+
+    private func reload() async {
+        loading = true
+        await herdr.refreshUsage(store.servers, force: true)
+        updated = .now
+        loading = false
     }
 }
 

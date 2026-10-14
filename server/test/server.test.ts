@@ -649,3 +649,12 @@ describe("usage history", () => {
     delete Bun.env.HOLLR_STATE_DIR;
   });
 });
+
+describe("live footer", () => {
+  test("recognised in every omp state", async () => {
+    const { hasLiveFooter } = await import("../src/herdr");
+    expect(hasLiveFooter("╰─ × muted · ␣ mute · ⎋ end ───╯")).toBe(true);
+    expect(hasLiveFooter("╰─ ● hearing you · ␣ mute · ⎋ end ─")).toBe(true);
+    expect(hasLiveFooter(" π · ◒ Opus 5.5 · 📁 …/sportpark · ⑂ main")).toBe(false);
+  });
+});

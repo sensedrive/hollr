@@ -206,6 +206,12 @@ export class Herdr {
     return (await this.agents()).some((a) => a.pane === pane);
   }
 
+  /** omp shows its live footer ("… · ␣ mute · ⎋ end"), whatever state it is in. */
+  async liveActive(pane: string): Promise<boolean> {
+    const screen = await this.exec(["agent", "read", pane, "--source", "visible", "--lines", "6"]);
+    return hasLiveFooter(typeof screen === "string" ? screen : "");
+  }
+
   /** omp's live footer state ("listening", "muted", "speaking", "working", …) or undefined. */
   async liveState(pane: string): Promise<string | undefined> {
     const screen = await this.exec(["agent", "read", pane, "--source", "visible", "--lines", "6"]);
@@ -242,6 +248,10 @@ export const KEY_SEQUENCES: Record<string, string> = {
   delete: "\x1b[3~",
   insert: "\x1b[2~",
 };
+
+export function hasLiveFooter(screen: string): boolean {
+  return /·\s*\S+\s+mute\s+·\s*\S+\s+end\b/u.test(screen);
+}
 
 /** Reads omp's live footer, e.g. "╰─ × muted · 󱁐 mute · 󱊷 end ─". */
 export function parseLiveState(screen: string): string | undefined {

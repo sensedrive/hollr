@@ -81,30 +81,16 @@ if [ "$OS" = "Linux" ] && [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
 fi
 
 if [ "$OS" = "Darwin" ] && [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
-  bold "1/5 Audio (PulseAudio)"
-  if has pactl && has pacat; then ok "pactl/pacat vorhanden"
-  elif has brew; then info "installiere pulseaudio (Homebrew)"; brew install -q pulseaudio >/dev/null && ok "PulseAudio installiert"
-  else info "Homebrew fehlt – für Live-Sprache: https://brew.sh, dann 'brew install pulseaudio'"; fi
-  # PulseAudio can't daemonize on macOS: run it in the foreground under launchd (restarted if it exits)
-  if has pulseaudio && ! pactl info >/dev/null 2>&1; then
-    has brew && brew services stop pulseaudio >/dev/null 2>&1 || true
-    PA_AGENT="$HOME/Library/LaunchAgents/app.hollr.pulseaudio.plist"
-    mkdir -p "$(dirname "$PA_AGENT")"
-    cat > "$PA_AGENT" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>app.hollr.pulseaudio</string>
-  <key>ProgramArguments</key><array><string>$(command -v pulseaudio)</string><string>--daemonize=no</string><string>--exit-idle-time=-1</string></array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardErrorPath</key><string>$HOME/Library/Logs/hollr-pulseaudio.log</string>
-</dict></plist>
-PLIST
-    launchd_up "app.hollr.pulseaudio" "$PA_AGENT"
-    sleep 1
+  bold "1/5 Audio (Live-Sprache)"
+  # live calls: omp uses the Mac's default devices, Hollr points them at BlackHole during a call
+  if has brew; then
+    for f in sox switchaudio-osx; do brew list "$f" >/dev/null 2>&1 || brew install -q "$f" >/dev/null 2>&1 || true; done
   fi
-  pactl info >/dev/null 2>&1 && ok "Audio-Server läuft" || info "Audio-Server läuft nicht – siehe 'hollr doctor'"
+  if [ -d "/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver" ] && [ -d "/Library/Audio/Plug-Ins/HAL/BlackHole16ch.driver" ]; then
+    ok "Live-Audio: BlackHole vorhanden"
+  else
+    info "Für Live-Sprache einmalig (fragt nach dem Mac-Passwort): brew install --cask blackhole-2ch blackhole-16ch"
+  fi
 fi
 
 # ---------------------------------------------------------------- herdr + omp
