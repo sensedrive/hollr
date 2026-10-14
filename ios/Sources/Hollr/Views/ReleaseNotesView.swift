@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 24, date: "14.10.2026", items: [
+            ("terminal", String(localized: "Server einrichten jetzt mit einem einzigen Befehl – ohne Extras")),
+        ]),
         ReleaseNote(build: 23, date: "14.10.2026", items: [
             ("lock.open", String(localized: "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr")),
             ("qrcode", String(localized: "Server einrichten mit einem curl-Befehl – kein GitHub-Login mehr nötig")),

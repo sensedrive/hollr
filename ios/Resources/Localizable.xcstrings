@@ -617,6 +617,16 @@
         }
       }
     },
+    "Auf dem Server ausführen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run on the server"
+          }
+        }
+      }
+    },
     "Auf dem Server bleibt der Schlüssel bis `hollr revoke %@`.": {
       "localizations": {
         "en": {
@@ -1209,6 +1219,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remove"
+          }
+        }
+      }
+    },
+    "Entfernte Anmeldung (SSH) einschalten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on Remote Login (SSH)"
           }
         }
       }
@@ -2855,6 +2875,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Set up a server"
+          }
+        }
+      }
+    },
+    "Server einrichten jetzt mit einem einzigen Befehl – ohne Extras": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up a server is now a single command – nothing extra"
           }
         }
       }

@@ -1,5 +1,7 @@
 // Settings, design, server info, tools, release notes, notifications and pairing (German source → English).
 export default {
+  "Entfernte Anmeldung (SSH) einschalten": "Turn on Remote Login (SSH)",
+  "Auf dem Server ausführen": "Run on the server",
   // settings navigation
   Einstellungen: "Settings",
   Allgemein: "General",

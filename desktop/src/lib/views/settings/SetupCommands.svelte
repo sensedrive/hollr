@@ -7,15 +7,11 @@
   let copied = $state("");
 
   const REPO = "sensedrive/hollr";
-  const viaCurl = `curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | bash && ~/.local/bin/hollr pair --link`;
-  const sshLinux =
-    "command -v sshd >/dev/null || (sudo apt-get install -y openssh-server 2>/dev/null || sudo dnf install -y openssh-server 2>/dev/null || sudo pacman -S --noconfirm openssh 2>/dev/null || sudo zypper install -y openssh 2>/dev/null || sudo apk add openssh)";
+  const install = `curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | bash && ~/.local/bin/hollr pair --link`;
 
   const steps = $derived([
-    os === "mac"
-      ? { title: "1. Entfernte Anmeldung (SSH) einschalten", cmd: "sudo systemsetup -setremotelogin on" }
-      : { title: "1. SSH-Server (falls noch nicht da)", cmd: sshLinux },
-    { title: "2. Hollr installieren und Kopplungslink anzeigen", cmd: viaCurl },
+    ...(os === "mac" ? [{ title: "Entfernte Anmeldung (SSH) einschalten", cmd: "sudo systemsetup -setremotelogin on" }] : []),
+    { title: "Auf dem Server ausführen", cmd: install },
     { title: "Schon installiert? Nur koppeln:", cmd: "hollr pair --link" },
   ]);
 
@@ -46,7 +42,6 @@
       </div>
     </div>
   {/each}
-  <div class="dim small">{t("Der Installer erkennt apt, dnf, yum, pacman, zypper und apk und lässt alles Vorhandene in Ruhe.")}</div>
 </div>
 
 <style>

@@ -161,8 +161,13 @@ struct SetupCommands: View {
     @State private var copied: String?
 
     private static let repo = "sensedrive/hollr"
-    private static let viaCurl =
-        "curl -fsSL https://raw.githubusercontent.com/\(repo)/main/install.sh | bash && ~/.local/bin/hollr pair"
+    #if targetEnvironment(macCatalyst)
+    private static let pair = "hollr pair --link"   // the Mac app pastes a link, it has no camera scanner
+    #else
+    private static let pair = "hollr pair"
+    #endif
+    private static let install =
+        "curl -fsSL https://raw.githubusercontent.com/\(repo)/main/install.sh | bash && ~/.local/bin/\(pair)"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -172,16 +177,10 @@ struct SetupCommands: View {
             }
             .pickerStyle(.segmented)
             if os == .mac {
-                step(String(localized: "1. Entfernte Anmeldung (SSH) einschalten"), "sudo systemsetup -setremotelogin on")
-            } else {
-                step(String(localized: "1. SSH-Server (falls noch nicht da)"),
-                     "command -v sshd >/dev/null || (sudo apt-get install -y openssh-server 2>/dev/null || sudo dnf install -y openssh-server 2>/dev/null || sudo pacman -S --noconfirm openssh 2>/dev/null || sudo zypper install -y openssh 2>/dev/null || sudo apk add openssh)")
+                step(String(localized: "Entfernte Anmeldung (SSH) einschalten"), "sudo systemsetup -setremotelogin on")
             }
-            step(String(localized: "2. Hollr installieren und QR-Code anzeigen"), Self.viaCurl)
-            step(String(localized: "Schon installiert? Nur koppeln:"), "hollr pair")
-            step(String(localized: "Für Mac und Desktop: Link statt QR-Code"), "hollr pair --link")
-            Text("Der Installer erkennt apt, dnf, yum, pacman, zypper und apk und lässt alles Vorhandene in Ruhe.")
-                .font(.caption).foregroundStyle(.secondary)
+            step(String(localized: "Auf dem Server ausführen"), Self.install)
+            step(String(localized: "Schon installiert? Nur koppeln:"), Self.pair)
         }
         .padding(.top, 12)
     }
