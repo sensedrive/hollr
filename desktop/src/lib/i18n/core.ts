@@ -1,6 +1,7 @@
 // Core strings (German source → English).
 export default {
   Sitzungen: "Sessions",
+  aktiv: "active",
   "Neue Sitzung": "New session",
   "Server koppeln": "Pair server",
   "Kein Server gekoppelt": "No server paired",

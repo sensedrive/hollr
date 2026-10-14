@@ -57,7 +57,7 @@ import { readTimeline } from "./timeline";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.16.1";
+export const VERSION = "0.17.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 

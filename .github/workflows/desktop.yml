@@ -1,6 +1,8 @@
 name: desktop
 
-# Hollr desktop client (Tauri): Linux packages for x64 and arm64, attached to the release of the tag.
+# Hollr Desktop (Tauri): Linux packages for x64 and arm64 and macOS DMGs (Apple Silicon, Intel),
+# attached to the release of the tag. On macOS the app is "Hollr Desktop" (app.hollr.desktop), next to the
+# native Mac Catalyst app "Hollr" from mac.yml.
 on:
   push:
     tags: ["v*"]
@@ -50,6 +52,59 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: hollr-linux-${{ matrix.arch }}
+          path: dist-desktop/*
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        working-directory: .
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          for i in $(seq 1 30); do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist-desktop/* --clobber
+
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            name: apple-silicon
+          - target: x86_64-apple-darwin
+            name: intel
+    # one Apple Silicon runner builds both (Intel is cross-compiled)
+    runs-on: macos-26
+    permissions: { contents: write }
+    defaults: { run: { working-directory: desktop } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: 1.4.2 }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.target }}" }
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop/src-tauri -> target"
+          key: ${{ matrix.target }}
+      - run: bun install --frozen-lockfile
+      - name: Version from tag
+        if: github.ref_type == 'tag'
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          jq --arg v "$V" '.version = $v' src-tauri/tauri.conf.json > t.json && mv t.json src-tauri/tauri.conf.json
+      # ad-hoc signed (signingIdentity "-" in tauri.macos.conf.json), not notarized
+      - run: bun run tauri build --bundles dmg --target ${{ matrix.target }}
+      - name: Collect
+        run: |
+          mkdir -p ../dist-desktop
+          # Hollr-Desktop-<version>-mac-<apple-silicon|intel>.dmg (the native app's DMGs are Hollr-<version>-mac-*.dmg)
+          V=$(jq -r .version src-tauri/tauri.conf.json)
+          f=$(find src-tauri/target/${{ matrix.target }}/release/bundle/dmg -type f -name "*.dmg" | head -1)
+          [ -n "$f" ] || { echo "no DMG built"; exit 1; }
+          cp "$f" "../dist-desktop/Hollr-Desktop-$V-mac-${{ matrix.name }}.dmg"
+          ls -la ../dist-desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hollr-desktop-mac-${{ matrix.name }}
           path: dist-desktop/*
       - name: Attach to release
         if: github.ref_type == 'tag'

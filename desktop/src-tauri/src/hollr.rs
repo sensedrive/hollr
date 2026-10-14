@@ -154,6 +154,11 @@ impl Hollr {
         Err(anyhow!("Server nicht erreichbar: {last}"))
     }
 
+    /// Drops the pooled connection, the next call reconnects (users of the old handle keep it).
+    pub async fn invalidate(&self, server_id: &str) {
+        self.pool.lock().await.remove(server_id);
+    }
+
     /// Pooled connection to a paired server (live calls open their own channel on it).
     pub async fn handle_for(&self, server_id: &str) -> Result<Arc<Handle<Pinned>>> {
         let server = self.servers().into_iter().find(|s| s.id == server_id).context("Server nicht gefunden")?;
@@ -162,10 +167,10 @@ impl Hollr {
 
     async fn handle(&self, server: &Server) -> Result<Arc<Handle<Pinned>>> {
         let mut pool = self.pool.lock().await;
-        if let Some(h) = pool.get(&server.id) {
-            if !h.is_closed() {
-                return Ok(h.clone());
-            }
+        if let Some(h) = pool.get(&server.id)
+            && !h.is_closed()
+        {
+            return Ok(h.clone());
         }
         let h = Arc::new(
             Self::connect(&server.addresses, server.port, &server.user, &server.host_fingerprint, self.device_key()?).await?,

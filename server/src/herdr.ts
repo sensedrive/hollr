@@ -213,9 +213,35 @@ export class Herdr {
   }
 
   async sendKeys(pane: string, keys: string[]): Promise<void> {
-    await this.exec([(await this.isAgent(pane)) ? "agent" : "pane", "send-keys", pane, ...keys]);
+    const scope = (await this.isAgent(pane)) ? "agent" : "pane";
+    // herdr has no names for these keys: send their terminal sequences as text, in order
+    let run: string[] = [];
+    const flush = async () => {
+      if (run.length) await this.exec([scope, "send-keys", pane, ...run]);
+      run = [];
+    };
+    for (const key of keys) {
+      const seq = KEY_SEQUENCES[key];
+      if (!seq) {
+        run.push(key);
+        continue;
+      }
+      await flush();
+      await this.exec(["pane", "send-text", pane, seq]);
+    }
+    await flush();
   }
 }
+
+/** Keys herdr's send-keys doesn't know, as the escape sequences a terminal sends. */
+export const KEY_SEQUENCES: Record<string, string> = {
+  pageup: "\x1b[5~",
+  pagedown: "\x1b[6~",
+  home: "\x1bOH",
+  end: "\x1bOF",
+  delete: "\x1b[3~",
+  insert: "\x1b[2~",
+};
 
 /** Reads omp's live footer, e.g. "╰─ × muted · 󱁐 mute · 󱊷 end ─". */
 export function parseLiveState(screen: string): string | undefined {

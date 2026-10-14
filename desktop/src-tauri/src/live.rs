@@ -176,13 +176,13 @@ pub async fn start<H: russh::client::Handler + 'static>(
                         if q.len() < (rate as usize * 8 / 10) {
                             q.extend(tmp.iter());
                         }
-                    } else if kind == FRAME_JSON {
-                        if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload) {
-                            if v["t"] == "phase" && v["phase"] == "live" {
-                                live.store(true, Ordering::Relaxed);
-                            }
-                            let _ = app.emit("live", v);
+                    } else if kind == FRAME_JSON
+                        && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload)
+                    {
+                        if v["t"] == "phase" && v["phase"] == "live" {
+                            live.store(true, Ordering::Relaxed);
                         }
+                        let _ = app.emit("live", v);
                     }
                 }
             }

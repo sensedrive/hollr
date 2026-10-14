@@ -11,8 +11,8 @@
 </div>
 
 <style>
-  .backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; z-index: 10; }
+  .backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; place-items: start center; padding-top: 12vh; z-index: 10; }
   .modal { background: var(--side); border: 1px solid var(--border); border-radius: 14px; padding: 20px; width: min(560px, 92vw);
-    max-height: 86vh; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+    max-height: 80vh; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
   h2 { margin: 0; font-size: 17px; }
 </style>

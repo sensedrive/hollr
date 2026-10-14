@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { encodeFrame, encodeJson, FRAME_AUDIO, FRAME_JSON, FrameDecoder } from "../src/frames";
-import { toAgent } from "../src/herdr";
+import { Herdr, toAgent } from "../src/herdr";
 import {
   addBootstrap,
   buildPayload,
@@ -588,5 +588,23 @@ describe("models", () => {
     );
     expect(switchCommand("claude", "opus")).toBe("/model opus");
     expect(() => switchCommand("codex", "gpt-5.5")).toThrow();
+  });
+});
+
+describe("keys", () => {
+  test("keys herdr doesn't know go out as escape sequences, in order", async () => {
+    const calls: string[][] = [];
+    const herdr = new Herdr(async (args) => {
+      calls.push(args);
+      return args[1] === "list" ? { agents: [] } : "";
+    });
+    await herdr.sendKeys("w1:p1", ["a", "b", "home", "x", "delete", "enter"]);
+    expect(calls.filter((c) => c[1] !== "list")).toEqual([
+      ["pane", "send-keys", "w1:p1", "a", "b"],
+      ["pane", "send-text", "w1:p1", "\x1bOH"],
+      ["pane", "send-keys", "w1:p1", "x"],
+      ["pane", "send-text", "w1:p1", "\x1b[3~"],
+      ["pane", "send-keys", "w1:p1", "enter"],
+    ]);
   });
 });

@@ -5,7 +5,7 @@ use hollr_desktop_lib::hollr::Hollr;
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let hollr = Hollr::new(args[1].clone().into());
-    let server = if let Some(link) = args.get(2) { hollr.pair(link, "hollr-desktop-smoke").await? } else { hollr.servers()[0].clone() };
+    let server = if let Some(link) = args.get(2) { hollr.pair(link, &std::env::var("HOLLR_DEVICE").unwrap_or("hollr-desktop-smoke".into())).await? } else { hollr.servers()[0].clone() };
     println!("paired: {} device {}", server.label, server.device_id);
     let tree = hollr.gate(&server.id, "tree", None).await?;
     println!("tree: {} bytes, starts {}", tree.len(), &tree[..tree.len().min(120)]);

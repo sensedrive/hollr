@@ -19,5 +19,5 @@ export function t(text: string, vars?: Record<string, string | number>): string 
 }
 
 export function statusLabel(s: string): string {
-  return t({ idle: "bereit", done: "fertig", working: "arbeitet", blocked: "wartet auf dich" }[s] ?? s);
+  return t({ idle: "bereit", done: "fertig", working: "arbeitet", blocked: "wartet auf dich", unknown: "aktiv" }[s] ?? s);
 }

@@ -1,5 +1,6 @@
 pub mod hollr;
 mod live;
+mod tunnel;
 
 use hollr::{Hollr, Server};
 use tauri::Manager;
@@ -21,7 +22,8 @@ async fn pair(state: tauri::State<'_, Hollr>, link: String, device_name: String)
 }
 
 #[tauri::command]
-async fn remove_server(state: tauri::State<'_, Hollr>, id: String) -> R<()> {
+async fn remove_server(state: tauri::State<'_, Hollr>, tunnels: tauri::State<'_, tunnel::Tunnels>, id: String) -> R<()> {
+    tunnels.close_server(&id).await;
     state.remove_server(&id).await.map_err(err)
 }
 
@@ -70,6 +72,18 @@ async fn live_speaker(live: tauri::State<'_, Live>, muted: bool) -> R<()> {
     Ok(())
 }
 
+/// Local port on this computer that leads to `localhost:<port>` on the server (for the in-app browser).
+#[tauri::command]
+async fn tunnel_open(app: tauri::AppHandle, tunnels: tauri::State<'_, tunnel::Tunnels>, server: String, port: u16) -> R<u16> {
+    tunnels.open(app, server, port).await.map_err(err)
+}
+
+#[tauri::command]
+async fn tunnel_close(tunnels: tauri::State<'_, tunnel::Tunnels>, local_port: u16) -> R<()> {
+    tunnels.close(local_port).await;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -79,9 +93,10 @@ pub fn run() {
             let dir = app.path().app_data_dir().expect("app data dir");
             app.manage(Hollr::new(dir));
             app.manage(Live::default());
+            app.manage(tunnel::Tunnels::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![servers, pair, remove_server, gate, live_start, live_stop, live_mute, live_speaker])
+        .invoke_handler(tauri::generate_handler![servers, pair, remove_server, gate, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
