@@ -1,0 +1,24 @@
+{
+  "name": "hollr-server",
+  "version": "0.16.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "test": "bun test",
+    "check-types": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "build": "bun run scripts/build.ts"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "@types/bun": "1.2.22",
+    "@types/qrcode": "1.5.5",
+    "typescript": "5.9.2"
+  },
+  "license": "MIT"
+}

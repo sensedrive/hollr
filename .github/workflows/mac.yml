@@ -1,0 +1,45 @@
+name: mac
+
+# Mac app (Mac Catalyst) for Apple Silicon and Intel, attached to the release of the tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  dmg:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    runs-on: macos-26
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Newest Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+      - run: brew install xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: ios/build/dd-${{ matrix.arch }}/SourcePackages
+          key: spm-${{ matrix.arch }}-${{ hashFiles('ios/project.yml') }}
+      - name: Build DMG
+        env: { ARCH: "${{ matrix.arch }}", VERSION: "${{ github.ref_type == 'tag' && github.ref_name || '' }}" }
+        run: |
+          [ -n "$VERSION" ] && export VERSION="${VERSION#v}" || unset VERSION
+          ios/scripts/mac-dmg-ci.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hollr-mac-${{ matrix.arch }}
+          path: ios/build/*.dmg
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          # the server workflow creates the release; wait for it, create it if it never shows up
+          for i in $(seq 1 30); do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" ios/build/*.dmg --clobber

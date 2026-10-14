@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Runs what CI runs, before anything leaves this machine (skip once: git push --no-verify).
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+
+# files touched by the commits being pushed (stdin: <local ref> <local sha> <remote ref> <remote sha>)
+changed=""
+while read -r _ local_sha _ remote_sha; do
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    range="$local_sha"; base="$(git merge-base "$local_sha" origin/main 2>/dev/null || true)"
+    [ -n "$base" ] && range="$base..$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  changed+="$(git diff --name-only "$range" 2>/dev/null || true)"$'\n'
+done
+
+if [ -z "${changed//$'\n'/}" ]; then exit 0; fi
+
+if grep -qE '^(server/|install\.sh|\.github/)' <<<"$changed"; then
+  echo "▸ server: types · lint · tests"
+  cd "$root/server"
+  bun run check-types
+  bun run lint
+  bun test
+  bash -n "$root/install.sh"
+fi
+
+if grep -qE '^ios/' <<<"$changed"; then
+  echo "▸ ios: build"
+  cd "$root/ios"
+  command -v xcodegen >/dev/null && xcodegen generate -q
+  xcodebuild -project Hollr.xcodeproj -scheme Hollr -destination 'generic/platform=iOS Simulator' -quiet build \
+    2>&1 | grep -E "error:|BUILD FAILED" && { echo "✘ iOS-Build fehlgeschlagen"; exit 1; }
+fi
+if grep -qE '^desktop/' <<<"$changed"; then
+  echo "▸ desktop: svelte-check · cargo check"
+  cd "$root/desktop"
+  bun run check >/dev/null
+  (cd src-tauri && cargo check -q)
+fi
+echo "✔ pre-push ok"

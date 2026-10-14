@@ -1,0 +1,824 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0225E73B4920FB558A7C1344 /* BrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B93593C5F420AEB419328B5 /* BrowserView.swift */; };
+		11B5D45C5CE755FDA2899668 /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3322CFB07BC55EC7BD14BA /* Composer.swift */; };
+		19D52A7B613CFAEFB3BB95E9 /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC7D7F8A66E83200A70DFE0 /* Timeline.swift */; };
+		1B600C8A88DB172BF3AF81A1 /* NewSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A023AAFBC21566CC6D1ADA2 /* NewSpaceView.swift */; };
+		1E9B7CB51322142C450623B9 /* Tunnel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0020C719F00C6559F36F7ABF /* Tunnel.swift */; };
+		23B99D1989E9A4E9CED63CCF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 788426E5E1D9A21D681E6CF5 /* FluidAudio */; };
+		2A701E77575F00114E32F0E0 /* AgentListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */; };
+		352214150A54CF4B8871FB13 /* PairingPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20135523C477C7E3FF4526F3 /* PairingPayload.swift */; };
+		35A117D4607500E8C3D382E9 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 545D133067307064214160C5 /* MarkdownUI */; };
+		37F2B1D094F412EFE1260F1C /* ServersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028DC151D09F4CA7C3915657 /* ServersView.swift */; };
+		38AD2951853D3F540A6121F9 /* PushKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB461C556C5E5C219B20FCB /* PushKey.swift */; };
+		3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D3180E113553B70CDF4810A /* ProtocolTests.swift */; };
+		47597F2CACD6AFC33AF883C9 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */; };
+		498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */; };
+		4A07AE229CDF8604DE0CDE12 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BED9544749EEB0E7476BB5 /* Dictation.swift */; };
+		514B2B079668C322CA6DBE91 /* HollrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AD5CD41D0A367E7C71A73F /* HollrApp.swift */; };
+		51F68E40F60C46E32A53305B /* DictationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DBAEB7961669E5A00031A5B /* DictationSettings.swift */; };
+		5D1B9D75B607E536BB19C722 /* DiffViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92221483A7A40DA45402706 /* DiffViewer.swift */; };
+		5E62D25E3C3B0B23D6070423 /* HollrClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */; };
+		600EC276313BAAE941AFEB1C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EAC832FAD971F0528242B59E /* Assets.xcassets */; };
+		6038A998B56A056E0EFED763 /* ModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8962791A94FF32DBFE98885 /* ModelPicker.swift */; };
+		7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D5C6613C409FB4F134C940D7 /* WhisperKit */; };
+		7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */; };
+		7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */; };
+		831DF3CFA3E88A34A57DA0F3 /* TimelineViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C577BF328A3A26A824FF673 /* TimelineViews.swift */; };
+		8A575E6E850F340FB5D79772 /* GitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AD6EE69ADDD4E7DF04704C /* GitModels.swift */; };
+		8ECE8D1C3BB595B2E7C2FB6F /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0EB84E73241B4C0E156B01F0 /* InfoPlist.xcstrings */; };
+		961FD016CC39FD7331ED4530 /* VoiceIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6AB6D608815833828B30FD /* VoiceIO.swift */; };
+		9A322A6B9A15DE7992DA2C8D /* ToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */; };
+		9D058E4BBCBF3F3B20CD881D /* Frames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A4E25D9270177A46475CB74 /* Frames.swift */; };
+		9ED347BE7C6BE7CD221B3BFE /* Spaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD0AF2665A02292636F1A65 /* Spaces.swift */; };
+		A0BF4F1DECDBFFDC1548104E /* PairView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76055EDBFA8BC5F8A7E7BDBB /* PairView.swift */; };
+		A604541D3BD8DC89D95DF2E7 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC7D0F3B418EE3043DECA56B /* DashboardView.swift */; };
+		A6DE61EE1B7B43C2BC6EB9A4 /* AgentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9B7EF593C0D1C6A9B89F1F /* AgentSession.swift */; };
+		AA4DE42BBB6E341C7E168CAD /* AgentMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4877B66AFD418DA334916A4 /* AgentMarkdown.swift */; };
+		AA9E1B34B06011317DE36E11 /* ReleaseNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C0187F573B70F2EFC959C6 /* ReleaseNotesView.swift */; };
+		AECF890C774D9FD45864DC06 /* TextScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4B6116C23D43D57F42D49E /* TextScale.swift */; };
+		C526B25F09F82C4463F22E33 /* HerdrStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */; };
+		C8DC245B9AE249921AC87F4E /* Server.swift in Sources */ = {isa = PBXBuildFile; fileRef = 805E396247941037A1716917 /* Server.swift */; };
+		D1F535B9BB70EF91478E8A57 /* ServerInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */; };
+		EC80E407D12CBDCD64DD2974 /* GitPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFCAF16DF865175B867F578 /* GitPanel.swift */; };
+		ECB878680950687496834668 /* SpacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */; };
+		EEE855EFD83914A10A5DCE86 /* HollrLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525EA22BD8EF7FD00CC4BE94 /* HollrLog.swift */; };
+		F0F75B24C9B0F639CBC3D6A3 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = AFB9CA29E5C96BCCEC58A007 /* Citadel */; };
+		F11B5960C2756F5D52EA1FAE /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0019B48D52F54784A3AA6AD /* Palette.swift */; };
+		F29711403138418BF233D3C0 /* DeviceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D506F45973D977B4EB1B01E /* DeviceKey.swift */; };
+		F7001D3B215139A57FA7A4FC /* AppLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9E55498830793578CC172BD /* AppLock.swift */; };
+		F88B8CA99190A2DA65E6C8C6 /* MySessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515576480CDB424E848FA072 /* MySessions.swift */; };
+		F9CE19BF9FBFEE6F57C473EF /* AgentDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 436A87439A46CBB4E9A580B7 /* AgentDetailView.swift */; };
+		FD1E609FF71265AEA685CC6B /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF5CA60C68CE01EC72C2754E /* PushManager.swift */; };
+		FD1F5BB3D8C8946D38AF25F0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA1716A49A0CA301933CD58 /* RootView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CD83AAF2CFC57D053FFE2A44 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DA354FD9430AE34E07DD43B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3A1A95EE0A964544BC8966D9;
+			remoteInfo = Hollr;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0020C719F00C6559F36F7ABF /* Tunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tunnel.swift; sourceTree = "<group>"; };
+		028DC151D09F4CA7C3915657 /* ServersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServersView.swift; sourceTree = "<group>"; };
+		05524A71BC53973DF98B0626 /* Hollr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Hollr.entitlements; sourceTree = "<group>"; };
+		06AD5CD41D0A367E7C71A73F /* HollrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrApp.swift; sourceTree = "<group>"; };
+		0C3322CFB07BC55EC7BD14BA /* Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Composer.swift; sourceTree = "<group>"; };
+		0C577BF328A3A26A824FF673 /* TimelineViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineViews.swift; sourceTree = "<group>"; };
+		0EB84E73241B4C0E156B01F0 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+		0FB461C556C5E5C219B20FCB /* PushKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushKey.swift; sourceTree = "<group>"; };
+		1A023AAFBC21566CC6D1ADA2 /* NewSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSpaceView.swift; sourceTree = "<group>"; };
+		1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
+		1D506F45973D977B4EB1B01E /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
+		20135523C477C7E3FF4526F3 /* PairingPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPayload.swift; sourceTree = "<group>"; };
+		32AD6EE69ADDD4E7DF04704C /* GitModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitModels.swift; sourceTree = "<group>"; };
+		350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesView.swift; sourceTree = "<group>"; };
+		3B6AB6D608815833828B30FD /* VoiceIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceIO.swift; sourceTree = "<group>"; };
+		3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoView.swift; sourceTree = "<group>"; };
+		436A87439A46CBB4E9A580B7 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
+		45BED9544749EEB0E7476BB5 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
+		515576480CDB424E848FA072 /* MySessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySessions.swift; sourceTree = "<group>"; };
+		525EA22BD8EF7FD00CC4BE94 /* HollrLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrLog.swift; sourceTree = "<group>"; };
+		57C0187F573B70F2EFC959C6 /* ReleaseNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotesView.swift; sourceTree = "<group>"; };
+		5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
+		5F48A8E3BC209F72881B3D5B /* Hollr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Hollr.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsView.swift; sourceTree = "<group>"; };
+		6B93593C5F420AEB419328B5 /* BrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserView.swift; sourceTree = "<group>"; };
+		6D3180E113553B70CDF4810A /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
+		6FC7D7F8A66E83200A70DFE0 /* Timeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Timeline.swift; sourceTree = "<group>"; };
+		71DE12D2ADC4C5A554A697D4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		76055EDBFA8BC5F8A7E7BDBB /* PairView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairView.swift; sourceTree = "<group>"; };
+		7AFCAF16DF865175B867F578 /* GitPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitPanel.swift; sourceTree = "<group>"; };
+		7DBAEB7961669E5A00031A5B /* DictationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSettings.swift; sourceTree = "<group>"; };
+		805E396247941037A1716917 /* Server.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Server.swift; sourceTree = "<group>"; };
+		839D4D17A770C43AC204CED4 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		9A4E25D9270177A46475CB74 /* Frames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Frames.swift; sourceTree = "<group>"; };
+		9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrStore.swift; sourceTree = "<group>"; };
+		A92221483A7A40DA45402706 /* DiffViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffViewer.swift; sourceTree = "<group>"; };
+		ACA1716A49A0CA301933CD58 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		AF5CA60C68CE01EC72C2754E /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
+		B8962791A94FF32DBFE98885 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
+		BC7D0F3B418EE3043DECA56B /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		C9E55498830793578CC172BD /* AppLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLock.swift; sourceTree = "<group>"; };
+		CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentListView.swift; sourceTree = "<group>"; };
+		CFD0AF2665A02292636F1A65 /* Spaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spaces.swift; sourceTree = "<group>"; };
+		DA4B6116C23D43D57F42D49E /* TextScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextScale.swift; sourceTree = "<group>"; };
+		DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrClient.swift; sourceTree = "<group>"; };
+		DEF330646E3FAD8E17D97E02 /* HollrTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HollrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EAC832FAD971F0528242B59E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F0019B48D52F54784A3AA6AD /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
+		F00FDEBC95E6346051043CD7 /* HollrMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HollrMac.entitlements; sourceTree = "<group>"; };
+		F4877B66AFD418DA334916A4 /* AgentMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMarkdown.swift; sourceTree = "<group>"; };
+		FA9B7EF593C0D1C6A9B89F1F /* AgentSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSession.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2D105B6FE588450B9EFF4C34 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F0F75B24C9B0F639CBC3D6A3 /* Citadel in Frameworks */,
+				35A117D4607500E8C3D382E9 /* MarkdownUI in Frameworks */,
+				7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */,
+				23B99D1989E9A4E9CED63CCF /* FluidAudio in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2296EC5D996F78551B4AC39D /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				86AC98EC7D9B65638161D060 /* Hollr */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		2598F41EFB84959A20866BA9 /* Git */ = {
+			isa = PBXGroup;
+			children = (
+				A92221483A7A40DA45402706 /* DiffViewer.swift */,
+				32AD6EE69ADDD4E7DF04704C /* GitModels.swift */,
+				7AFCAF16DF865175B867F578 /* GitPanel.swift */,
+			);
+			path = Git;
+			sourceTree = "<group>";
+		};
+		3F2B80608274C7B6FE60EA91 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				C9E55498830793578CC172BD /* AppLock.swift */,
+				06AD5CD41D0A367E7C71A73F /* HollrApp.swift */,
+				525EA22BD8EF7FD00CC4BE94 /* HollrLog.swift */,
+				F0019B48D52F54784A3AA6AD /* Palette.swift */,
+				DA4B6116C23D43D57F42D49E /* TextScale.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4D2631890049C296733C507D /* Push */ = {
+			isa = PBXGroup;
+			children = (
+				0FB461C556C5E5C219B20FCB /* PushKey.swift */,
+				AF5CA60C68CE01EC72C2754E /* PushManager.swift */,
+			);
+			path = Push;
+			sourceTree = "<group>";
+		};
+		64004A81E367EC9EDE305694 /* Dictation */ = {
+			isa = PBXGroup;
+			children = (
+				45BED9544749EEB0E7476BB5 /* Dictation.swift */,
+				7DBAEB7961669E5A00031A5B /* DictationSettings.swift */,
+			);
+			path = Dictation;
+			sourceTree = "<group>";
+		};
+		68ABB8B60C8A5B4CFEB1407A /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				D4E8C97266946EAB9E8E9F42 /* HollrTests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		86AC98EC7D9B65638161D060 /* Hollr */ = {
+			isa = PBXGroup;
+			children = (
+				05524A71BC53973DF98B0626 /* Hollr.entitlements */,
+				F00FDEBC95E6346051043CD7 /* HollrMac.entitlements */,
+				71DE12D2ADC4C5A554A697D4 /* Info.plist */,
+				3F2B80608274C7B6FE60EA91 /* App */,
+				FBFC99EE84754E49DDD372C9 /* Audio */,
+				64004A81E367EC9EDE305694 /* Dictation */,
+				E4C931101FBAE429E2E4182E /* Live */,
+				A38B52055E8D0D3D9EE638A9 /* Model */,
+				4D2631890049C296733C507D /* Push */,
+				D8FFB4AAB756D4E4556541DA /* SSH */,
+				D0BE3ECE7CCB3B9A67580384 /* Views */,
+			);
+			path = Hollr;
+			sourceTree = "<group>";
+		};
+		A38B52055E8D0D3D9EE638A9 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */,
+				515576480CDB424E848FA072 /* MySessions.swift */,
+				20135523C477C7E3FF4526F3 /* PairingPayload.swift */,
+				805E396247941037A1716917 /* Server.swift */,
+				CFD0AF2665A02292636F1A65 /* Spaces.swift */,
+				6FC7D7F8A66E83200A70DFE0 /* Timeline.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		AA1AAB358D9909F4C3473C57 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				839D4D17A770C43AC204CED4 /* Base.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		B9450B8432243BC3DC2C2AD8 = {
+			isa = PBXGroup;
+			children = (
+				AA1AAB358D9909F4C3473C57 /* Config */,
+				ECEC8E4415F4A13B595BB0D6 /* Resources */,
+				2296EC5D996F78551B4AC39D /* Sources */,
+				68ABB8B60C8A5B4CFEB1407A /* Tests */,
+				CE165FBB5FC2ECF492B64547 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CE165FBB5FC2ECF492B64547 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5F48A8E3BC209F72881B3D5B /* Hollr.app */,
+				DEF330646E3FAD8E17D97E02 /* HollrTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D0BE3ECE7CCB3B9A67580384 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				436A87439A46CBB4E9A580B7 /* AgentDetailView.swift */,
+				CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */,
+				F4877B66AFD418DA334916A4 /* AgentMarkdown.swift */,
+				6B93593C5F420AEB419328B5 /* BrowserView.swift */,
+				0C3322CFB07BC55EC7BD14BA /* Composer.swift */,
+				BC7D0F3B418EE3043DECA56B /* DashboardView.swift */,
+				B8962791A94FF32DBFE98885 /* ModelPicker.swift */,
+				1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */,
+				1A023AAFBC21566CC6D1ADA2 /* NewSpaceView.swift */,
+				76055EDBFA8BC5F8A7E7BDBB /* PairView.swift */,
+				57C0187F573B70F2EFC959C6 /* ReleaseNotesView.swift */,
+				ACA1716A49A0CA301933CD58 /* RootView.swift */,
+				3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */,
+				028DC151D09F4CA7C3915657 /* ServersView.swift */,
+				9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */,
+				5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */,
+				350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */,
+				0C577BF328A3A26A824FF673 /* TimelineViews.swift */,
+				6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */,
+				2598F41EFB84959A20866BA9 /* Git */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D4E8C97266946EAB9E8E9F42 /* HollrTests */ = {
+			isa = PBXGroup;
+			children = (
+				6D3180E113553B70CDF4810A /* ProtocolTests.swift */,
+			);
+			path = HollrTests;
+			sourceTree = "<group>";
+		};
+		D8FFB4AAB756D4E4556541DA /* SSH */ = {
+			isa = PBXGroup;
+			children = (
+				1D506F45973D977B4EB1B01E /* DeviceKey.swift */,
+				9A4E25D9270177A46475CB74 /* Frames.swift */,
+				DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */,
+				0020C719F00C6559F36F7ABF /* Tunnel.swift */,
+			);
+			path = SSH;
+			sourceTree = "<group>";
+		};
+		E4C931101FBAE429E2E4182E /* Live */ = {
+			isa = PBXGroup;
+			children = (
+				FA9B7EF593C0D1C6A9B89F1F /* AgentSession.swift */,
+			);
+			path = Live;
+			sourceTree = "<group>";
+		};
+		ECEC8E4415F4A13B595BB0D6 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				EAC832FAD971F0528242B59E /* Assets.xcassets */,
+				0EB84E73241B4C0E156B01F0 /* InfoPlist.xcstrings */,
+				9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		FBFC99EE84754E49DDD372C9 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				3B6AB6D608815833828B30FD /* VoiceIO.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3A1A95EE0A964544BC8966D9 /* Hollr */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E77F53951E8EE3887F5D3CF1 /* Build configuration list for PBXNativeTarget "Hollr" */;
+			buildPhases = (
+				D8C9A59B9FE022C156ADF9BB /* Sources */,
+				D0AD619934F46F7F79200AA9 /* Resources */,
+				2D105B6FE588450B9EFF4C34 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Hollr;
+			packageProductDependencies = (
+				AFB9CA29E5C96BCCEC58A007 /* Citadel */,
+				545D133067307064214160C5 /* MarkdownUI */,
+				D5C6613C409FB4F134C940D7 /* WhisperKit */,
+				788426E5E1D9A21D681E6CF5 /* FluidAudio */,
+			);
+			productName = Hollr;
+			productReference = 5F48A8E3BC209F72881B3D5B /* Hollr.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EEBEA2DC8216467025B9FB0D /* HollrTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 12C394245512417E4534E766 /* Build configuration list for PBXNativeTarget "HollrTests" */;
+			buildPhases = (
+				5177746783C7B60756278035 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				792172FF79789D58EA19495B /* PBXTargetDependency */,
+			);
+			name = HollrTests;
+			packageProductDependencies = (
+			);
+			productName = HollrTests;
+			productReference = DEF330646E3FAD8E17D97E02 /* HollrTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1DA354FD9430AE34E07DD43B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					3A1A95EE0A964544BC8966D9 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					EEBEA2DC8216467025B9FB0D = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 484B76B80E36289956312F4E /* Build configuration list for PBXProject "Hollr" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				de,
+				en,
+			);
+			mainGroup = B9450B8432243BC3DC2C2AD8;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FD347B691D84F5243D42AC45 /* XCRemoteSwiftPackageReference "Citadel" */,
+				4C9BFE89C9176D14BBC2521B /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				43385381A240BA698E434DE8 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				A159D4F9C5337AC67CD7C069 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CE165FBB5FC2ECF492B64547 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3A1A95EE0A964544BC8966D9 /* Hollr */,
+				EEBEA2DC8216467025B9FB0D /* HollrTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D0AD619934F46F7F79200AA9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				600EC276313BAAE941AFEB1C /* Assets.xcassets in Resources */,
+				8ECE8D1C3BB595B2E7C2FB6F /* InfoPlist.xcstrings in Resources */,
+				47597F2CACD6AFC33AF883C9 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5177746783C7B60756278035 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D8C9A59B9FE022C156ADF9BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9CE19BF9FBFEE6F57C473EF /* AgentDetailView.swift in Sources */,
+				2A701E77575F00114E32F0E0 /* AgentListView.swift in Sources */,
+				AA4DE42BBB6E341C7E168CAD /* AgentMarkdown.swift in Sources */,
+				A6DE61EE1B7B43C2BC6EB9A4 /* AgentSession.swift in Sources */,
+				F7001D3B215139A57FA7A4FC /* AppLock.swift in Sources */,
+				0225E73B4920FB558A7C1344 /* BrowserView.swift in Sources */,
+				11B5D45C5CE755FDA2899668 /* Composer.swift in Sources */,
+				A604541D3BD8DC89D95DF2E7 /* DashboardView.swift in Sources */,
+				F29711403138418BF233D3C0 /* DeviceKey.swift in Sources */,
+				4A07AE229CDF8604DE0CDE12 /* Dictation.swift in Sources */,
+				51F68E40F60C46E32A53305B /* DictationSettings.swift in Sources */,
+				5D1B9D75B607E536BB19C722 /* DiffViewer.swift in Sources */,
+				9D058E4BBCBF3F3B20CD881D /* Frames.swift in Sources */,
+				8A575E6E850F340FB5D79772 /* GitModels.swift in Sources */,
+				EC80E407D12CBDCD64DD2974 /* GitPanel.swift in Sources */,
+				C526B25F09F82C4463F22E33 /* HerdrStore.swift in Sources */,
+				514B2B079668C322CA6DBE91 /* HollrApp.swift in Sources */,
+				5E62D25E3C3B0B23D6070423 /* HollrClient.swift in Sources */,
+				EEE855EFD83914A10A5DCE86 /* HollrLog.swift in Sources */,
+				6038A998B56A056E0EFED763 /* ModelPicker.swift in Sources */,
+				F88B8CA99190A2DA65E6C8C6 /* MySessions.swift in Sources */,
+				498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */,
+				1B600C8A88DB172BF3AF81A1 /* NewSpaceView.swift in Sources */,
+				A0BF4F1DECDBFFDC1548104E /* PairView.swift in Sources */,
+				352214150A54CF4B8871FB13 /* PairingPayload.swift in Sources */,
+				F11B5960C2756F5D52EA1FAE /* Palette.swift in Sources */,
+				38AD2951853D3F540A6121F9 /* PushKey.swift in Sources */,
+				FD1E609FF71265AEA685CC6B /* PushManager.swift in Sources */,
+				AA9E1B34B06011317DE36E11 /* ReleaseNotesView.swift in Sources */,
+				FD1F5BB3D8C8946D38AF25F0 /* RootView.swift in Sources */,
+				C8DC245B9AE249921AC87F4E /* Server.swift in Sources */,
+				D1F535B9BB70EF91478E8A57 /* ServerInfoView.swift in Sources */,
+				37F2B1D094F412EFE1260F1C /* ServersView.swift in Sources */,
+				7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */,
+				7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */,
+				9ED347BE7C6BE7CD221B3BFE /* Spaces.swift in Sources */,
+				ECB878680950687496834668 /* SpacesView.swift in Sources */,
+				AECF890C774D9FD45864DC06 /* TextScale.swift in Sources */,
+				19D52A7B613CFAEFB3BB95E9 /* Timeline.swift in Sources */,
+				831DF3CFA3E88A34A57DA0F3 /* TimelineViews.swift in Sources */,
+				9A322A6B9A15DE7992DA2C8D /* ToolsView.swift in Sources */,
+				1E9B7CB51322142C450623B9 /* Tunnel.swift in Sources */,
+				961FD016CC39FD7331ED4530 /* VoiceIO.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		792172FF79789D58EA19495B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3A1A95EE0A964544BC8966D9 /* Hollr */;
+			targetProxy = CD83AAF2CFC57D053FFE2A44 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		022565BB4A2F0427A0C9AB72 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hollr.app/Hollr";
+			};
+			name = Debug;
+		};
+		0FD11A9EA7CC1DA2C155FAF9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 839D4D17A770C43AC204CED4 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 22;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		33BCBA9C7593802FAC46E402 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 839D4D17A770C43AC204CED4 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 22;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8F2D8B261A01DB0138BD6151 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hollr.app/Hollr";
+			};
+			name = Release;
+		};
+		D34A45D46E9E12EFB3F53781 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Sources/Hollr/Hollr.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Sources/Hollr/HollrMac.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/Hollr/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Hollr;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Hollr scannt den Kopplungs-QR-Code deines Servers.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Hollr kann mit Face ID gesperrt werden, damit niemand an deine Server kommt.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hollr überträgt deine Stimme an omp /live auf deinem Server.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				TARGETED_DEVICE_FAMILY = "1,6";
+				TARGETED_DEVICE_FAMILY_MACCATALYST = 6;
+			};
+			name = Debug;
+		};
+		DE6DFA9ECCCF81D605C6E265 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Sources/Hollr/Hollr.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Sources/Hollr/HollrMac.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/Hollr/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Hollr;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Hollr scannt den Kopplungs-QR-Code deines Servers.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Hollr kann mit Face ID gesperrt werden, damit niemand an deine Server kommt.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hollr überträgt deine Stimme an omp /live auf deinem Server.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				TARGETED_DEVICE_FAMILY = "1,6";
+				TARGETED_DEVICE_FAMILY_MACCATALYST = 6;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		12C394245512417E4534E766 /* Build configuration list for PBXNativeTarget "HollrTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				022565BB4A2F0427A0C9AB72 /* Debug */,
+				8F2D8B261A01DB0138BD6151 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		484B76B80E36289956312F4E /* Build configuration list for PBXProject "Hollr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0FD11A9EA7CC1DA2C155FAF9 /* Debug */,
+				33BCBA9C7593802FAC46E402 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E77F53951E8EE3887F5D3CF1 /* Build configuration list for PBXNativeTarget "Hollr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D34A45D46E9E12EFB3F53781 /* Debug */,
+				DE6DFA9ECCCF81D605C6E265 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		43385381A240BA698E434DE8 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = exactVersion;
+				version = 2.4.1;
+			};
+		};
+		4C9BFE89C9176D14BBC2521B /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio";
+			requirement = {
+				kind = exactVersion;
+				version = 0.17.7;
+			};
+		};
+		A159D4F9C5337AC67CD7C069 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.18.0;
+			};
+		};
+		FD347B691D84F5243D42AC45 /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.12.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		545D133067307064214160C5 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 43385381A240BA698E434DE8 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+		788426E5E1D9A21D681E6CF5 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4C9BFE89C9176D14BBC2521B /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+		AFB9CA29E5C96BCCEC58A007 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FD347B691D84F5243D42AC45 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+		D5C6613C409FB4F134C940D7 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A159D4F9C5337AC67CD7C069 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1DA354FD9430AE34E07DD43B /* Project object */;
+}

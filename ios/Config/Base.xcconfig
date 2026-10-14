@@ -1,0 +1,3 @@
+// Team-ID lokal in Config/Local.xcconfig setzen (siehe Local.example.xcconfig)
+DEVELOPMENT_TEAM =
+#include? "Local.xcconfig"

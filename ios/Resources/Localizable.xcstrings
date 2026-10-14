@@ -1,0 +1,4574 @@
+{
+  "sourceLanguage": "de",
+  "strings": {
+    "": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ""
+          }
+        }
+      }
+    },
+    " · auf dem Gerät": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · on device"
+          }
+        }
+      }
+    },
+    " <%@>": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " <%@>"
+          }
+        }
+      }
+    },
+    " └─ %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " └─ %@"
+          }
+        }
+      }
+    },
+    "-%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "-%lld"
+          }
+        }
+      }
+    },
+    ": %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ": %@"
+          }
+        }
+      }
+    },
+    "?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "?"
+          }
+        }
+      }
+    },
+    "…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…"
+          }
+        }
+      }
+    },
+    "… (%lld earlier lines, showing %lld of %lld)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "… (%1$lld earlier lines, showing %2$lld of %3$lld)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "… (%1$lld earlier lines, showing %2$lld of %3$lld)"
+          }
+        }
+      }
+    },
+    "… gekürzt (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "… truncated (%@)"
+          }
+        }
+      }
+    },
+    "…%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…%@"
+          }
+        }
+      }
+    },
+    "· %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %@"
+          }
+        }
+      }
+    },
+    "· %lld/%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "· %1$lld/%2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "· Live: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· Live: %@"
+          }
+        }
+      }
+    },
+    "„%@“ schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close “%@”"
+          }
+        }
+      }
+    },
+    "„%@“ wird in herdr geschlossen und %@ beendet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "„%1$@“ wird in herdr geschlossen und %2$@ beendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” will be closed in herdr and %2$@ stopped."
+          }
+        }
+      }
+    },
+    "(%lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(%lld)"
+          }
+        }
+      }
+    },
+    "⟦": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⟦"
+          }
+        }
+      }
+    },
+    "⟧": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⟧"
+          }
+        }
+      }
+    },
+    "⟨%@⟩": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⟨%@⟩"
+          }
+        }
+      }
+    },
+    "*%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "*%lld"
+          }
+        }
+      }
+    },
+    "/": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/"
+          }
+        }
+      }
+    },
+    "%@ · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ · %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ (%@)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ (%2$@)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "%@ %lld%%": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ %2$lld%%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$lld%%"
+          }
+        }
+      }
+    },
+    "%@ ist gekoppelt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is paired"
+          }
+        }
+      }
+    },
+    "%@: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@: Push nicht eingerichtet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: push not set up"
+          }
+        }
+      }
+    },
+    "%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld"
+          }
+        }
+      }
+    },
+    "%lld %%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %%"
+          }
+        }
+      }
+    },
+    "%lld Agents · Gerät %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld Agents · Gerät %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld agents · device %2$@"
+          }
+        }
+      }
+    },
+    "%lld Commit(s) nicht gepusht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld commit(s) not pushed"
+          }
+        }
+      }
+    },
+    "%lld MB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld MB"
+          }
+        }
+      }
+    },
+    "%lld nicht gestaged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld unstaged"
+          }
+        }
+      }
+    },
+    "%lld Sitzung(en) werden beendet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld session(s) will be ended"
+          }
+        }
+      }
+    },
+    "%lld ungespeicherte Änderung(en)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld uncommitted change(s)"
+          }
+        }
+      }
+    },
+    "%lld unveränderte Zeilen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld unchanged lines"
+          }
+        }
+      }
+    },
+    "•": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "•"
+          }
+        }
+      }
+    },
+    "`hollr pair` starten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run `hollr pair`"
+          }
+        }
+      }
+    },
+    "↑%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑%lld"
+          }
+        }
+      }
+    },
+    "↓%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↓%lld"
+          }
+        }
+      }
+    },
+    "+%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%lld"
+          }
+        }
+      }
+    },
+    ">_": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ">_"
+          }
+        }
+      }
+    },
+    "⏹ Abgebrochen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⏹ Cancelled"
+          }
+        }
+      }
+    },
+    "│ ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "│ "
+          }
+        }
+      }
+    },
+    "└─": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "└─"
+          }
+        }
+      }
+    },
+    "└─────": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "└─────"
+          }
+        }
+      }
+    },
+    "├─": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "├─"
+          }
+        }
+      }
+    },
+    "◉": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "◉"
+          }
+        }
+      }
+    },
+    "○": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "○"
+          }
+        }
+      }
+    },
+    "☐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "☐"
+          }
+        }
+      }
+    },
+    "☑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "☑"
+          }
+        }
+      }
+    },
+    "⚙": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚙"
+          }
+        }
+      }
+    },
+    "✔ %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✔ %@"
+          }
+        }
+      }
+    },
+    "✘": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✘"
+          }
+        }
+      }
+    },
+    "$ ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "$ "
+          }
+        }
+      }
+    },
+    "$%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "$%@"
+          }
+        }
+      }
+    },
+    "1. SSH-Server (falls noch nicht da)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. SSH server (if not installed yet)"
+          }
+        }
+      }
+    },
+    "Abbrechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "Agent nicht gefunden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent not found"
+          }
+        }
+      }
+    },
+    "Agent starten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start agent"
+          }
+        }
+      }
+    },
+    "Agents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents"
+          }
+        }
+      }
+    },
+    "Aktualisieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update"
+          }
+        }
+      }
+    },
+    "Aktuell": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to date"
+          }
+        }
+      }
+    },
+    "Alle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        }
+      }
+    },
+    "Alles committet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything is committed."
+          }
+        }
+      }
+    },
+    "Alles in %@ wird endgültig gelöscht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything in %@ will be deleted permanently."
+          }
+        }
+      }
+    },
+    "Allgemein": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        }
+      }
+    },
+    "An %@ kannst du unten Text schicken.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can send text to %@ below."
+          }
+        }
+      }
+    },
+    "anbieter/modell-id": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "provider/model-id"
+          }
+        }
+      }
+    },
+    "Anderen APNs-Schlüssel importieren …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import a different APNs key …"
+          }
+        }
+      }
+    },
+    "Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes"
+          }
+        }
+      }
+    },
+    "Änderungen anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show changes"
+          }
+        }
+      }
+    },
+    "Änderungen, Verlauf und Branches ansehen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View changes, history and branches"
+          }
+        }
+      }
+    },
+    "Anfang": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginning"
+          }
+        }
+      }
+    },
+    "Anlegen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create"
+          }
+        }
+      }
+    },
+    "Ansicht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        }
+      }
+    },
+    "APNs-Schlüssel importieren (.p8) …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import APNs key (.p8) …"
+          }
+        }
+      }
+    },
+    "Apple": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple"
+          }
+        }
+      }
+    },
+    "arbeitet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "working"
+          }
+        }
+      }
+    },
+    "Art": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kind"
+          }
+        }
+      }
+    },
+    "Ask": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask"
+          }
+        }
+      }
+    },
+    "Ask – omp wartet auf dich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask – omp is waiting for you"
+          }
+        }
+      }
+    },
+    "Auch auf origin löschen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also delete on origin"
+          }
+        }
+      }
+    },
+    "Audio konnte nicht starten: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio could not start: %@"
+          }
+        }
+      }
+    },
+    "Auf %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On %@"
+          }
+        }
+      }
+    },
+    "Auf %@ antwortet nichts auf Port %lld.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Auf %1$@ antwortet nichts auf Port %2$lld."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing answers on port %2$lld on %1$@."
+          }
+        }
+      }
+    },
+    "auf %@ nicht installiert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not installed on %@"
+          }
+        }
+      }
+    },
+    "Auf dem Server `hollr pair` ausführen (oder im herdr-Menü „Hollr: iPhone koppeln“) und den QR-Code scannen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run `hollr pair` on the server (or use the herdr menu “Hollr: pair iPhone”) and scan the QR code."
+          }
+        }
+      }
+    },
+    "Auf dem Server bleibt der Schlüssel bis `hollr revoke %@`.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The key stays on the server until `hollr revoke %@`."
+          }
+        }
+      }
+    },
+    "Auf dem Server: Installer ausführen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the server: run the installer"
+          }
+        }
+      }
+    },
+    "Aufgabe fertig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task finished"
+          }
+        }
+      }
+    },
+    "Aus der Übersicht nehmen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from overview"
+          }
+        }
+      }
+    },
+    "Auslastung": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load"
+          }
+        }
+      }
+    },
+    "Auswahl in Codex öffnen (/model)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Codex's picker (/model)"
+          }
+        }
+      }
+    },
+    "Automatisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      }
+    },
+    "Automatisch erkennen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detect automatically"
+          }
+        }
+      }
+    },
+    "Basis (leer = aktueller Branch)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base (empty = current branch)"
+          }
+        }
+      }
+    },
+    "Beende …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ending …"
+          }
+        }
+      }
+    },
+    "Befehl ausführen …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run a command …"
+          }
+        }
+      }
+    },
+    "Befehl kopieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy command"
+          }
+        }
+      }
+    },
+    "bereit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ready"
+          }
+        }
+      }
+    },
+    "Beste Genauigkeit, 25 Sprachen, Deutsch + Englisch gemischt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best accuracy, 25 languages, German + English mixed"
+          }
+        }
+      }
+    },
+    "Binärdatei": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Binary file"
+          }
+        }
+      }
+    },
+    "Branch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch"
+          }
+        }
+      }
+    },
+    "Browser": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browser"
+          }
+        }
+      }
+    },
+    "Browser zeigt auch localhost-Seiten des Servers – über SSH, ohne Zusatzdienst": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The browser also shows the server's localhost pages – over SSH, no extra service"
+          }
+        }
+      }
+    },
+    "Build": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Build"
+          }
+        }
+      }
+    },
+    "Build %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Build %lld"
+          }
+        }
+      }
+    },
+    "Chat konnte nicht geöffnet werden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chat could not be opened."
+          }
+        }
+      }
+    },
+    "Chat schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close chat"
+          }
+        }
+      }
+    },
+    "Chat schließen?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close chat?"
+          }
+        }
+      }
+    },
+    "Claude Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code"
+          }
+        }
+      }
+    },
+    "Codex": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex"
+          }
+        }
+      }
+    },
+    "Codex wechselt das Modell nur über seine eigene Auswahl im Terminal.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex only switches models through its own picker in the terminal."
+          }
+        }
+      }
+    },
+    "Commit-Hash kopieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy commit hash"
+          }
+        }
+      }
+    },
+    "Danach mit >_ ↑ ↓ und Enter wählen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Then choose with >_ ↑ ↓ and Enter."
+          }
+        }
+      }
+    },
+    "Das ist kein Hollr-Kopplungscode.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is not a Hollr pairing code."
+          }
+        }
+      }
+    },
+    "Das ist keine APNs-Schlüsseldatei (.p8).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is not an APNs key file (.p8)."
+          }
+        }
+      }
+    },
+    "Das Pane „%@“ wird in herdr auf %@ geschlossen und %@ beendet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Das Pane „%1$@“ wird in herdr auf %2$@ geschlossen und %3$@ beendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pane “%1$@” will be closed in herdr on %2$@ and %3$@ will be stopped."
+          }
+        }
+      }
+    },
+    "Dateien": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files"
+          }
+        }
+      }
+    },
+    "Dein Server meldet sich direkt über Apple, wenn ein Agent auf dich wartet, fertig ist oder mit einem Fehler stoppt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your server notifies you directly via Apple when an agent waits for you, finishes or stops with an error."
+          }
+        }
+      }
+    },
+    "Den Link aus `hollr pair --link` kopieren und unten einfügen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the link from `hollr pair --link` and paste it below."
+          }
+        }
+      }
+    },
+    "Der Code wurde schon benutzt oder ist abgelaufen. Auf dem Server neu erzeugen: hollr pair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code was already used or has expired. Create a new one on the server: hollr pair"
+          }
+        }
+      }
+    },
+    "Der Installer erkennt apt, dnf, yum, pacman, zypper und apk und lässt alles Vorhandene in Ruhe.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installer detects apt, dnf, yum, pacman, zypper and apk and leaves everything already installed alone."
+          }
+        }
+      }
+    },
+    "Der Kopplungscode ist abgelaufen. Auf dem Server neu erzeugen: hollr pair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing code has expired. Create a new one on the server: hollr pair"
+          }
+        }
+      }
+    },
+    "Der Kopplungscode ist beschädigt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing code is damaged."
+          }
+        }
+      }
+    },
+    "Der Schlüssel liegt im Schlüsselbund dieses iPhones. Neue Server bekommen ihn automatisch.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The key is stored in this iPhone's keychain. New servers get it automatically."
+          }
+        }
+      }
+    },
+    "Design": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Design"
+          }
+        }
+      }
+    },
+    "Details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        }
+      }
+    },
+    "Deutsch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "German"
+          }
+        }
+      }
+    },
+    "Die Session existiert in herdr nicht mehr.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The session no longer exists in herdr."
+          }
+        }
+      }
+    },
+    "Diktat beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop dictation"
+          }
+        }
+      }
+    },
+    "Diktieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictate"
+          }
+        }
+      }
+    },
+    "Dunkel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        }
+      }
+    },
+    "Dunkles Design": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark theme"
+          }
+        }
+      }
+    },
+    "Ein Begriff pro Zeile, falsch verstandene Varianten nach „=“: z. B. „JIRA = Jira, Dschira“. Die Liste fließt in alle Engines ein (Apple-Kontext, Whisper-Prompt, Parakeet-Boost) und korrigiert danach Schreibweisen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One term per line, misheard variants after “=”, e.g. “JIRA = Jira, Dschira”. The list feeds all engines (Apple context, Whisper prompt, Parakeet boost) and fixes spellings afterwards."
+          }
+        }
+      }
+    },
+    "Eingebauter Browser; Links fragen: Hollr-Browser oder Safari": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in browser; links ask: Hollr browser or Safari"
+          }
+        }
+      }
+    },
+    "Einmal fürs Team: developer.apple.com → Keys → „+“ → Apple Push Notifications service. Die .p8 hier importieren – Hollr richtet damit alle Server ein.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once per team: developer.apple.com → Keys → “+” → Apple Push Notifications service. Import the .p8 here – Hollr sets up all servers with it."
+          }
+        }
+      }
+    },
+    "Einrichtung · %lld Problem(e)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup · %lld problem(s)"
+          }
+        }
+      }
+    },
+    "Einrichtung · alles korrekt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup · all good"
+          }
+        }
+      }
+    },
+    "Einstellungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "EMPFOHLEN": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RECOMMENDED"
+          }
+        }
+      }
+    },
+    "Empfohlen: sehr genau bei Deutsch mit englischen Fachwörtern, läuft auf der Neural Engine.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended: very accurate for German with English technical terms, runs on the Neural Engine."
+          }
+        }
+      }
+    },
+    "Englisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English"
+          }
+        }
+      }
+    },
+    "Entfernen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        }
+      }
+    },
+    "Error: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error: %@"
+          }
+        }
+      }
+    },
+    "ersetzen durch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "replace with"
+          }
+        }
+      }
+    },
+    "Ersetzung hinzufügen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add replacement"
+          }
+        }
+      }
+    },
+    "Fachwort-Boost": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Term boost"
+          }
+        }
+      }
+    },
+    "Fachwörter (%lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Technical terms (%lld)"
+          }
+        }
+      }
+    },
+    "Fachwörter verwenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use technical terms"
+          }
+        }
+      }
+    },
+    "Fast so genau, deutlich schneller": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Almost as accurate, much faster"
+          }
+        }
+      }
+    },
+    "Fehler": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        }
+      }
+    },
+    "Fehlgeschlagen (Exit %lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed (exit %lld)"
+          }
+        }
+      }
+    },
+    "Feintuning": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine tuning"
+          }
+        }
+      }
+    },
+    "fertig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "done"
+          }
+        }
+      }
+    },
+    "Fertig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "Feste Ersetzungen nach der Erkennung, z. B. „Komma“ → „,“.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixed replacements after recognition, e.g. “comma” → “,”."
+          }
+        }
+      }
+    },
+    "Fragen & Bestätigungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questions & confirmations"
+          }
+        }
+      }
+    },
+    "Fragt beim Öffnen und nach mehr als 30 Sekunden im Hintergrund.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asks when opening and after more than 30 seconds in the background."
+          }
+        }
+      }
+    },
+    "Französisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "French"
+          }
+        }
+      }
+    },
+    "Für Deutsch mit englischen Fachbegriffen „Deutsch“ wählen – das ist genauer als „Automatisch“.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For German with English technical terms choose “German” – it is more accurate than “Automatic”."
+          }
+        }
+      }
+    },
+    "Für localhost-Adressen zuerst einen Server koppeln.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair a server first to open localhost addresses."
+          }
+        }
+      }
+    },
+    "Ganze Antwort anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show full answer"
+          }
+        }
+      }
+    },
+    "Ganze App skalieren – auch per Zwei-Finger-Geste": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scale the whole app – also with a pinch"
+          }
+        }
+      }
+    },
+    "GEÄNDERTE DATEIEN  %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CHANGED FILES  %lld"
+          }
+        }
+      }
+    },
+    "gehört": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "heard"
+          }
+        }
+      }
+    },
+    "Gerade läuft dort kein Web-Dienst auf localhost.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No web service is running on localhost there right now."
+          }
+        }
+      }
+    },
+    "Gerätecode": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passcode"
+          }
+        }
+      }
+    },
+    "Gerätename": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device name"
+          }
+        }
+      }
+    },
+    "Gilt nur für diese Sitzung – omps Standard bleibt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies to this session only – omp's default stays."
+          }
+        }
+      }
+    },
+    "Git & Dateien": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git & files"
+          }
+        }
+      }
+    },
+    "Git-Worktree": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git-Worktree"
+          }
+        }
+      }
+    },
+    "Groß": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large"
+          }
+        }
+      }
+    },
+    "Größer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larger"
+          }
+        }
+      }
+    },
+    "Hell": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        }
+      }
+    },
+    "Helles Design": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light theme"
+          }
+        }
+      }
+    },
+    "herdr legt einen eigenen Arbeitsordner mit neuem Branch an – parallel zu main, ohne dass sich Agents in die Quere kommen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "herdr creates a separate working folder with a new branch – parallel to main, so agents don't get in each other's way."
+          }
+        }
+      }
+    },
+    "herdr, omp, Claude Code, Codex und Hollr direkt aus der App installieren und aktualisieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install and update herdr, omp, Claude Code, Codex and Hollr right from the app"
+          }
+        }
+      }
+    },
+    "Hier erscheinen die Sitzungen, die du in Hollr öffnest oder startest – Agents und Terminals, nach Maschine sortiert.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions you open or start in Hollr appear here – agents and terminals, grouped by machine."
+          }
+        }
+      }
+    },
+    "Hier läuft kein Agent, nur eine Shell.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No agent runs here, just a shell."
+          }
+        }
+      }
+    },
+    "Hollr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr"
+          }
+        }
+      }
+    },
+    "Hollr & Agents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr & Agents"
+          }
+        }
+      }
+    },
+    "Hollr ist gesperrt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr is locked"
+          }
+        }
+      }
+    },
+    "hört zu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "listening"
+          }
+        }
+      }
+    },
+    "Ich höre zu …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening …"
+          }
+        }
+      }
+    },
+    "Ich höre zu … (zum Beenden tippen)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening … (tap to stop)"
+          }
+        }
+      }
+    },
+    "Im Hollr-Browser": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Hollr browser"
+          }
+        }
+      }
+    },
+    "In den iOS-Einstellungen erlauben": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow in iOS Settings"
+          }
+        }
+      }
+    },
+    "In Safari": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Safari"
+          }
+        }
+      }
+    },
+    "In Safari öffnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Safari"
+          }
+        }
+      }
+    },
+    "Installieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install"
+          }
+        }
+      }
+    },
+    "installiert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "installed"
+          }
+        }
+      }
+    },
+    "jetzt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "now"
+          }
+        }
+      }
+    },
+    "Kamera nicht verfügbar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera not available"
+          }
+        }
+      }
+    },
+    "Kein Projekt (Home)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No project (home)"
+          }
+        }
+      }
+    },
+    "Kein Whisper-Modell": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Whisper model"
+          }
+        }
+      }
+    },
+    "Keine Agents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No agents"
+          }
+        }
+      }
+    },
+    "Keine Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changes"
+          }
+        }
+      }
+    },
+    "Keine Panes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No panes"
+          }
+        }
+      }
+    },
+    "Keiner (Shell)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None (shell)"
+          }
+        }
+      }
+    },
+    "Kernel %@ · läuft seit %@ · Hollr %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Kernel %1$@ · läuft seit %2$@ · Hollr %3$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kernel %1$@ · up %2$@ · Hollr %3$@"
+          }
+        }
+      }
+    },
+    "Key-ID (10 Zeichen)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key ID (10 characters)"
+          }
+        }
+      }
+    },
+    "Klein": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small"
+          }
+        }
+      }
+    },
+    "Kleiner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smaller"
+          }
+        }
+      }
+    },
+    "Kompakt, gute Genauigkeit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact, good accuracy"
+          }
+        }
+      }
+    },
+    "Konto %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account %@"
+          }
+        }
+      }
+    },
+    "Kopple mit %@ …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing with %@ …"
+          }
+        }
+      }
+    },
+    "Kopplung abgelehnt (%@).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing rejected (%@)."
+          }
+        }
+      }
+    },
+    "Lade …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading …"
+          }
+        }
+      }
+    },
+    "Lädt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
+    "Lange Aufnahmen an Pausen teilen (VAD)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split long recordings at pauses (VAD)"
+          }
+        }
+      }
+    },
+    "Large v3 ist am genauesten, braucht aber mehr Zeit und Speicher.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large v3 is the most accurate but needs more time and memory."
+          }
+        }
+      }
+    },
+    "läuft": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "running"
+          }
+        }
+      }
+    },
+    "Leer = Home-Verzeichnis. Ordner mit ~ werden auf dem Server aufgelöst.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty = home directory. Folders with ~ are resolved on the server."
+          }
+        }
+      }
+    },
+    "Link kopieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy link"
+          }
+        }
+      }
+    },
+    "Live": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live"
+          }
+        }
+      }
+    },
+    "Live · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live · %@"
+          }
+        }
+      }
+    },
+    "Live beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End live"
+          }
+        }
+      }
+    },
+    "Live klappt jetzt schon beim ersten Anruf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live now works on the very first call"
+          }
+        }
+      }
+    },
+    "Live mit omp sprechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Talk live with omp"
+          }
+        }
+      }
+    },
+    "Live wurde am Rechner beendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live was ended at the computer."
+          }
+        }
+      }
+    },
+    "localhost auf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "localhost on"
+          }
+        }
+      }
+    },
+    "localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr opens localhost addresses through the SSH connection to the server."
+          }
+        }
+      }
+    },
+    "Lokale Spracheingabe mit Parakeet, Whisper und Apple – mehrsprachig, mit Fachwörtern": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local dictation with Parakeet, Whisper and Apple – multilingual, with technical terms"
+          }
+        }
+      }
+    },
+    "Löschen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "Löscht den Branch zusätzlich im entfernten Repository (z. B. GitHub).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also deletes the branch in the remote repository (e.g. GitHub)."
+          }
+        }
+      }
+    },
+    "Maximale Genauigkeit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum accuracy"
+          }
+        }
+      }
+    },
+    "Mehr Wiederholungen = robuster bei schwierigen Stellen, aber langsamer.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More retries = more robust on hard passages, but slower."
+          }
+        }
+      }
+    },
+    "Melden, wenn …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notify when …"
+          }
+        }
+      }
+    },
+    "Merge – zeigt, was der Merge gebracht hat.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge – shows what the merge brought in."
+          }
+        }
+      }
+    },
+    "Mikro aus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mic off"
+          }
+        }
+      }
+    },
+    "Mikro aus lässt die Antwort weiterlaufen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mic off keeps the answer playing"
+          }
+        }
+      }
+    },
+    "Mikrofon an": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone on"
+          }
+        }
+      }
+    },
+    "Mikrofon aus (wie Leertaste) – du hörst weiter zu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone off (like Space) – you keep listening"
+          }
+        }
+      }
+    },
+    "Mikrofon nicht verfügbar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone not available"
+          }
+        }
+      }
+    },
+    "Mikrofon-Zugriff fehlt (Einstellungen › Hollr › Mikrofon).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone access missing (Settings › Hollr › Microphone)."
+          }
+        }
+      }
+    },
+    "Mit %@ entsperren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock with %@"
+          }
+        }
+      }
+    },
+    "Mit %@ sperren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lock with %@"
+          }
+        }
+      }
+    },
+    "Mit Suche, zuletzt genutzten Modellen und %@-Stufe.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With search, recently used models and %@ level."
+          }
+        }
+      }
+    },
+    "Mitteilungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications"
+          }
+        }
+      }
+    },
+    "Modell": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        }
+      }
+    },
+    "Modell schnell wechseln: Statuszeile antippen oder ⋯ → Modell wechseln (omp nur für die Sitzung)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch models quickly: tap the status line or ⋯ → Switch model (omp: this session only)"
+          }
+        }
+      }
+    },
+    "Modell suchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search models"
+          }
+        }
+      }
+    },
+    "Modell und Thinking/Effort gleich beim Start einer Sitzung wählen – mit Suche und zuletzt genutzten Modellen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick model and thinking/effort right when starting a session – with search and recently used models"
+          }
+        }
+      }
+    },
+    "Modell wechseln": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch model"
+          }
+        }
+      }
+    },
+    "Modellname lädt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading model name"
+          }
+        }
+      }
+    },
+    "Nach dem Diktieren automatisch senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send automatically after dictation"
+          }
+        }
+      }
+    },
+    "Nach Updates suchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates"
+          }
+        }
+      }
+    },
+    "Nachricht an %@ …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message to %@ …"
+          }
+        }
+      }
+    },
+    "Name (optional)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name (optional)"
+          }
+        }
+      }
+    },
+    "Neu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New"
+          }
+        }
+      }
+    },
+    "Neue Sitzung": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New session"
+          }
+        }
+      }
+    },
+    "Neuer Chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New chat"
+          }
+        }
+      }
+    },
+    "Neuer Space": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New space"
+          }
+        }
+      }
+    },
+    "Neuer Workspace": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New workspace"
+          }
+        }
+      }
+    },
+    "Neuer Worktree …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New worktree …"
+          }
+        }
+      }
+    },
+    "Neuigkeiten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What's new"
+          }
+        }
+      }
+    },
+    "Nicht committete Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uncommitted changes"
+          }
+        }
+      }
+    },
+    "nicht installiert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not installed"
+          }
+        }
+      }
+    },
+    "Nicht umbrechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't wrap"
+          }
+        }
+      }
+    },
+    "Niederländisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dutch"
+          }
+        }
+      }
+    },
+    "Nochmal scannen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan again"
+          }
+        }
+      }
+    },
+    "Nur schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close only"
+          }
+        }
+      }
+    },
+    "Nutzungslimits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limits"
+          }
+        }
+      }
+    },
+    "Nutzungslimits von Claude und ChatGPT": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limits for Claude and ChatGPT"
+          }
+        }
+      }
+    },
+    "NVIDIA-Original, 25 Sprachen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NVIDIA original, 25 languages"
+          }
+        }
+      }
+    },
+    "NVIDIA, 25 Sprachen, Deutsch + Englisch im selben Satz": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NVIDIA, 25 languages, German + English in the same sentence"
+          }
+        }
+      }
+    },
+    "Oder tippen …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or type …"
+          }
+        }
+      }
+    },
+    "Öffnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "Öffnet als neuer Tab im Ordner dieses Workspaces.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens as a new tab in this workspace's folder."
+          }
+        }
+      }
+    },
+    "Oh My Pi – mit Live-Sprachmodus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oh My Pi – with live voice mode"
+          }
+        }
+      }
+    },
+    "Ohne diesen Haken bricht das Entfernen ab, solange Änderungen offen sind.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without this, removal stops while changes are uncommitted."
+          }
+        }
+      }
+    },
+    "Ohne Download, Text erscheint schon beim Sprechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No download, text appears while you speak"
+          }
+        }
+      }
+    },
+    "Ohne Mikrofon-Zugriff geht es nicht (Einstellungen › Hollr › Mikrofon).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This needs microphone access (Settings › Hollr › Microphone)."
+          }
+        }
+      }
+    },
+    "omp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp"
+          }
+        }
+      }
+    },
+    "omp /live vom iPhone: echtes Gespräch mit deinen Agents auf dem Server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp /live from the iPhone: real conversations with your agents on the server"
+          }
+        }
+      }
+    },
+    "omp /live wird gestartet …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting omp /live …"
+          }
+        }
+      }
+    },
+    "omp, Claude Code und Codex öffnen, lesen, schreiben und schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open, read, write to and close omp, Claude Code and Codex"
+          }
+        }
+      }
+    },
+    "OpenAI, 99 Sprachen, höchste Genauigkeit mit Large v3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenAI, 99 languages, highest accuracy with Large v3"
+          }
+        }
+      }
+    },
+    "Optional mit Face ID sperren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional Face ID lock"
+          }
+        }
+      }
+    },
+    "Ordner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder"
+          }
+        }
+      }
+    },
+    "Ordner auf dem Server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder on the server"
+          }
+        }
+      }
+    },
+    "Ordner komplett löschen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete folder completely"
+          }
+        }
+      }
+    },
+    "Ordner löschen ist gesperrt: %lld Worktree(s) hängen an diesem Repo.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleting is blocked: %lld worktree(s) depend on this repo."
+          }
+        }
+      }
+    },
+    "Ordner und Branch „%@“ werden gelöscht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder and branch “%@” will be deleted."
+          }
+        }
+      }
+    },
+    "Ordner wird gelöscht, der Branch bleibt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder is deleted, the branch stays."
+          }
+        }
+      }
+    },
+    "Parakeet erkennt die Sprache selbst – auch gemischt Deutsch/Englisch.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parakeet detects the language itself – even mixed German/English."
+          }
+        }
+      }
+    },
+    "Parakeet-Modell noch nicht geladen (Einstellungen › Sprache).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parakeet model not loaded yet (Settings › Speech)."
+          }
+        }
+      }
+    },
+    "Parakeet-Modelle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parakeet models"
+          }
+        }
+      }
+    },
+    "Polnisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polish"
+          }
+        }
+      }
+    },
+    "Portugiesisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portuguese"
+          }
+        }
+      }
+    },
+    "Protokoll anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show log"
+          }
+        }
+      }
+    },
+    "Protokoll ausblenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide log"
+          }
+        }
+      }
+    },
+    "Prozess suchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search processes"
+          }
+        }
+      }
+    },
+    "Prozesse · nach CPU": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processes · by CPU"
+          }
+        }
+      }
+    },
+    "Prüfe Space …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking space …"
+          }
+        }
+      }
+    },
+    "Prüfung %lld läuft": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check %lld running"
+          }
+        }
+      }
+    },
+    "Push-Mitteilungen, wenn ein Agent wartet, fertig ist oder einen Fehler hat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push notifications when an agent waits, finishes or fails"
+          }
+        }
+      }
+    },
+    "Push-Schlüssel einmal in der App importieren – alle Server werden automatisch eingerichtet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import the push key once in the app – all servers are set up automatically"
+          }
+        }
+      }
+    },
+    "QR-Code scannen – fertig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the QR code – done"
+          }
+        }
+      }
+    },
+    "Quelltext": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        }
+      }
+    },
+    "Read": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read"
+          }
+        }
+      }
+    },
+    "Repo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repo"
+          }
+        }
+      }
+    },
+    "Riesig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huge"
+          }
+        }
+      }
+    },
+    "Satzzeichen & Großschreibung": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punctuation & capitalization"
+          }
+        }
+      }
+    },
+    "Schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "Schließen / Worktree löschen …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close / delete worktree …"
+          }
+        }
+      }
+    },
+    "Schlüssel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key"
+          }
+        }
+      }
+    },
+    "Schlüssel fehlt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key missing"
+          }
+        }
+      }
+    },
+    "Schnell, für kurze Notizen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast, for short notes"
+          }
+        }
+      }
+    },
+    "Schnellster Start, Fachwörter werden als Kontext genutzt (max. 100).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastest start, technical terms are used as context (max. 100)."
+          }
+        }
+      }
+    },
+    "Sehr groß": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Very large"
+          }
+        }
+      }
+    },
+    "Sehr klein": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Very small"
+          }
+        }
+      }
+    },
+    "Senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "Server & Geräte": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servers & devices"
+          }
+        }
+      }
+    },
+    "Server aus Hollr entfernen?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove server from Hollr?"
+          }
+        }
+      }
+    },
+    "Server einrichten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up a server"
+          }
+        }
+      }
+    },
+    "Server koppeln": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair server"
+          }
+        }
+      }
+    },
+    "Server koppeln: kopierbare Befehle für Linux und macOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair server: copyable commands for Linux and macOS"
+          }
+        }
+      }
+    },
+    "Server nicht erreichbar: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server not reachable: %@"
+          }
+        }
+      }
+    },
+    "Server per QR-Code koppeln – nur SSH, kein Zusatzdienst": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair servers by QR code – SSH only, no extra service"
+          }
+        }
+      }
+    },
+    "Server-Info": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server info"
+          }
+        }
+      }
+    },
+    "Server-Info %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server info %@"
+          }
+        }
+      }
+    },
+    "Server-Info: Auslastung, Prozesse und ob der Server korrekt eingerichtet ist": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server info: load, processes and whether the server is set up correctly"
+          }
+        }
+      }
+    },
+    "Server-Schlüssel stimmt nicht (erwartet %@…, bekommen %@…). Nicht verbinden – Server neu koppeln.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Server-Schlüssel stimmt nicht (erwartet %1$@…, bekommen %2$@…). Nicht verbinden – Server neu koppeln."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server key mismatch (expected %1$@…, got %2$@…). Not connecting – pair the server again."
+          }
+        }
+      }
+    },
+    "Shell · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell · %@"
+          }
+        }
+      }
+    },
+    "Shell ohne Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell without agent"
+          }
+        }
+      }
+    },
+    "Shells anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show shells"
+          }
+        }
+      }
+    },
+    "Sicherheit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Security"
+          }
+        }
+      }
+    },
+    "Sitzung beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End session"
+          }
+        }
+      }
+    },
+    "Sitzungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions"
+          }
+        }
+      }
+    },
+    "Sitzungen beenden, Dateien und Branch bleiben.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End sessions, files and branch stay."
+          }
+        }
+      }
+    },
+    "Skaliert die ganze App. Im Chat geht's auch mit zwei Fingern (auf-/zuziehen) oder im Lesemodus.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scales the whole app. In a chat you can also pinch with two fingers or use reading mode."
+          }
+        }
+      }
+    },
+    "So erscheint dein iPhone in `hollr devices` auf dem Server.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is how your iPhone appears in `hollr devices` on the server."
+          }
+        }
+      }
+    },
+    "Sortierung": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sorting"
+          }
+        }
+      }
+    },
+    "Space": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Space"
+          }
+        }
+      }
+    },
+    "Space schließen …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close space …"
+          }
+        }
+      }
+    },
+    "Space schließen mit allen Optionen: nur schließen, Worktree entfernen, Worktree und Branch löschen (auch auf origin), Ordner löschen – vorher siehst du offene Änderungen und nicht gepushte Commits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close a space with all options: close only, remove worktree, delete worktree and branch (also on origin), delete folder – you see uncommitted changes and unpushed commits first"
+          }
+        }
+      }
+    },
+    "Spaces": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spaces"
+          }
+        }
+      }
+    },
+    "Spaces: Repos und Worktrees, Git-Verlauf und Dateien; Spaces anlegen und löschen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spaces: repos and worktrees, git history and files; create and delete spaces"
+          }
+        }
+      }
+    },
+    "Speichern und auf Server übertragen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save and install on servers"
+          }
+        }
+      }
+    },
+    "Sprach-Engine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech engine"
+          }
+        }
+      }
+    },
+    "Sprache": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech"
+          }
+        }
+      }
+    },
+    "Sprache wird von Apple nicht unterstützt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language not supported by Apple."
+          }
+        }
+      }
+    },
+    "Spracherkennung nicht erlaubt (Einstellungen › Hollr).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech recognition not allowed (Settings › Hollr)."
+          }
+        }
+      }
+    },
+    "Spracherkennung nicht verfügbar.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech recognition not available."
+          }
+        }
+      }
+    },
+    "Sprachmodell wird geladen …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading speech model …"
+          }
+        }
+      }
+    },
+    "Sprechen geht bisher nur mit omp.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Talking only works with omp so far."
+          }
+        }
+      }
+    },
+    "Sprich mit omp /live auf deinem Server –\nso, als säßest du davor.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Talk to omp /live on your server –\nas if you were sitting in front of it."
+          }
+        }
+      }
+    },
+    "Stagen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stage"
+          }
+        }
+      }
+    },
+    "Standard": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        }
+      }
+    },
+    "Standard des Agents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent default"
+          }
+        }
+      }
+    },
+    "Standardliste wiederherstellen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore default list"
+          }
+        }
+      }
+    },
+    "Starte in herdr eine omp-Session.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start an omp session in herdr."
+          }
+        }
+      }
+    },
+    "Startet im Home-Verzeichnis von %@ – ohne Projekt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starts in %@'s home directory – no project."
+          }
+        }
+      }
+    },
+    "stumm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "muted"
+          }
+        }
+      }
+    },
+    "Suche Web-Dienste …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking for web services …"
+          }
+        }
+      }
+    },
+    "System folgen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow system"
+          }
+        }
+      }
+    },
+    "Tastatur schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide keyboard"
+          }
+        }
+      }
+    },
+    "Tastatur schließen, schließt nach dem Senden von selbst": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide the keyboard; it also closes after sending"
+          }
+        }
+      }
+    },
+    "Tasten ans Terminal senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send keys to the terminal"
+          }
+        }
+      }
+    },
+    "Tasten senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send keys"
+          }
+        }
+      }
+    },
+    "Tasten senden fehlgeschlagen: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending keys failed: %@"
+          }
+        }
+      }
+    },
+    "Team-ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Team-ID"
+          }
+        }
+      }
+    },
+    "Team: Jede Person koppelt ihr eigenes iPhone mit `hollr pair`. Entfernen auf dem Server mit `hollr revoke <name>`.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Team: everyone pairs their own iPhone with `hollr pair`. Remove on the server with `hollr revoke <name>`."
+          }
+        }
+      }
+    },
+    "Terminal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal"
+          }
+        }
+      }
+    },
+    "Terminal · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal · %@"
+          }
+        }
+      }
+    },
+    "Terminals starten – auch ohne Projekt im Home-Verzeichnis": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start terminals – even without a project, in the home directory"
+          }
+        }
+      }
+    },
+    "Test-Mitteilung senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send test notification"
+          }
+        }
+      }
+    },
+    "Text größer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larger text"
+          }
+        }
+      }
+    },
+    "Text kleiner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smaller text"
+          }
+        }
+      }
+    },
+    "Textgröße": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text size"
+          }
+        }
+      }
+    },
+    "Tippe auf den Kreis und sprich mit omp.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the circle and talk to omp."
+          }
+        }
+      }
+    },
+    "Tippen, um eine Testtranskription aufzunehmen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to record a test transcription"
+          }
+        }
+      }
+    },
+    "TODO": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TODO"
+          }
+        }
+      }
+    },
+    "Ton an": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound on"
+          }
+        }
+      }
+    },
+    "Ton aus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound off"
+          }
+        }
+      }
+    },
+    "Ton aus (Antwort nicht hören)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound off (don't hear the answer)"
+          }
+        }
+      }
+    },
+    "Ton aus: Antwort stummschalten, ohne aufzulegen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound off: mute the answer without hanging up"
+          }
+        }
+      }
+    },
+    "Transkription testen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test transcription"
+          }
+        }
+      }
+    },
+    "Trotzdem neu installieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinstall anyway"
+          }
+        }
+      }
+    },
+    "Über": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "Über %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Via %@"
+          }
+        }
+      }
+    },
+    "Übersicht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        }
+      }
+    },
+    "Übersicht zeigt deine Sitzungen, gruppiert nach Maschine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview shows your sessions, grouped by machine"
+          }
+        }
+      }
+    },
+    "Unerwartete Antwort vom Server. Ist hollr dort aktuell? (install.sh erneut ausführen)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unexpected answer from the server. Is hollr up to date there? (run install.sh again)"
+          }
+        }
+      }
+    },
+    "Ungespeicherte Änderungen verwerfen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard uncommitted changes"
+          }
+        }
+      }
+    },
+    "Unstagen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unstage"
+          }
+        }
+      }
+    },
+    "URL oder localhost:3000": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL or localhost:3000"
+          }
+        }
+      }
+    },
+    "Verbinde …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting …"
+          }
+        }
+      }
+    },
+    "Verbindung zu %@ fehlgeschlagen: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Verbindung zu %1$@ fehlgeschlagen: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection to %1$@ failed: %2$@"
+          }
+        }
+      }
+    },
+    "Verbindung zum Server wurde beendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection to the server was closed."
+          }
+        }
+      }
+    },
+    "Verbindung zum Server wurde unerwartet beendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection to the server closed unexpectedly."
+          }
+        }
+      }
+    },
+    "Verbindungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connections"
+          }
+        }
+      }
+    },
+    "Verlauf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        }
+      }
+    },
+    "Verlauf lässt sich seitlich scrollen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History scrolls sideways"
+          }
+        }
+      }
+    },
+    "Verlauf wie omps Terminal – ruhiger, kompakter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcript like omp's terminal – calmer, more compact"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        }
+      }
+    },
+    "Vorschau": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
+          }
+        }
+      }
+    },
+    "Wählen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose"
+          }
+        }
+      }
+    },
+    "warte auf iOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for iOS"
+          }
+        }
+      }
+    },
+    "wartet auf dich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for you"
+          }
+        }
+      }
+    },
+    "Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you – answer with >_ (e.g. ↓ and Enter)"
+          }
+        }
+      }
+    },
+    "wartet auf Hintergrund-Jobs": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for background jobs"
+          }
+        }
+      }
+    },
+    "Was": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What"
+          }
+        }
+      }
+    },
+    "Was du sagst, landet direkt in dieser Session – wie /live am Rechner.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What you say goes straight into this session – like /live at the computer."
+          }
+        }
+      }
+    },
+    "Was soll passieren?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What should happen?"
+          }
+        }
+      }
+    },
+    "Wechselt das Modell dieser Claude-Sitzung (/model).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switches the model of this Claude session (/model)."
+          }
+        }
+      }
+    },
+    "Weniger anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show less"
+          }
+        }
+      }
+    },
+    "Werkzeuge auf %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools on %@"
+          }
+        }
+      }
+    },
+    "Werkzeuge zeigen die Zielversion, „Aktuell“ und ein ein-/ausklappbares Protokoll": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools show the target version, “up to date” and a collapsible log"
+          }
+        }
+      }
+    },
+    "Whisper-Modell noch nicht geladen (Einstellungen › Sprache).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whisper model not loaded yet (Settings › Speech)."
+          }
+        }
+      }
+    },
+    "Whisper-Modelle (mehrsprachig)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whisper models (multilingual)"
+          }
+        }
+      }
+    },
+    "Wie iOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Like iOS"
+          }
+        }
+      }
+    },
+    "Wie iOS (Systemeinstellung)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Like iOS (system setting)"
+          }
+        }
+      }
+    },
+    "Wiederholungen bei Unsicherheit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retries when unsure"
+          }
+        }
+      }
+    },
+    "Winzig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiny"
+          }
+        }
+      }
+    },
+    "Wird angelegt, falls er noch nicht existiert.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created if it doesn't exist yet."
+          }
+        }
+      }
+    },
+    "wird installiert …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "installing …"
+          }
+        }
+      }
+    },
+    "Wo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where"
+          }
+        }
+      }
+    },
+    "Working…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working…"
+          }
+        }
+      }
+    },
+    "Workspace": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace"
+          }
+        }
+      }
+    },
+    "Worktree": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktree"
+          }
+        }
+      }
+    },
+    "Worktree entfernen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove worktree"
+          }
+        }
+      }
+    },
+    "Worktree und Branch löschen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete worktree and branch"
+          }
+        }
+      }
+    },
+    "Wortersetzungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Word replacements"
+          }
+        }
+      }
+    },
+    "Zeilen umbrechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wrap lines"
+          }
+        }
+      }
+    },
+    "Zen-Modus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zen mode"
+          }
+        }
+      }
+    },
+    "Zen-Modus beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave zen mode"
+          }
+        }
+      }
+    },
+    "Zen-Modus: nur Chat und durchsichtige Eingabe": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zen mode: just the chat and a see-through composer"
+          }
+        }
+      }
+    },
+    "Zuletzt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent"
+          }
+        }
+      }
+    },
+    "Zur Bestätigung „%@“ eingeben": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type “%@” to confirm"
+          }
+        }
+      }
+    },
+    "Zusatzmodell (≈ 100 MB) erkennt deine Fachwörter im Audio und korrigiert sie": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extra model (≈ 100 MB) spots your technical terms in the audio and fixes them"
+          }
+        }
+      }
+    },
+    "App-Sprache": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App language"
+          }
+        }
+      }
+    },
+    "Deutsch oder Englisch – iOS stellt die Sprache pro App um.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "German or English – iOS switches the language per app."
+          }
+        }
+      }
+    },
+    "Hollr spricht jetzt Deutsch und Englisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr now speaks German and English"
+          }
+        }
+      }
+    },
+    "Skeletons statt Lade-Kreisel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skeletons instead of loading spinners"
+          }
+        }
+      }
+    },
+    "Hollr für den Mac (DMG) – koppeln per Link aus hollr pair --link": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr for the Mac (DMG) – pair with the link from hollr pair --link"
+          }
+        }
+      }
+    },
+    "Ordner auf dem Server, z. B. ~/projects/my-app": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder on the server, e.g. ~/projects/my-app"
+          }
+        }
+      }
+    },
+    "Neuer Branch, z. B. feature/PROJ-123-login": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New branch, e.g. feature/PROJ-123-login"
+          }
+        }
+      }
+    },
+    "2. Hollr installieren und QR-Code anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Install Hollr and show the QR code"
+          }
+        }
+      }
+    },
+    "1. Entfernte Anmeldung (SSH) einschalten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Turn on Remote Login (SSH)"
+          }
+        }
+      }
+    },
+    "Schon installiert? Nur koppeln:": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already installed? Just pair:"
+          }
+        }
+      }
+    },
+    "Für Mac und Desktop: Link statt QR-Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For Mac and desktop: a link instead of a QR code"
+          }
+        }
+      }
+    },
+    "Git: Dateien, Änderungen mit Diff, Verlauf-Graph, Branches mit PR-Status": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git: files, changes with diff, history graph, branches with PR status"
+          }
+        }
+      }
+    },
+    "Designs: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub und mehr – hell, dunkel oder automatisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Themes: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub and more – light, dark or automatic"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

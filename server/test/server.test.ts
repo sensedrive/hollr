@@ -1,0 +1,592 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { encodeFrame, encodeJson, FRAME_AUDIO, FRAME_JSON, FrameDecoder } from "../src/frames";
+import { toAgent } from "../src/herdr";
+import {
+  addBootstrap,
+  buildPayload,
+  ed25519PublicLine,
+  enroll,
+  listDevices,
+  newBootstrapKey,
+  parsePayloadUrl,
+  payloadUrl,
+  revokeDevice,
+  upgradeDeviceKeys,
+} from "../src/pairing";
+import { PulseSession, type Run } from "../src/pulse";
+import { parseEntry } from "../src/sessionlog";
+
+describe("frames", () => {
+  test("roundtrip across arbitrary chunk boundaries", () => {
+    const audio = new Uint8Array([1, 2, 3, 4, 5]);
+    const bytes = new Uint8Array([
+      ...encodeFrame(FRAME_AUDIO, audio),
+      ...encodeJson({ t: "mute", on: true }),
+    ]);
+    const d = new FrameDecoder();
+    const frames = [
+      ...d.push(bytes.slice(0, 3)),
+      ...d.push(bytes.slice(3, 11)),
+      ...d.push(bytes.slice(11)),
+    ];
+    expect(frames).toEqual([
+      { type: FRAME_AUDIO, data: audio },
+      { type: FRAME_JSON, data: { t: "mute", on: true } },
+    ]);
+  });
+});
+
+describe("pairing", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "hollr-"));
+    Bun.env.HOLLR_AUTHORIZED_KEYS = join(dir, "authorized_keys");
+    Bun.env.HOLLR_HOST_KEY = join(dir, "host.pub");
+    writeFileSync(
+      Bun.env.HOLLR_HOST_KEY,
+      `${ed25519PublicLine(new Uint8Array(32).fill(7))} root@test\n`,
+    );
+    writeFileSync(Bun.env.HOLLR_AUTHORIZED_KEYS, "ssh-ed25519 AAAAexisting user@laptop\n", {
+      mode: 0o600,
+    });
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  test("bootstrap -> enroll -> list -> revoke keeps other keys intact", () => {
+    const { seed, publicLine } = newBootstrapKey();
+    expect(seed.length).toBe(32);
+    const { id, exp } = addBootstrap(publicLine);
+    let content = readFileSync(Bun.env.HOLLR_AUTHORIZED_KEYS ?? "", "utf8");
+    expect(content).toContain(`enroll ${id}"`);
+    expect(content).toContain("restrict,command=");
+
+    const device = enroll(id, newBootstrapKey().publicLine, "Alex's iPhone; rm -rf /");
+    expect(device.name).toBe("Alex's iPhone rm -rf");
+    content = readFileSync(Bun.env.HOLLR_AUTHORIZED_KEYS ?? "", "utf8");
+    expect(content).not.toContain("hollr-pairing");
+    expect(content).toContain(' gate" ssh-ed25519');
+    expect(content).toContain("user@laptop");
+    expect(() => enroll(id, newBootstrapKey().publicLine, "x")).toThrow("unknown_pairing");
+
+    expect(listDevices().map((d) => d.name)).toEqual(["Alex's iPhone rm -rf"]);
+    expect(revokeDevice(device.id)).toHaveLength(1);
+    expect(listDevices()).toHaveLength(0);
+    expect(readFileSync(Bun.env.HOLLR_AUTHORIZED_KEYS ?? "", "utf8")).toContain("user@laptop");
+
+    const payload = buildPayload({ seed, exp, addresses: ["1.2.3.4"], label: "my-server" });
+    expect(parsePayloadUrl(payloadUrl(payload))).toEqual(payload);
+    expect(payload.fp).toMatch(/^SHA256:[A-Za-z0-9+/]{43}$/);
+  });
+
+  test("device keys: forwarding only to loopback, old keys upgraded once", () => {
+    const file = Bun.env.HOLLR_AUTHORIZED_KEYS ?? "";
+    const key = newBootstrapKey().publicLine;
+    writeFileSync(
+      file,
+      `ssh-ed25519 AAAAother user@laptop\nrestrict,command="/x/hollr gate" ${key} hollr-device:abcd Old Phone\n`,
+    );
+    expect(upgradeDeviceKeys()).toBe(1);
+    const line = readFileSync(file, "utf8").split("\n")[1] ?? "";
+    expect(line).toMatch(
+      /^restrict,port-forwarding,permitopen="localhost:\*",permitopen="127\.0\.0\.1:\*",permitopen="\[::1\]:\*",command="[^"]+ gate" ssh-ed25519 /,
+    );
+    expect(line).toEndWith("hollr-device:abcd Old Phone");
+    expect(readFileSync(file, "utf8")).toStartWith("ssh-ed25519 AAAAother user@laptop\n");
+    expect(upgradeDeviceKeys()).toBe(0);
+    expect(listDevices().map((d) => d.name)).toEqual(["Old Phone"]);
+  });
+
+  test("expired bootstrap is rejected", () => {
+    const { id } = addBootstrap(newBootstrapKey().publicLine, -1);
+    expect(() => enroll(id, newBootstrapKey().publicLine, "x")).toThrow();
+  });
+
+  test("rejects non-ed25519 device keys", () => {
+    const { id } = addBootstrap(newBootstrapKey().publicLine);
+    expect(() => enroll(id, 'ssh-rsa AAAA" command="evil', "x")).toThrow("invalid_key");
+  });
+});
+
+describe("pulse", () => {
+  test("moves only the streams of the omp pid, once", async () => {
+    const calls: string[][] = [];
+    const run: Run = async (args) => {
+      calls.push(args);
+      if (args.includes("source-outputs")) {
+        return {
+          code: 0,
+          err: "",
+          out: JSON.stringify([
+            { index: 5, properties: { "application.process.id": "42" } },
+            { index: 6, properties: { "application.process.id": "99" } },
+          ]),
+        };
+      }
+      if (args.includes("sink-inputs")) return { code: 0, err: "", out: "[]" };
+      return { code: 0, err: "", out: "17" };
+    };
+    const s = new PulseSession("1234", run);
+    expect(await s.attach(42)).toEqual({ capturing: true, playing: false });
+    await s.attach(42);
+    const moves = calls.filter((c) => c[1] === "move-source-output");
+    expect(moves).toEqual([["pactl", "move-source-output", "5", "hollr_mic_1234"]]);
+  });
+});
+
+describe("session log", () => {
+  test("delegations, tools and answers", () => {
+    expect(
+      parseEntry(
+        JSON.stringify({
+          type: "custom_message",
+          customType: "live-delegation",
+          content: "Lies notiz.txt",
+          message: { role: "custom", customType: "live-delegation", content: "Lies notiz.txt" },
+        }),
+      ),
+    ).toEqual([{ t: "delegation", text: "Lies notiz.txt" }]);
+    expect(
+      parseEntry(
+        JSON.stringify({
+          type: "message",
+          message: {
+            role: "assistant",
+            stopReason: "toolUse",
+            content: [
+              { type: "thinking" },
+              { type: "toolCall", name: "read", intent: "Datei lesen" },
+            ],
+          },
+        }),
+      ),
+    ).toEqual([{ t: "tool", name: "read", intent: "Datei lesen" }]);
+    expect(
+      parseEntry(
+        JSON.stringify({
+          type: "message",
+          message: {
+            role: "assistant",
+            stopReason: "stop",
+            content: [{ type: "text", text: "4711" }],
+          },
+        }),
+      ),
+    ).toEqual([{ t: "answer", text: "4711", final: true }]);
+  });
+});
+
+test("agent title strips omp prefix and icon glyphs", () => {
+  expect(
+    toAgent({
+      pane_id: "wH:p6",
+      agent: "omp",
+      terminal_title_stripped: "π > \u{F014E} TICKET: Structure the backlog",
+    }).title,
+  ).toBe("TICKET: Structure the backlog");
+});
+
+test("session tail only reports entries since the call started", async () => {
+  const { SessionTail } = await import("../src/sessionlog");
+  const file = join(tmpdir(), `hollr-tail-${Date.now()}.jsonl`);
+  const old = {
+    type: "custom_message",
+    customType: "live-delegation",
+    content: "alt",
+    timestamp: "2020-01-01T00:00:00Z",
+  };
+  writeFileSync(file, `${JSON.stringify(old)}\n`);
+  const events: unknown[] = [];
+  const tail = new SessionTail(file, (e) => events.push(e), Date.now() - 1000);
+  const fresh = { ...old, content: "neu", timestamp: new Date().toISOString() };
+  writeFileSync(file, `${JSON.stringify(old)}\n${JSON.stringify(fresh)}\n`);
+  await tail.poll();
+  expect(events).toEqual([{ t: "delegation", text: "neu" }]);
+  rmSync(file);
+});
+
+test("omp live footer state", async () => {
+  const { parseLiveState } = await import("../src/herdr");
+  expect(parseLiveState("╰─ × muted · 󱁐 mute · 󱊷 end ───")).toBe("muted");
+  expect(parseLiveState("╰─ ● listening · 󱁐 mute · 󱊷 end ─")).toBe("listening");
+  expect(parseLiveState("normal prompt ❯")).toBeUndefined();
+});
+
+describe("timeline", () => {
+  const line = (o: unknown) => JSON.stringify(o);
+  const t0 = Date.parse("2026-10-13T10:00:00Z");
+  const iso = (s: number) => new Date(t0 + s * 1000).toISOString();
+
+  test("turn, grouped tools with duration, todo snapshot, running job, end", async () => {
+    const { buildTimeline } = await import("../src/timeline");
+    const now = Date.now();
+    const jsonl = [
+      line({ type: "title", title: "📝 Test" }),
+      line({
+        type: "message",
+        timestamp: iso(0),
+        message: { role: "user", content: [{ type: "text", text: "Mach was" }], timestamp: t0 },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(1),
+        message: {
+          role: "assistant",
+          stopReason: "toolUse",
+          content: [
+            { type: "thinking", thinking: "erst lesen" },
+            {
+              type: "toolCall",
+              id: "c1",
+              name: "read",
+              intent: "Datei lesen",
+              arguments: { path: "a.ts" },
+            },
+            {
+              type: "toolCall",
+              id: "c2",
+              name: "edit",
+              intent: "Fix",
+              arguments: { input: "[src/b.ts#AB12]\nPUT" },
+            },
+          ],
+        },
+      }),
+      line({
+        type: "custom",
+        customType: "tool_execution_start",
+        timestamp: iso(1),
+        data: { toolCallId: "c1", toolName: "read", startedAt: iso(1) },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(3),
+        message: {
+          role: "toolResult",
+          toolCallId: "c1",
+          toolName: "read",
+          content: [{ type: "text", text: "x" }],
+          timestamp: t0 + 3000,
+        },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(4),
+        message: {
+          role: "toolResult",
+          toolCallId: "c2",
+          toolName: "edit",
+          details: { diff: "+a\n+b\n-c" },
+          content: [],
+          timestamp: t0 + 4000,
+        },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(5),
+        message: {
+          role: "assistant",
+          stopReason: "toolUse",
+          content: [
+            { type: "toolCall", id: "c3", name: "todo", arguments: { op: "done", task: "A" } },
+            {
+              type: "toolCall",
+              id: "c4",
+              name: "bash",
+              intent: "Deploy",
+              arguments: { command: "yarn deploy", async: true },
+            },
+          ],
+        },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(6),
+        message: {
+          role: "toolResult",
+          toolCallId: "c3",
+          toolName: "todo",
+          details: {
+            phases: [
+              {
+                name: "Welle 2",
+                tasks: [
+                  { content: "A", status: "completed" },
+                  { content: "B", status: "in_progress" },
+                ],
+              },
+            ],
+          },
+          content: [],
+        },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(6),
+        message: {
+          role: "toolResult",
+          toolCallId: "c4",
+          toolName: "bash",
+          details: { async: { state: "running", jobId: "bg_1", type: "bash" } },
+          content: [],
+          timestamp: now,
+        },
+      }),
+      line({
+        type: "message",
+        timestamp: iso(8),
+        message: {
+          role: "assistant",
+          stopReason: "stop",
+          completedAt: t0 + 134_000,
+          content: [{ type: "text", text: "Fertig." }],
+        },
+      }),
+    ].join("\n");
+    const t = buildTimeline(jsonl);
+    expect(t.title).toBe("📝 Test");
+    // consecutive tool calls without text in between form one group (like omp's TUI)
+    expect(t.items.map((i) => i.k)).toEqual(["user", "thinking", "tools", "text", "end"]);
+    const g = t.items[2] as {
+      calls: Array<{ name: string; ms?: number; detail?: string; add?: number; del?: number }>;
+    };
+    expect(g.calls.map((c) => c.name)).toEqual(["read", "edit", "todo", "bash"]);
+    expect(g.calls[0]?.ms).toBe(2000);
+    expect(g.calls[1]?.detail).toBe("src/b.ts");
+    expect([g.calls[1]?.add, g.calls[1]?.del]).toEqual([2, 1]);
+    expect(t.todo?.[0]?.name).toBe("Welle 2");
+    expect(t.jobs.map((j) => j.id)).toEqual(["bg_1"]);
+    expect((t.items.at(-1) as { ms: number }).ms).toBe(134_000);
+    expect(t.running).toBe(false);
+  });
+
+  test("redacts tokens", async () => {
+    const { redact } = await import("../src/timeline");
+    expect(redact("token ghp_abcdefghijklmnopqrstuvwxyz123456 ok")).toBe("token ••• ok");
+  });
+});
+
+test("omp footer parsing", async () => {
+  const { parseFooter } = await import("../src/spaces");
+  const f = parseFooter("─────\n 󰵗 · 󰪣 Opus 5.5 ·  hollr-test ·  1.6%/1M 󰁨 · 󰙺 0.10");
+  expect(f.model).toBe("Opus 5.5");
+  expect(f.context).toBe("1.6%/1M");
+  expect(f.cost).toBe("0.10");
+});
+
+describe("ports", () => {
+  test("keeps loopback/wildcard listeners with their process", async () => {
+    const { parseListeners } = await import("../src/ports");
+    const ss = [
+      'LISTEN 0 511 127.0.0.1:5173 0.0.0.0:* users:(("node",pid=42,fd=20))',
+      "LISTEN 0 4096 0.0.0.0:8082 0.0.0.0:*",
+      "LISTEN 0 5 10.0.0.2:15432 0.0.0.0:*",
+      "LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*",
+      "LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*",
+      'LISTEN 0 511 [::1]:3000 [::]:* users:(("bun",pid=7,fd=3))',
+    ].join("\n");
+    expect(parseListeners(ss)).toEqual([
+      { port: 3000, process: "bun", pid: 7 },
+      { port: 5173, process: "node", pid: 42 },
+      { port: 8082, process: undefined, pid: undefined },
+    ]);
+  });
+});
+
+describe("watch", () => {
+  test("waiting at once, done only after idle holds and real work", async () => {
+    const { diffStates } = await import("../src/watch");
+    const seen = new Map();
+    expect(diffStates(seen, [{ pane: "w1:p1", status: "idle" }], 0)).toEqual([]);
+    diffStates(seen, [{ pane: "w1:p1", status: "working" }], 1000);
+    // short pause between steps: no notification
+    expect(diffStates(seen, [{ pane: "w1:p1", status: "idle" }], 9000)).toEqual([]);
+    diffStates(seen, [{ pane: "w1:p1", status: "working" }], 10000);
+    expect(diffStates(seen, [{ pane: "w1:p1", status: "idle" }], 20000)).toEqual([]);
+    expect(diffStates(seen, [{ pane: "w1:p1", status: "idle" }], 24000)).toEqual([
+      { pane: "w1:p1", kind: "done", workedMs: 19000 },
+    ]);
+    expect(diffStates(seen, [{ pane: "w1:p1", status: "idle" }], 30000)).toEqual([]);
+    diffStates(seen, [{ pane: "w1:p1", status: "working" }], 31000);
+    expect(diffStates(seen, [{ pane: "w1:p1", status: "blocked" }], 33000)).toEqual([
+      { pane: "w1:p1", kind: "waiting", workedMs: 2000 },
+    ]);
+    // a turn under 5s is not worth a push
+    diffStates(seen, [{ pane: "w2:p1", status: "working" }], 40000);
+    diffStates(seen, [{ pane: "w2:p1", status: "working" }], 40000);
+    diffStates(seen, [{ pane: "w2:p1", status: "idle" }], 42000);
+    expect(diffStates(seen, [{ pane: "w2:p1", status: "idle" }], 47000)).toEqual([]);
+  });
+});
+
+describe("push", () => {
+  test("devices and ES256 provider token", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-push-"));
+    Bun.env.HOLLR_PUSH_DIR = dir;
+    const push = await import("../src/push");
+    expect(() => push.registerDevice({ token: "nothex" })).toThrow("invalid_token");
+    push.registerDevice({ token: "AB".repeat(32), env: "sandbox", name: "Test" });
+    push.registerDevice({
+      token: "ab".repeat(32),
+      env: "production",
+      prefs: { done: false } as never,
+    });
+    expect(push.pushDevices()).toHaveLength(1);
+    expect(push.pushDevices()[0]?.prefs).toEqual({ waiting: true, done: false, error: true });
+    const { generateKeyPairSync, verify } = await import("node:crypto");
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const jwt = push.providerToken(
+      { keyId: "ABC123DEFG", teamId: "TEAM123456", bundleId: "x" },
+      pem,
+      1_000_000,
+    );
+    const [h, c, sig] = jwt.split(".");
+    expect(JSON.parse(Buffer.from(h ?? "", "base64url").toString())).toEqual({
+      alg: "ES256",
+      kid: "ABC123DEFG",
+    });
+    expect(JSON.parse(Buffer.from(c ?? "", "base64url").toString())).toEqual({
+      iss: "TEAM123456",
+      iat: 1000,
+    });
+    expect(
+      verify(
+        "sha256",
+        Buffer.from(`${h}.${c}`),
+        { key: publicKey, dsaEncoding: "ieee-p1363" },
+        Buffer.from(sig ?? "", "base64url"),
+      ),
+    ).toBe(true);
+    expect(push.unregisterDevice("AB".repeat(32))).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("git views", () => {
+  test("graph, changes, stage, commit details, branches on a real repo", async () => {
+    const git = await import("../src/git");
+    const repo = mkdtempSync(join(tmpdir(), "hollr-git-"));
+    const sh = (...cmd: string[]) => {
+      const r = Bun.spawnSync(cmd, {
+        cwd: repo,
+        env: {
+          ...Bun.env,
+          GIT_AUTHOR_NAME: "T",
+          GIT_AUTHOR_EMAIL: "t@x",
+          GIT_COMMITTER_NAME: "T",
+          GIT_COMMITTER_EMAIL: "t@x",
+        },
+      });
+      if (r.exitCode !== 0) throw new Error(`${cmd.join(" ")}: ${r.stderr}`);
+    };
+    sh("git", "init", "-q", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "one\ntwo\n");
+    sh("git", "add", ".");
+    sh("git", "commit", "-qm", "first");
+    sh("git", "checkout", "-qb", "feature");
+    writeFileSync(join(repo, "b.txt"), "x\n");
+    sh("git", "add", ".");
+    sh("git", "commit", "-qm", "feat: b");
+    sh("git", "checkout", "-q", "main");
+    writeFileSync(join(repo, "a.txt"), "one\nTWO\n");
+    sh("git", "commit", "-qam", "change a");
+    sh("git", "merge", "-q", "--no-ff", "-m", "Merge feature", "feature");
+
+    const g = git.graph(repo);
+    expect(g.commits.map((c) => c.subject)).toEqual([
+      "Merge feature",
+      "feat: b",
+      "change a",
+      "first",
+    ]);
+    expect(g.commits[0]?.parents).toHaveLength(2);
+
+    const merge = git.commitDetails(repo, g.commits[0]?.hash ?? "");
+    expect(merge.merge).toBe(true);
+    expect(merge.files).toEqual([{ path: "b.txt", status: "A", add: 1, del: 0 }]);
+
+    writeFileSync(join(repo, "a.txt"), "one\nTWO\nthree\n");
+    writeFileSync(join(repo, "new.md"), "hi\nthere\n");
+    let c = git.changes(repo);
+    expect(c.branch).toBe("main");
+    expect(c.staged).toEqual([]);
+    expect(c.unstaged).toEqual([
+      { path: "a.txt", status: "M", add: 1, del: 0 },
+      { path: "new.md", status: "A", add: 3, del: 0 },
+    ]);
+    expect(git.fileDiff(repo, "a.txt", false).text).toContain("+three");
+    git.stage(repo, "a.txt", true);
+    c = git.changes(repo);
+    expect(c.staged).toEqual([{ path: "a.txt", status: "M", add: 1, del: 0 }]);
+    expect(git.fileDiff(repo, "a.txt", true).text).toContain(" one");
+    git.stage(repo, "a.txt", false);
+    expect(git.changes(repo).staged).toEqual([]);
+
+    const b = git.branches(repo);
+    expect(
+      (b.local as Array<{ name: string; current: boolean }>).map((x) => [x.name, x.current]).sort(),
+    ).toEqual([
+      ["feature", false],
+      ["main", true],
+    ]);
+    rmSync(repo, { recursive: true, force: true });
+  });
+});
+
+describe("space deletion safety", () => {
+  test("only folders inside home or /tmp, never home itself or system paths", async () => {
+    const { safeToDelete } = await import("../src/spaces");
+    const home = Bun.env.HOME ?? "";
+    const inside = mkdtempSync(join(home, ".hollr-test-"));
+    const tmp = mkdtempSync(join("/tmp", "hollr-del-"));
+    expect(safeToDelete(inside)).toBe(true);
+    expect(safeToDelete(tmp)).toBe(true);
+    expect(safeToDelete(home)).toBe(false);
+    expect(safeToDelete("/")).toBe(false);
+    expect(safeToDelete("/usr")).toBe(false);
+    expect(safeToDelete("/tmp")).toBe(false);
+    expect(safeToDelete(`${inside}/../..`)).toBe(false);
+    expect(safeToDelete("/does/not/exist")).toBe(false);
+    expect(safeToDelete("")).toBe(false);
+    rmSync(inside, { recursive: true, force: true });
+    rmSync(tmp, { recursive: true, force: true });
+  });
+});
+
+describe("tools", () => {
+  test("version comparison", async () => {
+    const { newer } = await import("../src/tools");
+    expect(newer("0.9.2", "0.9.1")).toBe(true);
+    expect(newer("1.10.0", "1.9.9")).toBe(true);
+    expect(newer("rust-v0.162.1", "0.162.1")).toBe(false);
+    expect(newer("18.10.1", "18.10.4")).toBe(false);
+    expect(newer("2.1.280", "2.1.280")).toBe(false);
+  });
+});
+
+describe("models", () => {
+  test("start args and session switch per agent", async () => {
+    const { startArgs, switchCommand } = await import("../src/models");
+    expect(startArgs("omp", "anthropic/claude-opus-5-5", "high")).toEqual([
+      "--model=anthropic/claude-opus-5-5",
+      "--thinking=high",
+    ]);
+    expect(startArgs("claude", "sonnet", "max")).toEqual(["--model", "sonnet", "--effort", "max"]);
+    expect(startArgs("codex", "gpt-5.5", "low")).toEqual([
+      "-m",
+      "gpt-5.5",
+      "-c",
+      'model_reasoning_effort="low"',
+    ]);
+    expect(startArgs("omp")).toEqual([]);
+    expect(() => startArgs("omp", "x; rm -rf /")).toThrow();
+    expect(switchCommand("omp", "anthropic/claude-haiku-5-5", "low")).toBe(
+      "/switch anthropic/claude-haiku-5-5:low",
+    );
+    expect(switchCommand("claude", "opus")).toBe("/model opus");
+    expect(() => switchCommand("codex", "gpt-5.5")).toThrow();
+  });
+});

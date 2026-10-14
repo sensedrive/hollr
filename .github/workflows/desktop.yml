@@ -1,0 +1,56 @@
+name: desktop
+
+# Hollr desktop client (Tauri): Linux packages for x64 and arm64, attached to the release of the tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    permissions: { contents: write }
+    defaults: { run: { working-directory: desktop } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libasound2-dev rpm
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: 1.4.2 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: "desktop/src-tauri -> target" }
+      - run: bun install --frozen-lockfile
+      - name: Version from tag
+        if: github.ref_type == 'tag'
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          jq --arg v "$V" '.version = $v' src-tauri/tauri.conf.json > t.json && mv t.json src-tauri/tauri.conf.json
+      - run: bun run tauri build --bundles deb,rpm,appimage
+      - name: Collect
+        run: |
+          mkdir -p ../dist-desktop
+          find src-tauri/target/release/bundle -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -exec cp {} ../dist-desktop/ \;
+          ls -la ../dist-desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hollr-linux-${{ matrix.arch }}
+          path: dist-desktop/*
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        working-directory: .
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          for i in $(seq 1 30); do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist-desktop/* --clobber

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+ios/Config/Local.xcconfig
+*.wav
+ios/Config/asc.env
+build/
+*.p8

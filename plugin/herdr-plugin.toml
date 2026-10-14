@@ -1,0 +1,24 @@
+id = "hollr"
+name = "Hollr"
+version = "0.1.0"
+min_herdr_version = "0.7.5"
+platforms = ["linux", "macos"]
+
+# Pair an iPhone: shows a QR code (valid 10 minutes, single use)
+[[actions]]
+id = "pair"
+title = "Hollr: iPhone koppeln"
+contexts = ["global"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/open-pair.sh\""]
+
+[[panes]]
+id = "pair"
+title = "Hollr: iPhone koppeln"
+placement = "zoomed"
+command = ["sh", "-c", "\"$HOME/.local/bin/hollr\" pair; printf '\\nEnter zum Schliessen '; read -r _"]
+
+[[actions]]
+id = "doctor"
+title = "Hollr: Server prüfen"
+contexts = ["global"]
+command = ["sh", "-c", "\"$HOME/.local/bin/hollr\" doctor"]
