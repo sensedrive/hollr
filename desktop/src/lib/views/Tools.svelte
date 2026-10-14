@@ -17,6 +17,8 @@
   let confirmReinstall = $state("");
 
   const anyRunning = $derived(tools?.some((x) => x.running) ?? false);
+  /** missing or outdated and not already running */
+  const pending = $derived(tools?.filter((x) => !x.running && (!x.installed || x.updateAvailable)) ?? []);
 
   async function load() {
     const s = server;
@@ -93,6 +95,11 @@
     <button class="btn" onclick={back} title={t("Zurück")}>‹</button>
     <h1>{t("Werkzeuge auf {server}", { server: srv?.label ?? server })}</h1>
     <button class="btn" onclick={() => go({ view: "serverinfo", server })}>{t("Server-Info")}</button>
+    {#if pending.length}
+      <button class="btn primary" onclick={async () => { for (const x of pending) await run(x.name); }}>
+        {pending.length === 1 ? t("1 Werkzeug installieren/aktualisieren") : t("{n} Werkzeuge installieren/aktualisieren", { n: pending.length })}
+      </button>
+    {/if}
     <button class="btn" onclick={check} disabled={checking || !tools}>{checking ? t("Suche …") : t("Nach Updates suchen")}</button>
   </div>
 

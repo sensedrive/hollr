@@ -1,5 +1,6 @@
 // Calls into the Rust backend (pinned SSH → `hollr gate` on the server).
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export interface Server {
   id: string;
@@ -129,3 +130,10 @@ export const switchModel = (s: string, pane: string, model: string, level?: stri
 // ---- localhost tunnel: a local port on this computer forwarded to `localhost:<port>` on the server
 export const tunnelOpen = (server: string, port: number) => invoke<number>("tunnel_open", { server, port });
 export const tunnelClose = (localPort: number) => invoke<void>("tunnel_close", { localPort });
+
+// ---- live change feed (one `hollr gate events` channel per server, see src-tauri/src/feed.rs)
+export const feedsSync = (servers: string[]) => invoke<void>("feeds_sync", { servers });
+export const onChanged = (fn: (e: { server: string; spaces: boolean }) => void) =>
+  listen<{ server: string; spaces: boolean }>("hollr-changed", (e) => fn(e.payload));
+export const onFeed = (fn: (e: { server: string; live: boolean }) => void) =>
+  listen<{ server: string; live: boolean }>("hollr-feed", (e) => fn(e.payload));

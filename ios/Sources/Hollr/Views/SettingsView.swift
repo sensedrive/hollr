@@ -77,14 +77,10 @@ struct SettingsView: View {
             }
             Section {
                 NavigationLink { ServersView(onPair: onPair) } label: {
-                    Label("Server & Geräte", systemImage: "server.rack")
-                }
-                ForEach(store.servers) { server in
-                    NavigationLink { ServerInfoView(server: server) } label: {
-                        Label("Server-Info \(server.label)", systemImage: "gauge.with.dots.needle.67percent")
-                    }
-                    NavigationLink { ToolsView(server: server) } label: {
-                        Label("Werkzeuge auf \(server.label)", systemImage: "shippingbox")
+                    LabeledContent {
+                        Text("\(store.servers.count)")
+                    } label: {
+                        Label("Server & Geräte", systemImage: "server.rack")
                     }
                 }
             }

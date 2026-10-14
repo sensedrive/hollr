@@ -10,6 +10,14 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 26, date: "14.10.2026", items: [
+            ("bolt.horizontal", String(localized: "Echtzeit: Neue Workspaces, Tabs und Agent-Status erscheinen sofort – ohne ständiges Nachladen")),
+        ]),
+        ReleaseNote(build: 25, date: "14.10.2026", items: [
+            ("server.rack", String(localized: "Server & Geräte: jede Maschine mit eigener Seite – Auslastung, Probleme, Updates auf einen Blick")),
+            ("arrow.down.circle", String(localized: "Werkzeuge: alles Fehlende und Veraltete mit einem Tipp installieren")),
+            ("laptopcomputer", String(localized: "Macs als Server: Werkzeuge, Server-Info und Ports funktionieren jetzt auch dort")),
+        ]),
         ReleaseNote(build: 24, date: "14.10.2026", items: [
             ("terminal", String(localized: "Server einrichten jetzt mit einem einzigen Befehl – ohne Extras")),
         ]),

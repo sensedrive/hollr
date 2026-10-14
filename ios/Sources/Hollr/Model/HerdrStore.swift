@@ -12,6 +12,11 @@ final class HerdrStore {
     private(set) var usage: [UUID: [UsageLimit]] = [:]
     private(set) var capacity: [UUID: [UsageCapacity]] = [:]
     private var usageFetchedAt: [UUID: Date] = [:]
+    /// servers whose live change feed is connected (then polling can slow down)
+    private(set) var live: Set<UUID> = []
+    /// bumped whenever a feed reports a change – views that load on their own can react
+    private(set) var changeCount = 0
+    private var feeds: [UUID: Task<Void, Never>] = [:]
 
     func refreshSpaces(_ servers: [Server]) async {
         for server in servers {
@@ -54,6 +59,75 @@ final class HerdrStore {
         let ids = Set(servers.map(\.id))
         trees = trees.filter { ids.contains($0.key) }
         loaded = true
+    }
+
+    /// One server's tree, without touching the others.
+    func refresh(server: Server) async {
+        do {
+            trees[server.id] = try await HollrClient.tree(server)
+            errors[server.id] = nil
+        } catch {
+            errors[server.id] = error.localizedDescription
+        }
+    }
+
+    // MARK: live change feed (`hollr gate events`)
+
+    /// Keeps one feed per server while the app is active; changes in herdr show up right away.
+    func startFeeds(_ servers: [Server]) {
+        for server in servers where feeds[server.id] == nil {
+            feeds[server.id] = Task { [weak self] in await self?.runFeed(server) }
+        }
+        for (id, task) in feeds where !servers.contains(where: { $0.id == id }) {
+            task.cancel()
+            feeds[id] = nil
+            live.remove(id)
+        }
+    }
+
+    func stopFeeds() {
+        feeds.values.forEach { $0.cancel() }
+        feeds = [:]
+        live = []
+    }
+
+    private func runFeed(_ server: Server) async {
+        var backoff = 2.0
+        while !Task.isCancelled {
+            var unsupported = false
+            do {
+                let client = try await SSHPool.shared.client(for: server)
+                try await client.withExec("events") { inbound, _ in
+                    var buffer = Data()
+                    for try await output in inbound {
+                        guard case .stdout(let bytes) = output else { continue }
+                        buffer.append(contentsOf: bytes.readableBytesView)
+                        while let newline = buffer.firstIndex(of: 0x0a) {
+                            let line = buffer[buffer.startIndex..<newline]
+                            buffer.removeSubrange(buffer.startIndex...newline)
+                            guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+                            if obj["error"] != nil, obj["t"] == nil { unsupported = true }  // older server
+                            switch obj["t"] as? String {
+                            case "ready":
+                                live.insert(server.id)
+                                backoff = 2
+                            case "changed":
+                                changeCount += 1
+                                await refresh(server: server)
+                                if obj["spaces"] as? Bool == true { await refreshSpaces([server]) }
+                            default:
+                                break
+                            }
+                        }
+                    }
+                }
+            } catch {}
+            live.remove(server.id)
+            if Task.isCancelled { break }
+            // an older server without the feed: just keep polling, look again in a few minutes
+            try? await Task.sleep(for: .seconds(unsupported ? 300 : backoff))
+            backoff = min(backoff * 2, 30)
+        }
     }
 
     func agents(on server: Server) -> [AgentRef] {

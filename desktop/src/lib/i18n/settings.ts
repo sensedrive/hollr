@@ -1,5 +1,7 @@
 // Settings, design, server info, tools, release notes, notifications and pairing (German source → English).
 export default {
+  "1 Werkzeug installieren/aktualisieren": "Install/update 1 tool",
+  "{n} Werkzeuge installieren/aktualisieren": "Install/update {n} tools",
   "Entfernte Anmeldung (SSH) einschalten": "Turn on Remote Login (SSH)",
   "Auf dem Server ausführen": "Run on the server",
   // settings navigation

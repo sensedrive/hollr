@@ -67,7 +67,9 @@ struct SpacesView: View {
         .task {
             while !Task.isCancelled {
                 await herdr.refreshSpaces(store.servers)
-                try? await Task.sleep(for: .seconds(10))
+                // the live feed refreshes spaces on every change; this is only the safety net
+                let allLive = store.servers.allSatisfy { herdr.live.contains($0.id) }
+                try? await Task.sleep(for: .seconds(allLive ? 60 : 10))
             }
         }
     }

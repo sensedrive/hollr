@@ -36,6 +36,19 @@ struct ToolsView: View {
         List {
             Group {
             if let error { Text(error).foregroundStyle(Theme.warn) }
+            if !pending.isEmpty {
+                Button {
+                    Task { for tool in pending { await run(tool.name) } }
+                } label: {
+                    Label(pending.count == 1 ? String(localized: "1 Werkzeug installieren/aktualisieren")
+                          : String(localized: "\(pending.count) Werkzeuge installieren/aktualisieren"),
+                          systemImage: "arrow.down.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
             ForEach(tools) { tool in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -102,7 +115,7 @@ struct ToolsView: View {
                 .accessibilityLabel("Nach Updates suchen")
             }
         }
-        .navigationTitle("Werkzeuge auf \(server.label)")
+        .navigationTitle("Werkzeuge")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task {
@@ -112,6 +125,11 @@ struct ToolsView: View {
                 try? await Task.sleep(for: .seconds(tools.contains { $0.running } ? 2 : 15))
             }
         }
+    }
+
+    /// missing or outdated and not already running
+    private var pending: [ServerTool] {
+        tools.filter { !$0.running && (!$0.installed || $0.updateAvailable == true) }
     }
 
     @ViewBuilder private func versionLine(_ tool: ServerTool) -> some View {

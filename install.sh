@@ -71,6 +71,17 @@ if [ "$OS" = "Linux" ] && [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
   fi
 fi
 
+if [ "$OS" = "Darwin" ] && [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
+  bold "1/5 Audio (PulseAudio)"
+  if has pactl && has pacat; then ok "pactl/pacat vorhanden"
+  elif has brew; then info "installiere pulseaudio (Homebrew)"; brew install -q pulseaudio >/dev/null && ok "PulseAudio installiert"
+  else info "Homebrew fehlt – für Live-Sprache: https://brew.sh, dann 'brew install pulseaudio'"; fi
+  if has brew && has pactl && ! pactl info >/dev/null 2>&1; then
+    brew services start pulseaudio >/dev/null 2>&1 || true
+  fi
+  pactl info >/dev/null 2>&1 && ok "Audio-Server läuft" || info "Audio-Server läuft nicht – siehe 'hollr doctor'"
+fi
+
 # ---------------------------------------------------------------- herdr + omp
 if [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
   bold "2/5 herdr"
@@ -152,6 +163,27 @@ UNIT
   # restart so an updated binary is used
   systemctl --user restart hollr-watch.service >/dev/null 2>&1 \
     && ok "Wächter läuft (Push: hollr push setup …)" || info "Wächter nicht startbar – siehe 'systemctl --user status hollr-watch'"
+fi
+
+if [ "$OS" = "Darwin" ]; then
+  AGENT="$HOME/Library/LaunchAgents/app.hollr.watch.plist"
+  mkdir -p "$(dirname "$AGENT")"
+  cat > "$AGENT" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>app.hollr.watch</string>
+  <key>ProgramArguments</key><array><string>$BIN_DIR/hollr</string><string>watch</string></array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>$BIN_DIR:$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>$HOME/Library/Logs/hollr-watch.log</string>
+</dict></plist>
+PLIST
+  # reload so an updated binary is used
+  launchctl bootout "gui/$(id -u)/app.hollr.watch" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/$(id -u)" "$AGENT" >/dev/null 2>&1 \
+    && ok "Wächter läuft (launchd)" || info "Wächter nicht startbar – launchctl print gui/$(id -u)/app.hollr.watch"
 fi
 
 # ---------------------------------------------------------------- done

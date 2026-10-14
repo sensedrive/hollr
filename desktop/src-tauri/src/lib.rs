@@ -1,4 +1,5 @@
 pub mod hollr;
+mod feed;
 mod live;
 mod tunnel;
 
@@ -84,6 +85,13 @@ async fn tunnel_close(tunnels: tauri::State<'_, tunnel::Tunnels>, local_port: u1
     Ok(())
 }
 
+/// Keeps one live change feed per paired server (emits `hollr-changed` / `hollr-feed`).
+#[tauri::command]
+async fn feeds_sync(app: tauri::AppHandle, feeds: tauri::State<'_, feed::Feeds>, servers: Vec<String>) -> R<()> {
+    feeds.sync(app, servers).await;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -93,10 +101,11 @@ pub fn run() {
             let dir = app.path().app_data_dir().expect("app data dir");
             app.manage(Hollr::new(dir));
             app.manage(Live::default());
+            app.manage(feed::Feeds::default());
             app.manage(tunnel::Tunnels::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![servers, pair, remove_server, gate, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
+        .invoke_handler(tauri::generate_handler![feeds_sync, servers, pair, remove_server, gate, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

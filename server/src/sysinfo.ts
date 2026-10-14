@@ -42,7 +42,23 @@ function read(file: string): string {
   }
 }
 
+/** Runs a command; missing binaries (systemctl on macOS …) give "" instead of throwing. */
+function run(cmd: string[]): { ok: boolean; out: string } {
+  try {
+    const res = Bun.spawnSync(cmd, { stdout: "pipe", stderr: "ignore", timeout: 5000 });
+    return { ok: res.exitCode === 0, out: res.stdout.toString() };
+  } catch {
+    return { ok: false, out: "" };
+  }
+}
+
+const mac = platform() === "darwin";
+
 export function osName(): string {
+  if (mac) {
+    const v = run(["sw_vers", "-productVersion"]).out.trim();
+    return v ? `macOS ${v}` : `macOS ${release()}`;
+  }
   const os = read("/etc/os-release");
   const pretty = os.match(/^PRETTY_NAME="?([^"\n]+)"?/m)?.[1];
   return pretty ?? `${platform()} ${release()}`;
@@ -50,7 +66,11 @@ export function osName(): string {
 
 /** Package manager → install command for PulseAudio tools on this distro. */
 export function packageHint(pkgs: string): string {
-  const has = (cmd: string) => Bun.spawnSync(["sh", "-c", `command -v ${cmd}`]).exitCode === 0;
+  const has = (cmd: string) => run(["sh", "-c", `command -v ${cmd}`]).ok;
+  if (mac)
+    return has("brew")
+      ? "brew install pulseaudio"
+      : "Homebrew installieren (https://brew.sh), dann: brew install pulseaudio";
   if (has("apt-get")) return `sudo apt-get install -y ${pkgs}`;
   if (has("dnf")) return `sudo dnf install -y ${pkgs}`;
   if (has("yum")) return `sudo yum install -y ${pkgs}`;
@@ -64,6 +84,12 @@ export function packageHint(pkgs: string): string {
 async function cpuUsage(): Promise<number | undefined> {
   const sample = () => {
     const line = read("/proc/stat").split("\n")[0] ?? "";
+    if (!line) {
+      // macOS & co.: per-core times from the OS
+      const t = cpus().map((c) => c.times);
+      const idle = t.reduce((a, c) => a + c.idle, 0);
+      return { idle, total: t.reduce((a, c) => a + c.user + c.nice + c.sys + c.idle + c.irq, 0) };
+    }
     const nums = line.split(/\s+/).slice(1).map(Number);
     const idle = (nums[3] ?? 0) + (nums[4] ?? 0);
     const total = nums.reduce((a, b) => a + (b || 0), 0);
@@ -83,20 +109,22 @@ function memory() {
     Number(info.match(new RegExp(`^${key}:\\s+(\\d+)`, "m"))?.[1] ?? 0) * 1024;
   const total = kb("MemTotal") || totalmem();
   const available = kb("MemAvailable") || freemem();
-  return {
-    total,
-    used: total - available,
-    swapTotal: kb("SwapTotal"),
-    swapUsed: kb("SwapTotal") - kb("SwapFree"),
-  };
+  let swapTotal = kb("SwapTotal");
+  let swapUsed = swapTotal - kb("SwapFree");
+  if (!info && mac) {
+    // "total = 2048.00M  used = 1024.50M  free = …"
+    const m = run(["sysctl", "-n", "vm.swapusage"]).out;
+    const mb = (k: string) => Number(m.match(new RegExp(`${k} = ([\\d.]+)M`))?.[1] ?? 0) * 1048576;
+    swapTotal = mb("total");
+    swapUsed = mb("used");
+  }
+  return { total, used: total - available, swapTotal, swapUsed };
 }
 
 function disks() {
-  const res = Bun.spawnSync(["df", "-P", "-k"], { stdout: "pipe", stderr: "ignore" });
   const seen = new Set<string>();
-  return res.stdout
-    .toString()
-    .split("\n")
+  return run(["df", "-P", "-k"])
+    .out.split("\n")
     .slice(1)
     .map((l) => l.trim().split(/\s+/))
     .filter(
@@ -104,7 +132,11 @@ function disks() {
         c.length >= 6 &&
         c[0]?.startsWith("/dev/") &&
         !c[5]?.startsWith("/snap") &&
-        !c[5]?.startsWith("/boot"),
+        !c[5]?.startsWith("/boot") &&
+        // macOS system volumes (the data volume is the one that fills up)
+        !(c[5]?.startsWith("/System/Volumes/") && c[5] !== "/System/Volumes/Data") &&
+        !c[5]?.startsWith("/Volumes/") &&
+        !c[5]?.startsWith("/Library/"),
     )
     .filter((c) => {
       const dev = c[0] ?? "";
@@ -170,13 +202,8 @@ export async function processes(limit = 40): Promise<ProcessInfo[]> {
 }
 
 function psFallback(limit: number): ProcessInfo[] {
-  const res = Bun.spawnSync(["ps", "-axo", "pid=,user=,pcpu=,pmem=,rss=,comm="], {
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  return res.stdout
-    .toString()
-    .split("\n")
+  return run(["ps", "-axo", "pid=,user=,pcpu=,pmem=,rss=,comm="])
+    .out.split("\n")
     .map((l) => l.trim().split(/\s+/))
     .filter((c) => c.length >= 6)
     .map((c) => {
@@ -196,13 +223,15 @@ function psFallback(limit: number): ProcessInfo[] {
     .slice(0, limit);
 }
 
-function serviceActive(unit: string): boolean | undefined {
-  const res = Bun.spawnSync(["systemctl", "--user", "is-active", unit], {
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  if (res.exitCode !== 0 && !res.stdout.toString().trim()) return undefined;
-  return res.stdout.toString().trim() === "active";
+/** The push watcher service: systemd user unit on Linux, launchd agent on macOS. */
+function watcherActive(): boolean | undefined {
+  if (mac) {
+    const r = run(["launchctl", "list", "app.hollr.watch"]);
+    return r.ok ? /"PID" = \d+/.test(r.out) : false;
+  }
+  const r = run(["systemctl", "--user", "is-active", "hollr-watch.service"]);
+  if (!r.ok && !r.out.trim()) return undefined;
+  return r.out.trim() === "active";
 }
 
 export async function sysinfo(version: string, lang: Lang = "de") {
@@ -212,12 +241,14 @@ export async function sysinfo(version: string, lang: Lang = "de") {
       ? { ...c, fix: packageHint("pulseaudio pulseaudio-utils") }
       : c,
   );
-  const watch = serviceActive("hollr-watch.service");
+  const watch = watcherActive();
   checks.push({
     name: "Hollr-Wächter (Push)",
     ok: watch !== false,
     detail: watch === undefined ? "kein systemd" : watch ? "läuft" : "gestoppt",
-    fix: "systemctl --user enable --now hollr-watch.service",
+    fix: mac
+      ? 'launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/app.hollr.watch.plist'
+      : "systemctl --user enable --now hollr-watch.service",
   });
   const push = pushConfig();
   checks.push({

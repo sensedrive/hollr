@@ -345,13 +345,15 @@ export function openSessionFile(pid: number): string | undefined {
       } catch {}
     }
   } catch {
-    const res = Bun.spawnSync(["lsof", "-p", String(pid), "-Fn"], {
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    for (const line of res.stdout.toString().split("\n")) {
-      if (line.startsWith("n") && isSession(line.slice(1))) return line.slice(1);
-    }
+    try {
+      const res = Bun.spawnSync(["lsof", "-p", String(pid), "-Fn"], {
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      for (const line of res.stdout.toString().split("\n")) {
+        if (line.startsWith("n") && isSession(line.slice(1))) return line.slice(1);
+      }
+    } catch {}
   }
   return undefined;
 }

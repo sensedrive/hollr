@@ -42,6 +42,44 @@ export function parseListeners(text: string): Listener[] {
   return [...out.values()].sort((a, b) => a.port - b.port);
 }
 
+/** macOS (no `ss`): `lsof -nP -iTCP -sTCP:LISTEN -Fpcn` → p<pid> / c<command> / n<host:port> records. */
+export function parseLsof(text: string): Listener[] {
+  const out = new Map<number, Listener>();
+  let pid: number | undefined;
+  let proc: string | undefined;
+  for (const line of text.split("\n")) {
+    const v = line.slice(1);
+    if (line.startsWith("p")) pid = Number(v);
+    else if (line.startsWith("c")) proc = v;
+    else if (line.startsWith("n")) {
+      const idx = v.lastIndexOf(":");
+      const host = v.slice(0, idx);
+      const port = Number(v.slice(idx + 1));
+      if (!port || SKIP.has(port) || out.has(port)) continue;
+      if (!["127.0.0.1", "*", "[::1]", "localhost", "[::]"].includes(host)) continue;
+      if (proc && SKIP_PROCESS.test(proc)) continue;
+      out.set(port, { port, process: proc, pid });
+    }
+  }
+  return [...out.values()].sort((a, b) => a.port - b.port);
+}
+
+function listeners(): Listener[] {
+  try {
+    const ss = Bun.spawnSync(["ss", "-Hltnp"], { stdout: "pipe", stderr: "ignore" });
+    if (ss.exitCode === 0) return parseListeners(ss.stdout.toString());
+  } catch {}
+  try {
+    const lsof = Bun.spawnSync(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpcn"], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    return parseLsof(lsof.stdout.toString());
+  } catch {
+    return [];
+  }
+}
+
 async function probe(port: number): Promise<{ html: boolean; title?: string }> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/`, {
@@ -59,9 +97,11 @@ async function probe(port: number): Promise<{ html: boolean; title?: string }> {
 }
 
 export async function webPorts(): Promise<WebPort[]> {
-  const ss = Bun.spawnSync(["ss", "-Hltnp"], { stdout: "pipe", stderr: "ignore" });
-  const listeners = parseListeners(ss.stdout.toString()).slice(0, 60);
-  const probed = await Promise.all(listeners.map(async (l) => ({ l, p: await probe(l.port) })));
+  const probed = await Promise.all(
+    listeners()
+      .slice(0, 60)
+      .map(async (l) => ({ l, p: await probe(l.port) })),
+  );
   return probed
     .filter(({ p }) => p.html)
     .map(({ l, p }) => {

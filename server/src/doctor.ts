@@ -102,7 +102,8 @@ export async function collectChecks(): Promise<Check[]> {
   const akMode = existsSync(ak) ? (statSync(ak).mode & 0o777).toString(8) : "fehlt";
   checks.push({
     name: "authorized_keys",
-    ok: akMode === "600" || akMode === "fehlt",
+    // sshd only refuses keys files others can write to
+    ok: akMode === "fehlt" || (Number.parseInt(akMode, 8) & 0o022) === 0,
     detail: `${ak} (${akMode})`,
     fix: `chmod 600 ${ak}`,
   });

@@ -227,20 +227,24 @@ function pullRequests(root: string): Record<string, PrInfo> {
     };
     if (Date.now() - cached.at < 120_000) return cached.prs;
   } catch {}
-  const res = Bun.spawnSync(
-    [
-      "gh",
-      "pr",
-      "list",
-      "--state",
-      "open",
-      "--limit",
-      "60",
-      "--json",
-      "number,headRefName,state,isDraft,statusCheckRollup",
-    ],
-    { cwd: root, stdout: "pipe", stderr: "ignore", timeout: 8000 },
-  );
+  // PR badges are optional: without the GitHub CLI there are just none
+  let res: { exitCode: number | null; stdout: Buffer } = { exitCode: 1, stdout: Buffer.from("") };
+  try {
+    res = Bun.spawnSync(
+      [
+        "gh",
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "60",
+        "--json",
+        "number,headRefName,state,isDraft,statusCheckRollup",
+      ],
+      { cwd: root, stdout: "pipe", stderr: "ignore", timeout: 8000 },
+    );
+  } catch {}
   const prs: Record<string, PrInfo> = {};
   if (res.exitCode === 0) {
     try {

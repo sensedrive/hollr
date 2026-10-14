@@ -12,7 +12,10 @@
 
   onMount(() => {
     refreshSpaces();
-    const timer = setInterval(() => refreshSpaces(), 10_000);
+    // pushed changes refresh spaces right away; this is only the safety net
+    const timer = setInterval(() => {
+      if (app.servers.some((x) => !app.live[x.id])) refreshSpaces();
+    }, 10_000);
     return () => clearInterval(timer);
   });
 

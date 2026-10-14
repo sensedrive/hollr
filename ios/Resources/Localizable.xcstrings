@@ -165,6 +165,16 @@
         }
       }
     },
+    "%lld Agents": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld agents"
+          }
+        }
+      }
+    },
     "%lld Agents · Gerät %@": {
       "localizations": {
         "de": {
@@ -201,12 +211,52 @@
         }
       }
     },
+    "%lld Problem(e)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld problem(s)"
+          }
+        }
+      }
+    },
     "%lld Sitzung(en) werden beendet": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld session(s) will be ended"
+          }
+        }
+      }
+    },
+    "%lld Update(s)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld update(s)"
+          }
+        }
+      }
+    },
+    "%lld Werkzeuge installieren/aktualisieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install/update %lld tools"
+          }
+        }
+      }
+    },
+    "%lld fehlt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld missing"
           }
         }
       }
@@ -291,6 +341,16 @@
         }
       }
     },
+    "1 Werkzeug installieren/aktualisieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install/update 1 tool"
+          }
+        }
+      }
+    },
     "1. Entfernte Anmeldung (SSH) einschalten": {
       "localizations": {
         "en": {
@@ -371,6 +431,16 @@
         }
       }
     },
+    "Adresse": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Address"
+          }
+        }
+      }
+    },
     "Agent nicht gefunden": {
       "localizations": {
         "en": {
@@ -427,6 +497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "All"
+          }
+        }
+      }
+    },
+    "Alles bereit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All set"
           }
         }
       }
@@ -817,6 +897,16 @@
         }
       }
     },
+    "CPU": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
+      }
+    },
     "Chat konnte nicht geöffnet werden.": {
       "localizations": {
         "en": {
@@ -1083,6 +1173,16 @@
         }
       }
     },
+    "Dieses Gerät": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device"
+          }
+        }
+      }
+    },
     "Diktat beenden": {
       "localizations": {
         "en": {
@@ -1099,6 +1199,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dictate"
+          }
+        }
+      }
+    },
+    "Disk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disk"
           }
         }
       }
@@ -1129,6 +1239,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "RECOMMENDED"
+          }
+        }
+      }
+    },
+    "Echtzeit: Neue Workspaces, Tabs und Agent-Status erscheinen sofort – ohne ständiges Nachladen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Real time: new workspaces, tabs and agent status show up instantly – without constant reloading"
           }
         }
       }
@@ -1439,6 +1559,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No web service is running on localhost there right now."
+          }
+        }
+      }
+    },
+    "Geräte-ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device ID"
           }
         }
       }
@@ -1879,6 +2009,16 @@
         }
       }
     },
+    "Last": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load"
+          }
+        }
+      }
+    },
     "Leer = Home-Verzeichnis. Ordner mit ~ werden auf dem Server aufgelöst.": {
       "localizations": {
         "en": {
@@ -1995,6 +2135,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Also deletes the branch in the remote repository (e.g. GitHub)."
+          }
+        }
+      }
+    },
+    "Macs als Server: Werkzeuge, Server-Info und Ports funktionieren jetzt auch dort": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macs as servers: tools, server info and ports now work there too"
           }
         }
       }
@@ -2699,6 +2849,16 @@
         }
       }
     },
+    "RAM": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAM"
+          }
+        }
+      }
+    },
     "Read": {
       "localizations": {
         "en": {
@@ -2855,6 +3015,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Servers & devices"
+          }
+        }
+      }
+    },
+    "Server & Geräte: jede Maschine mit eigener Seite – Auslastung, Probleme, Updates auf einen Blick": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servers & devices: every machine gets its own page – load, problems and updates at a glance"
+          }
+        }
+      }
+    },
+    "Server aus Hollr entfernen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove server from Hollr"
           }
         }
       }
@@ -3385,6 +3565,16 @@
         }
       }
     },
+    "Team: Jede Person koppelt ihr eigenes iPhone mit `hollr pair`.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Team: everyone pairs their own iPhone with `hollr pair`."
+          }
+        }
+      }
+    },
     "Team: Jede Person koppelt ihr eigenes iPhone mit `hollr pair`. Entfernen auf dem Server mit `hollr revoke <name>`.": {
       "localizations": {
         "en": {
@@ -3751,6 +3941,16 @@
         }
       }
     },
+    "Werkzeuge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools"
+          }
+        }
+      }
+    },
     "Werkzeuge auf %@": {
       "localizations": {
         "en": {
@@ -3767,6 +3967,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tools show the target version, “up to date” and a collapsible log"
+          }
+        }
+      }
+    },
+    "Werkzeuge: alles Fehlende und Veraltete mit einem Tipp installieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools: install everything missing or outdated with one tap"
           }
         }
       }

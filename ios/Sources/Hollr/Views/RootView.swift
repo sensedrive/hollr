@@ -58,7 +58,10 @@ struct RootView: View {
                     if let server { sheetAgent = "\(server.id.uuidString)|\(pane)" }
                 }
                 .task { PushManager.shared.start(servers: store.servers) }
-                .onChange(of: store.servers) { _, servers in PushManager.shared.updateServers(servers) }
+                .onChange(of: store.servers) { _, servers in
+                    PushManager.shared.updateServers(servers)
+                    herdr.startFeeds(servers)
+                }
                 .sheet(item: Binding(get: { sheetAgent.map(SheetID.init) }, set: { sheetAgent = $0?.id })) { item in
                     AgentSheet(agentId: item.id)
                         .presentationDetents([.fraction(0.82), .large])
@@ -84,10 +87,17 @@ struct RootView: View {
                 .environment(store)
         }
         .task(id: scenePhase) {
-            // keep herdr state fresh while the app is in the foreground
+            // keep herdr state fresh while the app is in the foreground: the live feed pushes
+            // changes; polling stays as a slow safety net (fast only while a feed is down)
+            guard scenePhase == .active else {
+                herdr.stopFeeds()
+                return
+            }
+            herdr.startFeeds(store.servers)
             while scenePhase == .active, !Task.isCancelled {
                 await herdr.refresh(store.servers)
-                try? await Task.sleep(for: .seconds(5))
+                let allLive = store.servers.allSatisfy { herdr.live.contains($0.id) }
+                try? await Task.sleep(for: .seconds(allLive ? 30 : 5))
             }
         }
         #if DEBUG

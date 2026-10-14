@@ -7,7 +7,7 @@
   import { settings } from "$lib/settings.svelte";
   import * as theme from "$lib/theme";
   import {
-    app, back, dialogs, findPane, go, loadServers, mySessions, nav, refresh, refreshSpaces, tabName, type Route,
+    app, back, dialogs, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName, type Route,
   } from "$lib/store.svelte";
   import AgentView from "$lib/components/AgentView.svelte";
   import PairDialog from "$lib/components/PairDialog.svelte";
@@ -58,9 +58,12 @@
     const onScheme = () => (systemDark = mq.matches);
     mq.addEventListener("change", onScheme);
     loadServers().then(() => refreshSpaces());
-    const timer = setInterval(refresh, 5000);
+    let unlisten = () => {};
+    listenFeeds().then((off) => (unlisten = off)).catch(() => {});
+    const timer = setInterval(poll, 5000);
     return () => {
       clearInterval(timer);
+      unlisten();
       mq.removeEventListener("change", onScheme);
     };
   });

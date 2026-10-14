@@ -1,61 +1,187 @@
 import SwiftUI
 
+/// Settings → Server & Geräte: every paired server, each with its own page.
 struct ServersView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
     let onPair: () -> Void
-    @State private var confirmRemove: Server?
 
     var body: some View {
         List {
             Group {
-            Section {
-                ForEach(store.servers) { server in
+                Section {
+                    ForEach(store.servers) { server in
+                        NavigationLink { ServerDetailView(server: server) } label: { ServerRow(server: server) }
+                    }
+                } footer: {
+                    Text("Team: Jede Person koppelt ihr eigenes iPhone mit `hollr pair`.")
+                }
+                Section {
+                    Button(action: onPair) { Label("Server koppeln", systemImage: "qrcode.viewfinder") }
+                }
+            }
+            .listRowBackground(Theme.card)
+        }.themedList()
+        .navigationTitle("Server & Geräte")
+    }
+}
+
+private struct ServerRow: View {
+    @Environment(HerdrStore.self) private var herdr
+    let server: Server
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ServerIcon(error: herdr.errors[server.id] != nil)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(server.label).font(.headline)
+                Text(server.displayAddress).font(.caption).foregroundStyle(.secondary)
+                if let error = herdr.errors[server.id] {
+                    Text(error).font(.caption2).foregroundStyle(Theme.warn).lineLimit(2)
+                } else {
+                    let n = herdr.agents(on: server).filter { $0.pane.agent != nil }.count
+                    Text("\(n) Agents").font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct ServerIcon: View {
+    let error: Bool
+    var body: some View {
+        Image(systemName: "server.rack")
+            .font(.title3)
+            .foregroundStyle(Theme.accent)
+            .frame(width: 36, height: 36)
+            .background(Theme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(alignment: .bottomTrailing) {
+                Circle().fill(error ? Theme.warn : Theme.live).frame(width: 9, height: 9)
+                    .overlay(Circle().stroke(Theme.card, lineWidth: 2))
+                    .offset(x: 2, y: 2)
+            }
+    }
+}
+
+/// One server: status at a glance, then server info, tools and this device.
+struct ServerDetailView: View {
+    @Environment(ServerStore.self) private var store
+    @Environment(HerdrStore.self) private var herdr
+    @Environment(\.dismiss) private var dismiss
+    let server: Server
+    @State private var info: ServerInfo?
+    @State private var tools: [ServerTool]?
+    @State private var error: String?
+    @State private var confirmRemove = false
+
+    private var problems: [ServerInfo.Check] { info?.checks.filter { !$0.ok } ?? [] }
+    private var updates: Int { tools?.filter { $0.updateAvailable == true }.count ?? 0 }
+    private var missing: Int { tools?.filter { !$0.installed }.count ?? 0 }
+
+    var body: some View {
+        List {
+            Group {
+                Section {
                     HStack(spacing: 14) {
-                        Image(systemName: "server.rack")
-                            .font(.title3)
-                            .foregroundStyle(Theme.accent)
-                            .frame(width: 36, height: 36)
-                            .background(Theme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 9))
+                        ServerIcon(error: herdr.errors[server.id] != nil || error != nil)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(server.label).font(.headline)
-                            Text(server.displayAddress).font(.caption).foregroundStyle(.secondary)
-                            if let error = herdr.errors[server.id] {
-                                Text(error).font(.caption2).foregroundStyle(Theme.warn)
-                            } else {
-                                let n = herdr.agents(on: server).filter { $0.pane.agent != nil }.count
-                                Text("\(n) Agents · Gerät \(server.deviceId)").font(.caption2).foregroundStyle(.tertiary)
-                            }
+                            Text(info?.host ?? server.label).font(.headline)
+                            Text(info.map { "\($0.os) · Hollr \($0.hollr)" } ?? server.displayAddress)
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
-                    .swipeActions {
-                        Button("Entfernen", role: .destructive) { confirmRemove = server }
+                    if let error {
+                        Text(error).font(.caption).foregroundStyle(Theme.warn)
+                    } else {
+                        if info == nil {
+                            stats.redacted(reason: .placeholder).shimmer()
+                        } else {
+                            stats
+                        }
                     }
                 }
-            } footer: {
-                Text("Team: Jede Person koppelt ihr eigenes iPhone mit `hollr pair`. Entfernen auf dem Server mit `hollr revoke <name>`.")
+                Section {
+                    NavigationLink { ServerInfoView(server: server) } label: {
+                        LabeledContent {
+                            if info != nil {
+                                Text(problems.isEmpty ? String(localized: "Alles bereit") : String(localized: "\(problems.count) Problem(e)"))
+                                    .foregroundStyle(problems.isEmpty ? Theme.live : Theme.warn)
+                            }
+                        } label: {
+                            Label("Server-Info", systemImage: "gauge.with.dots.needle.67percent")
+                        }
+                    }
+                    NavigationLink { ToolsView(server: server) } label: {
+                        LabeledContent {
+                            if let tools {
+                                Text(updates + missing == 0 ? String(localized: "Aktuell")
+                                     : missing > 0 ? String(localized: "\(missing) fehlt") : String(localized: "\(updates) Update(s)"))
+                                    .foregroundStyle(updates + missing == 0 ? Theme.live : Theme.accent)
+                            }
+                        } label: {
+                            Label("Werkzeuge", systemImage: "shippingbox")
+                        }
+                    }
+                } footer: {
+                    if !problems.isEmpty {
+                        Text(problems.map(\.name).joined(separator: " · "))
+                    }
+                }
+                Section("Dieses Gerät") {
+                    LabeledContent("Geräte-ID", value: server.deviceId)
+                    LabeledContent("Adresse", value: server.displayAddress)
+                    Button("Server aus Hollr entfernen", role: .destructive) { confirmRemove = true }
+                }
             }
-            Section {
-                Button(action: onPair) { Label("Server koppeln", systemImage: "qrcode.viewfinder") }
-            }
-            Section("Über") {
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
-                LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")
-            }
-        }
             .listRowBackground(Theme.card)
         }.themedList()
-        .navigationTitle("Server")
-        .confirmationDialog(
-            String(localized: "Server aus Hollr entfernen?"), isPresented: .constant(confirmRemove != nil), titleVisibility: .visible,
-            presenting: confirmRemove
-        ) { server in
-            Button("Entfernen", role: .destructive) { store.remove(server); confirmRemove = nil }
-            Button("Abbrechen", role: .cancel) { confirmRemove = nil }
-        } message: { server in
+        .navigationTitle(server.label)
+        .refreshable { await load() }
+        .task { await load() }
+        .confirmationDialog(String(localized: "Server aus Hollr entfernen?"), isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Entfernen", role: .destructive) {
+                store.remove(server)
+                dismiss()
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
             Text("Auf dem Server bleibt der Schlüssel bis `hollr revoke \(server.deviceId)`.")
         }
+    }
+
+    private var stats: some View {
+        let i = info ?? .placeholder
+        let mem = i.memory.total > 0 ? Int(i.memory.used / i.memory.total * 100) : 0
+        let disk = i.disks.first.map { $0.total > 0 ? Int($0.used / $0.total * 100) : 0 } ?? 0
+        return HStack(spacing: 0) {
+            stat(String(localized: "CPU"), i.cpu.map { "\(Int($0)) %" } ?? "–")
+            stat(String(localized: "Last"), String(format: "%.1f", i.load.first ?? 0))
+            stat(String(localized: "RAM"), "\(mem) %")
+            stat(String(localized: "Disk"), "\(disk) %")
+            stat(String(localized: "Agents"), "\(herdr.agents(on: server).filter { $0.pane.agent != nil }.count)")
+        }
+    }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.headline.monospacedDigit())
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func load() async {
+        async let i = HollrClient.sysinfo(server)
+        async let t = HollrClient.tools(server)
+        do {
+            info = try await i
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+        tools = try? await t
     }
 }
 

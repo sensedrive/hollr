@@ -11,6 +11,10 @@ export const app = $state({
   errors: {} as Record<string, string>,
   /** first tree load per server finished (for skeletons) */
   loaded: {} as Record<string, boolean>,
+  /** live change feed connected (then polling is only a slow safety net) */
+  live: {} as Record<string, boolean>,
+  /** bumped on every pushed change – views that load on their own can react */
+  changes: 0,
 });
 
 // ------------------------------------------------------------ navigation
@@ -119,12 +123,38 @@ export const serverById = (id: string) => app.servers.find((s) => s.id === id);
 export async function loadServers() {
   app.servers = await api.servers();
   if (!app.servers.length) dialogs.pair = true;
+  api.feedsSync(app.servers.map((s) => s.id)).catch(() => {});
   await refresh();
 }
 
-export async function refresh() {
+/** Pushed changes from the servers' live feeds (`hollr gate events`). */
+export async function listenFeeds(): Promise<() => void> {
+  const offChanged = await api.onChanged(async ({ server, spaces }) => {
+    app.changes++;
+    await refresh(server);
+    if (spaces) await refreshSpaces(server);
+  });
+  const offLive = await api.onFeed(({ server, live }) => {
+    app.live[server] = live;
+  });
+  return () => {
+    offChanged();
+    offLive();
+  };
+}
+
+/** Polling: fast while a server has no live feed, otherwise only every 30 s as a safety net. */
+let lastFull = 0;
+export function poll() {
+  const full = Date.now() - lastFull > 30_000;
+  if (full) lastFull = Date.now();
+  const due = app.servers.filter((s) => full || !app.live[s.id]).map((s) => s.id);
+  if (due.length) refresh(...due);
+}
+
+export async function refresh(...only: string[]) {
   await Promise.all(
-    app.servers.map(async (s) => {
+    app.servers.filter((s) => !only.length || only.includes(s.id)).map(async (s) => {
       try {
         app.trees[s.id] = await api.tree(s.id);
         delete app.errors[s.id];

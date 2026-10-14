@@ -608,3 +608,19 @@ describe("keys", () => {
     ]);
   });
 });
+
+describe("events", () => {
+  test("structure changes always, pane updates only when status/cwd/title change", async () => {
+    const { classify } = await import("../src/events");
+    const panes = new Map<string, string>();
+    const upd = (status: string, rev: number) => ({
+      event: "pane_updated",
+      data: { pane: { pane_id: "w1:p1", agent_status: status, cwd: "/tmp", revision: rev } },
+    });
+    expect(classify({ event: "workspace_created" }, panes)).toBe("spaces");
+    expect(classify({ event: "pane_created" }, panes)).toBe("tree");
+    expect(classify(upd("idle", 1), panes)).toBe("none"); // first sighting: just remembered
+    expect(classify(upd("idle", 2), panes)).toBe("none"); // output only
+    expect(classify(upd("working", 3), panes)).toBe("tree");
+  });
+});

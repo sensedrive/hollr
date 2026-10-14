@@ -13,8 +13,10 @@
  *   hollr gate      → hello | agents | live <pane> | prompt <pane> | keys <pane> <key>...
  *   hollr enroll ID → pairing handshake
  */
+import { existsSync } from "node:fs";
 import QRCode from "qrcode";
 import { runDoctor } from "./doctor";
+import { runEvents } from "./events";
 import { execHerdr, Herdr, installedKinds, type NewChatRequest, newChat } from "./herdr";
 import { toLang } from "./i18n";
 import { runLive } from "./live";
@@ -57,7 +59,7 @@ import { readTimeline } from "./timeline";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.17.1";
+export const VERSION = "0.18.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -90,6 +92,22 @@ function flag(args: string[], name: string): string[] {
 }
 
 async function gate(): Promise<number> {
+  // forced SSH commands get a minimal PATH (and Bun hands children the PATH it started with):
+  // restart once with the places installers use, Homebrew on macOS included
+  const home = Bun.env.HOME ?? "";
+  const want = [`${home}/.local/bin`, `${home}/.bun/bin`, "/opt/homebrew/bin", "/usr/local/bin"];
+  const path = (Bun.env.PATH ?? "/usr/bin:/bin").split(":");
+  if (!Bun.env.HOLLR_GATE_PATH && want.some((d) => !path.includes(d) && existsSync(d))) {
+    // compiled binary: execPath is hollr itself; `bun src/cli.ts`: execPath is bun + the script
+    const script = Bun.argv[1]?.startsWith("/$bunfs/") ? [] : [Bun.argv[1] ?? ""];
+    const child = Bun.spawn([process.execPath, ...script, ...Bun.argv.slice(2)], {
+      env: { ...Bun.env, PATH: [...want, ...path].join(":"), HOLLR_GATE_PATH: "1" },
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    return await child.exited;
+  }
   const original = (Bun.env.SSH_ORIGINAL_COMMAND ?? "").trim();
   const [cmd = "", pane = "", ...rest] = original.split(/\s+/);
   const herdr = new Herdr();
@@ -107,6 +125,7 @@ async function gate(): Promise<number> {
       "tools",
       "sysinfo",
       "models",
+      "events",
     ].includes(cmd)
   )
     log("gate", original);
@@ -303,6 +322,8 @@ async function gate(): Promise<number> {
       });
       return 0;
     }
+    case "events":
+      return await runEvents();
     case "live":
       await runLive(pane, herdr, {
         input: Bun.stdin.stream() as unknown as AsyncIterable<Uint8Array>,
@@ -323,7 +344,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | tree | kinds | new | close <pane> | ports | history <pane> | live <pane> | prompt <pane> | keys <pane> <key>...",
+        hint: "hello | events | tree | kinds | new | close <pane> | ports | history <pane> | live <pane> | prompt <pane> | keys <pane> <key>...",
       });
       return 2;
   }
