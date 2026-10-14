@@ -93,6 +93,21 @@ export function relTime(ms: number): string {
   return f.format(Math.round(diff / (86400 * 365)), "year");
 }
 
+/** Time until a reset, precise to the minute: "in 4 Std. 23 Min.", "in 1 Tag 6 Std.". */
+export function countdown(ms: number): string {
+  const s = (ms - Date.now()) / 1000;
+  const en = lang() === "en";
+  if (s <= 30) return en ? "soon" : "gleich";
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const parts =
+    d > 0
+      ? [en ? `${d} d` : `${d} ${d === 1 ? "Tag" : "Tage"}`, h ? (en ? `${h} h` : `${h} Std.`) : ""]
+      : [h ? (en ? `${h} h` : `${h} Std.`) : "", en ? `${m} min` : `${m} Min.`];
+  return `in ${parts.filter(Boolean).join(" ")}`;
+}
+
 /** 200000 → "200k", 1000000 → "1M" */
 export const ctxLabel = (n?: number) =>
   !n ? "" : n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : `${Math.round(n / 1000)}k`;

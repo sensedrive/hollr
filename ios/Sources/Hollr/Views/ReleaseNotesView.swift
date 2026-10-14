@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 28, date: "14.10.2026", items: [
+            ("clock", String(localized: "Nutzungslimits: Reset auf die Minute genau (z. B. „in 4 Std., 23 Min.“)")),
+        ]),
         ReleaseNote(build: 27, date: "14.10.2026", items: [
             ("chart.xyaxis.line", String(localized: "Verlauf & Statistik (Beta): Nutzungslimits über die Zeit, Verbrauch pro Tag und Agent-Zeit pro Maschine")),
             ("checkmark.circle", String(localized: "Nutzungslimits ohne doppelte Einträge")),

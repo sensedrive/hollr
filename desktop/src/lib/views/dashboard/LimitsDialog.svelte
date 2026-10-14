@@ -4,7 +4,7 @@
   import { t } from "$lib/i18n";
   import { app } from "$lib/store.svelte";
   import { providerName, refreshUsage, usage, usedColor, type UsageLimit } from "./usage.svelte";
-  import { relTime } from "./util";
+  import { countdown } from "./util";
   import UsageHistory from "./UsageHistory.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
@@ -54,7 +54,7 @@
             <div class="limit">
               <div class="line"><span class="grow">{short(l)}</span>
                 <b style="color:{usedColor(l.used)}">{Math.round(l.used * 100)} %</b>
-                {#if l.resetsAt}<span class="dim small">· {relTime(l.resetsAt)}</span>{/if}
+                {#if l.resetsAt}<span class="dim small">· {countdown(l.resetsAt)}</span>{/if}
               </div>
               <div class="bar"><div style="width:max(4px, {l.used * 100}%); background:{usedColor(l.used)}"></div></div>
             </div>

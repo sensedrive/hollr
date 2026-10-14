@@ -105,6 +105,21 @@ struct UsageLimit: Codable, Identifiable, Hashable {
 }
 
 enum RelativeTime {
+    /// Time until a reset, precise to the minute: "in 4 Std., 23 Min.", "in 1 Tag, 6 Std.".
+    static func countdown(_ epochMs: Double) -> String {
+        let seconds = epochMs / 1000 - Date.now.timeIntervalSince1970
+        guard seconds > 30 else { return String(localized: "gleich") }
+        let f = DateComponentsFormatter()
+        f.unitsStyle = .short
+        f.maximumUnitCount = 2
+        f.allowedUnits = seconds >= 86_400 ? [.day, .hour] : [.hour, .minute]
+        var calendar = Calendar.current
+        calendar.locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "de")
+        f.calendar = calendar
+        let text = f.string(from: seconds) ?? ""
+        return String(localized: "in \(text)")
+    }
+
     static func string(_ epochMs: Double) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short

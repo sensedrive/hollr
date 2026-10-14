@@ -2649,6 +2649,16 @@
         }
       }
     },
+    "Nutzungslimits: Reset auf die Minute genau (z. B. „in 4 Std., 23 Min.“)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage limits: resets to the minute (e.g. “in 4 hr, 23 min”)"
+          }
+        }
+      }
+    },
     "Oder tippen …": {
       "localizations": {
         "en": {
@@ -4431,6 +4441,16 @@
         }
       }
     },
+    "gleich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soon"
+          }
+        }
+      }
+    },
     "herdr legt einen eigenen Arbeitsordner mit neuem Branch an – parallel zu main, ohne dass sich Agents in die Quere kommen.": {
       "localizations": {
         "en": {
@@ -4457,6 +4477,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "listening"
+          }
+        }
+      }
+    },
+    "in %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in %@"
           }
         }
       }

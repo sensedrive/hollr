@@ -260,7 +260,7 @@ struct LimitBar: View {
                 Text("\(Int((limit.used * 100).rounded())) %").font(.caption.monospacedDigit().weight(.semibold))
                     .foregroundStyle(color)
                 if let reset = limit.resetsAt {
-                    Text("· \(RelativeTime.string(reset))").font(.caption2).foregroundStyle(.tertiary)
+                    Text("· \(RelativeTime.countdown(reset))").font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
                 }
             }
             GeometryReader { geo in
