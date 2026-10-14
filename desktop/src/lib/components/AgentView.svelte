@@ -53,7 +53,10 @@
 
   const status = $derived(timeline?.status ?? pane.status);
   const working = $derived(!!timeline?.running && status !== "blocked");
-  const showsScreen = $derived(!isOmp || status === "blocked");
+  // omp's question already shows as an Ask card – then the raw screen would only repeat it
+  const askShown = $derived(isOmp && (timeline?.items ?? []).some((i) => i.k === "ask" && i.pending));
+  const showsScreen = $derived((!isOmp || status === "blocked") && !askShown);
+  let screenOpen = $state(false);
 
   function toBubbles(events: HistoryEvent[]): Bubble[] {
     const out: Bubble[] = [];
@@ -561,9 +564,10 @@
               <div class="screencard" class:waiting>
                 <div class="sc-head">
                   <span>{waiting ? `⚠ ${t("Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)")}` : `>_ ${t("Terminal")}`}</span>
+                  {#if isOmp}<button class="link" onclick={() => (screenOpen = !screenOpen)}>{screenOpen ? "▴" : "▾"}</button>{/if}
                   <button class="link" onclick={() => (mode = "terminal")}>{t("Interaktiv öffnen")}</button>
                 </div>
-                <pre>{screen}</pre>
+                {#if !isOmp || screenOpen}<pre>{screen}</pre>{/if}
               </div>
             {/if}
             {#if error}<div class="warnline">⚠ {error}</div>{/if}

@@ -1463,6 +1463,16 @@
         }
       }
     },
+    "Eigene Antwort – danach unten eintippen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Own answer – then type it below"
+          }
+        }
+      }
+    },
     "Ein Begriff pro Zeile, falsch verstandene Varianten nach „=“: z. B. „JIRA = Jira, Dschira“. Die Liste fließt in alle Engines ein (Apple-Kontext, Whisper-Prompt, Parakeet-Boost) und korrigiert danach Schreibweisen.": {
       "localizations": {
         "en": {
@@ -1699,6 +1709,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Questions & confirmations"
+          }
+        }
+      }
+    },
+    "Fragen von omp: keine doppelte Terminal-Ansicht mehr über der Frage, dazu „Eigene Antwort“": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questions from omp: no duplicate terminal view over the question anymore, plus “Own answer”"
           }
         }
       }

@@ -217,8 +217,13 @@ private struct AgentConversation: View {
                             Bubble(item: item).id(item.id)
                         }
                     }
-                    if session.showsScreen && !session.screen.isEmpty {
-                        TerminalCard(text: session.screen, waiting: session.agentStatus == "blocked")
+                    // omp's question already shows as an Ask card – the raw screen would only repeat it
+                    let askShown = session.usesTimeline && (session.timeline?.visibleItems.contains {
+                        if case .ask(_, _, _, _, true) = $0 { return true } else { return false }
+                    } ?? false)
+                    if session.showsScreen && !session.screen.isEmpty && !askShown {
+                        TerminalCard(text: session.screen, waiting: session.agentStatus == "blocked",
+                                     collapsible: session.usesTimeline)
                     }
                     if case .failed(let message) = session.phase {
                         Label(message, systemImage: "exclamationmark.triangle.fill")
@@ -354,18 +359,35 @@ private struct AgentConversation: View {
 private struct TerminalCard: View {
     let text: String
     let waiting: Bool
+    /// omp chats: the screen is only a fallback – start folded so it doesn't cover the chat
+    var collapsible = false
+    @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(waiting ? String(localized: "Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)") : String(localized: "Terminal"),
-                  systemImage: waiting ? "exclamationmark.bubble.fill" : "terminal")
+            Button {
+                if collapsible { withAnimation(.snappy) { expanded.toggle() } }
+            } label: {
+                HStack {
+                    Label(waiting ? String(localized: "Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)") : String(localized: "Terminal"),
+                          systemImage: waiting ? "exclamationmark.bubble.fill" : "terminal")
+                    Spacer(minLength: 0)
+                    if collapsible {
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down").foregroundStyle(.secondary)
+                    }
+                }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(waiting ? Theme.warn : .secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(text)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .buttonStyle(.plain)
+            .disabled(!collapsible)
+            if !collapsible || expanded {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(text)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
         }
         .padding(12)

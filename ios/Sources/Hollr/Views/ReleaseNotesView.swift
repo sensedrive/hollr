@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 32, date: "14.10.2026", items: [
+            ("questionmark.bubble", String(localized: "Fragen von omp: keine doppelte Terminal-Ansicht mehr über der Frage, dazu „Eigene Antwort“")),
+        ]),
         ReleaseNote(build: 31, date: "14.10.2026", items: [
             ("keyboard", String(localized: "Koppeln per Einmalcode: Code vom Rechner eintippen oder einsetzen – ideal von unterwegs über Tailscale")),
         ]),

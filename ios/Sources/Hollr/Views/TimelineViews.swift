@@ -444,6 +444,19 @@ struct AskCard: View {
                 .buttonStyle(.plain)
                 .disabled(!pending)
             }
+            if pending {
+                // omp's own last entry "Other (type your own)": select it, then type the answer below
+                Button { onPick(options.count) } label: {
+                    HStack(spacing: 8) {
+                        Text("✎").foregroundStyle(Omp.accent)
+                        Text("Eigene Antwort – danach unten eintippen").foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                    .font(.subheadline)
+                    .padding(.vertical, 8).padding(.horizontal, 10)
+                }
+                .buttonStyle(.plain)
+            }
             if let answer {
                 Text("✔ \(answer)").font(Omp.monoSmall).foregroundStyle(answer == "abgebrochen" ? Omp.warning : Omp.success)
             }
