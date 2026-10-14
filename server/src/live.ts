@@ -15,7 +15,11 @@ import { cleanupStale, PulseSession, pulseAvailable } from "./pulse";
 interface AudioRoute {
   create(): Promise<void>;
   attach(pid: number): Promise<{ capturing: boolean; playing: boolean }>;
-  spawnMicWriter(): { stdin: { write(data: Uint8Array): unknown }; kill(): void };
+  spawnMicWriter(): {
+    stdin: { write(data: Uint8Array): unknown };
+    kill(): void;
+    exited?: Promise<number>;
+  };
   spawnSpeakerReader(): { stdout: AsyncIterable<Uint8Array>; kill(): void };
   destroy(): Promise<void>;
 }
@@ -137,7 +141,33 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
   };
 
   await pulse.create();
-  const mic = pulse.spawnMicWriter();
+  // the process that feeds the phone's audio to omp: if it ever exits mid-call, start it again
+  // (otherwise omp keeps "listening" to nothing) – and log why it went away
+  const spawnMic = () => {
+    const proc = pulse.spawnMicWriter();
+    const err = (proc as { stderr?: unknown }).stderr;
+    if (err instanceof ReadableStream)
+      void new Response(err)
+        .text()
+        .then((t) => t.trim() && log("live", pane, "mic stderr", t.slice(0, 300)));
+    void (proc as { exited?: Promise<number> }).exited?.then((code) => {
+      if (ending) return;
+      log("live", pane, "mic writer exited", { code });
+      mic.current = spawnMic();
+    });
+    return proc;
+  };
+  const mic = {
+    current: spawnMic(),
+    write(data: Uint8Array) {
+      try {
+        this.current.stdin.write(data);
+      } catch {}
+    },
+    kill() {
+      this.current.kill();
+    },
+  };
   const speaker = pulse.spawnSpeakerReader();
 
   // every caller waits for the same cleanup (restoring devices must finish before the process exits)
@@ -185,7 +215,7 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
   timers.push(
     setInterval(() => {
       if (ending) return;
-      if (muted || Date.now() - lastMicAt > 100) mic.stdin.write(SILENCE_20MS);
+      if (muted || Date.now() - lastMicAt > 100) mic.write(SILENCE_20MS);
     }, 20),
   );
 
@@ -246,7 +276,7 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
       for (const frame of decoder.push(chunk)) {
         if (frame.type === FRAME_AUDIO) {
           if (!muted) {
-            mic.stdin.write(frame.data);
+            mic.write(frame.data);
             lastMicAt = Date.now();
           }
         } else if (frame.type === FRAME_JSON) {

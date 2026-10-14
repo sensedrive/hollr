@@ -89,11 +89,11 @@ export class MacAudioSession {
   }
 
   /** sox writing phone audio into BlackHole 2ch (comes out of its input side as omp's mic). */
-  spawnMicWriter(): Subprocess<"pipe", "ignore", "ignore"> {
+  spawnMicWriter(): Subprocess<"pipe", "ignore", "pipe"> {
     return Bun.spawn(["sox", "-q", ...pcm, "-", "-t", "coreaudio", MIC_DEVICE], {
       stdin: "pipe",
       stdout: "ignore",
-      stderr: "ignore",
+      stderr: "pipe",
     });
   }
 
@@ -112,6 +112,19 @@ export class MacAudioSession {
   }
 
   async destroy(): Promise<void> {
+    const saved = (() => {
+      try {
+        return JSON.parse(readFileSync(stateFile(), "utf8")) as { input?: string; output?: string };
+      } catch {
+        return undefined;
+      }
+    })();
     restoreMacDefaults();
+    // CoreAudio sometimes settles late (omp releasing its devices): check once more and correct
+    if (saved) {
+      await Bun.sleep(700);
+      if (saved.input && current("input") !== saved.input) select("input", saved.input);
+      if (saved.output && current("output") !== saved.output) select("output", saved.output);
+    }
   }
 }
