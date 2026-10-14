@@ -601,6 +601,16 @@
         }
       }
     },
+    "Am Rechner `hollr pair` ausführen – der Code steht unter dem QR-Code, gilt 10 Minuten und nur einmal. Von unterwegs: am Rechner „Tailscale / Fernzugriff“ wählen und Tailscale auf dem iPhone verbinden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run `hollr pair` on the computer – the code is below the QR code, valid for 10 minutes and once. On the go: choose “Tailscale / remote access” on the computer and connect Tailscale on the iPhone."
+          }
+        }
+      }
+    },
     "Am Rechner abgelehnt.": {
       "localizations": {
         "en": {
@@ -1037,6 +1047,26 @@
         }
       }
     },
+    "Code eingeben": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter code"
+          }
+        }
+      }
+    },
+    "Code wird geprüft": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking code"
+          }
+        }
+      }
+    },
     "Codex": {
       "localizations": {
         "en": {
@@ -1143,6 +1173,36 @@
         }
       }
     },
+    "Der Code hat 16 Zeichen, z. B. K7Q2-M9XA-3PLD-W8RT.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code has 16 characters, e.g. K7Q2-M9XA-3PLD-W8RT."
+          }
+        }
+      }
+    },
+    "Der Code ist abgelaufen oder wurde schon benutzt. Am Rechner einen neuen erzeugen: hollr pair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code has expired or was already used. Create a new one on the computer: hollr pair"
+          }
+        }
+      }
+    },
+    "Der Code stimmt nicht. Bitte genau so eingeben, wie er am Rechner steht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The code is wrong. Please enter it exactly as shown on the computer."
+          }
+        }
+      }
+    },
     "Der Code wurde schon benutzt oder ist abgelaufen. Auf dem Server neu erzeugen: hollr pair": {
       "localizations": {
         "en": {
@@ -1189,6 +1249,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "The pairing code is damaged."
+          }
+        }
+      }
+    },
+    "Der Rechner (%@) ist nicht erreichbar. Gleiches WLAN? Läuft „hollr pair“ am Rechner noch?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The computer (%@) isn't reachable. Same Wi-Fi? Is “hollr pair” still running on the computer?"
+          }
+        }
+      }
+    },
+    "Der Rechner (%@) ist nicht erreichbar. Ist Tailscale auf dem iPhone verbunden und läuft „hollr pair“ am Rechner noch?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The computer (%@) isn't reachable. Is Tailscale connected on the iPhone, and is “hollr pair” still running on the computer?"
           }
         }
       }
@@ -1269,6 +1349,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "German or English – iOS switches the language per app."
+          }
+        }
+      }
+    },
+    "Die Antwort des Rechners passt nicht zum Code.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The computer's answer doesn't match the code."
           }
         }
       }
@@ -2119,6 +2209,26 @@
         }
       }
     },
+    "Koppeln": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair"
+          }
+        }
+      }
+    },
+    "Koppeln per Einmalcode: Code vom Rechner eintippen oder einsetzen – ideal von unterwegs über Tailscale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair with a one-time code: type or paste the code from your computer – ideal on the go via Tailscale"
+          }
+        }
+      }
+    },
     "Kopple mit %@ …": {
       "localizations": {
         "en": {
@@ -2739,6 +2849,16 @@
         }
       }
     },
+    "Nochmal versuchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
     "Nur im selben Netzwerk erreichbar – für unterwegs „Tailscale / Fernzugriff“ wählen.": {
       "localizations": {
         "en": {
@@ -2959,6 +3079,16 @@
         }
       }
     },
+    "Pairing-Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing code"
+          }
+        }
+      }
+    },
     "Parakeet erkennt die Sprache selbst – auch gemischt Deutsch/Englisch.": {
       "localizations": {
         "en": {
@@ -3095,6 +3225,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Import the push key once in the app – all servers are set up automatically"
+          }
+        }
+      }
+    },
+    "QR-Code scannen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan QR code"
           }
         }
       }
@@ -4617,6 +4757,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zen mode: just the chat and a see-through composer"
+          }
+        }
+      }
+    },
+    "Zu viele falsche Versuche – der Code ist gesperrt. Am Rechner einen neuen erzeugen („n“ + Enter).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many wrong attempts – the code is locked. Create a new one on the computer (“n” + Enter)."
           }
         }
       }

@@ -25,6 +25,7 @@ import { listModels, switchCommand } from "./models";
 import {
   addressesFor,
   IPHONE_TAILSCALE_HINT,
+  isTailscaleIp,
   lanAddresses,
   type NetworkMode,
   type TailscaleInfo,
@@ -32,6 +33,7 @@ import {
   tailscaleInfo,
   tailscaleSteps,
 } from "./network";
+import { OTP_PORT, type OtpServer, serveCode } from "./otp";
 import {
   addBootstrap,
   answerRequest,
@@ -43,6 +45,7 @@ import {
   PAIRING_TTL_SEC,
   payloadUrl,
   pendingRequest,
+  removeBootstrap,
   requireConfirmation,
   revokeDevice,
   upgradeDeviceKeys,
@@ -74,7 +77,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.21.0";
+export const VERSION = "0.22.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -472,54 +475,110 @@ async function pair(args: string[]): Promise<number> {
     }
   }
   const addresses = hosts.length ? hosts : addressesFor(mode, ts);
-  const { seed, publicLine } = newBootstrapKey();
-  const { id, exp } = addBootstrap(publicLine);
-  if (interactive) requireConfirmation(id);
-  const payload = buildPayload({
-    seed,
-    exp,
-    addresses,
-    port: Number(flag(args, "--port")[0] ?? 22),
-    label: flag(args, "--name")[0],
-    network: mode,
-  });
-  const url = payloadUrl(payload);
-  console.log(await QRCode.toString(url, { type: "utf8", errorCorrectionLevel: "L", margin: 2 }));
-  console.log(
-    `Mit der iPhone-Kamera oder in Hollr scannen. Gültig ${PAIRING_TTL_SEC / 60} Minuten, einmal nutzbar.`,
-  );
-  console.log(
-    `Verbindung: ${MODE_LABEL[mode]} · ${payload.u}@${payload.a.join(" / ")}:${payload.p}`,
-  );
-  console.log(`Host-Key: ${payload.fp}`);
-  if (mode === "tailscale") console.log(IPHONE_TAILSCALE_HINT);
-  if (args.includes("--link")) console.log(`\nLink (wie ein Passwort behandeln):\n${url}`);
-  if (!interactive) return 0;
+  const wantCode = interactive || args.includes("--code");
+  // the code carries one IPv4: Tailscale's when remote, the LAN one otherwise
+  const codeIp =
+    (mode !== "lan" ? ts.ips[0] : undefined) ??
+    addresses.find((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a) && !isTailscaleIp(a)) ??
+    addresses.find((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a));
 
-  // wait for the phone: confirm here, then report the result
-  console.log("\nWarte auf das iPhone … (Strg+C zum Abbrechen)");
-  const before = new Set(listDevices().map((d) => d.id));
-  while (Date.now() / 1000 < exp) {
-    const request = pendingRequest(id);
-    if (request) {
-      const allow = yes(`\n„${request.name}“ möchte sich mit diesem Rechner koppeln. Erlauben?`);
-      answerRequest(id, allow);
-      if (!allow) {
-        console.log("Abgelehnt – der Code ist damit verbraucht.");
-        return 1;
+  /** One pairing: bootstrap key, QR code and (optionally) the one-time code for the same payload. */
+  const issue = async () => {
+    const { seed, publicLine } = newBootstrapKey();
+    const { id, exp } = addBootstrap(publicLine);
+    if (interactive && !args.includes("--no-confirm")) requireConfirmation(id);
+    const payload = buildPayload({
+      seed,
+      exp,
+      addresses,
+      port: Number(flag(args, "--port")[0] ?? 22),
+      label: flag(args, "--name")[0],
+      network: mode,
+    });
+    const url = payloadUrl(payload);
+    console.log(await QRCode.toString(url, { type: "utf8", errorCorrectionLevel: "L", margin: 2 }));
+    let otp: OtpServer | undefined;
+    if (wantCode && codeIp) {
+      try {
+        otp = serveCode(codeIp, JSON.stringify(payload), exp);
+      } catch (err) {
+        console.log(
+          `(Kein Code: Port ${OTP_PORT} auf ${codeIp} belegt – ${err instanceof Error ? err.message : err})`,
+        );
       }
     }
-    const added = listDevices().find((d) => !before.has(d.id));
-    if (added) {
-      console.log(
-        `\n✓ ${added.name} ist gekoppelt (Gerät ${added.id}). Entfernen jederzeit mit: hollr revoke ${added.id}`,
-      );
-      return 0;
-    }
-    await Bun.sleep(400);
+    const until = new Date(exp * 1000).toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    console.log(`Mit der iPhone-Kamera oder in Hollr scannen – oder in Hollr „Code eingeben“:`);
+    if (otp) console.log(`\n      Code:  ${otp.code}\n`);
+    console.log(`Gültig bis ${until} (${PAIRING_TTL_SEC / 60} Min.), einmal nutzbar.`);
+    console.log(
+      `Verbindung: ${MODE_LABEL[mode]} · ${payload.u}@${payload.a.join(" / ")}:${payload.p}`,
+    );
+    console.log(`Host-Key: ${payload.fp}`);
+    if (mode === "tailscale") console.log(IPHONE_TAILSCALE_HINT);
+    if (args.includes("--link")) console.log(`\nLink (wie ein Passwort behandeln):\n${url}`);
+    return { id, exp, otp };
+  };
+
+  let current = await issue();
+  if (!interactive && !current.otp) return 0;
+
+  // wait for the phone: confirm here, "n" = new code, then report the result
+  const lines: string[] = [];
+  if (interactive) {
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk: string) =>
+      lines.push(...chunk.split("\n").filter((_, i, a) => i < a.length - 1 || _)),
+    );
   }
-  console.log("\nDer Code ist abgelaufen. Neu:  hollr pair");
-  return 1;
+  console.log(
+    interactive
+      ? "\nWarte auf das iPhone … („n“ + Enter = neuer Code, Strg+C = Abbrechen)"
+      : "\nWarte auf das iPhone …",
+  );
+  const before = new Set(listDevices().map((d) => d.id));
+  try {
+    while (Date.now() / 1000 < current.exp) {
+      const request = pendingRequest(current.id);
+      if (request) {
+        process.stdout.write(
+          `\n„${request.name}“ möchte sich mit diesem Rechner koppeln. Erlauben? [J/n] `,
+        );
+        lines.length = 0;
+        while (!lines.length) await Bun.sleep(100);
+        const allow = !/^n/i.test(lines.shift()?.trim() ?? "");
+        answerRequest(current.id, allow);
+        if (!allow) {
+          console.log("Abgelehnt – der Code ist damit verbraucht.");
+          return 1;
+        }
+      } else if (lines.length) {
+        const line = lines.shift()?.trim().toLowerCase();
+        if (line === "n") {
+          current.otp?.stop();
+          removeBootstrap(current.id);
+          console.log("\nNeuer Code:\n");
+          current = await issue();
+        }
+      }
+      const added = listDevices().find((d) => !before.has(d.id));
+      if (added) {
+        console.log(
+          `\n✓ ${added.name} ist gekoppelt (Gerät ${added.id}). Entfernen jederzeit mit: hollr revoke ${added.id}`,
+        );
+        return 0;
+      }
+      await Bun.sleep(400);
+    }
+    console.log("\nDer Code ist abgelaufen. Neu:  hollr pair");
+    return 1;
+  } finally {
+    current.otp?.stop();
+    process.stdin.pause();
+  }
 }
 
 async function main(argv: string[]): Promise<number> {

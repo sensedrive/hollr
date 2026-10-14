@@ -137,6 +137,14 @@ export function addBootstrap(
   return { id, exp };
 }
 
+/** Drops a pairing that was replaced by a new code (`hollr pair` → "n"). */
+export function removeBootstrap(pairingId: string) {
+  withAuthorizedKeys((lines) => ({
+    lines: lines.filter((l) => l.match(BOOT_RE)?.[1] !== pairingId),
+    result: null,
+  }));
+}
+
 export function sanitizeName(name: string): string {
   return (
     name

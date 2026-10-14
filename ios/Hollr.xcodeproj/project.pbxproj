@@ -49,6 +49,7 @@
 		C526B25F09F82C4463F22E33 /* HerdrStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */; };
 		C8DC245B9AE249921AC87F4E /* Server.swift in Sources */ = {isa = PBXBuildFile; fileRef = 805E396247941037A1716917 /* Server.swift */; };
 		D1F535B9BB70EF91478E8A57 /* ServerInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */; };
+		DC1554928C1EE1201FF08087 /* PairingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052C3A789B4E44E5370C5151 /* PairingCode.swift */; };
 		EC80E407D12CBDCD64DD2974 /* GitPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFCAF16DF865175B867F578 /* GitPanel.swift */; };
 		ECB878680950687496834668 /* SpacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */; };
 		EEE855EFD83914A10A5DCE86 /* HollrLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525EA22BD8EF7FD00CC4BE94 /* HollrLog.swift */; };
@@ -75,6 +76,7 @@
 /* Begin PBXFileReference section */
 		0020C719F00C6559F36F7ABF /* Tunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tunnel.swift; sourceTree = "<group>"; };
 		028DC151D09F4CA7C3915657 /* ServersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServersView.swift; sourceTree = "<group>"; };
+		052C3A789B4E44E5370C5151 /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		05524A71BC53973DF98B0626 /* Hollr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Hollr.entitlements; sourceTree = "<group>"; };
 		06AD5CD41D0A367E7C71A73F /* HollrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrApp.swift; sourceTree = "<group>"; };
 		0C3322CFB07BC55EC7BD14BA /* Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Composer.swift; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 				1D506F45973D977B4EB1B01E /* DeviceKey.swift */,
 				9A4E25D9270177A46475CB74 /* Frames.swift */,
 				DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */,
+				052C3A789B4E44E5370C5151 /* PairingCode.swift */,
 				0020C719F00C6559F36F7ABF /* Tunnel.swift */,
 			);
 			path = SSH;
@@ -475,6 +478,7 @@
 				498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */,
 				1B600C8A88DB172BF3AF81A1 /* NewSpaceView.swift in Sources */,
 				A0BF4F1DECDBFFDC1548104E /* PairView.swift in Sources */,
+				DC1554928C1EE1201FF08087 /* PairingCode.swift in Sources */,
 				352214150A54CF4B8871FB13 /* PairingPayload.swift in Sources */,
 				F11B5960C2756F5D52EA1FAE /* Palette.swift in Sources */,
 				38AD2951853D3F540A6121F9 /* PushKey.swift in Sources */,
@@ -562,7 +566,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -631,7 +635,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -690,6 +694,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Hollr scannt den Kopplungs-QR-Code deines Servers.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Hollr kann mit Face ID gesperrt werden, damit niemand an deine Server kommt.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Hollr verbindet sich mit deinen Rechnern im lokalen Netzwerk.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hollr überträgt deine Stimme an omp /live auf deinem Server.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -722,6 +727,7 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Hollr scannt den Kopplungs-QR-Code deines Servers.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Hollr kann mit Face ID gesperrt werden, damit niemand an deine Server kommt.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Hollr verbindet sich mit deinen Rechnern im lokalen Netzwerk.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hollr überträgt deine Stimme an omp /live auf deinem Server.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

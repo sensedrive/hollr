@@ -655,7 +655,7 @@ describe("live footer", () => {
     const { hasLiveFooter } = await import("../src/herdr");
     expect(hasLiveFooter("╰─ × muted · ␣ mute · ⎋ end ───╯")).toBe(true);
     expect(hasLiveFooter("╰─ ● hearing you · ␣ mute · ⎋ end ─")).toBe(true);
-    expect(hasLiveFooter(" π · ◒ Opus 5.5 · 📁 …/sportpark · ⑂ main")).toBe(false);
+    expect(hasLiveFooter(" π · ◒ Opus 5.5 · 📁 …/my-app · ⑂ main")).toBe(false);
   });
 });
 
@@ -696,4 +696,50 @@ describe("pairing confirmation", () => {
     rmSync(dir, { recursive: true, force: true });
     delete Bun.env.HOLLR_STATE_DIR;
   });
+});
+
+describe("one-time code", () => {
+  test("format round-trip, tolerant input", async () => {
+    const { decodeCode, encodeCode } = await import("../src/otp");
+    const secret = Buffer.from("a1b2c3d4e5f6", "hex");
+    const code = encodeCode("100.101.127.82", secret);
+    expect(code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+    const back = decodeCode(code.toLowerCase().replaceAll("-", " "));
+    expect(back?.ip).toBe("100.101.127.82");
+    expect(back?.secret.toString("hex")).toBe("a1b2c3d4e5f6");
+    expect(decodeCode("ABCD-EFGH")).toBeUndefined();
+  });
+
+  test("phone proves the code, gets the payload once; wrong codes lock it", async () => {
+    const { createDecipheriv } = await import("node:crypto");
+    const otp = await import("../src/otp");
+    const payload = JSON.stringify({ v: 1, a: ["127.0.0.1"], l: "test" });
+    const server = otp.serveCode("127.0.0.1", payload, Date.now() / 1000 + 60);
+    const url = `http://127.0.0.1:${otp.OTP_PORT}/hollr/pair`;
+    const post = (proof: Buffer) =>
+      fetch(url, { method: "POST", body: JSON.stringify({ proof: proof.toString("base64") }) });
+    // wrong code → 403
+    expect((await post(Buffer.alloc(32))).status).toBe(403);
+    // right code → sealed payload
+    const { ip, secret } = otp.decodeCode(server.code)!;
+    const keys = otp.deriveKeys(ip, secret);
+    const res = await post(otp.proofFor(keys.auth));
+    expect(res.status).toBe(200);
+    const box = Buffer.from(((await res.json()) as { box: string }).box, "base64");
+    const d = createDecipheriv("aes-256-gcm", keys.enc, box.subarray(0, 12));
+    d.setAuthTag(box.subarray(box.length - 16));
+    expect(Buffer.concat([d.update(box.subarray(12, box.length - 16)), d.final()]).toString()).toBe(payload);
+    expect(await server.done).toBe("served");
+    // used → 410 (or closed)
+    const again = await post(otp.proofFor(keys.auth)).catch(() => undefined);
+    expect(again === undefined || again.status === 410).toBe(true);
+    server.stop();
+    await Bun.sleep(300);
+
+    const locked = otp.serveCode("127.0.0.1", payload, Date.now() / 1000 + 60);
+    for (let i = 0; i < 5; i++) await post(Buffer.alloc(32));
+    expect(await locked.done).toBe("failed");
+    locked.stop();
+    await Bun.sleep(300);
+  }, 20_000);
 });

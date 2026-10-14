@@ -71,9 +71,14 @@ The connection type can be switched later in the app (Settings → Server & Ger�
 When `hollr pair` runs in a terminal it asks before a scanned code becomes a device key ("'Alex's iPhone' möchte sich koppeln – erlauben?"),
 so a photographed QR code alone is not enough. For the Mac and desktop apps use `hollr pair --link` and paste the link.
 
+**No camera at hand – e.g. on the go?** `hollr pair` also shows a one-time code like `K7Q2-M9XA-3PLD-W8RT`; enter it in Hollr under
+"Code eingeben". The code carries the computer's address (its Tailscale IP when remote) and a secret: the app proves it knows the code
+and gets the same pairing data as the QR code, encrypted with a key derived from the code. It only works while `hollr pair` runs,
+for 10 minutes, once, and 5 wrong tries end it. `n` + Enter in `hollr pair` makes a new code.
+
 | Command | |
 |---|---|
-| `hollr pair [--lan\|--tailscale] [--name L] [--host ADDR] [--port N] [--link]` | pair a device (QR code valid 10 minutes, single use) |
+| `hollr pair [--lan\|--tailscale] [--code] [--name L] [--host ADDR] [--port N] [--link]` | pair a device (QR code / one-time code valid 10 minutes, single use) |
 | `hollr devices` / `hollr revoke <id\|name>` | list / remove paired devices |
 | `hollr doctor` | check the setup, with fixes |
 | `hollr push status\|test` | push notifications (the key is imported once in the iPhone app) |

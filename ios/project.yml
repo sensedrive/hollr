@@ -10,10 +10,10 @@ configFiles:
   Release: Config/Base.xcconfig
 settings:
   base:
-    MARKETING_VERSION: "0.21.0"
+    MARKETING_VERSION: "0.22.0"
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
-    CURRENT_PROJECT_VERSION: "30"
+    CURRENT_PROJECT_VERSION: "31"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
 packages:
@@ -62,6 +62,7 @@ targets:
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.
         INFOPLIST_KEY_NSFaceIDUsageDescription: Hollr kann mit Face ID gesperrt werden, damit niemand an deine Server kommt.
         INFOPLIST_KEY_NSCameraUsageDescription: Hollr scannt den Kopplungs-QR-Code deines Servers.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Hollr verbindet sich mit deinen Rechnern im lokalen Netzwerk.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
   HollrTests:
     type: bundle.unit-test

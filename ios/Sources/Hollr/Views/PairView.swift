@@ -10,6 +10,11 @@ struct PairView: View {
     @State private var deviceName = DeviceKey.defaultDeviceName
     @State private var state: PairState = .scanning
     @State private var mode: NetworkMode = .auto
+    @State private var method: Method = .scan
+    @State private var code = ""
+    @FocusState private var codeFocused: Bool
+
+    enum Method: Hashable { case scan, code }
     #if targetEnvironment(macCatalyst)
     @State private var scannerAvailable = false
     #else
@@ -57,7 +62,7 @@ struct PairView: View {
                     Image(systemName: "xmark.octagon.fill").font(.system(size: 56)).foregroundStyle(Theme.warn)
                     Text(message).multilineTextAlignment(.center)
                     Spacer()
-                    Button("Nochmal scannen") { state = .scanning }.buttonStyle(.bordered)
+                    Button(method == .code ? "Nochmal versuchen" : "Nochmal scannen") { state = .scanning }.buttonStyle(.bordered)
                 }
             }
             .padding()
@@ -73,6 +78,11 @@ struct PairView: View {
     }
 
     @ViewBuilder private var scanner: some View {
+        Picker("Methode", selection: $method) {
+            Label("QR-Code scannen", systemImage: "qrcode.viewfinder").tag(Method.scan)
+            Label("Code eingeben", systemImage: "keyboard").tag(Method.code)
+        }
+        .pickerStyle(.segmented)
         VStack(alignment: .leading, spacing: 6) {
             Text("Gerätename").font(.caption).foregroundStyle(.secondary)
             TextField("Gerätename", text: $deviceName)
@@ -81,7 +91,9 @@ struct PairView: View {
             Text("So erscheint dein iPhone in `hollr devices` auf dem Server.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
-        if scannerAvailable {
+        if method == .code {
+            codeEntry
+        } else if scannerAvailable {
             #if !targetEnvironment(macCatalyst)
             QRScanner { pair($0) }
                 .frame(height: 360)
@@ -94,13 +106,69 @@ struct PairView: View {
                 description: Text("Den Link aus `hollr pair --link` kopieren und unten einfügen.")
             )
         }
-        Text("Auf dem Server `hollr pair` ausführen (oder im herdr-Menü „Hollr: iPhone koppeln“) und den QR-Code scannen.")
-            .font(.footnote).foregroundStyle(.secondary)
-        PasteButton(payloadType: String.self) { strings in
-            if let link = strings.first { Task { @MainActor in pair(link) } }
+        if method == .scan {
+            Text("Auf dem Server `hollr pair` ausführen (oder im herdr-Menü „Hollr: iPhone koppeln“) und den QR-Code scannen.")
+                .font(.footnote).foregroundStyle(.secondary)
+            PasteButton(payloadType: String.self) { strings in
+                if let link = strings.first { Task { @MainActor in pair(link) } }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
         SetupCommands()
+    }
+
+    @ViewBuilder private var codeEntry: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Pairing-Code").font(.caption).foregroundStyle(.secondary)
+            TextField("XXXX-XXXX-XXXX-XXXX", text: $code)
+                .font(.system(.title2, design: .monospaced).weight(.semibold))
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .keyboardType(.asciiCapable)
+                .focused($codeFocused)
+                .padding(14)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
+                .onChange(of: code) { _, new in
+                    let formatted = PairingCode.format(new)
+                    if formatted != new { code = formatted }
+                }
+                .onSubmit(pairWithCode)
+            Button(action: pairWithCode) {
+                Label("Koppeln", systemImage: "link").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(PairingCode.decode(code) == nil)
+            // code copied from a message: paste and pair in one tap (no paste prompt)
+            PasteButton(payloadType: String.self) { strings in
+                guard let text = strings.first else { return }
+                Task { @MainActor in
+                    code = PairingCode.format(text)
+                    pairWithCode()
+                }
+            }
+            .labelStyle(.titleAndIcon)
+            .frame(maxWidth: .infinity)
+            Text("Am Rechner `hollr pair` ausführen – der Code steht unter dem QR-Code, gilt 10 Minuten und nur einmal. Von unterwegs: am Rechner „Tailscale / Fernzugriff“ wählen und Tailscale auf dem iPhone verbinden.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+        .onAppear { codeFocused = true }
+    }
+
+    private func pairWithCode() {
+        guard PairingCode.decode(code) != nil else { return }
+        codeFocused = false
+        let entered = code
+        state = .pairing(String(localized: "Code wird geprüft"))
+        Task {
+            do {
+                let payload = try await PairingCode.fetchPayload(entered)
+                pair(payload: payload)
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+        }
     }
 
     private func pair(_ link: String) {
@@ -112,6 +180,11 @@ struct PairView: View {
             state = .failed(error.localizedDescription)
             return
         }
+        pair(payload: payload)
+    }
+
+    /// QR code, link and one-time code all end here: the same pairing.
+    private func pair(payload: PairingPayload) {
         mode = payload.network
         state = .pairing(payload.l)
         let name = deviceName.trimmingCharacters(in: .whitespaces)

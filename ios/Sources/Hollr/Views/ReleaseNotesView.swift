@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 31, date: "14.10.2026", items: [
+            ("keyboard", String(localized: "Koppeln per Einmalcode: Code vom Rechner eintippen oder einsetzen – ideal von unterwegs über Tailscale")),
+        ]),
         ReleaseNote(build: 30, date: "14.10.2026", items: [
             ("globe", String(localized: "Fernzugriff über Tailscale: den Rechner auch von unterwegs erreichen – ohne offene Ports")),
             ("wifi", String(localized: "Verbindungsart pro Server: Lokales Netzwerk oder Tailscale, jederzeit umstellbar – mit Status „verbunden über …“")),
