@@ -1,8 +1,9 @@
 /**
  * One live voice session: phone <-> SSH exec channel <-> virtual devices <-> omp /live.
  */
+
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { encodeFrame, encodeJson, FRAME_AUDIO, FRAME_JSON, FrameDecoder } from "./frames";
 import type { Herdr } from "./herdr";
@@ -74,6 +75,15 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
   if (agent.kind !== "omp") {
     rmSync(lock, { force: true });
     return fail("unsupported", `Live gibt es nur für omp (Agent ist ${agent.kind}).`);
+  }
+  // macOS: omp talks to CoreAudio directly (the Mac's own mic and speakers), there is no
+  // PulseAudio stream to reroute – starting /live would only open the Mac's microphone
+  if (platform() === "darwin") {
+    rmSync(lock, { force: true });
+    return fail(
+      "unsupported_os",
+      "Live-Sprache geht auf Mac-Servern noch nicht: omp nutzt dort direkt Mikrofon und Lautsprecher des Macs. Chat und Tippen funktionieren ganz normal.",
+    );
   }
   const pid = await herdr.agentPid(pane, "omp");
   if (!pid || !(await pulseAvailable())) {
@@ -161,6 +171,9 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
     }
   }
   if (!state.capturing) {
+    // don't leave a half-started /live behind (it would keep listening on the server)
+    if (startedLive && (await herdr.liveState(pane).catch(() => undefined)))
+      await herdr.sendKeys(pane, ["esc"]).catch(() => {});
     await end("start_failed");
     return fail(
       "start_failed",

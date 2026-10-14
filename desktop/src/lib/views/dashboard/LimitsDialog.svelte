@@ -5,9 +5,11 @@
   import { app } from "$lib/store.svelte";
   import { providerName, refreshUsage, usage, usedColor, type UsageLimit } from "./usage.svelte";
   import { relTime } from "./util";
+  import UsageHistory from "./UsageHistory.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
   let busy = $state(false);
+  let history = $state(false);
 
   // several servers report the same accounts: one row per limit (the highest value wins)
   const limits = $derived.by(() => {
@@ -33,7 +35,14 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
 
-<Modal title={t("Nutzungslimits")} {onClose}>
+<Modal title={history ? t("Verlauf") : t("Nutzungslimits")} {onClose}>
+  <button class="btn tab" onclick={() => (history = !history)}>
+    {history ? `‹ ${t("Nutzungslimits")}` : t("Verlauf & Statistik")}
+    {#if !history}<span class="beta">Beta</span>{/if}
+  </button>
+  {#if history}
+    <UsageHistory />
+  {:else}
   {#if !limits.length}<div class="muted">{t("Keine Limits gemeldet.")}</div>{/if}
   {#each providers as p}
     <div class="section">{p.name}</div>
@@ -54,6 +63,7 @@
       {/each}
     </div>
   {/each}
+  {/if}
   <div class="buttons">
     <button class="btn" disabled={busy} onclick={reload}>{busy ? "…" : t("Aktualisieren")}</button>
     <button class="btn primary" onclick={onClose}>{t("Fertig")}</button>
@@ -69,4 +79,7 @@
   .bar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
   .bar div { height: 100%; border-radius: 99px; }
   .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+  .tab { align-self: start; display: inline-flex; gap: 8px; align-items: center; }
+  .beta { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 99px; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 20%, transparent); }
 </style>

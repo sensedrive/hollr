@@ -16,9 +16,12 @@
   import { arrowNav, refTitle, type MenuItem } from "./dashboard/util";
 
   onMount(() => {
-    refreshUsage();
     const timer = setInterval(() => refreshUsage(), 120_000);
     return () => clearInterval(timer);
+  });
+  // load as soon as the paired servers are known (on app start they come in after mount)
+  $effect(() => {
+    if (app.servers.length) refreshUsage();
   });
 
   const anyLoaded = $derived(app.servers.some((s) => app.loaded[s.id]));
