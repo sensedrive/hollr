@@ -40,7 +40,12 @@ jobs:
       - name: Collect
         run: |
           mkdir -p ../dist-desktop
-          find src-tauri/target/release/bundle -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -exec cp {} ../dist-desktop/ \;
+          # uniform names: Hollr-<version>-linux-<x64|arm64>.<deb|rpm|AppImage>
+          V=$(jq -r .version src-tauri/tauri.conf.json)
+          for ext in deb rpm AppImage; do
+            f=$(find src-tauri/target/release/bundle -type f -name "*.$ext" | head -1)
+            [ -n "$f" ] && cp "$f" "../dist-desktop/Hollr-$V-linux-${{ matrix.arch }}.$ext"
+          done
           ls -la ../dist-desktop
       - uses: actions/upload-artifact@v4
         with:

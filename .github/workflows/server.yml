@@ -31,5 +31,9 @@ jobs:
         with: { bun-version: 1.4.2 }
       - run: bun install --frozen-lockfile
       - run: bun run build linux-x64,linux-arm64,darwin-arm64
-      - run: gh release create "$GITHUB_REF_NAME" dist/hollr-* --generate-notes --repo "$GITHUB_REPOSITORY"
+      - name: Release
         env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          export V="${GITHUB_REF_NAME#v}" URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          envsubst '$V $URL' < ../.github/release.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/hollr-* --title "Hollr $V" --notes-file notes.md --generate-notes --repo "$GITHUB_REPOSITORY"
