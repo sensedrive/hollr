@@ -166,8 +166,10 @@ export function enroll(pairingId: string, devicePublicLine: string, name: string
     const idx = lines.findIndex((l) => l.match(BOOT_RE)?.[1] === pairingId);
     if (idx === -1) throw new Error("unknown_pairing");
     if (Number(lines[idx]?.match(BOOT_RE)?.[2]) <= now) throw new Error("expired");
+    // the same phone pairing again: replace its old entry instead of adding a duplicate
+    const key = devicePublicLine.trim().split(/\s+/).slice(0, 2).join(" ");
     const kept = dropExpired(
-      lines.filter((_, i) => i !== idx),
+      lines.filter((l, i) => i !== idx && !(DEVICE_RE.test(l) && l.includes(key))),
       now,
     );
     const deviceLine = `${deviceOptions()} ${devicePublicLine.trim()} hollr-device:${id} ${clean}`;
