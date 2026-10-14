@@ -163,7 +163,8 @@ struct RootView: View {
                     }
                 }
                 let started = Date()
-                let text = await Dictator().testWithFile(url, settings: settings)
+                let terms = d.string(forKey: "hollrTerms")?.split(separator: ",").map(String.init) ?? []
+                let text = await Dictator().testWithFile(url, settings: settings, context: DictationContext(terms: terms))
                 HollrLog.info("dictate-test (\(settings.engine.rawValue)): \"\(text)\" in \(Int(Date().timeIntervalSince(started)))s")
             }
             await DebugLaunch.run(store: store, herdr: herdr, sessions: sessions, pairing: $pairing, path: $agentPath)

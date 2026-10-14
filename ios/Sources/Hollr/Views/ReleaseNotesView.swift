@@ -10,6 +10,15 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 35, date: "14.10.2026", items: [
+            ("waveform", String(localized: "Diktat mit Parakeet und Whisper erkennt schon beim Sprechen – nach dem Stopp ist der Text fast sofort da")),
+            ("hand.tap", String(localized: "Mikrofon gedrückt halten zum Diktieren, ✕ verwirft die Aufnahme, Diktat landet an der Cursor-Position")),
+            ("text.magnifyingglass", String(localized: "Projekt, Tickets und Dateinamen aus dem Chat werden besser erkannt und richtig geschrieben (z. B. TENDR-725)")),
+            ("paperplane", String(localized: "„… senden“ am Ende schickt die Nachricht ab")),
+            ("scissors", String(localized: "„ähm“ und „äh“ fliegen raus, erfundene Untertitel bei Stille auch")),
+            ("phone.arrow.down.left", String(localized: "Anruf, App-Wechsel oder AirPods weg: das Diktat stoppt sauber und behält das Gesagte")),
+            ("slider.horizontal.3", String(localized: "Neu in Einstellungen › Sprache: Rauschfilter, immer iPhone-Mikrofon, Feinschliff mit Apple Intelligence (Beta)")),
+        ]),
         ReleaseNote(build: 34, date: "14.10.2026", items: [
             ("bolt", String(localized: "Deutlich flüssiger: der Chat lädt nur noch, was sich geändert hat, und reagiert sofort auf Antworten")),
             ("mic", String(localized: "Während des Diktierens pausiert der Chat, damit die Spracherkennung die volle Leistung hat")),

@@ -671,6 +671,16 @@
         }
       }
     },
+    "Anruf, App-Wechsel oder AirPods weg: das Diktat stoppt sauber und behält das Gesagte": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Call, app switch or AirPods gone: dictation stops cleanly and keeps what you said"
+          }
+        }
+      }
+    },
     "Ansicht": {
       "localizations": {
         "en": {
@@ -707,6 +717,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apple"
+          }
+        }
+      }
+    },
+    "Apple Intelligence ist gerade nicht verfügbar.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence is not available right now."
+          }
+        }
+      }
+    },
+    "Apple Intelligence ist in den iOS-Einstellungen aus.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence is turned off in iOS Settings."
           }
         }
       }
@@ -837,6 +867,16 @@
         }
       }
     },
+    "Aufnahme unterbrochen – das Gesagte ist eingefügt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording interrupted – what you said has been inserted."
+          }
+        }
+      }
+    },
     "Aus der Übersicht nehmen": {
       "localizations": {
         "en": {
@@ -963,6 +1003,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Branch"
+          }
+        }
+      }
+    },
+    "Braucht iOS 26 mit Apple Intelligence.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs iOS 26 with Apple Intelligence."
           }
         }
       }
@@ -1117,6 +1167,16 @@
         }
       }
     },
+    "Das Apple-Modell wird noch geladen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Apple model is still downloading."
+          }
+        }
+      }
+    },
     "Das Pane „%@“ wird in herdr auf %@ geschlossen und %@ beendet.": {
       "localizations": {
         "de": {
@@ -1259,6 +1319,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The pairing code is damaged."
+          }
+        }
+      }
+    },
+    "Der Rauschfilter dämpft Straße, Café und Lüfter. „Immer iPhone-Mikrofon“ nimmt nicht über AirPods auf – deren Mikro klingt am Telefon-Kanal dünner und wird schlechter erkannt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The noise filter dampens traffic, cafés and fans. “Always iPhone microphone” doesn’t record through AirPods – their headset mic sounds thinner and is recognised less accurately."
           }
         }
       }
@@ -1413,12 +1483,42 @@
         }
       }
     },
+    "Dieses iPhone unterstützt Apple Intelligence nicht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This iPhone doesn’t support Apple Intelligence."
+          }
+        }
+      }
+    },
     "Diktat beenden": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Stop dictation"
+          }
+        }
+      }
+    },
+    "Diktat mit Parakeet und Whisper erkennt schon beim Sprechen – nach dem Stopp ist der Text fast sofort da": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parakeet and Whisper dictation now recognises while you speak – the text is there almost instantly after you stop"
+          }
+        }
+      }
+    },
+    "Diktat verwerfen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard dictation"
           }
         }
       }
@@ -1703,6 +1803,16 @@
         }
       }
     },
+    "Feinschliff mit Apple Intelligence (Beta)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polish with Apple Intelligence (beta)"
+          }
+        }
+      }
+    },
     "Feintuning": {
       "localizations": {
         "en": {
@@ -1783,6 +1893,16 @@
         }
       }
     },
+    "Füllwörter entfernen („ähm“, „äh“)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove filler words (“um”, “uh”)"
+          }
+        }
+      }
+    },
     "Für Deutsch mit englischen Fachbegriffen „Deutsch“ wählen – das ist genauer als „Automatisch“.": {
       "localizations": {
         "en": {
@@ -1849,6 +1969,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scale the whole app – also with a pinch"
+          }
+        }
+      }
+    },
+    "Genutzt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used"
           }
         }
       }
@@ -2083,6 +2213,16 @@
         }
       }
     },
+    "Immer iPhone-Mikrofon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always iPhone microphone"
+          }
+        }
+      }
+    },
     "In Safari": {
       "localizations": {
         "en": {
@@ -2129,6 +2269,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Camera not available"
+          }
+        }
+      }
+    },
+    "Kein Mikrofon verfügbar – läuft gerade ein Anruf?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No microphone available – is a call in progress?"
           }
         }
       }
@@ -2409,6 +2559,16 @@
         }
       }
     },
+    "Live landet direkt in dieser Session – wie /live am Rechner.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live goes straight into this session – like /live on the computer."
+          }
+        }
+      }
+    },
     "Live mit omp sprechen": {
       "localizations": {
         "en": {
@@ -2435,6 +2595,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Live · %@"
+          }
+        }
+      }
+    },
+    "Live-Gespräche gibt es nur mit omp.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live conversations are only available with omp."
           }
         }
       }
@@ -2509,6 +2679,16 @@
         }
       }
     },
+    "Maschine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Machine"
+          }
+        }
+      }
+    },
     "Maximale Genauigkeit": {
       "localizations": {
         "en": {
@@ -2549,6 +2729,16 @@
         }
       }
     },
+    "Methode": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Method"
+          }
+        }
+      }
+    },
     "Mikro aus": {
       "localizations": {
         "en": {
@@ -2569,6 +2759,16 @@
         }
       }
     },
+    "Mikrofon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone"
+          }
+        }
+      }
+    },
     "Mikrofon an": {
       "localizations": {
         "en": {
@@ -2579,12 +2779,32 @@
         }
       }
     },
+    "Mikrofon antippen startet und beendet, gedrückt halten diktiert bis zum Loslassen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the microphone to start and stop, or hold it to dictate until you let go."
+          }
+        }
+      }
+    },
     "Mikrofon aus (wie Leertaste) – du hörst weiter zu": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Microphone off (like Space) – you keep listening"
+          }
+        }
+      }
+    },
+    "Mikrofon gedrückt halten zum Diktieren, ✕ verwirft die Aufnahme, Diktat landet an der Cursor-Position": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold the microphone to dictate, ✕ discards the recording, dictation lands at the cursor"
           }
         }
       }
@@ -2779,6 +2999,16 @@
         }
       }
     },
+    "Neu in Einstellungen › Sprache: Rauschfilter, immer iPhone-Mikrofon, Feinschliff mit Apple Intelligence (Beta)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New in Settings › Speech: noise filter, always iPhone microphone, polish with Apple Intelligence (beta)"
+          }
+        }
+      }
+    },
     "Neue Sitzung": {
       "localizations": {
         "en": {
@@ -2905,6 +3135,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing found."
+          }
+        }
+      }
+    },
+    "Nichts verstanden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Didn’t catch anything."
           }
         }
       }
@@ -3279,6 +3519,16 @@
         }
       }
     },
+    "Projekt, Tickets und Dateinamen aus dem Chat werden besser erkannt und richtig geschrieben (z. B. TENDR-725)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project, tickets and file names from the chat are recognised better and spelled right (e.g. TENDR-725)"
+          }
+        }
+      }
+    },
     "Projekt-Orte": {
       "localizations": {
         "en": {
@@ -3419,6 +3669,16 @@
         }
       }
     },
+    "Rauschfilter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noise filter"
+          }
+        }
+      }
+    },
     "Read": {
       "localizations": {
         "en": {
@@ -3525,6 +3785,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Already installed? Just pair:"
+          }
+        }
+      }
+    },
+    "Schreib %@ unten eine Nachricht – oder diktiere sie mit dem Mikrofon.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send %@ a message below – or dictate it with the microphone."
+          }
+        }
+      }
+    },
+    "Schreib unten, diktiere mit dem Mikrofon – oder tippe auf „Live“ und sprich mit omp.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type below, dictate with the microphone – or tap “Live” and talk to omp."
           }
         }
       }
@@ -3721,6 +4001,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Server key mismatch (expected %1$@…, got %2$@…). Not connecting – pair the server again."
+          }
+        }
+      }
+    },
+    "Session-Wörter: Projekt, Ordner, Tickets (z. B. TENDR-725) und Dateinamen aus dem Chat helfen der Erkennung und werden richtig geschrieben. Der Feinschliff korrigiert Satzzeichen und Schreibweisen auf dem Gerät – dauert etwa eine Sekunde.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session words: project, folder, tickets (e.g. TENDR-725) and file names from the chat help recognition and are spelled right. Polish fixes punctuation and spelling on the device – takes about a second."
           }
         }
       }
@@ -4055,6 +4345,16 @@
         }
       }
     },
+    "Stunden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hours"
+          }
+        }
+      }
+    },
     "Suche Web-Dienste …": {
       "localizations": {
         "en": {
@@ -4081,6 +4381,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "TODO"
+          }
+        }
+      }
+    },
+    "Tag": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Day"
           }
         }
       }
@@ -4265,6 +4575,16 @@
         }
       }
     },
+    "Text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        }
+      }
+    },
     "Text größer": {
       "localizations": {
         "en": {
@@ -4301,6 +4621,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tap the circle and talk to omp."
+          }
+        }
+      }
+    },
+    "Tippen zum Starten und Beenden – oder gedrückt halten und sprechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to start and stop – or hold and speak"
           }
         }
       }
@@ -4507,6 +4837,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Connection type per server: local network or Tailscale, switchable any time – with “connected via …” status"
+          }
+        }
+      }
+    },
+    "Verbrauch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage"
           }
         }
       }
@@ -4881,12 +5221,32 @@
         }
       }
     },
+    "Wörter aus der offenen Session": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Words from the open session"
+          }
+        }
+      }
+    },
     "Zeilen umbrechen": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Wrap lines"
+          }
+        }
+      }
+    },
+    "Zeit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Time"
           }
         }
       }
@@ -4927,6 +5287,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zen mode: just the chat and a see-through composer"
+          }
+        }
+      }
+    },
+    "Zu kurz – etwas länger sprechen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too short – speak a little longer."
           }
         }
       }
@@ -5091,6 +5461,16 @@
         }
       }
     },
+    "hört zu …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "listening …"
+          }
+        }
+      }
+    },
     "in %@": {
       "localizations": {
         "en": {
@@ -5207,6 +5587,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "muted"
+          }
+        }
+      }
+    },
+    "transkribiere …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "transcribing …"
           }
         }
       }
@@ -5409,6 +5799,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "“%1$@” will be closed in herdr and %2$@ stopped."
+          }
+        }
+      }
+    },
+    "„ähm“ und „äh“ fliegen raus, erfundene Untertitel bei Stille auch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“um” and “uh” are dropped, and so are subtitles invented during silence"
+          }
+        }
+      }
+    },
+    "„… senden“ am Ende schickt ab": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“… send” at the end sends"
+          }
+        }
+      }
+    },
+    "„… senden“ am Ende schickt die Nachricht ab": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“… send” at the end sends the message"
           }
         }
       }

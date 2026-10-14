@@ -10,10 +10,10 @@ configFiles:
   Release: Config/Base.xcconfig
 settings:
   base:
-    MARKETING_VERSION: "0.23.1"
+    MARKETING_VERSION: "0.24.0"
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
-    CURRENT_PROJECT_VERSION: "34"
+    CURRENT_PROJECT_VERSION: "35"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
 packages:

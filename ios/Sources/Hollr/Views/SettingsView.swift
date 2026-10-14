@@ -190,12 +190,49 @@ struct SpeechSettingsView: View {
                 Toggle(isOn: $settings.autoSend) {
                     Label("Nach dem Diktieren automatisch senden", systemImage: "paperplane")
                 }
+                Toggle(isOn: $settings.voiceSend) {
+                    Label("„… senden“ am Ende schickt ab", systemImage: "text.bubble")
+                }
             } header: {
                 Text("Allgemein")
             } footer: {
                 Text(settings.engine == .parakeet
                      ? String(localized: "Parakeet erkennt die Sprache selbst – auch gemischt Deutsch/Englisch.")
                      : String(localized: "Für Deutsch mit englischen Fachbegriffen „Deutsch“ wählen – das ist genauer als „Automatisch“."))
+                + Text(" ") + Text("Mikrofon antippen startet und beendet, gedrückt halten diktiert bis zum Loslassen.")
+            }
+
+            Section {
+                Toggle(isOn: $settings.sessionVocabulary) {
+                    Label("Wörter aus der offenen Session", systemImage: "text.magnifyingglass")
+                }
+                Toggle(isOn: $settings.removeFillers) {
+                    Label("Füllwörter entfernen („ähm“, „äh“)", systemImage: "scissors")
+                }
+                Toggle(isOn: $settings.polish) {
+                    Label("Feinschliff mit Apple Intelligence (Beta)", systemImage: "sparkles")
+                }
+                .disabled(!LocalPolish.isAvailable && !settings.polish)
+                if settings.polish || !LocalPolish.isAvailable, let reason = LocalPolish.unavailableReason {
+                    Text(reason).font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Text")
+            } footer: {
+                Text("Session-Wörter: Projekt, Ordner, Tickets (z. B. TENDR-725) und Dateinamen aus dem Chat helfen der Erkennung und werden richtig geschrieben. Der Feinschliff korrigiert Satzzeichen und Schreibweisen auf dem Gerät – dauert etwa eine Sekunde.")
+            }
+
+            Section {
+                Toggle(isOn: $settings.noiseSuppression) {
+                    Label("Rauschfilter", systemImage: "waveform.path.ecg")
+                }
+                Toggle(isOn: $settings.preferBuiltInMic) {
+                    Label("Immer iPhone-Mikrofon", systemImage: "iphone")
+                }
+            } header: {
+                Text("Mikrofon")
+            } footer: {
+                Text("Der Rauschfilter dämpft Straße, Café und Lüfter. „Immer iPhone-Mikrofon“ nimmt nicht über AirPods auf – deren Mikro klingt am Telefon-Kanal dünner und wird schlechter erkannt.")
             }
 
             Section {

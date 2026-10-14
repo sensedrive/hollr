@@ -271,11 +271,11 @@ private struct AgentConversation: View {
             } else if session.phase == .live {
                 Text("Ich höre zu …")
             } else if ref.pane.live {
-                Text("Tippe auf den Kreis und sprich mit omp.")
-                Text("Was du sagst, landet direkt in dieser Session – wie /live am Rechner.").font(.footnote)
+                Text("Schreib unten, diktiere mit dem Mikrofon – oder tippe auf „Live“ und sprich mit omp.")
+                Text("Live landet direkt in dieser Session – wie /live am Rechner.").font(.footnote)
             } else if ref.pane.agent != nil {
-                Text("Sprechen geht bisher nur mit omp.")
-                Text("An \(ref.pane.agentName) kannst du unten Text schicken.").font(.footnote)
+                Text("Schreib \(ref.pane.agentName) unten eine Nachricht – oder diktiere sie mit dem Mikrofon.")
+                Text("Live-Gespräche gibt es nur mit omp.").font(.footnote)
             } else {
                 Text("Hier läuft kein Agent, nur eine Shell.")
             }

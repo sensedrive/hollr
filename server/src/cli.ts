@@ -79,7 +79,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.23.1";
+export const VERSION = "0.24.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 

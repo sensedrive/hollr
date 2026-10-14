@@ -23,6 +23,13 @@ struct HollrApp: App {
                 .environment(mySessions)
                 .appTextScale()
                 .appLock()
+                // dictation models take hundreds of MB: give them back when iOS asks or we go away
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+                    Dictator.releaseModels()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                    Dictator.releaseModels()
+                }
                 .onOpenURL { url in
                     // QR code scanned with the iPhone camera opens hollr://pair?c=…
                     pairing = PairingRequest(link: url.absoluteString)

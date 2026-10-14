@@ -106,6 +106,18 @@ final class DictationSettings {
     var whisperVAD: Bool { didSet { defaults.set(whisperVAD, forKey: "dictation.whisperVAD") } }
     /// Apple: punctuation and capitalisation.
     var applePunctuation: Bool { didSet { defaults.set(applePunctuation, forKey: "dictation.applePunctuation") } }
+    /// Drop "ähm", "äh" … from the result.
+    var removeFillers: Bool { didSet { defaults.set(removeFillers, forKey: "dictation.removeFillers") } }
+    /// Apple Intelligence on the device polishes punctuation and spelling (iOS 26, beta).
+    var polish: Bool { didSet { defaults.set(polish, forKey: "dictation.polish") } }
+    /// Voice processing: noise suppression and level control (for noisy places).
+    var noiseSuppression: Bool { didSet { defaults.set(noiseSuppression, forKey: "dictation.noiseSuppression") } }
+    /// Record with the iPhone microphone even when AirPods are connected.
+    var preferBuiltInMic: Bool { didSet { defaults.set(preferBuiltInMic, forKey: "dictation.preferBuiltInMic") } }
+    /// Words from the open session (repo, branch, tickets, files) help recognition.
+    var sessionVocabulary: Bool { didSet { defaults.set(sessionVocabulary, forKey: "dictation.sessionVocabulary") } }
+    /// "… senden" at the end sends the message.
+    var voiceSend: Bool { didSet { defaults.set(voiceSend, forKey: "dictation.voiceSend") } }
     var replacements: [Replacement] {
         didSet { defaults.set(try? JSONEncoder().encode(replacements), forKey: "dictation.replacements") }
     }
@@ -126,6 +138,12 @@ final class DictationSettings {
         whisperFallbacks = defaults.object(forKey: "dictation.whisperFallbacks") != nil ? defaults.integer(forKey: "dictation.whisperFallbacks") : 3
         whisperVAD = Self.flag("dictation.whisperVAD", default: true)
         applePunctuation = Self.flag("dictation.applePunctuation", default: true)
+        removeFillers = Self.flag("dictation.removeFillers", default: true)
+        polish = Self.flag("dictation.polish", default: false)
+        noiseSuppression = Self.flag("dictation.noiseSuppression", default: false)
+        preferBuiltInMic = Self.flag("dictation.preferBuiltInMic", default: false)
+        sessionVocabulary = Self.flag("dictation.sessionVocabulary", default: true)
+        voiceSend = Self.flag("dictation.voiceSend", default: true)
         replacements = defaults.data(forKey: "dictation.replacements")
             .flatMap { try? JSONDecoder().decode([Replacement].self, from: $0) } ?? []
         downloaded = (defaults.dictionary(forKey: "dictation.downloaded") as? [String: String] ?? [:])
@@ -162,9 +180,26 @@ final class DictationSettings {
     /// Plain terms for engines without alias support.
     var vocabularyWords: [String] { useVocabulary ? terms.map(\.text) : [] }
 
+    /// Own vocabulary plus words from the open session (deduplicated, own terms first).
+    func allTerms(extra: [String]) -> [Term] {
+        var seen = Set<String>()
+        return (terms + extra.map { Term(text: $0, aliases: []) }).filter { seen.insert($0.text.lowercased()).inserted }
+    }
+
+    /// Everything after recognition: invented subtitles, fillers, replacements, vocabulary, ticket keys.
+    func finish(_ raw: String, extraTerms: [String] = []) -> String {
+        var out = DictationText.dropHallucinations(raw)
+        if removeFillers { out = DictationText.dropFillers(out, language: language) }
+        out = apply(out, extra: extraTerms)
+        let all = allTerms(extra: extraTerms).map(\.text)
+        out = DictationText.formatTickets(out, prefixes: DictationText.ticketPrefixes(in: all))
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Replacements + vocabulary aliases (alias → canonical spelling), case-insensitive whole words.
-    func apply(_ text: String) -> String {
+    func apply(_ text: String, extra: [String] = []) -> String {
         var out = text
+        let terms = allTerms(extra: extra)
         var rules = replacements.map { ($0.from, $0.to) }
         if useVocabulary { rules += terms.flatMap { term in term.aliases.map { ($0, term.text) } } }
         for (from, to) in rules where !from.isEmpty {

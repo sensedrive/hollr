@@ -13,6 +13,13 @@ struct Composer: View {
     @State private var dictator = Dictator()
     @State private var text = ""
     @State private var textBeforeDictation = ""
+    /// text after the cursor when dictation started (dictation is inserted at the cursor)
+    @State private var textAfterDictation = ""
+    /// cursor position in `text` (iOS 18+, nil = end)
+    @State private var cursor: Int?
+    /// finger is held on the mic (hold-to-talk: release ends the dictation)
+    @State private var holding = false
+    @State private var pressStarted: Date?
     @FocusState private var focused: Bool
 
     private var ref: AgentRef { session.ref }
@@ -30,7 +37,10 @@ struct Composer: View {
             if case .preparing(let message) = dictator.state {
                 Label(message, systemImage: "arrow.down.circle").font(.caption).foregroundStyle(.secondary)
             }
-            TextField(placeholder, text: dictating ? .constant(dictationPreview) : $text, axis: .vertical)
+            if let notice = dictator.notice, !dictating {
+                Text(notice).font(.caption).foregroundStyle(.secondary)
+            }
+            ComposerField(placeholder: placeholder, text: dictating ? .constant(dictationPreview) : $text, cursor: $cursor)
                 .font(.system(.body, design: .monospaced))
                 .lineLimit(1...6)
                 .focused($focused)
@@ -55,7 +65,14 @@ struct Composer: View {
         .onChange(of: focused) { _, now in withAnimation(.easeInOut(duration: 0.2)) { editing.wrappedValue = now } }
         // while dictating, the chat stops refreshing so the transcription gets the CPU
         .onChange(of: dictating) { _, _ in syncDictating() }
-        .onDisappear { session.dictating = false }
+        .onAppear {
+            Dictator.prewarm(settings)
+            dictator.onAutoStop = { result in insertDictation(result) }
+        }
+        .onDisappear {
+            session.dictating = false
+            if dictator.isRecording { dictator.cancel() }
+        }
     }
 
     private var placeholder: String {
@@ -70,8 +87,10 @@ struct Composer: View {
         if !dictating { session.nudge() } // catch up right after dictation
     }
     private var dictationPreview: String {
-        let spoken = dictator.state == .transcribing && dictator.text.isEmpty ? "transkribiere …" : dictator.text
-        return [textBeforeDictation, spoken].filter { !$0.isEmpty }.joined(separator: " ")
+        let spoken = dictator.state == .transcribing && dictator.text.isEmpty
+            ? String(localized: "transkribiere …")
+            : dictator.isRecording && dictator.text.isEmpty ? String(localized: "hört zu …") : dictator.text
+        return [textBeforeDictation, spoken, textAfterDictation].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     // MARK: Action row
@@ -121,35 +140,102 @@ struct Composer: View {
     }
 
     private var micButton: some View {
-        Button {
-            Task {
-                if dictator.isRecording {
-                    let result = await dictator.stop(settings: settings)
-                    text = [textBeforeDictation, result].filter { !$0.isEmpty }.joined(separator: " ")
-                    if settings.autoSend, !result.isEmpty { send() }
-                } else {
-                    textBeforeDictation = trimmed
-                    focused = false
-                    await dictator.start(settings: settings)
+        HStack(spacing: 14) {
+            if dictator.isRecording {
+                // throw the recording away
+                Button {
+                    Haptics.tap(.light)
+                    dictator.cancel()
+                    holding = false
+                } label: {
+                    Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 30, height: 38)
                 }
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Diktat verwerfen")
+                .transition(.scale.combined(with: .opacity))
             }
-        } label: {
-            ZStack {
-                if dictator.isRecording {
-                    Circle().fill(Color.red).frame(width: 38, height: 38)
-                        .scaleEffect(1 + CGFloat(min(dictator.level * 8, 0.25)))
-                    Image(systemName: "stop.fill").font(.system(size: 14)).foregroundStyle(.white)
-                } else if dictator.state == .transcribing || { if case .preparing = dictator.state { return true }; return false }() {
-                    ProgressView().frame(width: 38, height: 38)
-                } else {
-                    Image(systemName: "mic").frame(width: 38, height: 38)
-                }
+            micLabel
+                .contentShape(Circle())
+                // tap = start/stop, hold = talk while holding (released after ≥ 0.3 s ends it)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            guard pressStarted == nil, micEnabled else { return }
+                            pressStarted = Date()
+                            if !dictator.isRecording { startDictation(); holding = true } else { holding = false }
+                        }
+                        .onEnded { _ in
+                            let held = pressStarted.map { Date().timeIntervalSince($0) } ?? 0
+                            pressStarted = nil
+                            if holding {
+                                holding = false
+                                if held >= 0.3 { stopDictation() } // short tap: keeps recording until the next tap
+                            } else if dictator.isRecording {
+                                stopDictation()
+                            }
+                        }
+                )
+                .opacity(micEnabled ? 1 : 0.35)
+                .accessibilityElement()
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(dictator.isRecording ? "Diktat beenden" : "Diktieren")
+                .accessibilityHint("Tippen zum Starten und Beenden – oder gedrückt halten und sprechen")
+                .accessibilityAction { dictator.isRecording ? stopDictation() : startDictation() }
+        }
+        .animation(.easeOut(duration: 0.15), value: dictator.isRecording)
+    }
+
+    private var micEnabled: Bool { hasAgent && !session.isLive && dictator.state != .transcribing }
+
+    private var micLabel: some View {
+        ZStack {
+            if dictator.isRecording {
+                Circle().fill(Color.red).frame(width: 38, height: 38)
+                    .scaleEffect(1 + CGFloat(min(dictator.level * 8, 0.25)))
+                Image(systemName: "stop.fill").font(.system(size: 14)).foregroundStyle(.white)
+            } else if dictator.state == .transcribing || { if case .preparing = dictator.state { return true }; return false }() {
+                ProgressView().frame(width: 38, height: 38)
+            } else {
+                Image(systemName: "mic").frame(width: 38, height: 38)
             }
         }
-        .disabled(!hasAgent || session.isLive || dictator.state == .transcribing)
-        .foregroundStyle(.primary)
-        .accessibilityLabel(dictator.isRecording ? "Diktat beenden" : "Diktieren")
         .animation(.easeOut(duration: 0.1), value: dictator.level)
+    }
+
+    private func startDictation() {
+        // split the text at the cursor: dictation goes in between
+        let chars = Array(text)
+        let at = min(max(cursor ?? chars.count, 0), chars.count)
+        textBeforeDictation = String(chars[..<at]).trimmingCharacters(in: .whitespaces)
+        textAfterDictation = String(chars[at...]).trimmingCharacters(in: .whitespaces)
+        focused = false
+        Haptics.tap(.medium)
+        let context = DictationContext(session: session)
+        Task { await dictator.start(settings: settings, context: context) }
+    }
+
+    private func stopDictation() {
+        Haptics.tap(.light)
+        Task { insertDictation(await dictator.stop(settings: settings)) }
+    }
+
+    /// Puts the dictated text at the cursor; "… senden" (or auto-send) sends it.
+    private func insertDictation(_ result: String) {
+        var spoken = result
+        var sendNow = settings.autoSend
+        if settings.voiceSend {
+            let (rest, said) = DictationText.voiceSend(spoken)
+            if said { spoken = rest; sendNow = true }
+        }
+        text = [textBeforeDictation, spoken, textAfterDictation].filter { !$0.isEmpty }.joined(separator: " ")
+        cursor = [textBeforeDictation, spoken].filter { !$0.isEmpty }.joined(separator: " ").count
+        textAfterDictation = ""
+        if spoken.isEmpty {
+            Haptics.notify(.warning)
+        } else {
+            Haptics.notify(.success)
+            if sendNow { send() }
+        }
     }
 
     private var liveButton: some View {
@@ -186,8 +272,10 @@ struct Composer: View {
         guard !trimmed.isEmpty else { return }
         session.sendText(trimmed)
         text = ""
+        cursor = nil
         focused = false
         textBeforeDictation = ""
+        textAfterDictation = ""
     }
 
     // MARK: Live strip (inside the card while a call runs)
@@ -255,5 +343,53 @@ struct LevelBars: View {
         }
         .frame(width: 36, height: 30)
         .animation(.easeOut(duration: 0.12), value: level)
+    }
+}
+
+/// Text field that reports the cursor position (iOS 18+) so dictation lands where you were typing.
+private struct ComposerField: View {
+    let placeholder: String
+    @Binding var text: String
+    @Binding var cursor: Int?
+
+    var body: some View {
+        if #available(iOS 18, macCatalyst 18, *) {
+            SelectionField(placeholder: placeholder, text: $text, cursor: $cursor)
+        } else {
+            TextField(placeholder, text: $text, axis: .vertical)
+        }
+    }
+}
+
+@available(iOS 18, macCatalyst 18, *)
+private struct SelectionField: View {
+    let placeholder: String
+    @Binding var text: String
+    @Binding var cursor: Int?
+    @State private var selection: TextSelection?
+
+    var body: some View {
+        TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
+            .onChange(of: selection) { _, new in
+                guard let new, case let .selection(range) = new.indices else { return }
+                cursor = text.distance(from: text.startIndex, to: range.upperBound)
+            }
+            .onChange(of: cursor) { _, new in
+                // put the cursor behind freshly dictated text
+                guard let new, new <= text.count else { return }
+                let i = text.index(text.startIndex, offsetBy: new)
+                if case let .selection(range)? = selection?.indices, range.upperBound == i { return }
+                selection = TextSelection(insertionPoint: i)
+            }
+    }
+}
+
+enum Haptics {
+    static func tap(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
+    static func notify(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        UINotificationFeedbackGenerator().notificationOccurred(type)
     }
 }

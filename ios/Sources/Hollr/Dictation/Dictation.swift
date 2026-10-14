@@ -3,10 +3,19 @@ import FluidAudio
 import Foundation
 import Observation
 import Speech
+import UIKit
 import WhisperKit
+
+/// What the open session contributes to recognition (repo, branch, tickets, files …).
+struct DictationContext {
+    var terms: [String] = []
+}
 
 /// On-device speech-to-text for the composer – independent of omp /live.
 /// Engines: Parakeet (FluidAudio), Whisper (WhisperKit), Apple (DictationTranscriber, iOS 26).
+///
+/// Audio runs on the audio thread (AudioCollector); Parakeet/Whisper transcribe in chunks at
+/// speech pauses while you talk, so only the last few seconds are left when you stop.
 @MainActor
 @Observable
 final class Dictator {
@@ -16,9 +25,13 @@ final class Dictator {
     }
 
     private(set) var state: State = .idle
-    /// Recognised text (Apple streams it live, Parakeet/Whisper deliver it after you stop).
+    /// Recognised text so far (Apple streams it, Parakeet/Whisper fill it chunk by chunk).
     private(set) var text = ""
     private(set) var level: Float = 0
+    /// short notice after a dictation ("Nichts verstanden", "Aufnahme unterbrochen" …)
+    private(set) var notice: String?
+    /// the system stopped the recording (call, app switch, headset gone) – the text is delivered here
+    var onAutoStop: ((String) -> Void)?
 
     var isRecording: Bool { state == .recording }
     var isBusy: Bool {
@@ -29,31 +42,42 @@ final class Dictator {
     }
 
     private let engine = AVAudioEngine()
+    private let collector = AudioCollector()
     private var apple: AnyObject?
     private var legacy: LegacyAppleEngine?
-    private var samples: [Float] = []
-    private var resampler: AVAudioConverter?
-    private let target16k = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
     private var active: DictationSettings.Engine = .apple
+    private var settings: DictationSettings?
+    private var context = DictationContext()
+    /// chunked transcription while recording
+    private var committed = ""
+    private var cut = 0
+    private var chunks: Task<Void, Never>?
+    private var chunkTimer: Task<Void, Never>?
+    private var observers: [NSObjectProtocol] = []
 
     // MARK: Start / stop
 
-    func start(settings: DictationSettings) async {
+    func start(settings: DictationSettings, context: DictationContext = DictationContext()) async {
         guard !isBusy else { return }
+        self.settings = settings
+        self.context = settings.sessionVocabulary ? context : DictationContext()
         text = ""
-        samples.removeAll()
+        notice = nil
+        committed = ""
+        cut = 0
+        collector.reset()
         active = settings.engine
         do {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw DictationError.message(String(localized: "Mikrofon-Zugriff fehlt (Einstellungen › Hollr › Mikrofon)."))
             }
+            let terms = settings.allTerms(extra: self.context.terms)
             switch active {
             case .parakeet:
                 guard ParakeetCache.isDownloaded(settings.parakeetModel) else {
                     throw DictationError.message(String(localized: "Parakeet-Modell noch nicht geladen (Einstellungen › Sprache)."))
                 }
                 let model = settings.parakeetModel, boost = settings.useVocabulary && settings.parakeetBoost
-                let terms = settings.terms
                 Task.detached { try? await ParakeetCache.shared.prepare(model: model, boost: boost, terms: terms) }
             case .whisper:
                 guard let folder = settings.downloaded[settings.whisperModel] else {
@@ -62,9 +86,10 @@ final class Dictator {
                 let model = settings.whisperModel
                 Task.detached { _ = try? await WhisperCache.shared.kit(model: model, folder: folder) }
             case .apple:
+                let words = settings.useVocabulary ? terms.map(\.text) : []
                 if #available(iOS 26, *), let a = try? await AppleDictationEngine.make(
                     locale: settings.locale, punctuation: settings.applePunctuation,
-                    vocabulary: settings.vocabularyWords,
+                    vocabulary: words,
                     onPrepare: { [weak self] in Task { @MainActor in self?.state = .preparing(String(localized: "Sprachmodell wird geladen …")) } },
                     onText: { [weak self] text in Task { @MainActor in self?.text = text } }
                 ) {
@@ -77,16 +102,45 @@ final class Dictator {
             }
 
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+            // iPhone mic preferred: no Bluetooth route (AirPods' headset mic is narrowband and noisier)
+            var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker]
+            if !settings.preferBuiltInMic { options.insert(.allowBluetooth) }
+            try session.setCategory(.playAndRecord, mode: settings.noiseSuppression ? .voiceChat : .measurement, options: options)
             try session.setActive(true)
+            if settings.preferBuiltInMic,
+               let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+                try? session.setPreferredInput(builtIn)
+            } else {
+                try? session.setPreferredInput(nil)
+            }
             let input = engine.inputNode
+            // Apple's voice processing: noise suppression and level control for noisy places
+            try? input.setVoiceProcessingEnabled(settings.noiseSuppression)
             let format = input.outputFormat(forBus: 0)
-            input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
-                self?.handle(buffer)
+            // no microphone (in use by a call, route just vanished): installTap would crash on a 0 Hz format
+            guard format.sampleRate > 0, format.channelCount > 0 else {
+                throw DictationError.message(String(localized: "Kein Mikrofon verfügbar – läuft gerade ein Anruf?"))
+            }
+
+            collector.onLevel = { [weak self] rms in Task { @MainActor in self?.level = rms } }
+            let collector = self.collector
+            let appleEngine = apple
+            let legacyEngine = legacy
+            let usesSamples = active != .apple
+            // audio thread: nothing here waits for the UI
+            input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
+                if usesSamples {
+                    collector.ingest(buffer)
+                } else {
+                    if #available(iOS 26, *), let a = appleEngine as? AppleDictationEngine { a.feed(buffer) } else { legacyEngine?.feed(buffer) }
+                    collector.ingest(buffer) // level meter
+                }
             }
             engine.prepare()
             try engine.start()
+            observeInterruptions()
             state = .recording
+            if usesSamples { startChunking() }
             HollrLog.info("dictation: recording with \(active.rawValue)")
         } catch {
             cleanupAudio()
@@ -95,26 +149,22 @@ final class Dictator {
         }
     }
 
-    /// Stops recording and returns the final text (vocabulary + replacements applied).
+    /// Stops recording and returns the final text (cleaned up, vocabulary applied).
     func stop(settings: DictationSettings) async -> String {
         guard state == .recording else { return "" }
         cleanupAudio()
         state = .transcribing
-        var result = text
         let started = Date()
+        let seconds = Double(collector.count) / Double(AudioCollector.rate)
+        var result = ""
         do {
             switch active {
-            case .parakeet:
-                result = try await ParakeetCache.shared.transcribe(
-                    samples, model: settings.parakeetModel,
-                    boost: settings.useVocabulary && settings.parakeetBoost, terms: settings.terms
-                )
-            case .whisper:
-                guard let folder = settings.downloaded[settings.whisperModel] else { throw DictationError.message(String(localized: "Kein Whisper-Modell")) }
-                result = try await WhisperCache.shared.transcribe(
-                    samples, model: settings.whisperModel, folder: folder, language: settings.language,
-                    vocabulary: settings.vocabularyWords, fallbacks: settings.whisperFallbacks, vad: settings.whisperVAD
-                )
+            case .parakeet, .whisper:
+                // only the tail after the last chunk is left to do
+                let tail = collector.slice(cut..<collector.count)
+                await chunks?.value
+                result = committed
+                if let piece = try await transcribeChunk(tail) { result = join(result, piece) }
             case .apple:
                 if #available(iOS 26, *), let a = apple as? AppleDictationEngine {
                     result = await a.finish()
@@ -122,99 +172,189 @@ final class Dictator {
                     result = await legacy.finish()
                 }
             }
-            state = .idle
-            HollrLog.info("dictation: \(active.rawValue) took \(String(format: "%.1f", Date().timeIntervalSince(started)))s for \(samples.count / 16000)s audio")
+            HollrLog.info("dictation: \(active.rawValue) took \(String(format: "%.1f", Date().timeIntervalSince(started)))s after stop, \(Int(seconds))s audio")
         } catch {
             state = .failed(error.localizedDescription)
             HollrLog.error("dictation stop: \(error)")
+            reset()
+            return ""
         }
-        apple = nil
-        legacy = nil
-        let cleaned = settings.apply(result.replacingOccurrences(of: #"\[[A-Z_]+\]"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines))
+        reset()
+        var cleaned = settings.finish(result, extraTerms: context.terms)
+        if settings.polish, !cleaned.isEmpty {
+            state = .transcribing
+            cleaned = await LocalPolish.polish(cleaned, terms: settings.allTerms(extra: context.terms).map(\.text), language: settings.language)
+        }
+        if cleaned.isEmpty {
+            notice = seconds < 0.6 ? String(localized: "Zu kurz – etwas länger sprechen.") : String(localized: "Nichts verstanden.")
+        }
+        state = .idle
         text = cleaned
         return cleaned
     }
 
+    /// Throws the recording away.
     func cancel() {
         cleanupAudio()
-        apple = nil
-        legacy = nil
+        reset()
         text = ""
         state = .idle
     }
 
+    private func reset() {
+        chunkTimer?.cancel()
+        chunkTimer = nil
+        chunks?.cancel()
+        chunks = nil
+        apple = nil
+        legacy = nil
+        collector.onLevel = nil
+    }
+
     private func cleanupAudio() {
+        for o in observers { NotificationCenter.default.removeObserver(o) }
+        observers = []
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         level = 0
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    // MARK: Audio
+    // MARK: Interruptions – a call, another app, the headset going away
 
-    nonisolated private func handle(_ buffer: AVAudioPCMBuffer) {
-        if let ch = buffer.floatChannelData?[0] {
-            var sum: Float = 0
-            for i in 0..<Int(buffer.frameLength) { sum += ch[i] * ch[i] }
-            let rms = sqrt(sum / Float(max(buffer.frameLength, 1)))
-            Task { @MainActor in self.level = rms }
+    private func observeInterruptions() {
+        let center = NotificationCenter.default
+        let stopNow: (String) -> Void = { [weak self] why in
+            Task { @MainActor in
+                guard let self, self.state == .recording, let settings = self.settings else { return }
+                HollrLog.info("dictation: stopped by the system (\(why))")
+                let text = await self.stop(settings: settings)
+                self.notice = String(localized: "Aufnahme unterbrochen – das Gesagte ist eingefügt.")
+                self.onAutoStop?(text)
+            }
         }
-        Task { @MainActor in self.route(buffer) }
+        observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { note in
+            let type = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
+            if type == .began { stopNow("interruption") }
+        })
+        observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { note in
+            let reason = (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
+            if reason == .oldDeviceUnavailable { stopNow("route") }
+        })
+        observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            stopNow("background")
+        })
     }
 
-    #if DEBUG
-    private var injecting = false
+    // MARK: Chunked transcription (Parakeet / Whisper)
 
-    /// Test hook: a whole dictation with an audio file instead of the microphone.
-    func testWithFile(_ url: URL, settings: DictationSettings) async -> String {
-        await start(settings: settings)
-        guard state == .recording, let file = try? AVAudioFile(forReading: url) else { return "start failed: \(state)" }
-        injecting = true
-        let format = file.processingFormat
-        while let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096),
-              (try? file.read(into: buffer, frameCount: 4096)) != nil, buffer.frameLength > 0 {
-            route(buffer, injected: true)
-            try? await Task.sleep(for: .milliseconds(Int(Double(buffer.frameLength) / format.sampleRate * 1000)))
-        }
-        try? await Task.sleep(for: .seconds(1))
-        injecting = false
-        return await stop(settings: settings)
-    }
-    #endif
-
-    private func route(_ buffer: AVAudioPCMBuffer, injected: Bool = false) {
-        guard state == .recording else { return }
-        #if DEBUG
-        if injecting && !injected { return }
-        #endif
-        switch active {
-        case .parakeet, .whisper:
-            appendResampled(buffer)
-        case .apple:
-            if #available(iOS 26, *), let a = apple as? AppleDictationEngine {
-                a.feed(buffer)
-            } else {
-                legacy?.feed(buffer)
+    private func startChunking() {
+        chunkTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, self.state == .recording else { return }
+                let total = self.collector.count
+                guard let point = Silence.cutPoint(energies: self.collector.energies(), from: self.cut, total: total),
+                      point > self.cut else { continue }
+                let piece = self.collector.slice(self.cut..<point)
+                self.cut = point
+                let previous = self.chunks
+                self.chunks = Task { [weak self] in
+                    await previous?.value
+                    guard let self, !Task.isCancelled else { return }
+                    if let text = try? await self.transcribeChunk(piece) {
+                        self.committed = self.join(self.committed, text)
+                        if self.state == .recording { self.text = self.committed }
+                    }
+                }
             }
         }
     }
 
-    private func appendResampled(_ buffer: AVAudioPCMBuffer) {
-        if resampler?.inputFormat != buffer.format { resampler = AVAudioConverter(from: buffer.format, to: target16k) }
-        guard let resampler else { return }
-        let ratio = 16_000 / buffer.format.sampleRate
-        guard let out = AVAudioPCMBuffer(pcmFormat: target16k, frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32)
-        else { return }
-        var consumed = false
-        resampler.convert(to: out, error: nil) { _, status in
-            if consumed { status.pointee = .noDataNow; return nil }
-            consumed = true
-            status.pointee = .haveData
-            return buffer
+    /// One piece of audio → text (silence trimmed, invented subtitles dropped); nil = nothing said.
+    private func transcribeChunk(_ samples: [Float]) async throws -> String? {
+        guard let settings, let speech = Silence.trim(samples) else { return nil }
+        let terms = settings.allTerms(extra: context.terms)
+        var text: String
+        switch active {
+        case .parakeet:
+            text = try await ParakeetCache.shared.transcribe(
+                speech, model: settings.parakeetModel, boost: settings.useVocabulary && settings.parakeetBoost, terms: terms
+            )
+        case .whisper:
+            guard let folder = settings.downloaded[settings.whisperModel] else { throw DictationError.message(String(localized: "Kein Whisper-Modell")) }
+            text = try await WhisperCache.shared.transcribe(
+                speech, model: settings.whisperModel, folder: folder, language: settings.language,
+                vocabulary: settings.useVocabulary ? terms.map(\.text) : [], context: committed,
+                fallbacks: settings.whisperFallbacks, vad: settings.whisperVAD
+            )
+        case .apple:
+            return nil
         }
-        if let ch = out.floatChannelData?[0] {
-            samples.append(contentsOf: UnsafeBufferPointer(start: ch, count: Int(out.frameLength)))
+        text = DictationText.dropHallucinations(text.replacingOccurrences(of: #"\[[A-Z_]+\]"#, with: "", options: .regularExpression))
+        return text.isEmpty ? nil : text
+    }
+
+    private func join(_ a: String, _ b: String) -> String {
+        [a, b].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    #if DEBUG
+    /// Test hook: a whole dictation with an audio file instead of the microphone.
+    func testWithFile(_ url: URL, settings: DictationSettings, context: DictationContext = DictationContext()) async -> String {
+        guard let file = try? AVAudioFile(forReading: url) else { return "no file" }
+        self.settings = settings
+        self.context = context
+        active = settings.engine
+        text = ""
+        committed = ""
+        cut = 0
+        collector.reset()
+        state = .recording
+        if active != .apple { startChunking() }
+        let format = file.processingFormat
+        while let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096),
+              (try? file.read(into: buffer, frameCount: 4096)) != nil, buffer.frameLength > 0 {
+            collector.ingest(buffer)
+            try? await Task.sleep(for: .milliseconds(Int(Double(buffer.frameLength) / format.sampleRate * 1000)))
+        }
+        HollrLog.info("dictate-test: \(committed.isEmpty ? "no" : "had") text before stop: \(committed.prefix(80))")
+        return await stop(settings: settings)
+    }
+    #endif
+
+    // MARK: Warm-up and memory
+
+    /// Loads the model before the first dictation (called when a chat opens).
+    static func prewarm(_ settings: DictationSettings) {
+        switch settings.engine {
+        case .parakeet where ParakeetCache.isDownloaded(settings.parakeetModel):
+            let model = settings.parakeetModel
+            Task.detached(priority: .utility) {
+                await WhisperCache.shared.unload()
+                try? await ParakeetCache.shared.prepare(model: model, boost: false, terms: [])
+            }
+        case .whisper:
+            if let folder = settings.downloaded[settings.whisperModel] {
+                let model = settings.whisperModel
+                Task.detached(priority: .utility) {
+                    await ParakeetCache.shared.unload()
+                    _ = try? await WhisperCache.shared.kit(model: model, folder: folder)
+                }
+            }
+        default:
+            Task.detached(priority: .utility) {
+                await ParakeetCache.shared.unload()
+                await WhisperCache.shared.unload()
+            }
+        }
+    }
+
+    /// Frees the models (memory warning, app in the background) – the next chat warms them up again.
+    static func releaseModels() {
+        Task.detached {
+            await ParakeetCache.shared.unload()
+            await WhisperCache.shared.unload()
         }
     }
 }
@@ -307,13 +447,15 @@ actor WhisperCache {
     }
 
     func transcribe(_ samples: [Float], model: String, folder: String, language: String, vocabulary: [String],
-                    fallbacks: Int, vad: Bool) async throws -> String {
+                    context: String = "", fallbacks: Int, vad: Bool) async throws -> String {
         guard samples.count > 8_000 else { return "" }
         let kit = try await kit(model: model, folder: folder)
         var prompt: [Int]?
-        if !vocabulary.isEmpty, let tok = kit.tokenizer {
-            // Whisper keeps the last 111 prompt tokens – the vocabulary as a natural sentence.
-            let text = " " + vocabulary.prefix(60).joined(separator: ", ") + "."
+        if (!vocabulary.isEmpty || !context.isEmpty), let tok = kit.tokenizer {
+            // Whisper keeps the last 111 prompt tokens: vocabulary as a sentence, then what was just said
+            // (so a chunk continues the previous one in style and spelling)
+            var text = vocabulary.isEmpty ? "" : " " + vocabulary.prefix(40).joined(separator: ", ") + "."
+            if !context.isEmpty { text += " " + String(context.suffix(200)) }
             prompt = Array(tok.encode(text: text).filter { $0 < tok.specialTokens.specialTokenBegin }.suffix(110))
         }
         let auto = language == "auto"
@@ -335,7 +477,7 @@ actor WhisperCache {
 // MARK: - Apple DictationTranscriber (iOS 26+)
 
 @available(iOS 26, *)
-final class AppleDictationEngine {
+final class AppleDictationEngine: @unchecked Sendable {
     private let analyzer: SpeechAnalyzer
     private let format: AVAudioFormat?
     private let input: AsyncStream<AnalyzerInput>.Continuation
@@ -428,7 +570,7 @@ final class AppleDictationEngine {
 
 // MARK: - Apple on-device fallback (older iOS / simulator)
 
-final class LegacyAppleEngine {
+final class LegacyAppleEngine: @unchecked Sendable {
     private let request = SFSpeechAudioBufferRecognitionRequest()
     private var task: SFSpeechRecognitionTask?
     private var latest = ""

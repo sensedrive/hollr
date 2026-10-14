@@ -16,6 +16,7 @@
 		2A701E77575F00114E32F0E0 /* AgentListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */; };
 		352214150A54CF4B8871FB13 /* PairingPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20135523C477C7E3FF4526F3 /* PairingPayload.swift */; };
 		35A117D4607500E8C3D382E9 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 545D133067307064214160C5 /* MarkdownUI */; };
+		3798B0DBF4403F8B013306CF /* SessionVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56E0A50722FFD5D16B233EC /* SessionVocabulary.swift */; };
 		37F2B1D094F412EFE1260F1C /* ServersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028DC151D09F4CA7C3915657 /* ServersView.swift */; };
 		38AD2951853D3F540A6121F9 /* PushKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB461C556C5E5C219B20FCB /* PushKey.swift */; };
 		3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D3180E113553B70CDF4810A /* ProtocolTests.swift */; };
@@ -29,6 +30,7 @@
 		5E62D25E3C3B0B23D6070423 /* HollrClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */; };
 		600EC276313BAAE941AFEB1C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EAC832FAD971F0528242B59E /* Assets.xcassets */; };
 		6038A998B56A056E0EFED763 /* ModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8962791A94FF32DBFE98885 /* ModelPicker.swift */; };
+		608A1B91DAB5CD3CA4C0096A /* DictationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCC6225238A5F43D225C929 /* DictationPipeline.swift */; };
 		7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D5C6613C409FB4F134C940D7 /* WhisperKit */; };
 		7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */; };
 		7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */; };
@@ -120,8 +122,10 @@
 		B8962791A94FF32DBFE98885 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
 		BC7D0F3B418EE3043DECA56B /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		C531336AADA7A34435E646E0 /* FolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderPicker.swift; sourceTree = "<group>"; };
+		C56E0A50722FFD5D16B233EC /* SessionVocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionVocabulary.swift; sourceTree = "<group>"; };
 		C9E55498830793578CC172BD /* AppLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLock.swift; sourceTree = "<group>"; };
 		CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentListView.swift; sourceTree = "<group>"; };
+		CFCC6225238A5F43D225C929 /* DictationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationPipeline.swift; sourceTree = "<group>"; };
 		CFD0AF2665A02292636F1A65 /* Spaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spaces.swift; sourceTree = "<group>"; };
 		DA4B6116C23D43D57F42D49E /* TextScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextScale.swift; sourceTree = "<group>"; };
 		DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrClient.swift; sourceTree = "<group>"; };
@@ -192,7 +196,9 @@
 			isa = PBXGroup;
 			children = (
 				45BED9544749EEB0E7476BB5 /* Dictation.swift */,
+				CFCC6225238A5F43D225C929 /* DictationPipeline.swift */,
 				7DBAEB7961669E5A00031A5B /* DictationSettings.swift */,
+				C56E0A50722FFD5D16B233EC /* SessionVocabulary.swift */,
 			);
 			path = Dictation;
 			sourceTree = "<group>";
@@ -467,6 +473,7 @@
 				A604541D3BD8DC89D95DF2E7 /* DashboardView.swift in Sources */,
 				F29711403138418BF233D3C0 /* DeviceKey.swift in Sources */,
 				4A07AE229CDF8604DE0CDE12 /* Dictation.swift in Sources */,
+				608A1B91DAB5CD3CA4C0096A /* DictationPipeline.swift in Sources */,
 				51F68E40F60C46E32A53305B /* DictationSettings.swift in Sources */,
 				5D1B9D75B607E536BB19C722 /* DiffViewer.swift in Sources */,
 				DC0185B6A82AC4BEA8C9BFA6 /* FolderPicker.swift in Sources */,
@@ -492,6 +499,7 @@
 				C8DC245B9AE249921AC87F4E /* Server.swift in Sources */,
 				D1F535B9BB70EF91478E8A57 /* ServerInfoView.swift in Sources */,
 				37F2B1D094F412EFE1260F1C /* ServersView.swift in Sources */,
+				3798B0DBF4403F8B013306CF /* SessionVocabulary.swift in Sources */,
 				7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */,
 				7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */,
 				9ED347BE7C6BE7CD221B3BFE /* Spaces.swift in Sources */,
@@ -570,7 +578,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -590,7 +598,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.23.1;
+				MARKETING_VERSION = 0.24.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -639,7 +647,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -653,7 +661,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.23.1;
+				MARKETING_VERSION = 0.24.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
