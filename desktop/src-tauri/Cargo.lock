@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "hollr-desktop"
-version = "0.22.1"
+version = "0.23.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",

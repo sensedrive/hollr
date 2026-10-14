@@ -11,6 +11,7 @@ struct NewSpaceView: View {
 
     @State private var kind: Kind = .worktree
     @State private var serverId: UUID?
+    @State private var browsing = false
     @State private var repoId: String = ""
     @State private var branch = ""
     @State private var base = ""
@@ -60,14 +61,27 @@ struct NewSpaceView: View {
                     }
                 } else {
                     Section {
-                        TextField("Ordner auf dem Server", text: $folder)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
+                        HStack {
+                            TextField("Ordner auf dem Server", text: $folder)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .font(.system(.body, design: .monospaced))
+                            Button { browsing = true } label: {
+                                Image(systemName: "folder.badge.gearshape")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Ordner durchsuchen")
+                            .disabled(server == nil)
+                        }
+                        Button { browsing = true } label: {
+                            Label("Ordner auf dem Server durchsuchen", systemImage: "folder")
+                        }
+                        .disabled(server == nil)
                     } header: {
                         Text("Ordner")
                     } footer: {
                         Text("Wird angelegt, falls er noch nicht existiert.")
                     }
+
                 }
 
                 Section("Space") {
@@ -96,6 +110,17 @@ struct NewSpaceView: View {
                 if repos.isEmpty { await herdr.refreshSpaces(store.servers) }
                 if repoId.isEmpty { repoId = repos.first?.id ?? "" }
                 if repos.isEmpty { kind = .folder }
+            }
+            .sheet(isPresented: $browsing) {
+                if let server {
+                    FolderPicker(server: server, start: folder.hasSuffix("/") ? String(folder.dropLast()) : folder) { chosen in
+                        folder = chosen
+                        // name the space after the folder unless one was typed
+                        if label.trimmingCharacters(in: .whitespaces).isEmpty {
+                            label = chosen.split(separator: "/").last.map(String.init) ?? ""
+                        }
+                    }
+                }
             }
         }
     }

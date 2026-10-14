@@ -721,7 +721,9 @@ describe("one-time code", () => {
     // wrong code → 403
     expect((await post(Buffer.alloc(32))).status).toBe(403);
     // right code → sealed payload
-    const { ip, secret } = otp.decodeCode(server.code)!;
+    const decoded = otp.decodeCode(server.code);
+    if (!decoded) throw new Error("code did not decode");
+    const { ip, secret } = decoded;
     const keys = otp.deriveKeys(ip, secret);
     const res = await post(otp.proofFor(keys.auth));
     expect(res.status).toBe(200);

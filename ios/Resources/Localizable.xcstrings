@@ -681,6 +681,16 @@
         }
       }
     },
+    "Antippen öffnet den Ordner, nach links wischen wählt ihn direkt. Git-Repos sind markiert.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap opens the folder, swipe left picks it directly. Git repos are marked."
+          }
+        }
+      }
+    },
     "App-Sprache": {
       "localizations": {
         "en": {
@@ -1369,6 +1379,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The session no longer exists in herdr."
+          }
+        }
+      }
+    },
+    "Diesen wählen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose this"
           }
         }
       }
@@ -2143,6 +2163,16 @@
         }
       }
     },
+    "Keine Unterordner.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No subfolders."
+          }
+        }
+      }
+    },
     "Keine Änderungen": {
       "localizations": {
         "en": {
@@ -2769,6 +2799,26 @@
         }
       }
     },
+    "Neuer Space: Ordner auf dem Server durchsuchen – Projekte und Git-Repos auf einen Blick": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New space: browse the server's folders – projects and git repos at a glance"
+          }
+        }
+      }
+    },
+    "Neuer Unterordner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New subfolder"
+          }
+        }
+      }
+    },
     "Neuer Workspace": {
       "localizations": {
         "en": {
@@ -2825,6 +2875,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Don't wrap"
+          }
+        }
+      }
+    },
+    "Nichts gefunden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing found."
           }
         }
       }
@@ -3049,12 +3109,42 @@
         }
       }
     },
+    "Ordner auf dem Server durchsuchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse folders on the server"
+          }
+        }
+      }
+    },
     "Ordner auf dem Server, z. B. ~/projects/my-app": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Folder on the server, e.g. ~/projects/my-app"
+          }
+        }
+      }
+    },
+    "Ordner durchsuchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse folders"
+          }
+        }
+      }
+    },
+    "Ordner filtern": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter folders"
           }
         }
       }
@@ -3095,6 +3185,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Folder is deleted, the branch stays."
+          }
+        }
+      }
+    },
+    "Ordner wählen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose folder"
           }
         }
       }
@@ -3155,6 +3255,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Portuguese"
+          }
+        }
+      }
+    },
+    "Projekt-Orte": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project locations"
           }
         }
       }
@@ -4647,6 +4757,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Created if it doesn't exist yet."
+          }
+        }
+      }
+    },
+    "Wird beim Anlegen des Space erstellt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created together with the space."
           }
         }
       }

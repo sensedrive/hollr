@@ -15,6 +15,7 @@
  */
 import { existsSync } from "node:fs";
 import QRCode from "qrcode";
+import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { runEvents } from "./events";
 import { execHerdr, Herdr, installedKinds, type NewChatRequest, newChat } from "./herdr";
@@ -77,7 +78,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.22.1";
+export const VERSION = "0.23.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -144,6 +145,7 @@ async function gate(): Promise<number> {
       "sysinfo",
       "models",
       "events",
+      "dirs",
     ].includes(cmd)
   )
     log("gate", original);
@@ -357,6 +359,15 @@ async function gate(): Promise<number> {
     }
     case "events":
       return await runEvents();
+    case "dirs": {
+      const req = JSON.parse((await readStdinLine()) || "{}") as { path?: string };
+      try {
+        json(listDirs(req.path));
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     case "live":
       await runLive(pane, herdr, {
         input: Bun.stdin.stream() as unknown as AsyncIterable<Uint8Array>,
