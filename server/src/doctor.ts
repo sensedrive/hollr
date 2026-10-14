@@ -62,7 +62,7 @@ export async function collectChecks(): Promise<Check[]> {
     ok: pulse,
     detail: pulse ? "ja" : "nein",
     fix: mac
-      ? "brew services start pulseaudio"
+      ? 'launchctl kickstart -k "gui/$(id -u)/app.hollr.pulseaudio"  (oder Installer erneut ausführen)'
       : "systemctl --user enable --now pulseaudio.socket pulseaudio.service",
   });
   if (mac) {

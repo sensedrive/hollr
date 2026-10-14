@@ -253,10 +253,11 @@ export async function sysinfo(version: string, lang: Lang = "de") {
   const push = pushConfig();
   checks.push({
     name: "Push-Schlüssel",
-    ok: Boolean(push),
+    // optional: without it there are just no push notifications
+    ok: true,
     detail: push
       ? `Key ${push.keyId} · ${pushDevices().length} ${lang === "en" ? "device(s)" : "Gerät(e)"}`
-      : "nicht eingerichtet (in der App importieren)",
+      : "optional – in der iPhone-App unter Mitteilungen importieren",
   });
   const localized = checks.map((c) => ({
     ...c,

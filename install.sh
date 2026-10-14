@@ -76,8 +76,26 @@ if [ "$OS" = "Darwin" ] && [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
   if has pactl && has pacat; then ok "pactl/pacat vorhanden"
   elif has brew; then info "installiere pulseaudio (Homebrew)"; brew install -q pulseaudio >/dev/null && ok "PulseAudio installiert"
   else info "Homebrew fehlt – für Live-Sprache: https://brew.sh, dann 'brew install pulseaudio'"; fi
-  if has brew && has pactl && ! pactl info >/dev/null 2>&1; then
-    brew services start pulseaudio >/dev/null 2>&1 || true
+  # PulseAudio can't daemonize on macOS: run it in the foreground under launchd (restarted if it exits)
+  if has pulseaudio && ! pactl info >/dev/null 2>&1; then
+    has brew && brew services stop pulseaudio >/dev/null 2>&1 || true
+    PA_AGENT="$HOME/Library/LaunchAgents/app.hollr.pulseaudio.plist"
+    mkdir -p "$(dirname "$PA_AGENT")"
+    cat > "$PA_AGENT" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>app.hollr.pulseaudio</string>
+  <key>ProgramArguments</key><array><string>$(command -v pulseaudio)</string><string>--daemonize=no</string><string>--exit-idle-time=-1</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>$HOME/Library/Logs/hollr-pulseaudio.log</string>
+</dict></plist>
+PLIST
+    launchctl bootout "gui/$(id -u)/app.hollr.pulseaudio" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$PA_AGENT" >/dev/null 2>&1 || true
+    launchctl kickstart -k "gui/$(id -u)/app.hollr.pulseaudio" >/dev/null 2>&1 || true
+    sleep 2
   fi
   pactl info >/dev/null 2>&1 && ok "Audio-Server läuft" || info "Audio-Server läuft nicht – siehe 'hollr doctor'"
 fi
@@ -95,7 +113,9 @@ fi
 
 # ---------------------------------------------------------------- hollr binary
 bold "4/5 hollr"
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+# a binary next to the script only when it runs from a checkout (not when piped from curl)
+SRC_DIR=""
+[ -f "${BASH_SOURCE[0]:-}" ] && SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSET="hollr-$TARGET"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/server/dist/$ASSET" ]; then
@@ -182,7 +202,10 @@ if [ "$OS" = "Darwin" ]; then
 PLIST
   # reload so an updated binary is used
   launchctl bootout "gui/$(id -u)/app.hollr.watch" >/dev/null 2>&1 || true
-  launchctl bootstrap "gui/$(id -u)" "$AGENT" >/dev/null 2>&1 \
+  launchctl bootstrap "gui/$(id -u)" "$AGENT" >/dev/null 2>&1 || true
+  launchctl kickstart -k "gui/$(id -u)/app.hollr.watch" >/dev/null 2>&1 || true
+  sleep 1
+  launchctl list app.hollr.watch 2>/dev/null | grep -q '"PID"' \
     && ok "Wächter läuft (launchd)" || info "Wächter nicht startbar – launchctl print gui/$(id -u)/app.hollr.watch"
 fi
 
