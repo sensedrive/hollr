@@ -43,7 +43,7 @@ struct DashboardView: View {
             }
         }
         .refreshable {
-            await herdr.refresh(store.servers)
+            await herdr.refresh(store.servers, force: true)
             await herdr.refreshUsage(store.servers, force: true)
         }
         .task { await herdr.refreshUsage(store.servers) }

@@ -90,6 +90,8 @@ export interface Timeline {
   model?: string;
   status?: string;
   line?: StatusLine;
+  /** content fingerprint – sent back on the next poll */
+  etag?: string;
 }
 
 export interface ModelList {
@@ -116,7 +118,11 @@ export async function gate<T>(server: string, command: string, body?: unknown): 
 }
 
 export const tree = (s: string) => gate<{ workspaces: Workspace[] }>(s, "tree").then((r) => r.workspaces);
-export const timeline = (s: string, pane: string) => gate<Timeline>(s, `timeline ${pane} 150`);
+/** null = unchanged since `etag` (the server then only answers {"same":true}). */
+export const timeline = (s: string, pane: string, etag?: string) =>
+  gate<Timeline & { same?: boolean }>(s, `timeline ${pane} 150${etag ? ` ${etag}` : ""}`).then((t) =>
+    t.same ? null : t,
+  );
 export const screen = (s: string, pane: string, lines = 80) =>
   gate<{ text: string }>(s, `screen ${pane} ${lines}`).then((r) => r.text);
 export const prompt = (s: string, pane: string, text: string) => gate(s, `prompt ${pane}`, { text });

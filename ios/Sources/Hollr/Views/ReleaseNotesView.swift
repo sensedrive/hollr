@@ -10,6 +10,11 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 34, date: "14.10.2026", items: [
+            ("bolt", String(localized: "Deutlich flüssiger: der Chat lädt nur noch, was sich geändert hat, und reagiert sofort auf Antworten")),
+            ("mic", String(localized: "Während des Diktierens pausiert der Chat, damit die Spracherkennung die volle Leistung hat")),
+            ("moon.zzz", String(localized: "Ein schlafender Rechner bremst die anderen Server nicht mehr aus")),
+        ]),
         ReleaseNote(build: 33, date: "14.10.2026", items: [
             ("folder", String(localized: "Neuer Space: Ordner auf dem Server durchsuchen – Projekte und Git-Repos auf einen Blick")),
         ]),

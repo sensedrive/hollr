@@ -1343,6 +1343,16 @@
         }
       }
     },
+    "Deutlich flüssiger: der Chat lädt nur noch, was sich geändert hat, und reagiert sofort auf Antworten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Much smoother: the chat only loads what changed and reacts instantly to answers"
+          }
+        }
+      }
+    },
     "Deutsch": {
       "localizations": {
         "en": {
@@ -1499,6 +1509,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "One term per line, misheard variants after “=”, e.g. “JIRA = Jira, Dschira”. The list feeds all engines (Apple context, Whisper prompt, Parakeet boost) and fixes spellings afterwards."
+          }
+        }
+      }
+    },
+    "Ein schlafender Rechner bremst die anderen Server nicht mehr aus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A sleeping computer no longer slows down the other servers"
           }
         }
       }
@@ -4847,6 +4867,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose"
+          }
+        }
+      }
+    },
+    "Während des Diktierens pausiert der Chat, damit die Spracherkennung die volle Leistung hat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "While you dictate, the chat pauses so speech recognition gets full power"
           }
         }
       }

@@ -40,9 +40,14 @@ final class HerdrStore {
         allAgents(servers).filter { $0.pane.status == "working" || $0.pane.status == "blocked" || live.contains($0.id) }
     }
 
-    func refresh(_ servers: [Server]) async {
+    /// servers that just failed: tried again after a pause instead of on every refresh
+    private var retryAfter: [UUID: Date] = [:]
+
+    func refresh(_ servers: [Server], force: Bool = false) async {
+        // an unreachable machine (asleep, off the network) would hold every refresh for its timeout
+        let due = servers.filter { force || (retryAfter[$0.id] ?? .distantPast) <= .now }
         await withTaskGroup(of: (UUID, Result<[Workspace], Error>).self) { group in
-            for server in servers {
+            for server in due {
                 group.addTask { (server.id, await Result(asyncCatching: { try await HollrClient.tree(server) })) }
             }
             for await (id, result) in group {
@@ -50,10 +55,13 @@ final class HerdrStore {
                 case .success(let tree):
                     trees[id] = tree
                     errors[id] = nil
+                    retryAfter[id] = nil
                 case .failure(let error):
                     errors[id] = error.localizedDescription
+                    retryAfter[id] = .now.addingTimeInterval(30)
                     if let server = servers.first(where: { $0.id == id }) { await SSHPool.shared.invalidate(server) }
                 }
+                loaded = true // show what we have, don't wait for the slowest machine
             }
         }
         let ids = Set(servers.map(\.id))

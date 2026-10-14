@@ -151,7 +151,8 @@ private struct AgentConversation: View {
                     await session.loadHistory()
                 }
                 await session.loadScreen()
-                try? await Task.sleep(for: .seconds(session.usesTimeline ? 2 : 3))
+                // 1.5 s while omp works or waits, 5 s when idle, paused while dictating – sooner on nudge()
+                await session.waitForPoll()
             }
         }
         #if DEBUG
@@ -162,6 +163,8 @@ private struct AgentConversation: View {
             mySessions.touch(ref.id)
         }
         .onDisappear { if PushManager.shared.visibleAgentId == ref.id { PushManager.shared.visibleAgentId = nil } }
+        // the server's live feed saw a change (status, new pane …): refresh this chat now
+        .onChange(of: herdr.changeCount) { _, _ in session.nudge() }
         .onChange(of: session.isLive) { _, live in
             UIApplication.shared.isIdleTimerDisabled = live
         }
@@ -205,6 +208,7 @@ private struct AgentConversation: View {
                         if tl.items.isEmpty && session.items.isEmpty { emptyHint }
                         ForEach(tl.visibleItems) { item in
                             TimelineRow(item: item) { index, _ in session.answer(option: index) }
+                                .equatable() // unchanged entries are not re-rendered on every refresh
                                 .id(item.id)
                         }
                         // typed prompts not yet in the log, live notices

@@ -66,9 +66,11 @@ struct BrailleSpinner: View {
 
 // MARK: - Rows (omp's TUI rules: packages/tui/src/chat + tools/*)
 
-struct TimelineRow: View {
+struct TimelineRow: View, Equatable {
     let item: TimelineItem
     var onAnswer: (Int, Int) -> Void = { _, _ in }
+
+    static func == (a: TimelineRow, b: TimelineRow) -> Bool { a.item == b.item }
 
     var body: some View {
         switch item {
@@ -421,6 +423,9 @@ struct AskCard: View {
     let answer: String?
     let pending: Bool
     let onPick: (Int) -> Void
+    /// marked right away on tap – omp's confirmation follows with the next refresh
+    @State private var picked: Int?
+    private var open: Bool { pending && picked == nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -431,22 +436,23 @@ struct AskCard: View {
             }
             Text(question).font(.body)
             ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                Button { if pending { onPick(index) } } label: {
+                Button { if open { picked = index; onPick(index) } } label: {
                     HStack(spacing: 8) {
-                        Text(answer?.contains(option) == true ? "◉" : "○").foregroundStyle(Omp.accent)
+                        Text(answer?.contains(option) == true || picked == index ? "◉" : "○").foregroundStyle(Omp.accent)
                         Text(option).foregroundStyle(.primary).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
                     }
                     .font(.subheadline)
                     .padding(.vertical, 8).padding(.horizontal, 10)
-                    .background(pending ? Omp.pendingBg : .clear, in: RoundedRectangle(cornerRadius: 8))
+                    .background(open ? Omp.pendingBg : picked == index ? Omp.pendingBg.opacity(0.5) : .clear,
+                                in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
-                .disabled(!pending)
+                .disabled(!open)
             }
-            if pending {
+            if open {
                 // omp's own last entry "Other (type your own)": select it, then type the answer below
-                Button { onPick(options.count) } label: {
+                Button { picked = options.count; onPick(options.count) } label: {
                     HStack(spacing: 8) {
                         Text("✎").foregroundStyle(Omp.accent)
                         Text("Eigene Antwort – danach unten eintippen").foregroundStyle(.secondary)

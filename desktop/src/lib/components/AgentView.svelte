@@ -74,14 +74,13 @@
     busy = true;
     try {
       if (isOmp) {
-        const tl = await api.timeline(server, pane.pane);
-        const sig = JSON.stringify(tl);
-        if (sig !== lastSig) {
-          lastSig = sig;
+        // unchanged → the server answers a few bytes instead of the whole timeline
+        const tl = await api.timeline(server, pane.pane, timeline?.etag);
+        if (tl) {
           timeline = tl;
+          const logged = new Set(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
+          if (pending.some((p) => logged.has(p))) pending = pending.filter((p) => !logged.has(p));
         }
-        const logged = new Set(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
-        if (pending.some((p) => logged.has(p))) pending = pending.filter((p) => !logged.has(p));
       } else {
         const h = await loadHistory(server, pane.pane);
         const fresh = toBubbles(h.events ?? []);

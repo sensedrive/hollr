@@ -53,6 +53,9 @@ struct Composer: View {
         )
         .animation(.easeInOut(duration: 0.2), value: session.isLive)
         .onChange(of: focused) { _, now in withAnimation(.easeInOut(duration: 0.2)) { editing.wrappedValue = now } }
+        // while dictating, the chat stops refreshing so the transcription gets the CPU
+        .onChange(of: dictating) { _, _ in syncDictating() }
+        .onDisappear { session.dictating = false }
     }
 
     private var placeholder: String {
@@ -61,6 +64,11 @@ struct Composer: View {
     }
 
     private var dictating: Bool { dictator.isRecording || dictator.state == .transcribing }
+
+    private func syncDictating() {
+        session.dictating = dictating
+        if !dictating { session.nudge() } // catch up right after dictation
+    }
     private var dictationPreview: String {
         let spoken = dictator.state == .transcribing && dictator.text.isEmpty ? "transkribiere …" : dictator.text
         return [textBeforeDictation, spoken].filter { !$0.isEmpty }.joined(separator: " ")

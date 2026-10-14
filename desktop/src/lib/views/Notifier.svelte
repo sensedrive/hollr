@@ -80,7 +80,7 @@
   /** the agent's question, last answer or error – like describe() in watch.ts */
   async function describe(server: string, pane: string, kind: "waiting" | "done"): Promise<{ body: string; error?: boolean }> {
     try {
-      const items = [...(await api.timeline(server, pane)).items].reverse();
+      const items = [...((await api.timeline(server, pane))?.items ?? [])].reverse();
       if (kind === "waiting") {
         const ask = items.find((i) => i.k === "ask" && i.pending);
         if (ask && ask.k === "ask") {

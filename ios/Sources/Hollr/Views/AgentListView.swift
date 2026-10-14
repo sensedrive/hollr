@@ -54,7 +54,7 @@ struct AgentListView: View {
         }.themedList()
         .overlay { if !herdr.loaded { Skeleton(style: .list, count: 10).background(Theme.bg) } }
         .navigationTitle("Agents")
-        .refreshable { await herdr.refresh(store.servers) }
+        .refreshable { await herdr.refresh(store.servers, force: true) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(action: onNewChat) { Image(systemName: "square.and.pencil") }

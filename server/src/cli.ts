@@ -13,6 +13,7 @@
  *   hollr gate      → hello | agents | live <pane> | prompt <pane> | keys <pane> <key>...
  *   hollr enroll ID → pairing handshake
  */
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import QRCode from "qrcode";
 import { listDirs } from "./dirs";
@@ -78,7 +79,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.23.0";
+export const VERSION = "0.23.1";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -231,11 +232,15 @@ async function gate(): Promise<number> {
         "4",
       ]).catch(() => "");
       const footer = parseFooter(typeof screen === "string" ? screen : "");
-      json({
+      const full = {
         ...timeline,
         status: agent.status,
         line: statusLine(agent.cwd, footer, (timeline as { model?: string }).model),
-      });
+      };
+      // the app polls often: with its last etag, an unchanged timeline is a few bytes, not ~100 KB
+      const etag = createHash("sha1").update(JSON.stringify(full)).digest("base64url").slice(0, 16);
+      if (rest[1] && rest[1] === etag) json({ same: true, etag });
+      else json({ ...full, etag });
       return 0;
     }
     case "ports":

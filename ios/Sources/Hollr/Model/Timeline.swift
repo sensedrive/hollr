@@ -12,6 +12,8 @@ struct Timeline: Decodable, Equatable {
     var model: String?
     var status: String?
     var line: StatusLine?
+    /// content fingerprint from the server – sent back on the next poll ("unchanged" costs a few bytes)
+    var etag: String? = nil
 
     static let empty = Timeline(items: [], jobs: [], running: false, waiting: false)
 

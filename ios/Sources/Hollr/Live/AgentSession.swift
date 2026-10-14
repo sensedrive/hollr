@@ -37,10 +37,53 @@ final class AgentSession {
 
     var usesTimeline: Bool { ref.pane.agent == "omp" }
 
+    // MARK: polling – cheap when nothing changes, fast while omp works, paused while you dictate
+
+    /// set by the composer while dictating: the transcription gets the CPU, the chat waits
+    var dictating = false
+    private var wake: (id: UUID, cont: CheckedContinuation<Void, Never>)?
+
+    /// How long until the next refresh.
+    var pollInterval: Duration {
+        if dictating { return .seconds(8) }
+        if !usesTimeline { return .seconds(3) }
+        let busy = timeline?.running == true || agentStatus == "working" || agentStatus == "blocked"
+        return busy ? .milliseconds(1500) : .seconds(5)
+    }
+
+    /// Waits for the next poll – or less, when `nudge()` says something just happened.
+    func waitForPoll() async {
+        let interval = pollInterval
+        let id = UUID()
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            if let old = wake { old.cont.resume() }
+            wake = (id, cont)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: interval)
+                self?.fire(id)
+            }
+        }
+    }
+
+    /// Refresh now (after sending, answering, or a change from the live feed).
+    func nudge() {
+        if let id = wake?.id { fire(id) }
+    }
+
+    private func fire(_ id: UUID) {
+        guard let current = wake, current.id == id else { return }
+        wake = nil
+        current.cont.resume()
+    }
+
     func loadTimeline() async {
         guard usesTimeline else { return }
         do {
-            let fresh = try await HollrClient.timeline(ref.server, pane: ref.pane.pane)
+            guard let fresh = try await HollrClient.timeline(ref.server, pane: ref.pane.pane, etag: timeline?.etag) else {
+                historyLoaded = true
+                lastError = nil
+                return // unchanged
+            }
             if fresh != timeline { timeline = fresh }
             if let status = fresh.status, !isLive { agentStatus = status }
             // typed prompts that now show up in the log are no longer "pending"
@@ -188,6 +231,7 @@ final class AgentSession {
             Task {
                 do {
                     try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: trimmed)
+                    nudge()
                 } catch {
                     lastError = "Senden fehlgeschlagen: \(error.localizedDescription)"
                 }
@@ -200,8 +244,10 @@ final class AgentSession {
             send(.control(["t": "keys", "keys": keys]))
         } else {
             Task {
-                do { try await HollrClient.keys(ref.server, pane: ref.pane.pane, keys: keys) }
-                catch { lastError = String(localized: "Tasten senden fehlgeschlagen: \(error.localizedDescription)") }
+                do {
+                    try await HollrClient.keys(ref.server, pane: ref.pane.pane, keys: keys)
+                    nudge() // show omp's reaction right away instead of on the next poll
+                } catch { lastError = String(localized: "Tasten senden fehlgeschlagen: \(error.localizedDescription)") }
             }
         }
     }

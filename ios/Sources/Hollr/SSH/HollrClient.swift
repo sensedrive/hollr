@@ -126,9 +126,12 @@ enum HollrClient {
         return response.workspaces ?? []
     }
 
-    static func timeline(_ server: Server, pane: String, limit: Int = 150) async throws -> Timeline {
+    /// nil = unchanged since `etag` (the server then only answers {"same":true}).
+    static func timeline(_ server: Server, pane: String, limit: Int = 150, etag: String? = nil) async throws -> Timeline? {
         let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.executeCommand("timeline \(pane) \(limit)").readableBytesView)
+        let command = etag.map { "timeline \(pane) \(limit) \($0)" } ?? "timeline \(pane) \(limit)"
+        let data = Data(try await client.executeCommand(command).readableBytesView)
+        if data.count < 200, String(decoding: data, as: UTF8.self).contains("\"same\":true") { return nil }
         do {
             return try JSONDecoder().decode(Timeline.self, from: data)
         } catch {
