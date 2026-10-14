@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { homedir, userInfo } from "node:os";
+import { homedir, platform, userInfo } from "node:os";
 import { join } from "node:path";
 import { herdrBin } from "./herdr";
 import { authorizedKeysPath, hostKeyFingerprint, listDevices } from "./pairing";
@@ -28,6 +28,8 @@ function version(cmd: string, ...args: string[]): string {
   }
 }
 
+const mac = platform() === "darwin";
+
 export async function collectChecks(): Promise<Check[]> {
   const checks: Check[] = [];
   const herdr = herdrBin();
@@ -51,7 +53,7 @@ export async function collectChecks(): Promise<Check[]> {
       name: tool,
       ok: Boolean(path),
       detail: path ?? "nicht gefunden",
-      fix: "sudo apt-get install -y pulseaudio pulseaudio-utils",
+      fix: mac ? "brew install pulseaudio" : "sudo apt-get install -y pulseaudio pulseaudio-utils",
     });
   }
   const pulse = await pulseAvailable();
@@ -59,21 +61,33 @@ export async function collectChecks(): Promise<Check[]> {
     name: "PulseAudio läuft",
     ok: pulse,
     detail: pulse ? "ja" : "nein",
-    fix: "systemctl --user enable --now pulseaudio.socket pulseaudio.service",
+    fix: mac
+      ? "brew services start pulseaudio"
+      : "systemctl --user enable --now pulseaudio.socket pulseaudio.service",
   });
-  const linger = Bun.spawnSync([
-    "loginctl",
-    "show-user",
-    userInfo().username,
-    "-p",
-    "Linger",
-  ]).stdout.toString();
-  checks.push({
-    name: "Dienste ohne Login (linger)",
-    ok: linger.includes("Linger=yes"),
-    detail: linger.trim() || "unbekannt",
-    fix: `sudo loginctl enable-linger ${userInfo().username}`,
-  });
+  if (mac) {
+    const ssh = await sshListening();
+    checks.push({
+      name: "SSH (Entfernte Anmeldung)",
+      ok: ssh,
+      detail: ssh ? "Port 22 offen" : "aus",
+      fix: "Systemeinstellungen → Allgemein → Teilen → Entfernte Anmeldung",
+    });
+  } else {
+    const linger = Bun.spawnSync([
+      "loginctl",
+      "show-user",
+      userInfo().username,
+      "-p",
+      "Linger",
+    ]).stdout.toString();
+    checks.push({
+      name: "Dienste ohne Login (linger)",
+      ok: linger.includes("Linger=yes"),
+      detail: linger.trim() || "unbekannt",
+      fix: `sudo loginctl enable-linger ${userInfo().username}`,
+    });
+  }
   let fp = "";
   try {
     fp = hostKeyFingerprint();
@@ -94,6 +108,20 @@ export async function collectChecks(): Promise<Check[]> {
   });
   checks.push({ name: "Gekoppelte Geräte", ok: true, detail: String(listDevices().length) });
   return checks;
+}
+
+async function sshListening(): Promise<boolean> {
+  try {
+    const socket = await Bun.connect({
+      hostname: "127.0.0.1",
+      port: 22,
+      socket: { data() {} },
+    });
+    socket.end();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function runDoctor(): Promise<number> {

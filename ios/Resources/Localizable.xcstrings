@@ -11,22 +11,22 @@
         }
       }
     },
-    " · auf dem Gerät": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · on device"
-          }
-        }
-      }
-    },
     " <%@>": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": " <%@>"
+          }
+        }
+      }
+    },
+    " · auf dem Gerät": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · on device"
           }
         }
       }
@@ -41,232 +41,22 @@
         }
       }
     },
-    "-%lld": {
+    "$ ": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "-%lld"
+            "value": "$ "
           }
         }
       }
     },
-    ": %@": {
+    "$%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": ": %@"
-          }
-        }
-      }
-    },
-    "?": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "?"
-          }
-        }
-      }
-    },
-    "…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "…"
-          }
-        }
-      }
-    },
-    "… (%lld earlier lines, showing %lld of %lld)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "new",
-            "value": "… (%1$lld earlier lines, showing %2$lld of %3$lld)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "… (%1$lld earlier lines, showing %2$lld of %3$lld)"
-          }
-        }
-      }
-    },
-    "… gekürzt (%@)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "… truncated (%@)"
-          }
-        }
-      }
-    },
-    "…%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "…%@"
-          }
-        }
-      }
-    },
-    "· %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· %@"
-          }
-        }
-      }
-    },
-    "· %lld/%lld": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "new",
-            "value": "· %1$lld/%2$lld"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· %1$lld/%2$lld"
-          }
-        }
-      }
-    },
-    "· Live: %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· Live: %@"
-          }
-        }
-      }
-    },
-    "„%@“ schließen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close “%@”"
-          }
-        }
-      }
-    },
-    "„%@“ wird in herdr geschlossen und %@ beendet.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "new",
-            "value": "„%1$@“ wird in herdr geschlossen und %2$@ beendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "“%1$@” will be closed in herdr and %2$@ stopped."
-          }
-        }
-      }
-    },
-    "(%lld)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "(%lld)"
-          }
-        }
-      }
-    },
-    "⟦": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⟦"
-          }
-        }
-      }
-    },
-    "⟧": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⟧"
-          }
-        }
-      }
-    },
-    "⟨%@⟩": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⟨%@⟩"
-          }
-        }
-      }
-    },
-    "*%lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "*%lld"
-          }
-        }
-      }
-    },
-    "/": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "/"
-          }
-        }
-      }
-    },
-    "%@ · %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        }
-      }
-    },
-    "%@ (%@)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$@ (%2$@)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ (%2$@)"
+            "value": "$%@"
           }
         }
       }
@@ -287,12 +77,44 @@
         }
       }
     },
+    "%@ (%@)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ (%2$@)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
     "%@ ist gekoppelt": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ is paired"
+          }
+        }
+      }
+    },
+    "%@ · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ · %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@"
           }
         }
       }
@@ -379,22 +201,22 @@
         }
       }
     },
-    "%lld nicht gestaged": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld unstaged"
-          }
-        }
-      }
-    },
     "%lld Sitzung(en) werden beendet": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld session(s) will be ended"
+          }
+        }
+      }
+    },
+    "%lld nicht gestaged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld unstaged"
           }
         }
       }
@@ -419,42 +241,22 @@
         }
       }
     },
-    "•": {
+    "(%lld)": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "•"
+            "value": "(%lld)"
           }
         }
       }
     },
-    "`hollr pair` starten": {
+    "*%lld": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Run `hollr pair`"
-          }
-        }
-      }
-    },
-    "↑%lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "↑%lld"
-          }
-        }
-      }
-    },
-    "↓%lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "↓%lld"
+            "value": "*%lld"
           }
         }
       }
@@ -469,152 +271,32 @@
         }
       }
     },
-    ">_": {
+    "-%lld": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": ">_"
+            "value": "-%lld"
           }
         }
       }
     },
-    "⏹ Abgebrochen": {
+    "/": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "⏹ Cancelled"
+            "value": "/"
           }
         }
       }
     },
-    "│ ": {
+    "1. Entfernte Anmeldung (SSH) einschalten": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "│ "
-          }
-        }
-      }
-    },
-    "└─": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "└─"
-          }
-        }
-      }
-    },
-    "└─────": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "└─────"
-          }
-        }
-      }
-    },
-    "├─": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "├─"
-          }
-        }
-      }
-    },
-    "◉": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "◉"
-          }
-        }
-      }
-    },
-    "○": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "○"
-          }
-        }
-      }
-    },
-    "☐": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "☐"
-          }
-        }
-      }
-    },
-    "☑": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "☑"
-          }
-        }
-      }
-    },
-    "⚙": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⚙"
-          }
-        }
-      }
-    },
-    "✔ %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "✔ %@"
-          }
-        }
-      }
-    },
-    "✘": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "✘"
-          }
-        }
-      }
-    },
-    "$ ": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "$ "
-          }
-        }
-      }
-    },
-    "$%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "$%@"
+            "value": "1. Turn on Remote Login (SSH)"
           }
         }
       }
@@ -625,6 +307,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "1. SSH server (if not installed yet)"
+          }
+        }
+      }
+    },
+    "2. Hollr installieren und QR-Code anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Install Hollr and show the QR code"
+          }
+        }
+      }
+    },
+    ": %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ": %@"
+          }
+        }
+      }
+    },
+    ">_": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ">_"
+          }
+        }
+      }
+    },
+    "?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "?"
+          }
+        }
+      }
+    },
+    "APNs-Schlüssel importieren (.p8) …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import APNs key (.p8) …"
           }
         }
       }
@@ -739,52 +471,12 @@
         }
       }
     },
-    "anbieter/modell-id": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "provider/model-id"
-          }
-        }
-      }
-    },
     "Anderen APNs-Schlüssel importieren …": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Import a different APNs key …"
-          }
-        }
-      }
-    },
-    "Änderungen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changes"
-          }
-        }
-      }
-    },
-    "Änderungen anzeigen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show changes"
-          }
-        }
-      }
-    },
-    "Änderungen, Verlauf und Branches ansehen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View changes, history and branches"
           }
         }
       }
@@ -819,12 +511,12 @@
         }
       }
     },
-    "APNs-Schlüssel importieren (.p8) …": {
+    "App-Sprache": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Import APNs key (.p8) …"
+            "value": "App language"
           }
         }
       }
@@ -835,16 +527,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apple"
-          }
-        }
-      }
-    },
-    "arbeitet": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "working"
           }
         }
       }
@@ -921,16 +603,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing answers on port %2$lld on %1$@."
-          }
-        }
-      }
-    },
-    "auf %@ nicht installiert": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not installed on %@"
           }
         }
       }
@@ -1061,16 +733,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copy command"
-          }
-        }
-      }
-    },
-    "bereit": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ready"
           }
         }
       }
@@ -1225,6 +887,22 @@
         }
       }
     },
+    "Das Pane „%@“ wird in herdr auf %@ geschlossen und %@ beendet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Das Pane „%1$@“ wird in herdr auf %2$@ geschlossen und %3$@ beendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pane “%1$@” will be closed in herdr on %2$@ and %3$@ will be stopped."
+          }
+        }
+      }
+    },
     "Das ist kein Hollr-Kopplungscode.": {
       "localizations": {
         "en": {
@@ -1241,22 +919,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "This is not an APNs key file (.p8)."
-          }
-        }
-      }
-    },
-    "Das Pane „%@“ wird in herdr auf %@ geschlossen und %@ beendet.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Das Pane „%1$@“ wird in herdr auf %2$@ geschlossen und %3$@ beendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The pane “%1$@” will be closed in herdr on %2$@ and %3$@ will be stopped."
           }
         }
       }
@@ -1351,6 +1013,26 @@
         }
       }
     },
+    "Designs: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub und mehr – hell, dunkel oder automatisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Themes: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub and more – light, dark or automatic"
+          }
+        }
+      }
+    },
+    "Desktop-App für Linux und Mac mit Live-Sprache und Git-Ansichten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop app for Linux and Mac with live voice and git views"
+          }
+        }
+      }
+    },
     "Details": {
       "localizations": {
         "en": {
@@ -1367,6 +1049,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "German"
+          }
+        }
+      }
+    },
+    "Deutsch oder Englisch – iOS stellt die Sprache pro App um.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "German or English – iOS switches the language per app."
           }
         }
       }
@@ -1417,6 +1109,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dark theme"
+          }
+        }
+      }
+    },
+    "EMPFOHLEN": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RECOMMENDED"
           }
         }
       }
@@ -1481,16 +1183,6 @@
         }
       }
     },
-    "EMPFOHLEN": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RECOMMENDED"
-          }
-        }
-      }
-    },
     "Empfohlen: sehr genau bei Deutsch mit englischen Fachwörtern, läuft auf der Neural Engine.": {
       "localizations": {
         "en": {
@@ -1527,16 +1219,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Error: %@"
-          }
-        }
-      }
-    },
-    "ersetzen durch": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "replace with"
           }
         }
       }
@@ -1621,16 +1303,6 @@
         }
       }
     },
-    "fertig": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "done"
-          }
-        }
-      }
-    },
     "Fertig": {
       "localizations": {
         "en": {
@@ -1691,12 +1363,32 @@
         }
       }
     },
+    "Für Mac und Desktop: Link statt QR-Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For Mac and desktop: a link instead of a QR code"
+          }
+        }
+      }
+    },
     "Für localhost-Adressen zuerst einen Server koppeln.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Pair a server first to open localhost addresses."
+          }
+        }
+      }
+    },
+    "GEÄNDERTE DATEIEN  %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CHANGED FILES  %lld"
           }
         }
       }
@@ -1717,26 +1409,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scale the whole app – also with a pinch"
-          }
-        }
-      }
-    },
-    "GEÄNDERTE DATEIEN  %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CHANGED FILES  %lld"
-          }
-        }
-      }
-    },
-    "gehört": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "heard"
           }
         }
       }
@@ -1801,6 +1473,16 @@
         }
       }
     },
+    "Git: Dateien, Änderungen mit Diff, Verlauf-Graph, Branches mit PR-Status": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git: files, changes with diff, history graph, branches with PR status"
+          }
+        }
+      }
+    },
     "Groß": {
       "localizations": {
         "en": {
@@ -1837,26 +1519,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Light theme"
-          }
-        }
-      }
-    },
-    "herdr legt einen eigenen Arbeitsordner mit neuem Branch an – parallel zu main, ohne dass sich Agents in die Quere kommen.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "herdr creates a separate working folder with a new branch – parallel to main, so agents don't get in each other's way."
-          }
-        }
-      }
-    },
-    "herdr, omp, Claude Code, Codex und Hollr direkt aus der App installieren und aktualisieren": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Install and update herdr, omp, Claude Code, Codex and Hollr right from the app"
           }
         }
       }
@@ -1901,6 +1563,26 @@
         }
       }
     },
+    "Hollr für den Mac (DMG) – koppeln per Link aus hollr pair --link": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr for the Mac (DMG) – pair with the link from hollr pair --link"
+          }
+        }
+      }
+    },
+    "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr is open source (MIT) – github.com/sensedrive/hollr"
+          }
+        }
+      }
+    },
     "Hollr ist gesperrt": {
       "localizations": {
         "en": {
@@ -1911,12 +1593,12 @@
         }
       }
     },
-    "hört zu": {
+    "Hollr spricht jetzt Deutsch und Englisch": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "listening"
+            "value": "Hollr now speaks German and English"
           }
         }
       }
@@ -1951,16 +1633,6 @@
         }
       }
     },
-    "In den iOS-Einstellungen erlauben": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Allow in iOS Settings"
-          }
-        }
-      }
-    },
     "In Safari": {
       "localizations": {
         "en": {
@@ -1981,32 +1653,22 @@
         }
       }
     },
+    "In den iOS-Einstellungen erlauben": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow in iOS Settings"
+          }
+        }
+      }
+    },
     "Installieren": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Install"
-          }
-        }
-      }
-    },
-    "installiert": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "installed"
-          }
-        }
-      }
-    },
-    "jetzt": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "now"
           }
         }
       }
@@ -2051,22 +1713,22 @@
         }
       }
     },
-    "Keine Änderungen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No changes"
-          }
-        }
-      }
-    },
     "Keine Panes": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "No panes"
+          }
+        }
+      }
+    },
+    "Keine Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changes"
           }
         }
       }
@@ -2177,16 +1839,6 @@
         }
       }
     },
-    "Lädt": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading"
-          }
-        }
-      }
-    },
     "Lange Aufnahmen an Pausen teilen (VAD)": {
       "localizations": {
         "en": {
@@ -2203,16 +1855,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Large v3 is the most accurate but needs more time and memory."
-          }
-        }
-      }
-    },
-    "läuft": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "running"
           }
         }
       }
@@ -2243,16 +1885,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Live"
-          }
-        }
-      }
-    },
-    "Live · %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Live · %@"
           }
         }
       }
@@ -2297,22 +1929,12 @@
         }
       }
     },
-    "localhost auf": {
+    "Live · %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "localhost on"
-          }
-        }
-      }
-    },
-    "localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hollr opens localhost addresses through the SSH connection to the server."
+            "value": "Live · %@"
           }
         }
       }
@@ -2323,6 +1945,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Local dictation with Parakeet, Whisper and Apple – multilingual, with technical terms"
+          }
+        }
+      }
+    },
+    "Lädt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
           }
         }
       }
@@ -2547,12 +2179,22 @@
         }
       }
     },
-    "Nach dem Diktieren automatisch senden": {
+    "NVIDIA, 25 Sprachen, Deutsch + Englisch im selben Satz": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send automatically after dictation"
+            "value": "NVIDIA, 25 languages, German + English in the same sentence"
+          }
+        }
+      }
+    },
+    "NVIDIA-Original, 25 Sprachen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NVIDIA original, 25 languages"
           }
         }
       }
@@ -2563,6 +2205,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Check for updates"
+          }
+        }
+      }
+    },
+    "Nach dem Diktieren automatisch senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send automatically after dictation"
           }
         }
       }
@@ -2603,6 +2255,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "New session"
+          }
+        }
+      }
+    },
+    "Neuer Branch, z. B. feature/PROJ-123-login": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New branch, e.g. feature/PROJ-123-login"
           }
         }
       }
@@ -2667,16 +2329,6 @@
         }
       }
     },
-    "nicht installiert": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not installed"
-          }
-        }
-      }
-    },
     "Nicht umbrechen": {
       "localizations": {
         "en": {
@@ -2737,26 +2389,6 @@
         }
       }
     },
-    "NVIDIA-Original, 25 Sprachen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "NVIDIA original, 25 languages"
-          }
-        }
-      }
-    },
-    "NVIDIA, 25 Sprachen, Deutsch + Englisch im selben Satz": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "NVIDIA, 25 languages, German + English in the same sentence"
-          }
-        }
-      }
-    },
     "Oder tippen …": {
       "localizations": {
         "en": {
@@ -2767,42 +2399,12 @@
         }
       }
     },
-    "Öffnen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open"
-          }
-        }
-      }
-    },
-    "Öffnet als neuer Tab im Ordner dieses Workspaces.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens as a new tab in this workspace's folder."
-          }
-        }
-      }
-    },
     "Oh My Pi – mit Live-Sprachmodus": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Oh My Pi – with live voice mode"
-          }
-        }
-      }
-    },
-    "Ohne diesen Haken bricht das Entfernen ab, solange Änderungen offen sind.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Without this, removal stops while changes are uncommitted."
           }
         }
       }
@@ -2827,42 +2429,12 @@
         }
       }
     },
-    "omp": {
+    "Ohne diesen Haken bricht das Entfernen ab, solange Änderungen offen sind.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "omp"
-          }
-        }
-      }
-    },
-    "omp /live vom iPhone: echtes Gespräch mit deinen Agents auf dem Server": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "omp /live from the iPhone: real conversations with your agents on the server"
-          }
-        }
-      }
-    },
-    "omp /live wird gestartet …": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Starting omp /live …"
-          }
-        }
-      }
-    },
-    "omp, Claude Code und Codex öffnen, lesen, schreiben und schließen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open, read, write to and close omp, Claude Code and Codex"
+            "value": "Without this, removal stops while changes are uncommitted."
           }
         }
       }
@@ -2903,6 +2475,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Folder on the server"
+          }
+        }
+      }
+    },
+    "Ordner auf dem Server, z. B. ~/projects/my-app": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder on the server, e.g. ~/projects/my-app"
           }
         }
       }
@@ -3197,6 +2779,16 @@
         }
       }
     },
+    "Schon installiert? Nur koppeln:": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already installed? Just pair:"
+          }
+        }
+      }
+    },
     "Sehr groß": {
       "localizations": {
         "en": {
@@ -3263,6 +2855,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Set up a server"
+          }
+        }
+      }
+    },
+    "Server einrichten mit einem curl-Befehl – kein GitHub-Login mehr nötig": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up a server with one curl command – no GitHub login needed"
           }
         }
       }
@@ -3353,22 +2955,22 @@
         }
       }
     },
-    "Shell · %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shell · %@"
-          }
-        }
-      }
-    },
     "Shell ohne Agent": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Shell without agent"
+          }
+        }
+      }
+    },
+    "Shell · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell · %@"
           }
         }
       }
@@ -3433,6 +3035,16 @@
         }
       }
     },
+    "Skeletons statt Lade-Kreisel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skeletons instead of loading spinners"
+          }
+        }
+      }
+    },
     "So erscheint dein iPhone in `hollr devices` auf dem Server.": {
       "localizations": {
         "en": {
@@ -3463,22 +3075,22 @@
         }
       }
     },
-    "Space schließen …": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close space …"
-          }
-        }
-      }
-    },
     "Space schließen mit allen Optionen: nur schließen, Worktree entfernen, Worktree und Branch löschen (auch auf origin), Ordner löschen – vorher siehst du offene Änderungen und nicht gepushte Commits": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Close a space with all options: close only, remove worktree, delete worktree and branch (also on origin), delete folder – you see uncommitted changes and unpushed commits first"
+          }
+        }
+      }
+    },
+    "Space schließen …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close space …"
           }
         }
       }
@@ -3653,16 +3265,6 @@
         }
       }
     },
-    "stumm": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "muted"
-          }
-        }
-      }
-    },
     "Suche Web-Dienste …": {
       "localizations": {
         "en": {
@@ -3679,6 +3281,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Follow system"
+          }
+        }
+      }
+    },
+    "TODO": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TODO"
           }
         }
       }
@@ -3843,16 +3455,6 @@
         }
       }
     },
-    "TODO": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TODO"
-          }
-        }
-      }
-    },
     "Ton an": {
       "localizations": {
         "en": {
@@ -3913,42 +3515,12 @@
         }
       }
     },
-    "Über": {
+    "URL oder localhost:3000": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About"
-          }
-        }
-      }
-    },
-    "Über %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Via %@"
-          }
-        }
-      }
-    },
-    "Übersicht": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Overview"
-          }
-        }
-      }
-    },
-    "Übersicht zeigt deine Sitzungen, gruppiert nach Maschine": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Overview shows your sessions, grouped by machine"
+            "value": "URL or localhost:3000"
           }
         }
       }
@@ -3979,16 +3551,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unstage"
-          }
-        }
-      }
-    },
-    "URL oder localhost:3000": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "URL or localhost:3000"
           }
         }
       }
@@ -4099,52 +3661,12 @@
         }
       }
     },
-    "Wählen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose"
-          }
-        }
-      }
-    },
-    "warte auf iOS": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "waiting for iOS"
-          }
-        }
-      }
-    },
-    "wartet auf dich": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "waiting for you"
-          }
-        }
-      }
-    },
     "Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Waiting for you – answer with >_ (e.g. ↓ and Enter)"
-          }
-        }
-      }
-    },
-    "wartet auf Hintergrund-Jobs": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "waiting for background jobs"
           }
         }
       }
@@ -4289,16 +3811,6 @@
         }
       }
     },
-    "wird installiert …": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "installing …"
-          }
-        }
-      }
-    },
     "Wo": {
       "localizations": {
         "en": {
@@ -4365,6 +3877,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Word replacements"
+          }
+        }
+      }
+    },
+    "Wählen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose"
           }
         }
       }
@@ -4439,132 +3961,640 @@
         }
       }
     },
-    "App-Sprache": {
+    "`hollr pair` starten": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "App language"
+            "value": "Run `hollr pair`"
           }
         }
       }
     },
-    "Deutsch oder Englisch – iOS stellt die Sprache pro App um.": {
+    "anbieter/modell-id": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "German or English – iOS switches the language per app."
+            "value": "provider/model-id"
           }
         }
       }
     },
-    "Hollr spricht jetzt Deutsch und Englisch": {
+    "arbeitet": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hollr now speaks German and English"
+            "value": "working"
           }
         }
       }
     },
-    "Skeletons statt Lade-Kreisel": {
+    "auf %@ nicht installiert": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Skeletons instead of loading spinners"
+            "value": "not installed on %@"
           }
         }
       }
     },
-    "Hollr für den Mac (DMG) – koppeln per Link aus hollr pair --link": {
+    "bereit": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hollr for the Mac (DMG) – pair with the link from hollr pair --link"
+            "value": "ready"
           }
         }
       }
     },
-    "Ordner auf dem Server, z. B. ~/projects/my-app": {
+    "ersetzen durch": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Folder on the server, e.g. ~/projects/my-app"
+            "value": "replace with"
           }
         }
       }
     },
-    "Neuer Branch, z. B. feature/PROJ-123-login": {
+    "fertig": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "New branch, e.g. feature/PROJ-123-login"
+            "value": "done"
           }
         }
       }
     },
-    "2. Hollr installieren und QR-Code anzeigen": {
+    "gehört": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "2. Install Hollr and show the QR code"
+            "value": "heard"
           }
         }
       }
     },
-    "1. Entfernte Anmeldung (SSH) einschalten": {
+    "herdr legt einen eigenen Arbeitsordner mit neuem Branch an – parallel zu main, ohne dass sich Agents in die Quere kommen.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "1. Turn on Remote Login (SSH)"
+            "value": "herdr creates a separate working folder with a new branch – parallel to main, so agents don't get in each other's way."
           }
         }
       }
     },
-    "Schon installiert? Nur koppeln:": {
+    "herdr, omp, Claude Code, Codex und Hollr direkt aus der App installieren und aktualisieren": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Already installed? Just pair:"
+            "value": "Install and update herdr, omp, Claude Code, Codex and Hollr right from the app"
           }
         }
       }
     },
-    "Für Mac und Desktop: Link statt QR-Code": {
+    "hört zu": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "For Mac and desktop: a link instead of a QR code"
+            "value": "listening"
           }
         }
       }
     },
-    "Git: Dateien, Änderungen mit Diff, Verlauf-Graph, Branches mit PR-Status": {
+    "installiert": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Git: files, changes with diff, history graph, branches with PR status"
+            "value": "installed"
           }
         }
       }
     },
-    "Designs: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub und mehr – hell, dunkel oder automatisch": {
+    "jetzt": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Themes: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub and more – light, dark or automatic"
+            "value": "now"
+          }
+        }
+      }
+    },
+    "localhost auf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "localhost on"
+          }
+        }
+      }
+    },
+    "localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr opens localhost addresses through the SSH connection to the server."
+          }
+        }
+      }
+    },
+    "läuft": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "running"
+          }
+        }
+      }
+    },
+    "nicht installiert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not installed"
+          }
+        }
+      }
+    },
+    "omp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp"
+          }
+        }
+      }
+    },
+    "omp /live vom iPhone: echtes Gespräch mit deinen Agents auf dem Server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp /live from the iPhone: real conversations with your agents on the server"
+          }
+        }
+      }
+    },
+    "omp /live wird gestartet …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting omp /live …"
+          }
+        }
+      }
+    },
+    "omp, Claude Code und Codex öffnen, lesen, schreiben und schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open, read, write to and close omp, Claude Code and Codex"
+          }
+        }
+      }
+    },
+    "stumm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "muted"
+          }
+        }
+      }
+    },
+    "warte auf iOS": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for iOS"
+          }
+        }
+      }
+    },
+    "wartet auf Hintergrund-Jobs": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for background jobs"
+          }
+        }
+      }
+    },
+    "wartet auf dich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for you"
+          }
+        }
+      }
+    },
+    "wird installiert …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "installing …"
+          }
+        }
+      }
+    },
+    "· %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %@"
+          }
+        }
+      }
+    },
+    "· %lld/%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "· %1$lld/%2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "· Live: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· Live: %@"
+          }
+        }
+      }
+    },
+    "Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes"
+          }
+        }
+      }
+    },
+    "Änderungen anzeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show changes"
+          }
+        }
+      }
+    },
+    "Änderungen, Verlauf und Branches ansehen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View changes, history and branches"
+          }
+        }
+      }
+    },
+    "Öffnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "Öffnet als neuer Tab im Ordner dieses Workspaces.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens as a new tab in this workspace's folder."
+          }
+        }
+      }
+    },
+    "Über": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "Über %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Via %@"
+          }
+        }
+      }
+    },
+    "Übersicht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        }
+      }
+    },
+    "Übersicht zeigt deine Sitzungen, gruppiert nach Maschine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview shows your sessions, grouped by machine"
+          }
+        }
+      }
+    },
+    "„%@“ schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close “%@”"
+          }
+        }
+      }
+    },
+    "„%@“ wird in herdr geschlossen und %@ beendet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "„%1$@“ wird in herdr geschlossen und %2$@ beendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” will be closed in herdr and %2$@ stopped."
+          }
+        }
+      }
+    },
+    "•": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "•"
+          }
+        }
+      }
+    },
+    "…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…"
+          }
+        }
+      }
+    },
+    "… (%lld earlier lines, showing %lld of %lld)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "new",
+            "value": "… (%1$lld earlier lines, showing %2$lld of %3$lld)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "… (%1$lld earlier lines, showing %2$lld of %3$lld)"
+          }
+        }
+      }
+    },
+    "… gekürzt (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "… truncated (%@)"
+          }
+        }
+      }
+    },
+    "…%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "…%@"
+          }
+        }
+      }
+    },
+    "↑%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑%lld"
+          }
+        }
+      }
+    },
+    "↓%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↓%lld"
+          }
+        }
+      }
+    },
+    "⏹ Abgebrochen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⏹ Cancelled"
+          }
+        }
+      }
+    },
+    "│ ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "│ "
+          }
+        }
+      }
+    },
+    "└─": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "└─"
+          }
+        }
+      }
+    },
+    "└─────": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "└─────"
+          }
+        }
+      }
+    },
+    "├─": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "├─"
+          }
+        }
+      }
+    },
+    "◉": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "◉"
+          }
+        }
+      }
+    },
+    "○": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "○"
+          }
+        }
+      }
+    },
+    "☐": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "☐"
+          }
+        }
+      }
+    },
+    "☑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "☑"
+          }
+        }
+      }
+    },
+    "⚙": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚙"
+          }
+        }
+      }
+    },
+    "✔ %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✔ %@"
+          }
+        }
+      }
+    },
+    "✘": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✘"
+          }
+        }
+      }
+    },
+    "⟦": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⟦"
+          }
+        }
+      }
+    },
+    "⟧": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⟧"
+          }
+        }
+      }
+    },
+    "⟨%@⟩": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⟨%@⟩"
           }
         }
       }

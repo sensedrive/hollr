@@ -289,7 +289,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
           pushItem({ k: "user", id: nid(e.id), text: clip(text, 4000), source: "voice", at });
         } else if (e.customType === "skill-prompt") {
           startTurn(at);
-          const prompt = str((e.details ?? {}).prompt) ?? text;
+          const prompt = str(e.details?.prompt) ?? text;
           pushItem({ k: "user", id: nid(e.id), text: clip(prompt, 400), source: "skill", at });
         } else if (e.customType === "async-result") {
           const finished =

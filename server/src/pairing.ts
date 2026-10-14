@@ -18,7 +18,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, hostname, userInfo } from "node:os";
+import { homedir, hostname, networkInterfaces, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 
 export const PAIRING_TTL_SEC = 10 * 60;
@@ -238,11 +238,18 @@ export function revokeDevice(idOrName: string): Device[] {
 // ---------- payload ----------
 
 export function detectAddresses(): string[] {
-  const out = Bun.spawnSync(["hostname", "-I"]).stdout.toString().trim();
-  const addrs = out.split(/\s+/).filter((a) => a && !a.startsWith("172.17.") && !a.includes(":"));
+  const addrs = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
+    (list ?? [])
+      .filter((i) => i.family === "IPv4" && !i.internal && !/^(docker|br-|veth)/.test(name))
+      .map((i) => i.address),
+  );
   const isPrivate = (a: string) =>
     /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(a);
-  return [...addrs.filter((a) => !isPrivate(a)), ...addrs.filter(isPrivate)];
+  // macOS: the Bonjour name survives changing Wi-Fi/hotspot IPs on the local network
+  const local = hostname().endsWith(".local") ? [hostname()] : [];
+  return [
+    ...new Set([...addrs.filter((a) => !isPrivate(a)), ...addrs.filter(isPrivate), ...local]),
+  ];
 }
 
 export function buildPayload(opts: {
