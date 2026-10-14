@@ -11,7 +11,7 @@ LABEL=$([ "$ARCH" = arm64 ] && echo "apple-silicon" || echo "intel")
 xcodegen generate --quiet
 xcodebuild -project Hollr.xcodeproj -scheme Hollr -configuration Release \
   -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-  ARCHS="$ARCH" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+  ARCHS="$ARCH" ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO MARKETING_VERSION="$VERSION" \
   -derivedDataPath "build/dd-$ARCH" build -quiet
 
 APP=$(find "build/dd-$ARCH/Build/Products" -maxdepth 2 -name Hollr.app -path "*maccatalyst*" | head -1)
