@@ -18,6 +18,15 @@ ok() { printf '  \033[32m✔\033[0m %s\n' "$*"; }
 info() { printf '  · %s\n' "$*"; }
 die() { printf '\n\033[31m✘ %s\033[0m\n' "$*" >&2; exit 1; }
 has() { command -v "$1" >/dev/null 2>&1 || [ -x "$BIN_DIR/$1" ]; }
+# macOS: (re)start a launchd agent – restart if registered (picks up a new binary), else register it
+launchd_up() {
+  if launchctl print "gui/$(id -u)/$1" >/dev/null 2>&1; then
+    launchctl kickstart -k "gui/$(id -u)/$1" >/dev/null 2>&1 || true
+  else
+    launchctl bootstrap "gui/$(id -u)" "$2" >/dev/null 2>&1 || { sleep 1; launchctl bootstrap "gui/$(id -u)" "$2" >/dev/null 2>&1; } || true
+  fi
+  sleep 1
+}
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -92,10 +101,8 @@ if [ "$OS" = "Darwin" ] && [ -z "${HOLLR_SKIP_DEPS:-}" ]; then
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/hollr-pulseaudio.log</string>
 </dict></plist>
 PLIST
-    launchctl bootout "gui/$(id -u)/app.hollr.pulseaudio" >/dev/null 2>&1 || true
-    launchctl bootstrap "gui/$(id -u)" "$PA_AGENT" >/dev/null 2>&1 || true
-    launchctl kickstart -k "gui/$(id -u)/app.hollr.pulseaudio" >/dev/null 2>&1 || true
-    sleep 2
+    launchd_up "app.hollr.pulseaudio" "$PA_AGENT"
+    sleep 1
   fi
   pactl info >/dev/null 2>&1 && ok "Audio-Server läuft" || info "Audio-Server läuft nicht – siehe 'hollr doctor'"
 fi
@@ -200,11 +207,7 @@ if [ "$OS" = "Darwin" ]; then
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/hollr-watch.log</string>
 </dict></plist>
 PLIST
-  # reload so an updated binary is used
-  launchctl bootout "gui/$(id -u)/app.hollr.watch" >/dev/null 2>&1 || true
-  launchctl bootstrap "gui/$(id -u)" "$AGENT" >/dev/null 2>&1 || true
-  launchctl kickstart -k "gui/$(id -u)/app.hollr.watch" >/dev/null 2>&1 || true
-  sleep 1
+  launchd_up "app.hollr.watch" "$AGENT"
   launchctl list app.hollr.watch 2>/dev/null | grep -q '"PID"' \
     && ok "Wächter läuft (launchd)" || info "Wächter nicht startbar – launchctl print gui/$(id -u)/app.hollr.watch"
 fi
