@@ -125,3 +125,7 @@ export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
 export const models = (s: string, kind: string) => gate<ModelList>(s, `models ${kind}`);
 export const switchModel = (s: string, pane: string, model: string, level?: string) =>
   gate(s, `model ${pane}`, { model, level });
+
+// ---- localhost tunnel: a local port on this computer forwarded to `localhost:<port>` on the server
+export const tunnelOpen = (server: string, port: number) => invoke<number>("tunnel_open", { server, port });
+export const tunnelClose = (localPort: number) => invoke<void>("tunnel_close", { localPort });
