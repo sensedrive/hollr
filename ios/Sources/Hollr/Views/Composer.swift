@@ -10,13 +10,9 @@ struct Composer: View {
     var translucent = false
     @Environment(SessionStore.self) private var sessions
     @Environment(DictationSettings.self) private var settings
-    @State private var dictator = Dictator()
-    @State private var text = ""
-    @State private var textBeforeDictation = ""
-    /// text after the cursor when dictation started (dictation is inserted at the cursor)
-    @State private var textAfterDictation = ""
-    /// cursor position in `text` (iOS 18+, nil = end)
-    @State private var cursor: Int?
+    @Environment(DraftStore.self) private var drafts
+    /// app-wide: one microphone; survives zen mode and layout changes
+    @Environment(Dictator.self) private var dictator
     /// finger is held on the mic (hold-to-talk: release ends the dictation)
     @State private var holding = false
     @State private var pressStarted: Date?
@@ -26,21 +22,32 @@ struct Composer: View {
     /// agents and plain terminals both take input
     private var hasAgent: Bool { true }
     private var isShell: Bool { ref.pane.agent == nil }
-    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// The unsent text lives in the draft store, not in this view: zen mode and other layouts show
+    /// another Composer, switching chats rebuilds the screen – the text stays.
+    private var draft: Draft { drafts.draft(for: ref) }
+    private var trimmed: String { draft.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var textBinding: Binding<String> {
+        let draft = draft
+        return Binding(get: { draft.text }, set: { draft.text = $0 })
+    }
+    private var cursorBinding: Binding<Int?> {
+        let draft = draft
+        return Binding(get: { draft.cursor }, set: { draft.cursor = $0 })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if session.isLive { liveStrip }
-            if case .failed(let message) = dictator.state {
+            if mine, case .failed(let message) = dictator.state {
                 Text(message).font(.caption).foregroundStyle(Theme.warn)
             }
-            if case .preparing(let message) = dictator.state {
+            if mine, case .preparing(let message) = dictator.state, !message.isEmpty {
                 Label(message, systemImage: "arrow.down.circle").font(.caption).foregroundStyle(.secondary)
             }
-            if let notice = dictator.notice, !dictating {
+            if mine, let notice = dictator.notice, !dictating {
                 Text(notice).font(.caption).foregroundStyle(.secondary)
             }
-            ComposerField(placeholder: placeholder, text: dictating ? .constant(dictationPreview) : $text, cursor: $cursor)
+            ComposerField(placeholder: placeholder, text: dictating ? .constant(dictationPreview) : textBinding, cursor: cursorBinding)
                 .font(.system(.body, design: .monospaced))
                 .lineLimit(1...6)
                 .focused($focused)
@@ -67,11 +74,13 @@ struct Composer: View {
         .onChange(of: dictating) { _, _ in syncDictating() }
         .onAppear {
             Dictator.prewarm(settings)
-            dictator.onAutoStop = { result in insertDictation(result) }
+            dictator.composerAppeared(draft.key)
+            syncDictating()
         }
         .onDisappear {
-            session.dictating = false
-            if dictator.isRecording { dictator.cancel() }
+            // the dictation keeps running while another composer of this chat takes over (zen mode);
+            // leaving the chat ends it and keeps the text (Dictator.composerDisappeared)
+            dictator.composerDisappeared(draft.key)
         }
     }
 
@@ -80,7 +89,10 @@ struct Composer: View {
         return session.isLive ? String(localized: "Oder tippen …") : String(localized: "Nachricht an \(ref.pane.agentName) …")
     }
 
-    private var dictating: Bool { dictator.isRecording || dictator.state == .transcribing }
+    /// the running dictation belongs to this chat
+    private var mine: Bool { dictator.owner == draft.key || (dictator.owner == nil && !dictator.isBusy) }
+    private var dictating: Bool { dictator.owner == draft.key && (dictator.isRecording || dictator.state == .transcribing) }
+    private var recordingHere: Bool { dictator.owner == draft.key && dictator.isRecording }
 
     private func syncDictating() {
         session.dictating = dictating
@@ -90,7 +102,7 @@ struct Composer: View {
         let spoken = dictator.state == .transcribing && dictator.text.isEmpty
             ? String(localized: "transkribiere …")
             : dictator.isRecording && dictator.text.isEmpty ? String(localized: "hört zu …") : dictator.text
-        return [textBeforeDictation, spoken, textAfterDictation].filter { !$0.isEmpty }.joined(separator: " ")
+        return [draft.beforeDictation, spoken, draft.afterDictation].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     // MARK: Action row
@@ -141,7 +153,7 @@ struct Composer: View {
 
     private var micButton: some View {
         HStack(spacing: 14) {
-            if dictator.isRecording {
+            if recordingHere {
                 // throw the recording away
                 Button {
                     Haptics.tap(.light)
@@ -156,44 +168,47 @@ struct Composer: View {
             }
             micLabel
                 .contentShape(Circle())
-                // tap = start/stop, hold = talk while holding (released after ≥ 0.3 s ends it)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            guard pressStarted == nil, micEnabled else { return }
-                            pressStarted = Date()
-                            if !dictator.isRecording { startDictation(); holding = true } else { holding = false }
+                // tap = start/stop, hold = talk while holding (released after ≥ 0.3 s ends it).
+                // onPressingChanged also reports a cancelled touch (permission alert, call) – a
+                // DragGesture would never end then and the mic would stay stuck.
+                .onLongPressGesture(minimumDuration: 0.3, maximumDistance: 80, perform: {}) { pressing in
+                    if pressing {
+                        guard pressStarted == nil, micEnabled else { return }
+                        pressStarted = Date()
+                        if !recordingHere && !dictator.isBusy { startDictation(); holding = true } else { holding = false }
+                    } else {
+                        let held = pressStarted.map { Date().timeIntervalSince($0) } ?? 0
+                        pressStarted = nil
+                        if holding {
+                            holding = false
+                            if held >= 0.3 { stopDictation() } // short tap: keeps recording until the next tap
+                        } else if recordingHere {
+                            stopDictation()
                         }
-                        .onEnded { _ in
-                            let held = pressStarted.map { Date().timeIntervalSince($0) } ?? 0
-                            pressStarted = nil
-                            if holding {
-                                holding = false
-                                if held >= 0.3 { stopDictation() } // short tap: keeps recording until the next tap
-                            } else if dictator.isRecording {
-                                stopDictation()
-                            }
-                        }
-                )
+                    }
+                }
                 .opacity(micEnabled ? 1 : 0.35)
                 .accessibilityElement()
                 .accessibilityAddTraits(.isButton)
-                .accessibilityLabel(dictator.isRecording ? "Diktat beenden" : "Diktieren")
+                .accessibilityLabel(recordingHere ? "Diktat beenden" : "Diktieren")
                 .accessibilityHint("Tippen zum Starten und Beenden – oder gedrückt halten und sprechen")
-                .accessibilityAction { dictator.isRecording ? stopDictation() : startDictation() }
+                .accessibilityAction { recordingHere ? stopDictation() : startDictation() }
         }
-        .animation(.easeOut(duration: 0.15), value: dictator.isRecording)
+        .animation(.easeOut(duration: 0.15), value: recordingHere)
     }
 
-    private var micEnabled: Bool { hasAgent && !session.isLive && dictator.state != .transcribing }
+    /// another chat's dictation or a transcription in progress blocks the mic here
+    private var micEnabled: Bool {
+        hasAgent && !session.isLive && dictator.state != .transcribing && (recordingHere || !dictator.isBusy)
+    }
 
     private var micLabel: some View {
         ZStack {
-            if dictator.isRecording {
+            if recordingHere {
                 Circle().fill(Color.red).frame(width: 38, height: 38)
                     .scaleEffect(1 + CGFloat(min(dictator.level * 8, 0.25)))
                 Image(systemName: "stop.fill").font(.system(size: 14)).foregroundStyle(.white)
-            } else if dictator.state == .transcribing || { if case .preparing = dictator.state { return true }; return false }() {
+            } else if dictator.owner == draft.key, dictator.state == .transcribing || { if case .preparing = dictator.state { return true }; return false }() {
                 ProgressView().frame(width: 38, height: 38)
             } else {
                 Image(systemName: "mic").frame(width: 38, height: 38)
@@ -203,38 +218,53 @@ struct Composer: View {
     }
 
     private func startDictation() {
+        guard micEnabled, !dictator.isBusy else { return }
         // split the text at the cursor: dictation goes in between
-        let chars = Array(text)
-        let at = min(max(cursor ?? chars.count, 0), chars.count)
-        textBeforeDictation = String(chars[..<at]).trimmingCharacters(in: .whitespaces)
-        textAfterDictation = String(chars[at...]).trimmingCharacters(in: .whitespaces)
+        let draft = draft
+        let chars = Array(draft.text)
+        let at = min(max(draft.cursor ?? chars.count, 0), chars.count)
+        draft.beforeDictation = String(chars[..<at]).trimmingCharacters(in: .whitespaces)
+        draft.afterDictation = String(chars[at...]).trimmingCharacters(in: .whitespaces)
         focused = false
         Haptics.tap(.medium)
         let context = DictationContext(session: session)
-        Task { await dictator.start(settings: settings, context: context) }
+        let settings = settings
+        let session = session
+        Task {
+            await dictator.start(settings: settings, context: context, owner: draft.key) { result in
+                Composer.insert(result, into: draft, settings: settings, session: session)
+            }
+        }
     }
 
     private func stopDictation() {
         Haptics.tap(.light)
-        Task { insertDictation(await dictator.stop(settings: settings)) }
+        Task { await dictator.finish() }
     }
 
-    /// Puts the dictated text at the cursor; "… senden" (or auto-send) sends it.
-    private func insertDictation(_ result: String) {
+    /// Puts the dictated text at the cursor of the chat's draft; "… senden" (or auto-send) sends it.
+    /// Static: the composer that started the dictation may be gone (zen mode, other chat).
+    static func insert(_ result: String, into draft: Draft, settings: DictationSettings, session: AgentSession) {
         var spoken = result
         var sendNow = settings.autoSend
         if settings.voiceSend {
             let (rest, said) = DictationText.voiceSend(spoken)
             if said { spoken = rest; sendNow = true }
         }
-        text = [textBeforeDictation, spoken, textAfterDictation].filter { !$0.isEmpty }.joined(separator: " ")
-        cursor = [textBeforeDictation, spoken].filter { !$0.isEmpty }.joined(separator: " ").count
-        textAfterDictation = ""
+        let head = [draft.beforeDictation, spoken].filter { !$0.isEmpty }.joined(separator: " ")
+        draft.text = [head, draft.afterDictation].filter { !$0.isEmpty }.joined(separator: " ")
+        draft.cursor = head.count
+        draft.beforeDictation = ""
+        draft.afterDictation = ""
         if spoken.isEmpty {
             Haptics.notify(.warning)
         } else {
             Haptics.notify(.success)
-            if sendNow { send() }
+            let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if sendNow, !text.isEmpty {
+                session.sendText(text)
+                draft.clear()
+            }
         }
     }
 
@@ -269,13 +299,10 @@ struct Composer: View {
     }
 
     private func send() {
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !dictating else { return }
         session.sendText(trimmed)
-        text = ""
-        cursor = nil
+        draft.clear()
         focused = false
-        textBeforeDictation = ""
-        textAfterDictation = ""
     }
 
     // MARK: Live strip (inside the card while a call runs)
@@ -371,15 +398,24 @@ private struct SelectionField: View {
     var body: some View {
         TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
             .onChange(of: selection) { _, new in
-                guard let new, case let .selection(range) = new.indices else { return }
-                cursor = text.distance(from: text.startIndex, to: range.upperBound)
+                // the selection can still point into the previous text (draft restored, dictation preview):
+                // only use it when it is a valid position in the current one
+                guard let new, case let .selection(range) = new.indices,
+                      range.upperBound <= text.endIndex,
+                      let i = String.Index(range.upperBound, within: text) else { cursor = nil; return }
+                cursor = text.distance(from: text.startIndex, to: i)
             }
             .onChange(of: cursor) { _, new in
                 // put the cursor behind freshly dictated text
-                guard let new, new <= text.count else { return }
+                guard let new, new >= 0, new <= text.count else { return }
                 let i = text.index(text.startIndex, offsetBy: new)
-                if case let .selection(range)? = selection?.indices, range.upperBound == i { return }
+                if case let .selection(range)? = selection?.indices, range.upperBound <= text.endIndex,
+                   range.upperBound == i { return }
                 selection = TextSelection(insertionPoint: i)
+            }
+            .onChange(of: text) { _, new in
+                // text replaced from outside (sent, dictation inserted): drop a selection that no longer fits
+                if case let .selection(range)? = selection?.indices, range.upperBound > new.endIndex { selection = nil }
             }
     }
 }

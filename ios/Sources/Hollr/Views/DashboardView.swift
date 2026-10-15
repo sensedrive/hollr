@@ -47,7 +47,7 @@ struct DashboardView: View {
             await herdr.refreshUsage(store.servers, force: true)
         }
         .task { await herdr.refreshUsage(store.servers) }
-        .confirmationDialog("Server aus Hollr entfernen?", isPresented: .constant(confirmRemove != nil),
+        .confirmationDialog("Server aus Hollr entfernen?", isPresented: Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }),
                             titleVisibility: .visible, presenting: confirmRemove) { server in
             Button("Entfernen", role: .destructive) { store.remove(server); confirmRemove = nil }
             Button("Abbrechen", role: .cancel) { confirmRemove = nil }

@@ -8,12 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		0225E73B4920FB558A7C1344 /* BrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B93593C5F420AEB419328B5 /* BrowserView.swift */; };
+		0D8E9580AD1E6920F450C428 /* Drafts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498ED45F8B15C93BC90B1859 /* Drafts.swift */; };
 		11B5D45C5CE755FDA2899668 /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3322CFB07BC55EC7BD14BA /* Composer.swift */; };
 		19D52A7B613CFAEFB3BB95E9 /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC7D7F8A66E83200A70DFE0 /* Timeline.swift */; };
 		1B600C8A88DB172BF3AF81A1 /* NewSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A023AAFBC21566CC6D1ADA2 /* NewSpaceView.swift */; };
 		1E9B7CB51322142C450623B9 /* Tunnel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0020C719F00C6559F36F7ABF /* Tunnel.swift */; };
 		23B99D1989E9A4E9CED63CCF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 788426E5E1D9A21D681E6CF5 /* FluidAudio */; };
 		2A701E77575F00114E32F0E0 /* AgentListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */; };
+		2D7C5884F52A6D1C08649E2A /* DraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5936D3405E68394D4F9C20 /* DraftTests.swift */; };
 		352214150A54CF4B8871FB13 /* PairingPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20135523C477C7E3FF4526F3 /* PairingPayload.swift */; };
 		35A117D4607500E8C3D382E9 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 545D133067307064214160C5 /* MarkdownUI */; };
 		3798B0DBF4403F8B013306CF /* SessionVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56E0A50722FFD5D16B233EC /* SessionVocabulary.swift */; };
@@ -96,6 +98,7 @@
 		3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoView.swift; sourceTree = "<group>"; };
 		436A87439A46CBB4E9A580B7 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
 		45BED9544749EEB0E7476BB5 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
+		498ED45F8B15C93BC90B1859 /* Drafts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Drafts.swift; sourceTree = "<group>"; };
 		4A6D989EB3307AFD05BD3882 /* UsageHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryView.swift; sourceTree = "<group>"; };
 		515576480CDB424E848FA072 /* MySessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MySessions.swift; sourceTree = "<group>"; };
 		525EA22BD8EF7FD00CC4BE94 /* HollrLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrLog.swift; sourceTree = "<group>"; };
@@ -120,6 +123,7 @@
 		ACA1716A49A0CA301933CD58 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		AF5CA60C68CE01EC72C2754E /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		B8962791A94FF32DBFE98885 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
+		BA5936D3405E68394D4F9C20 /* DraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftTests.swift; sourceTree = "<group>"; };
 		BC7D0F3B418EE3043DECA56B /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		C531336AADA7A34435E646E0 /* FolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderPicker.swift; sourceTree = "<group>"; };
 		C56E0A50722FFD5D16B233EC /* SessionVocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionVocabulary.swift; sourceTree = "<group>"; };
@@ -233,6 +237,7 @@
 			isa = PBXGroup;
 			children = (
 				FD1F45AC6948A9A031828FB8 /* Connectivity.swift */,
+				498ED45F8B15C93BC90B1859 /* Drafts.swift */,
 				9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */,
 				515576480CDB424E848FA072 /* MySessions.swift */,
 				20135523C477C7E3FF4526F3 /* PairingPayload.swift */,
@@ -303,6 +308,7 @@
 		D4E8C97266946EAB9E8E9F42 /* HollrTests */ = {
 			isa = PBXGroup;
 			children = (
+				BA5936D3405E68394D4F9C20 /* DraftTests.swift */,
 				6D3180E113553B70CDF4810A /* ProtocolTests.swift */,
 			);
 			path = HollrTests;
@@ -454,6 +460,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2D7C5884F52A6D1C08649E2A /* DraftTests.swift in Sources */,
 				3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -476,6 +483,7 @@
 				608A1B91DAB5CD3CA4C0096A /* DictationPipeline.swift in Sources */,
 				51F68E40F60C46E32A53305B /* DictationSettings.swift in Sources */,
 				5D1B9D75B607E536BB19C722 /* DiffViewer.swift in Sources */,
+				0D8E9580AD1E6920F450C428 /* Drafts.swift in Sources */,
 				DC0185B6A82AC4BEA8C9BFA6 /* FolderPicker.swift in Sources */,
 				9D058E4BBCBF3F3B20CD881D /* Frames.swift in Sources */,
 				8A575E6E850F340FB5D79772 /* GitModels.swift in Sources */,
@@ -578,7 +586,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 36;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -598,7 +606,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.24.0;
+				MARKETING_VERSION = 0.24.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -647,7 +655,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 35;
+				CURRENT_PROJECT_VERSION = 36;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -661,7 +669,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.24.0;
+				MARKETING_VERSION = 0.24.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

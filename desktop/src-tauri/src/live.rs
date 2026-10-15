@@ -90,6 +90,7 @@ pub async fn start<H: russh::client::Handler + 'static>(
     app: AppHandle,
     handle: Arc<russh::client::Handle<H>>,
     pane: String,
+    session: u64,
 ) -> Result<LiveSession> {
     let channel = handle.channel_open_session().await.map_err(|e| anyhow!("{e}"))?;
     channel.exec(true, format!("live {pane}")).await.map_err(|e| anyhow!("{e}"))?;
@@ -127,7 +128,7 @@ pub async fn start<H: russh::client::Handler + 'static>(
         let app = app.clone();
         std::thread::spawn(move || {
             if let Err(e) = run_audio(tx, stop.clone(), playback, speaker_muted, out_level, in_level, live, device_rate) {
-                let _ = app.emit("live", serde_json::json!({ "t": "audio_error", "message": format!("{e:#}") }));
+                let _ = app.emit("live", serde_json::json!({ "t": "audio_error", "message": format!("{e:#}"), "session": session }));
                 stop.store(true, Ordering::Relaxed);
             }
         });
@@ -177,17 +178,21 @@ pub async fn start<H: russh::client::Handler + 'static>(
                             q.extend(tmp.iter());
                         }
                     } else if kind == FRAME_JSON
-                        && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload)
+                        && let Ok(mut v) = serde_json::from_slice::<serde_json::Value>(&payload)
                     {
                         if v["t"] == "phase" && v["phase"] == "live" {
                             live.store(true, Ordering::Relaxed);
+                        }
+                        // the UI ignores events of an older session (e.g. its late "closed")
+                        if let Some(o) = v.as_object_mut() {
+                            o.insert("session".into(), session.into());
                         }
                         let _ = app.emit("live", v);
                     }
                 }
             }
             stop.store(true, Ordering::Relaxed);
-            let _ = app.emit("live", serde_json::json!({ "t": "closed" }));
+            let _ = app.emit("live", serde_json::json!({ "t": "closed", "session": session }));
         });
     }
 
@@ -200,7 +205,7 @@ pub async fn start<H: russh::client::Handler + 'static>(
                 tokio::time::sleep(Duration::from_millis(120)).await;
                 let i = f32::from_bits(in_level.load(Ordering::Relaxed));
                 let o = f32::from_bits(out_level.load(Ordering::Relaxed));
-                let _ = app.emit("live-levels", serde_json::json!({ "input": i, "output": o }));
+                let _ = app.emit("live-levels", serde_json::json!({ "input": i, "output": o, "session": session }));
             }
         });
     }

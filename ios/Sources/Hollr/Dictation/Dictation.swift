@@ -30,8 +30,13 @@ final class Dictator {
     private(set) var level: Float = 0
     /// short notice after a dictation ("Nichts verstanden", "Aufnahme unterbrochen" …)
     private(set) var notice: String?
-    /// the system stopped the recording (call, app switch, headset gone) – the text is delivered here
-    var onAutoStop: ((String) -> Void)?
+    /// The chat (draft key) this dictation belongs to – one microphone, one dictation in the whole app.
+    /// It is app-wide so zen mode or a new layout (another composer view) doesn't stop it.
+    private(set) var owner: String?
+    /// where the result goes (inserted into the draft, maybe sent) – set at start, not by a view
+    private var deliver: ((String) -> Void)?
+    /// composers on screen per chat: when the last one goes away, the dictation ends and keeps its text
+    private var visible: [String: Int] = [:]
 
     var isRecording: Bool { state == .recording }
     var isBusy: Bool {
@@ -54,11 +59,23 @@ final class Dictator {
     private var chunks: Task<Void, Never>?
     private var chunkTimer: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
+    /// bumped by every start and cancel: work of an older dictation (a slow start, a chunk) is dropped
+    private var generation = 0
+    /// stop was asked for while the microphone was still starting (released hold-to-talk early)
+    private var stopWhenReady = false
 
     // MARK: Start / stop
 
-    func start(settings: DictationSettings, context: DictationContext = DictationContext()) async {
+    func start(settings: DictationSettings, context: DictationContext = DictationContext(),
+               owner: String? = nil, deliver: ((String) -> Void)? = nil) async {
         guard !isBusy else { return }
+        generation += 1
+        let gen = generation
+        // busy right away: a second tap during the (slow) start must not start a second recording
+        state = .preparing("")
+        stopWhenReady = false
+        self.owner = owner
+        self.deliver = deliver
         self.settings = settings
         self.context = settings.sessionVocabulary ? context : DictationContext()
         text = ""
@@ -71,7 +88,10 @@ final class Dictator {
             guard await AVAudioApplication.requestRecordPermission() else {
                 throw DictationError.message(String(localized: "Mikrofon-Zugriff fehlt (Einstellungen › Hollr › Mikrofon)."))
             }
+            guard gen == generation else { return }
             let terms = settings.allTerms(extra: self.context.terms)
+            var madeApple: AnyObject?
+            var madeLegacy: LegacyAppleEngine?
             switch active {
             case .parakeet:
                 guard ParakeetCache.isDownloaded(settings.parakeetModel) else {
@@ -90,16 +110,33 @@ final class Dictator {
                 if #available(iOS 26, *), let a = try? await AppleDictationEngine.make(
                     locale: settings.locale, punctuation: settings.applePunctuation,
                     vocabulary: words,
-                    onPrepare: { [weak self] in Task { @MainActor in self?.state = .preparing(String(localized: "Sprachmodell wird geladen …")) } },
-                    onText: { [weak self] text in Task { @MainActor in self?.text = text } }
+                    onPrepare: { [weak self] in Task { @MainActor in
+                        guard let self, gen == self.generation else { return }
+                        self.state = .preparing(String(localized: "Sprachmodell wird geladen …"))
+                    } },
+                    onText: { [weak self] text in Task { @MainActor in
+                        guard let self, gen == self.generation else { return }
+                        self.text = text
+                    } }
                 ) {
-                    apple = a
+                    madeApple = a
                 } else {
-                    legacy = try await LegacyAppleEngine.make(locale: settings.locale) { [weak self] text in
-                        Task { @MainActor in self?.text = text }
+                    madeLegacy = try await LegacyAppleEngine.make(locale: settings.locale) { [weak self] text in
+                        Task { @MainActor in
+                            guard let self, gen == self.generation else { return }
+                            self.text = text
+                        }
                     }
                 }
             }
+            // cancelled (or restarted) while the engine was being made
+            guard gen == generation else {
+                if #available(iOS 26, *) { (madeApple as? AppleDictationEngine)?.cancel() }
+                madeLegacy?.cancel()
+                return
+            }
+            apple = madeApple
+            legacy = madeLegacy
 
             let session = AVAudioSession.sharedInstance()
             // iPhone mic preferred: no Bluetooth route (AirPods' headset mic is narrowband and noisier)
@@ -142,10 +179,44 @@ final class Dictator {
             state = .recording
             if usesSamples { startChunking() }
             HollrLog.info("dictation: recording with \(active.rawValue)")
+            if stopWhenReady {
+                stopWhenReady = false
+                await finish()
+            }
         } catch {
+            guard gen == generation else { return }
             cleanupAudio()
+            reset()
+            self.deliver = nil
+            self.owner = nil
             state = .failed(error.localizedDescription)
             HollrLog.error("dictation start: \(error)")
+        }
+    }
+
+    /// Stops and hands the text to whoever started the dictation.
+    func finish() async {
+        if case .preparing = state { stopWhenReady = true; return }
+        guard state == .recording, let settings else { return }
+        let deliver = self.deliver
+        self.deliver = nil
+        let text = await stop(settings: settings)
+        owner = nil
+        deliver?(text)
+    }
+
+    func composerAppeared(_ key: String) { visible[key, default: 0] += 1 }
+
+    /// The chat's last composer is gone (left the chat, closed it): end the dictation, keep the text.
+    func composerDisappeared(_ key: String) {
+        visible[key] = max((visible[key] ?? 1) - 1, 0)
+        guard key == owner else { return }
+        Task { @MainActor in
+            // zen mode swaps the composer: the new one appears right after the old one went away
+            try? await Task.sleep(for: .milliseconds(400))
+            guard self.owner == key, (self.visible[key] ?? 0) == 0 else { return }
+            HollrLog.info("dictation: chat left while recording – stopping")
+            await self.finish()
         }
     }
 
@@ -164,7 +235,14 @@ final class Dictator {
                 let tail = collector.slice(cut..<collector.count)
                 await chunks?.value
                 result = committed
-                if let piece = try await transcribeChunk(tail) { result = join(result, piece) }
+                // a failing last piece must not throw away what is already recognised
+                do {
+                    if let piece = try await transcribeChunk(tail) { result = join(result, piece) }
+                } catch {
+                    HollrLog.error("dictation tail: \(error)")
+                    if result.isEmpty { throw error }
+                    notice = String(localized: "Der letzte Teil wurde nicht erkannt.")
+                }
             case .apple:
                 if #available(iOS 26, *), let a = apple as? AppleDictationEngine {
                     result = await a.finish()
@@ -195,8 +273,12 @@ final class Dictator {
 
     /// Throws the recording away.
     func cancel() {
-        cleanupAudio()
+        generation += 1
+        stopWhenReady = false
+        if state == .recording { cleanupAudio() }
         reset()
+        owner = nil
+        deliver = nil
         text = ""
         state = .idle
     }
@@ -206,6 +288,9 @@ final class Dictator {
         chunkTimer = nil
         chunks?.cancel()
         chunks = nil
+        // a dropped engine would keep its analyzer waiting for audio forever
+        if #available(iOS 26, *) { (apple as? AppleDictationEngine)?.cancel() }
+        legacy?.cancel()
         apple = nil
         legacy = nil
         collector.onLevel = nil
@@ -226,11 +311,12 @@ final class Dictator {
         let center = NotificationCenter.default
         let stopNow: (String) -> Void = { [weak self] why in
             Task { @MainActor in
-                guard let self, self.state == .recording, let settings = self.settings else { return }
+                guard let self, self.state == .recording else { return }
                 HollrLog.info("dictation: stopped by the system (\(why))")
-                let text = await self.stop(settings: settings)
-                self.notice = String(localized: "Aufnahme unterbrochen – das Gesagte ist eingefügt.")
-                self.onAutoStop?(text)
+                await self.finish()
+                if case .failed = self.state {} else {
+                    self.notice = String(localized: "Aufnahme unterbrochen – das Gesagte ist eingefügt.")
+                }
             }
         }
         observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { note in
@@ -259,12 +345,16 @@ final class Dictator {
                 let piece = self.collector.slice(self.cut..<point)
                 self.cut = point
                 let previous = self.chunks
+                let gen = self.generation
                 self.chunks = Task { [weak self] in
                     await previous?.value
-                    guard let self, !Task.isCancelled else { return }
-                    if let text = try? await self.transcribeChunk(piece) {
+                    guard let self, !Task.isCancelled, gen == self.generation else { return }
+                    do {
+                        guard let text = try await self.transcribeChunk(piece), gen == self.generation else { return }
                         self.committed = self.join(self.committed, text)
                         if self.state == .recording { self.text = self.committed }
+                    } catch {
+                        HollrLog.error("dictation chunk: \(error)")
                     }
                 }
             }
@@ -390,12 +480,26 @@ actor ParakeetCache {
         if boost { _ = try await CtcModels.downloadAndLoad(variant: .ctc110m); progress(1) }
     }
 
+    /// the load in flight – warm-up, start and the first chunk all ask; the model is loaded once
+    private var loading: (model: String, task: Task<(AsrModels, AsrManager), Error>)?
+
     func prepare(model: String, boost: Bool, terms: [DictationSettings.Term]) async throws {
         if loaded?.model != model {
-            let models = try await AsrModels.downloadAndLoad(version: Self.version(model))
-            let asr = AsrManager(config: .default)
-            try await asr.loadModels(models)
-            loaded = (model, models, asr)
+            let task: Task<(AsrModels, AsrManager), Error>
+            if let loading, loading.model == model {
+                task = loading.task
+            } else {
+                task = Task {
+                    let models = try await AsrModels.downloadAndLoad(version: Self.version(model))
+                    let asr = AsrManager(config: .default)
+                    try await asr.loadModels(models)
+                    return (models, asr)
+                }
+                loading = (model, task)
+            }
+            defer { if loading?.model == model { loading = nil } }
+            let (models, asr) = try await task.value
+            if loaded?.model != model { loaded = (model, models, asr) }
         }
         if boost { _ = try await boostingSession(terms) }
     }
@@ -428,6 +532,7 @@ actor ParakeetCache {
 
     func unload() {
         loaded = nil
+        loading = nil
         boosting = nil
     }
 }
@@ -437,11 +542,20 @@ actor ParakeetCache {
 actor WhisperCache {
     static let shared = WhisperCache()
     private var current: (model: String, kit: WhisperKit)?
+    private var loading: (model: String, task: Task<WhisperKit, Error>)?
 
     func kit(model: String, folder: String) async throws -> WhisperKit {
         if let current, current.model == model { return current.kit }
-        let config = WhisperKitConfig(model: model, modelFolder: folder, verbose: false, prewarm: true, load: true, download: false)
-        let kit = try await WhisperKit(config)
+        let task: Task<WhisperKit, Error>
+        if let loading, loading.model == model {
+            task = loading.task
+        } else {
+            let config = WhisperKitConfig(model: model, modelFolder: folder, verbose: false, prewarm: true, load: true, download: false)
+            task = Task { try await WhisperKit(config) }
+            loading = (model, task)
+        }
+        defer { if loading?.model == model { loading = nil } }
+        let kit = try await task.value
         current = (model, kit)
         return kit
     }
@@ -471,7 +585,10 @@ actor WhisperCache {
         return results.map(\.text).joined(separator: " ")
     }
 
-    func unload() { current = nil }
+    func unload() {
+        current = nil
+        loading = nil
+    }
 }
 
 // MARK: - Apple DictationTranscriber (iOS 26+)
@@ -560,6 +677,14 @@ final class AppleDictationEngine: @unchecked Sendable {
         if out.frameLength > 0 { input.yield(AnalyzerInput(buffer: out)) }
     }
 
+    /// Drops everything (dictation thrown away or never started).
+    func cancel() {
+        input.finish()
+        resultsTask?.cancel()
+        let analyzer = analyzer
+        Task { await analyzer.cancelAndFinishNow() }
+    }
+
     func finish() async -> String {
         input.finish()
         try? await analyzer.finalizeAndFinishThroughEndOfInput()
@@ -597,6 +722,11 @@ final class LegacyAppleEngine: @unchecked Sendable {
     }
 
     func feed(_ buffer: AVAudioPCMBuffer) { request.append(buffer) }
+
+    func cancel() {
+        task?.cancel()
+        request.endAudio()
+    }
 
     private func markDone() {
         guard !finished else { return }

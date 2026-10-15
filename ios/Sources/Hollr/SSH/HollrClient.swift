@@ -42,32 +42,65 @@ final class PinnedHostKey: NIOSSHClientServerAuthenticationDelegate {
 }
 
 enum HollrClient {
-    /// Connects to the first reachable address.
+    /// Connects to the first reachable address. The addresses are tried staggered (happy eyeballs):
+    /// the last one that worked first, then every 1.5 s the next one in parallel – a server with
+    /// many addresses (Docker bridges, Tailscale switched off) no longer costs 8 s per dead address.
     static func connect(
         addresses: [String], port: Int, user: String, fingerprint: String,
         key: Curve25519.Signing.PrivateKey
     ) async throws -> SSHClient {
-        var lastError: Error = HollrError.unreachable("keine Adresse")
-        for host in addresses {
-            do {
-                let client = try await SSHClient.connect(
-                    host: host,
-                    port: port,
-                    authenticationMethod: .ed25519(username: user, privateKey: key),
-                    hostKeyValidator: .custom(PinnedHostKey(fingerprint)),
-                    reconnect: .never,
-                    connectTimeout: .seconds(8)
-                )
-                await ConnectionInfo.shared.connected(fingerprint: fingerprint, host: host)
-                return client
-            } catch let error as HollrError {
-                throw error // wrong host key: never try the next address
-            } catch {
-                lastError = HollrError.unreachable("\(host): \(error.localizedDescription)")
-            }
+        var hosts = addresses
+        if let last = await ConnectionInfo.shared.via[fingerprint], let i = hosts.firstIndex(of: last) {
+            hosts.insert(hosts.remove(at: i), at: 0)
         }
-        await ConnectionInfo.shared.failed(fingerprint: fingerprint)
-        throw lastError
+        guard !hosts.isEmpty else { throw HollrError.unreachable("keine Adresse") }
+        let race = ConnectRace(count: hosts.count)
+        let client: SSHClient
+        do {
+            client = try await connectRace(race, hosts: hosts, port: port, user: user, fingerprint: fingerprint, key: key)
+        } catch {
+            await ConnectionInfo.shared.failed(fingerprint: fingerprint)
+            throw error
+        }
+        if let host = race.host { await ConnectionInfo.shared.connected(fingerprint: fingerprint, host: host) }
+        return client
+    }
+
+    private static func connectRace(
+        _ race: ConnectRace, hosts: [String], port: Int, user: String, fingerprint: String,
+        key: Curve25519.Signing.PrivateKey
+    ) async throws -> SSHClient {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                race.start(cont)
+                for (i, host) in hosts.enumerated() {
+                    Task {
+                        if i > 0 {
+                            try? await Task.sleep(for: .milliseconds(1500 * i))
+                            if race.isDone { return }
+                        }
+                        do {
+                            let client = try await SSHClient.connect(
+                                host: host,
+                                port: port,
+                                authenticationMethod: .ed25519(username: user, privateKey: key),
+                                hostKeyValidator: .custom(PinnedHostKey(fingerprint)),
+                                reconnect: .never,
+                                connectTimeout: .seconds(8)
+                            )
+                            // a slower address that also made it: not needed
+                            if !race.win(client, host: host) { try? await client.close() }
+                        } catch let error as HollrError {
+                            race.fail(error, fatal: true) // wrong host key: never try the next address
+                        } catch {
+                            race.fail(HollrError.unreachable("\(host): \(error.localizedDescription)"), fatal: false)
+                        }
+                    }
+                }
+            }
+        } onCancel: {
+            race.cancel()
+        }
     }
 
     static func connect(_ server: Server) async throws -> SSHClient {
@@ -115,7 +148,7 @@ enum HollrClient {
 
     static func tree(_ server: Server) async throws -> [Workspace] {
         let client = try await SSHPool.shared.client(for: server)
-        let buffer = try await client.executeCommand("tree")
+        let buffer = try await client.exec("tree", on: server)
         struct Response: Decodable { let workspaces: [Workspace]?; let error: String? }
         let data = Data(buffer.readableBytesView)
         guard let response = try? JSONDecoder().decode(Response.self, from: data) else {
@@ -130,7 +163,7 @@ enum HollrClient {
     static func timeline(_ server: Server, pane: String, limit: Int = 150, etag: String? = nil) async throws -> Timeline? {
         let client = try await SSHPool.shared.client(for: server)
         let command = etag.map { "timeline \(pane) \(limit) \($0)" } ?? "timeline \(pane) \(limit)"
-        let data = Data(try await client.executeCommand(command).readableBytesView)
+        let data = Data(try await client.exec(command, on: server).readableBytesView)
         if data.count < 200, String(decoding: data, as: UTF8.self).contains("\"same\":true") { return nil }
         do {
             return try JSONDecoder().decode(Timeline.self, from: data)
@@ -142,7 +175,7 @@ enum HollrClient {
 
     static func spaces(_ server: Server) async throws -> [Space] {
         let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.executeCommand("spaces").readableBytesView)
+        let data = Data(try await client.exec("spaces", on: server).readableBytesView)
         struct R: Decodable { let spaces: [Space] }
         return try JSONDecoder().decode(R.self, from: data).spaces
     }
@@ -150,7 +183,7 @@ enum HollrClient {
     /// Web pages listening on the server's loopback (for the browser's quick links).
     static func ports(_ server: Server) async throws -> [WebPort] {
         let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.executeCommand("ports").readableBytesView)
+        let data = Data(try await client.exec("ports", on: server).readableBytesView)
         struct R: Decodable { let ports: [WebPort] }
         return try JSONDecoder().decode(R.self, from: data).ports
     }
@@ -165,7 +198,7 @@ enum HollrClient {
 
     static func usage(_ server: Server, refresh: Bool = false) async throws -> (limits: [UsageLimit], capacity: [UsageCapacity]) {
         let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.executeCommand(refresh ? "usage refresh" : "usage").readableBytesView)
+        let data = Data(try await client.exec(refresh ? "usage refresh" : "usage", on: server).readableBytesView)
         struct R: Decodable { let limits: [UsageLimit]; let capacity: [UsageCapacity]? }
         let r = try JSONDecoder().decode(R.self, from: data)
         return (r.limits, r.capacity ?? [])
@@ -177,14 +210,19 @@ enum HollrClient {
         var payload = try JSONSerialization.data(withJSONObject: body)
         payload.append(0x0a)
         var collected = Data()
+        let box = DataBox()
         do {
-            try await client.withExec(command) { inbound, outbound in
-                try await outbound.write(ByteBuffer(bytes: payload))
-                for try await output in inbound {
-                    if case .stdout(let buffer) = output { collected.append(contentsOf: buffer.readableBytesView) }
+            try await SSHPool.deadline(server, seconds: 30) {
+                try await client.withExec(command) { inbound, outbound in
+                    try await outbound.write(ByteBuffer(bytes: payload))
+                    for try await output in inbound {
+                        if case .stdout(let buffer) = output { box.append(buffer.readableBytesView) }
+                    }
                 }
             }
+            collected = box.data
         } catch {
+            collected = box.data
             // the server closes the channel after answering – only fail if nothing came back
             if collected.isEmpty { throw error }
         }
@@ -196,7 +234,7 @@ enum HollrClient {
 
     static func history(_ server: Server, pane: String, limit: Int = 80) async throws -> [LiveEvent] {
         let client = try await SSHPool.shared.client(for: server)
-        let buffer = try await client.executeCommand("history \(pane) \(limit)")
+        let buffer = try await client.exec("history \(pane) \(limit)", on: server)
         let data = Data(buffer.readableBytesView)
         guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let events = obj["events"] as? [[String: Any]]
@@ -207,7 +245,7 @@ enum HollrClient {
     /// Agent CLIs installed on the server (omp, claude, codex).
     static func kinds(_ server: Server) async throws -> [String] {
         let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.executeCommand("kinds").readableBytesView)
+        let data = Data(try await client.exec("kinds", on: server).readableBytesView)
         struct R: Decodable { let kinds: [String] }
         return (try? JSONDecoder().decode(R.self, from: data))?.kinds ?? []
     }
@@ -221,7 +259,7 @@ enum HollrClient {
         if let level { body["level"] = level }
         if let workspace { body["workspace"] = workspace }
         if let cwd, !cwd.isEmpty { body["cwd"] = cwd }
-        let line = try await requestLine(client, command: "new", body: body)
+        let line = try await requestLine(client, server: server, seconds: 90, command: "new", body: body)
         guard let obj = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
             throw HollrError.badResponse
         }
@@ -231,46 +269,48 @@ enum HollrClient {
 
     static func close(_ server: Server, pane: String) async throws {
         let client = try await SSHPool.shared.client(for: server)
-        _ = try await client.executeCommand("close \(pane)")
+        _ = try await client.exec("close \(pane)", on: server)
     }
 
     /// Visible terminal screen of a pane (for agents without a parsed history, or prompts).
     static func screen(_ server: Server, pane: String, lines: Int = 40) async throws -> String {
         let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.executeCommand("screen \(pane) \(lines)").readableBytesView)
+        let data = Data(try await client.exec("screen \(pane) \(lines)", on: server).readableBytesView)
         struct R: Decodable { let text: String? }
         return (try? JSONDecoder().decode(R.self, from: data))?.text ?? ""
     }
 
     static func keys(_ server: Server, pane: String, keys: [String]) async throws {
         let client = try await SSHPool.shared.client(for: server)
-        _ = try await client.executeCommand("keys \(pane) \(keys.joined(separator: " "))")
+        _ = try await client.exec("keys \(pane) \(keys.joined(separator: " "))", on: server)
     }
 
     static func prompt(_ server: Server, pane: String, text: String) async throws {
         let client = try await SSHPool.shared.client(for: server)
-        _ = try await requestLine(client, command: "prompt \(pane)", body: ["text": text])
+        _ = try await requestLine(client, server: server, seconds: 30, command: "prompt \(pane)", body: ["text": text])
     }
 
     /// Sends one JSON line on stdin and returns the first line of stdout.
-    private static func requestLine(_ client: SSHClient, command: String, body: [String: String]) async throws -> String {
-        var result = ""
-        try await client.withExec(command) { inbound, outbound in
-            var payload = try JSONSerialization.data(withJSONObject: body)
-            payload.append(0x0a)
-            try await outbound.write(ByteBuffer(bytes: payload))
-            var collected = Data()
-            for try await output in inbound {
-                if case .stdout(let buffer) = output {
-                    collected.append(contentsOf: buffer.readableBytesView)
-                    if let nl = collected.firstIndex(of: 0x0a) {
-                        result = String(decoding: collected[..<nl], as: UTF8.self)
-                        return
+    private static func requestLine(_ client: SSHClient, server: Server? = nil, seconds: Double = 60,
+                                    command: String, body: [String: String]) async throws -> String {
+        let box = DataBox()
+        let run: @Sendable () async throws -> Void = {
+            try await client.withExec(command) { inbound, outbound in
+                var payload = try JSONSerialization.data(withJSONObject: body)
+                payload.append(0x0a)
+                try await outbound.write(ByteBuffer(bytes: payload))
+                for try await output in inbound {
+                    if case .stdout(let buffer) = output {
+                        box.append(buffer.readableBytesView)
+                        if box.data.contains(0x0a) { return }
                     }
                 }
             }
-            result = String(decoding: collected, as: UTF8.self)
         }
+        if let server { try await SSHPool.deadline(server, seconds: seconds, run) } else { try await run() }
+        let collected = box.data
+        let line = collected.firstIndex(of: 0x0a).map { collected[..<$0] } ?? collected[...]
+        let result = String(decoding: line, as: UTF8.self)
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
@@ -296,11 +336,101 @@ actor SSHPool {
     }
 
     func invalidate(_ server: Server) async {
-        if let client = clients.removeValue(forKey: server.id) { try? await client.close() }
+        // closing a half-open connection can take long – don't make the caller wait for it
+        if let client = clients.removeValue(forKey: server.id) { Task { try? await client.close() } }
     }
 
+    /// App in the background, network changed: connections may be dead without knowing it.
     func closeAll() async {
-        for client in clients.values { try? await client.close() }
+        for client in clients.values { Task { try? await client.close() } }
         clients.removeAll()
+    }
+
+    /// Runs one command with a deadline. A connection that went half-open (Mac asleep, Wi-Fi → mobile)
+    /// still looks connected and would hold the command for minutes: on timeout the connection is
+    /// dropped (which also ends the hanging command) and the next call reconnects.
+    nonisolated static func deadline<T>(_ server: Server, seconds: Double = 20,
+                                       _ op: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask { try await op() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next(), let value = first else {
+                HollrLog.error("pool: \(server.label) did not answer within \(Int(seconds))s – reconnecting")
+                await SSHPool.shared.invalidate(server)
+                throw HollrError.unreachable(String(localized: "keine Antwort (Zeitüberschreitung)"))
+            }
+            return value
+        }
+    }
+}
+
+extension HollrError {
+    /// The connection itself failed (not an answer from the server): worth reconnecting.
+    static func isTransport(_ error: Error) -> Bool {
+        guard let e = error as? HollrError else { return !(error is DecodingError) }
+        if case .unreachable = e { return true }
+        return false
+    }
+}
+
+/// Output collected inside a @Sendable closure.
+final class DataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = Data()
+    var data: Data { lock.withLock { storage } }
+    func append(_ bytes: some Sequence<UInt8>) { lock.withLock { storage.append(contentsOf: bytes) } }
+}
+
+extension SSHClient {
+    /// `executeCommand` with a deadline (see SSHPool.deadline).
+    func exec(_ command: String, on server: Server, seconds: Double = 20) async throws -> ByteBuffer {
+        try await SSHPool.deadline(server, seconds: seconds) { try await self.executeCommand(command) }
+    }
+}
+
+/// First successful connection wins; the continuation is resumed exactly once.
+final class ConnectRace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cont: CheckedContinuation<SSHClient, Error>?
+    private var failures = 0
+    private let count: Int
+    private var lastError: Error = HollrError.unreachable("keine Adresse")
+    private(set) var host: String?
+
+    init(count: Int) { self.count = count }
+
+    var isDone: Bool { lock.withLock { cont == nil } }
+
+    func start(_ cont: CheckedContinuation<SSHClient, Error>) { lock.withLock { self.cont = cont } }
+
+    /// false when another address already won (or the attempt was cancelled)
+    func win(_ client: SSHClient, host: String) -> Bool {
+        let c: CheckedContinuation<SSHClient, Error>? = lock.withLock {
+            defer { cont = nil }
+            if cont != nil { self.host = host }
+            return cont
+        }
+        c?.resume(returning: client)
+        return c != nil
+    }
+
+    func fail(_ error: Error, fatal: Bool) {
+        let c: CheckedContinuation<SSHClient, Error>? = lock.withLock {
+            failures += 1
+            lastError = error
+            guard fatal || failures >= count else { return nil }
+            defer { cont = nil }
+            return cont
+        }
+        c?.resume(throwing: error)
+    }
+
+    func cancel() {
+        let c: CheckedContinuation<SSHClient, Error>? = lock.withLock { defer { cont = nil }; return cont }
+        c?.resume(throwing: CancellationError())
     }
 }

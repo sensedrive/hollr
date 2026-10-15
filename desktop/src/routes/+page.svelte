@@ -48,9 +48,21 @@
     else if (k === "1") go({ view: "dashboard" });
     else if (k === "2") go({ view: "agents" });
     else if (k === "3") go({ view: "spaces" });
-    else if (k === "[") back();
+    // ⌘[ while typing belongs to the text field (drafts keep the text on the other shortcuts)
+    else if (k === "[" && !typing(e.target)) back();
     else return;
     e.preventDefault();
+  }
+
+  const typing = (el: EventTarget | null) =>
+    el instanceof HTMLElement && (el.matches("input, textarea, select") || el.isContentEditable);
+
+  /** a closed session: forget it, and leave its view if it is still showing */
+  function onClosed(id: string) {
+    mySessions.remove(id);
+    const r = nav.route;
+    if (r.view === "agent" && `${r.server}|${r.pane}` === id) back();
+    refresh();
   }
 
   onMount(() => {
@@ -137,7 +149,7 @@
       {#if current}
         {#key `${nav.route.server}|${nav.route.pane}`}
           <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
-            onClosed={() => { mySessions.remove(`${current.server.id}|${current.pane.pane}`); back(); refresh(); }} />
+            {onClosed} />
         {/key}
       {:else}
         <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>

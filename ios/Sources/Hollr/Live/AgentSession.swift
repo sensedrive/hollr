@@ -41,7 +41,7 @@ final class AgentSession {
 
     /// set by the composer while dictating: the transcription gets the CPU, the chat waits
     var dictating = false
-    private var wake: (id: UUID, cont: CheckedContinuation<Void, Never>)?
+    @ObservationIgnored private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
     /// How long until the next refresh.
     var pollInterval: Duration {
@@ -52,28 +52,26 @@ final class AgentSession {
     }
 
     /// Waits for the next poll – or less, when `nudge()` says something just happened.
+    /// Every waiter has its own slot: two views polling the same session (a sheet over the list)
+    /// must not wake each other up in a loop.
     func waitForPoll() async {
         let interval = pollInterval
         let id = UUID()
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            if let old = wake { old.cont.resume() }
-            wake = (id, cont)
-            Task { @MainActor [weak self] in
+            waiters[id] = cont
+            // strong self: at most one poll interval, and the continuation is always resumed
+            Task { @MainActor in
                 try? await Task.sleep(for: interval)
-                self?.fire(id)
+                self.waiters.removeValue(forKey: id)?.resume()
             }
         }
     }
 
     /// Refresh now (after sending, answering, or a change from the live feed).
     func nudge() {
-        if let id = wake?.id { fire(id) }
-    }
-
-    private func fire(_ id: UUID) {
-        guard let current = wake, current.id == id else { return }
-        wake = nil
-        current.cont.resume()
+        let all = waiters
+        waiters = [:]
+        for cont in all.values { cont.resume() }
     }
 
     func loadTimeline() async {
@@ -99,7 +97,8 @@ final class AgentSession {
             HollrLog.error("timeline \(ref.pane.pane): \(error)")
             lastError = error.localizedDescription
             historyLoaded = true
-            await SSHPool.shared.invalidate(ref.server)
+            // a closed pane or herdr error is an answer – reconnecting would only tear down the feed
+            if HollrError.isTransport(error) { await SSHPool.shared.invalidate(ref.server) }
         }
     }
 
@@ -267,9 +266,11 @@ final class AgentSession {
         HollrLog.info("live: stop requested")
         phase = .ending
         send(.control(["t": "stop"]))
+        let call = task
         Task {
             try? await Task.sleep(for: .seconds(6))
-            if phase == .ending { task?.cancel() }
+            // only this call – not one started again in the meantime
+            if phase == .ending, let call, call == task { call.cancel() }
         }
     }
 
@@ -323,8 +324,30 @@ final class AgentSession {
                     }
                 }
                 defer { writer.cancel() }
+                // heartbeat: a ping every 5 s (also while muted) – the server answers with pong and ends
+                // a call it hasn't heard from; if we hear nothing for 20 s the connection is gone
+                let heard = Clock()
+                let heartbeat = Task { [weak self] in
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(5))
+                        if Task.isCancelled { return }
+                        continuation.yield(Frame.control(["t": "ping"]).encoded)
+                        if heard.age > 20 {
+                            HollrLog.error("live: nothing from the server for \(Int(heard.age))s – connection lost")
+                            await MainActor.run {
+                                if self?.lastError == nil {
+                                    self?.lastError = String(localized: "Verbindung verloren – keine Antwort vom Server.")
+                                }
+                            }
+                            try? await client.close()
+                            return
+                        }
+                    }
+                }
+                defer { heartbeat.cancel() }
                 var decoder = FrameDecoder()
                 for try await output in inbound {
+                    heard.touch()
                     switch output {
                     case .stderr(let buffer):
                         HollrLog.error("live: server stderr \(String(buffer: buffer))")
@@ -394,6 +417,13 @@ final class AgentSession {
                 finished = true
                 if reason == "live_stopped" {
                     items.append(TranscriptItem(kind: .info, text: String(localized: "Live wurde am Rechner beendet.")))
+                } else if lastError == nil, phase != .ending {
+                    // the server ended the call on its own: say why
+                    switch reason {
+                    case "start_failed": lastError = String(localized: "Live konnte auf dem Server nicht starten.")
+                    case "disconnected": lastError = String(localized: "Verbindung unterbrochen – bitte neu starten.")
+                    default: break
+                    }
                 }
                 return true
             default: break

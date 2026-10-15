@@ -8,6 +8,8 @@ struct HollrApp: App {
     @State private var sessions = SessionStore()
     @State private var dictation = DictationSettings()
     @State private var mySessions = MySessions()
+    @State private var drafts = DraftStore()
+    @State private var dictator = Dictator()
     @State private var pairing: PairingRequest?
 
     var body: some Scene {
@@ -21,14 +23,24 @@ struct HollrApp: App {
                 .environment(sessions)
                 .environment(dictation)
                 .environment(mySessions)
+                .environment(drafts)
+                .environment(dictator)
                 .appTextScale()
                 .appLock()
                 // dictation models take hundreds of MB: give them back when iOS asks or we go away
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
-                    Dictator.releaseModels()
+                    if !dictator.isBusy { Dictator.releaseModels() }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                    Dictator.releaseModels()
+                    drafts.save()
+                    // a dictation stops itself and still needs its model for the last piece
+                    Task {
+                        while dictator.isBusy { try? await Task.sleep(for: .milliseconds(200)) }
+                        Dictator.releaseModels()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
+                    drafts.save()
                 }
                 .onOpenURL { url in
                     // QR code scanned with the iPhone camera opens hollr://pair?c=…

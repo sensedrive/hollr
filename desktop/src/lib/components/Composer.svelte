@@ -3,9 +3,11 @@
   // ↑ in an empty field brings back the last message. ">_" sends single keys to the pane.
   import type { Snippet } from "svelte";
   import { t } from "../i18n";
+  import { pushRecall } from "../drafts";
 
   let {
     placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, value = $bindable(""),
+    sent = $bindable([]),
   }: {
     placeholder: string;
     keysTitle: string;
@@ -19,6 +21,8 @@
     /** extra buttons left of "send" (live button) */
     trailing?: Snippet;
     value?: string;
+    /** ↑ history, newest first (bind it to keep it beyond this component) */
+    sent?: string[];
   } = $props();
 
   const KEYS: [string, string][] = $derived([
@@ -30,7 +34,6 @@
 
   let area: HTMLTextAreaElement | undefined = $state();
   let menu = $state(false);
-  let sent: string[] = [];
   let recall = -1;
   const trimmed = $derived(value.trim());
 
@@ -51,9 +54,10 @@
     if (!msg || disabled) return;
     value = "";
     recall = -1;
-    sent = [msg, ...sent.filter((x) => x !== msg)].slice(0, 30);
+    sent = pushRecall(sent, msg);
     const ok = await onSend(msg);
-    if (ok === false && !value) value = msg;
+    // the owner may already have put it back (drafts) – never twice
+    if (ok === false && !value.includes(msg)) value = value ? `${msg}\n${value}` : msg;
   }
 
   function onKey(e: KeyboardEvent) {

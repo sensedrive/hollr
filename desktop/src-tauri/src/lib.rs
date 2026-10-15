@@ -35,17 +35,19 @@ async fn gate(state: tauri::State<'_, Hollr>, server: String, command: String, s
 }
 
 #[derive(Default)]
-struct Live(tokio::sync::Mutex<Option<live::LiveSession>>);
+struct Live(tokio::sync::Mutex<Option<live::LiveSession>>, std::sync::atomic::AtomicU64);
 
+/// Starts omp /live; returns the session id that every `live` / `live-levels` event carries.
 #[tauri::command]
-async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live: tauri::State<'_, Live>, server: String, pane: String) -> R<()> {
+async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live: tauri::State<'_, Live>, server: String, pane: String) -> R<u64> {
     let mut current = live.0.lock().await;
     if let Some(old) = current.take() {
         old.stop();
     }
+    let session = live.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let handle = state.handle_for(&server).await.map_err(err)?;
-    *current = Some(live::start(app, handle, pane).await.map_err(err)?);
-    Ok(())
+    *current = Some(live::start(app, handle, pane, session).await.map_err(err)?);
+    Ok(session)
 }
 
 #[tauri::command]

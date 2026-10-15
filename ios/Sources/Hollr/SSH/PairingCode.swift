@@ -105,21 +105,28 @@ enum PairingCode {
     private static func post(ip: String, path: String, body: Data) async throws -> (Int, Data) {
         let connection = NWConnection(host: NWEndpoint.Host(ip), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
         defer { connection.cancel() }
+        // one serial queue for the state handler and the timeout: the continuation is resumed exactly once
+        let queue = DispatchQueue(label: "app.hollr.pair")
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             var resumed = false
+            var lastWaiting: Error?
             connection.stateUpdateHandler = { state in
                 guard !resumed else { return }
                 switch state {
                 case .ready: resumed = true; cont.resume()
-                case let .failed(error), let .waiting(error): resumed = true; cont.resume(throwing: error)
+                case let .failed(error): resumed = true; cont.resume(throwing: error)
+                // .waiting is not fatal: the first LAN connection waits for the "local network" permission
+                case let .waiting(error): lastWaiting = error
                 default: break
                 }
             }
-            connection.start(queue: .global())
-            DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
-                if !resumed { resumed = true; cont.resume(throwing: URLError(.timedOut)) }
+            connection.start(queue: queue)
+            queue.asyncAfter(deadline: .now() + 20) {
+                if !resumed { resumed = true; cont.resume(throwing: lastWaiting ?? URLError(.timedOut)) }
             }
         }
+        // the whole exchange has a deadline too: cancelling the connection fails a pending receive
+        queue.asyncAfter(deadline: .now() + 30) { connection.cancel() }
         var request = Data("POST \(path) HTTP/1.1\r\nHost: \(ip):\(port)\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8)
         request.append(body)
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in

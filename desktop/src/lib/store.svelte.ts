@@ -3,6 +3,7 @@
 import * as api from "./api";
 import type { Pane, Server, Workspace } from "./api";
 import { type Space, spaces as loadSpaces } from "./git";
+import * as d from "./drafts";
 
 export const app = $state({
   servers: [] as Server[],
@@ -54,6 +55,64 @@ export const dialogs = $state({
   newSession: null as null | { server?: string; ws?: string },
   newSpace: null as null | { server?: string },
 });
+
+/** Last field values of the create dialogs, so an accidental close loses nothing (this run only). */
+export const dialogMemory = {
+  newSession: { folder: "", label: "" },
+  newSpace: { branch: "", base: "", folder: "~/projects/", label: "" },
+};
+
+// ------------------------------------------------------------ drafts (unsent composer text)
+
+/** Composer text per session ("serverId|pane"), saved shortly after each change and when the window goes. */
+class DraftStore {
+  all = $state<d.Drafts>(this.load());
+  /** ↑ history per session (memory only) */
+  #recall: Record<string, string[]> = {};
+  #timer: ReturnType<typeof setTimeout> | undefined;
+
+  load(): d.Drafts {
+    try {
+      return d.parseDrafts(localStorage.getItem(d.DRAFTS_KEY));
+    } catch {
+      return {};
+    }
+  }
+  text = (key: string) => this.all[key]?.text ?? "";
+  setText(key: string, text: string) {
+    d.setText(this.all, key, text);
+    this.save();
+  }
+  beginSend(key: string, msg: string) {
+    d.beginSend(this.all, key, msg);
+    this.save();
+  }
+  endSend(key: string, msg: string, ok: boolean) {
+    d.endSend(this.all, key, msg, ok);
+    this.save();
+  }
+  recall = (key: string) => this.#recall[key] ?? [];
+  setRecall(key: string, list: string[]) {
+    this.#recall[key] = list.slice(0, d.RECALL_MAX);
+  }
+  save() {
+    clearTimeout(this.#timer);
+    this.#timer = setTimeout(() => this.flush(), 300);
+  }
+  flush() {
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    try {
+      localStorage.setItem(d.DRAFTS_KEY, d.serializeDrafts($state.snapshot(this.all)));
+    } catch {}
+  }
+}
+
+export const drafts = new DraftStore();
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => drafts.flush());
+  window.addEventListener("pagehide", () => drafts.flush());
+}
 
 // ------------------------------------------------------------ my sessions
 
@@ -152,13 +211,20 @@ export function poll() {
   if (due.length) refresh(...due);
 }
 
+/** per server: newest tree request – an older answer arriving later must not overwrite it */
+const treeSeq: Record<string, number> = {};
+
 export async function refresh(...only: string[]) {
   await Promise.all(
     app.servers.filter((s) => !only.length || only.includes(s.id)).map(async (s) => {
+      const seq = (treeSeq[s.id] = (treeSeq[s.id] ?? 0) + 1);
       try {
-        app.trees[s.id] = await api.tree(s.id);
+        const tree = await api.tree(s.id);
+        if (seq !== treeSeq[s.id]) return;
+        app.trees[s.id] = tree;
         delete app.errors[s.id];
       } catch (e) {
+        if (seq !== treeSeq[s.id]) return;
         app.errors[s.id] = String(e instanceof Error ? e.message : e);
       } finally {
         app.loaded[s.id] = true;

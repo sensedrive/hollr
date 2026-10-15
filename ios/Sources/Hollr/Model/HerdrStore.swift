@@ -43,14 +43,27 @@ final class HerdrStore {
     /// servers that just failed: tried again after a pause instead of on every refresh
     private var retryAfter: [UUID: Date] = [:]
 
+    /// per server: only the newest tree request may write its answer (an older, slower one would
+    /// bring back a pane that was just closed)
+    private var treeGeneration: [UUID: Int] = [:]
+
+    private func nextGeneration(_ id: UUID) -> Int {
+        let n = (treeGeneration[id] ?? 0) + 1
+        treeGeneration[id] = n
+        return n
+    }
+
     func refresh(_ servers: [Server], force: Bool = false) async {
         // an unreachable machine (asleep, off the network) would hold every refresh for its timeout
         let due = servers.filter { force || (retryAfter[$0.id] ?? .distantPast) <= .now }
         await withTaskGroup(of: (UUID, Result<[Workspace], Error>).self) { group in
+            var generations: [UUID: Int] = [:]
             for server in due {
+                generations[server.id] = nextGeneration(server.id)
                 group.addTask { (server.id, await Result(asyncCatching: { try await HollrClient.tree(server) })) }
             }
             for await (id, result) in group {
+                guard generations[id] == treeGeneration[id] else { continue } // a newer request is under way
                 switch result {
                 case .success(let tree):
                     trees[id] = tree
@@ -59,7 +72,10 @@ final class HerdrStore {
                 case .failure(let error):
                     errors[id] = error.localizedDescription
                     retryAfter[id] = .now.addingTimeInterval(30)
-                    if let server = servers.first(where: { $0.id == id }) { await SSHPool.shared.invalidate(server) }
+                    // only a broken connection is worth reconnecting – not an error answer from herdr
+                    if HollrError.isTransport(error), let server = servers.first(where: { $0.id == id }) {
+                        await SSHPool.shared.invalidate(server)
+                    }
                 }
                 loaded = true // show what we have, don't wait for the slowest machine
             }
@@ -71,10 +87,15 @@ final class HerdrStore {
 
     /// One server's tree, without touching the others.
     func refresh(server: Server) async {
+        let gen = nextGeneration(server.id)
         do {
-            trees[server.id] = try await HollrClient.tree(server)
+            let tree = try await HollrClient.tree(server)
+            guard gen == treeGeneration[server.id] else { return }
+            trees[server.id] = tree
             errors[server.id] = nil
+            retryAfter[server.id] = nil
         } catch {
+            guard gen == treeGeneration[server.id] else { return }
             errors[server.id] = error.localizedDescription
         }
     }
@@ -103,12 +124,29 @@ final class HerdrStore {
         var backoff = 2.0
         while !Task.isCancelled {
             var unsupported = false
+            // the server pings every 20 s: silence means the connection died without anyone noticing
+            // (Mac asleep, Wi-Fi → mobile) – drop it so the feed and every other command reconnect
+            let lastLine = Clock()
+            let watchdog = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(15))
+                    if Task.isCancelled { return }
+                    if lastLine.age > 50 {
+                        HollrLog.error("events \(server.label): no ping for \(Int(lastLine.age))s – reconnecting")
+                        await SSHPool.shared.invalidate(server)
+                        return
+                    }
+                }
+            }
+            defer { watchdog.cancel() }
             do {
                 let client = try await SSHPool.shared.client(for: server)
+                lastLine.touch() // the clock starts once connected – connecting can take a while
                 try await client.withExec("events") { inbound, _ in
                     var buffer = Data()
                     for try await output in inbound {
                         guard case .stdout(let bytes) = output else { continue }
+                        lastLine.touch()
                         buffer.append(contentsOf: bytes.readableBytesView)
                         while let newline = buffer.firstIndex(of: 0x0a) {
                             let line = buffer[buffer.startIndex..<newline]
@@ -168,4 +206,12 @@ extension Result where Failure == Error {
     init(asyncCatching body: () async throws -> Success) async {
         do { self = .success(try await body()) } catch { self = .failure(error) }
     }
+}
+
+/// Time since the last touch, readable from any task.
+final class Clock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last = Date()
+    func touch() { lock.withLock { last = Date() } }
+    var age: TimeInterval { lock.withLock { Date().timeIntervalSince(last) } }
 }

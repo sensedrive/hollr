@@ -13,8 +13,13 @@ struct AgentDetailView: View {
             AgentConversation(session: session, path: $path)
                 .id(agentId)
         } else {
-            ContentUnavailableView("Agent nicht gefunden", systemImage: "questionmark.circle",
-                                   description: Text("Die Session existiert in herdr nicht mehr."))
+            if !herdr.loaded {
+                // cold start / opened from a notification: the tree is still loading
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView("Agent nicht gefunden", systemImage: "questionmark.circle",
+                                       description: Text("Die Session existiert in herdr nicht mehr."))
+            }
         }
     }
 
@@ -39,6 +44,7 @@ private struct AgentConversation: View {
     @State private var editing = false
     /// reading mode → transcript only, full screen
     @State private var reading = false
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(TextScale.key) private var scaleIndex = TextScale.system
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var scaleToast: String?
@@ -71,7 +77,8 @@ private struct AgentConversation: View {
         Task {
             do {
                 try await HollrClient.close(ref.server, pane: ref.pane.pane)
-                path.removeAll()
+                // in a sheet the chat is the root (empty path): close the sheet instead
+                if path.isEmpty { dismiss() } else { path.removeAll() }
                 await herdr.refresh(store.servers)
             } catch {
                 HollrLog.error("close: \(error)")
@@ -90,6 +97,8 @@ private struct AgentConversation: View {
             if !reading { controls }
         }
         .animation(.easeInOut(duration: 0.2), value: reading)
+        // the zen composer goes away with the keyboard up: its focus change never arrives
+        .onChange(of: reading) { _, _ in editing = false }
         .themedPage()
         .toolbar(reading ? .hidden : .visible, for: .navigationBar)
         .toolbar(reading ? .hidden : .visible, for: .tabBar)
@@ -194,6 +203,13 @@ private struct AgentConversation: View {
 
     // MARK: Transcript
 
+    private func settleAtBottom(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            proxy.scrollTo("bottom", anchor: .bottom)
+        }
+    }
+
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -250,6 +266,13 @@ private struct AgentConversation: View {
                     }
             )
             .defaultScrollAnchor(.bottom)
+            // zen on/off swaps the composer: the lazy rows lose their layout and stay blank until the
+            // list scrolls – scroll once the new layout has settled
+            // zen on/off swaps the composer, and a restored multi-line draft makes it tall from the start:
+            // the lazy list then sits past its end (blank) – scroll to the end once the layout has settled
+            .onChange(of: reading) { settleAtBottom(proxy) }
+            .onChange(of: session.historyLoaded) { settleAtBottom(proxy) }
+            .task { settleAtBottom(proxy) }
             .onChange(of: session.screen) {
                 withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }

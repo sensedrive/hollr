@@ -33,7 +33,16 @@ struct RootView: View {
 
                     NavigationStack(path: $spacesPath) {
                         SpacesView()
-                            .navigationDestination(for: String.self) { id in AgentDetailView(agentId: id, path: .constant([id])) }
+                            .navigationDestination(for: String.self) { id in
+                                // switching chats (chips) replaces the chat on the stack, closing pops it
+                                AgentDetailView(agentId: id, path: Binding(
+                                    get: { [id] },
+                                    set: { new in
+                                        if !spacesPath.isEmpty { spacesPath.removeLast() }
+                                        if let next = new.last { spacesPath.append(next) }
+                                    }
+                                ))
+                            }
                     }
                     .tabItem { Label("Spaces", systemImage: "square.stack.3d.up") }
                     .tag(RootTab.spaces)
@@ -91,6 +100,8 @@ struct RootView: View {
             // changes; polling stays as a slow safety net (fast only while a feed is down)
             guard scenePhase == .active else {
                 herdr.stopFeeds()
+                // back from the background the connections are often half-open: start fresh
+                if scenePhase == .background { await SSHPool.shared.closeAll() }
                 return
             }
             herdr.startFeeds(store.servers)
@@ -190,7 +201,7 @@ enum DebugLaunch {
             return
         }
         guard let pane = defaults.string(forKey: "hollrLive") ?? defaults.string(forKey: "hollrOpen"),
-              let server = store.servers.first else { return }
+              let server = defaults.string(forKey: "hollrServer").flatMap({ l in store.servers.first { $0.label == l } }) ?? store.servers.first else { return }
         await herdr.refresh(store.servers)
         guard let ref = herdr.agents(on: server).first(where: { $0.pane.pane == pane }) else { return }
         path.wrappedValue = [ref.id]

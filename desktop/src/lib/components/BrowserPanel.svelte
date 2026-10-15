@@ -30,8 +30,11 @@
   let ports = $state<WebPort[] | null>(null);
   let recent = $state(recentUrls());
   const tunnels = new Set<number>();
-  /** remote port → local port of this panel's tunnels */
-  const byRemote = new Map<number, number>();
+  /** remote port → local port of this panel's tunnels (pending opens are shared, not doubled) */
+  const byRemote = new Map<number, Promise<number>>();
+  /** bumped per navigation: a slow tunnel must not overwrite a newer page */
+  let navSeq = 0;
+  let destroyed = false;
 
   const tunneled = $derived(!!current && isLoopback(current));
 
@@ -46,16 +49,22 @@
   }
   refreshPorts();
 
-  async function local(remote: number): Promise<number> {
+  function local(remote: number): Promise<number> {
     const known = byRemote.get(remote);
     if (known) return known;
-    const port = await api.tunnelOpen(server, remote);
-    tunnels.add(port);
-    byRemote.set(remote, port);
-    return port;
+    const opening = api.tunnelOpen(server, remote).then((port) => {
+      // panel already gone: close right away
+      if (destroyed) api.tunnelClose(port).catch(() => {});
+      else tunnels.add(port);
+      return port;
+    });
+    opening.catch(() => byRemote.delete(remote));
+    byRemote.set(remote, opening);
+    return opening;
   }
 
   async function show(url: URL, push = true) {
+    const seq = ++navSeq;
     error = "";
     current = url;
     address = displayUrl(url);
@@ -67,9 +76,12 @@
     }
     loading = true;
     try {
-      src = isLoopback(url) ? viaTunnel(url, await local(urlPort(url))) : url.href;
+      const next = isLoopback(url) ? viaTunnel(url, await local(urlPort(url))) : url.href;
+      if (seq !== navSeq) return;
+      src = next;
       nonce++;
     } catch (e) {
+      if (seq !== navSeq) return;
       loading = false;
       error = t("Verbindung zu {server} fehlgeschlagen: {e}", { server: serverLabel, e: e instanceof Error ? e.message : String(e) });
     }
@@ -95,6 +107,8 @@
 
   const reload = () => current && show(current, false);
   function home() {
+    navSeq++;
+    loading = false;
     current = null;
     src = "";
     address = "";
@@ -122,6 +136,7 @@
   }
 
   onDestroy(() => {
+    destroyed = true;
     for (const port of tunnels) api.tunnelClose(port).catch(() => {});
   });
 </script>

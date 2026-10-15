@@ -112,6 +112,10 @@ final class ServerStore {
     }
 
     func add(_ server: Server) {
+        // paired again: the old entry's pooled connection (and its tunnels) must not live on
+        for old in servers where old.hostFingerprint == server.hostFingerprint && old.user == server.user {
+            Task { await SSHPool.shared.invalidate(old) }
+        }
         servers.removeAll { $0.hostFingerprint == server.hostFingerprint && $0.user == server.user }
         servers.append(server)
         save()
@@ -120,6 +124,7 @@ final class ServerStore {
     func remove(_ server: Server) {
         servers.removeAll { $0.id == server.id }
         save()
+        Task { await SSHPool.shared.invalidate(server) }
     }
 
     /// Connection type changed (addresses re-ordered or extended – same server, same key).

@@ -19,7 +19,14 @@ import QRCode from "qrcode";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { runEvents } from "./events";
-import { execHerdr, Herdr, installedKinds, type NewChatRequest, newChat } from "./herdr";
+import {
+  execHerdr,
+  Herdr,
+  HerdrError,
+  installedKinds,
+  type NewChatRequest,
+  newChat,
+} from "./herdr";
 import { toLang } from "./i18n";
 import { runLive } from "./live";
 import { LOG_FILE, log } from "./log";
@@ -41,6 +48,7 @@ import {
   answerRequest,
   awaitConfirmation,
   buildPayload,
+  endConfirmation,
   enroll,
   listDevices,
   newBootstrapKey,
@@ -79,7 +87,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.24.0";
+export const VERSION = "0.24.1";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -109,6 +117,17 @@ function flag(args: string[], name: string): string[] {
   for (let i = 0; i < args.length; i++)
     if (args[i] === name && args[i + 1]) values.push(args[++i] ?? "");
   return values;
+}
+
+/** The pane's agent, or undefined after answering {"error": …} (a closed pane is "not_found"). */
+async function agentOrError(herdr: Herdr, pane: string) {
+  try {
+    return await herdr.agent(pane);
+  } catch (err) {
+    const gone = err instanceof HerdrError && err.code !== "herdr_failed";
+    json({ error: gone ? "not_found" : err instanceof Error ? err.message : String(err) });
+    return undefined;
+  }
 }
 
 async function gate(): Promise<number> {
@@ -217,7 +236,9 @@ async function gate(): Promise<number> {
       json({ ok: true });
       return 0;
     case "timeline": {
-      const agent = await herdr.agent(pane);
+      // a pane that is gone: an answer the app understands, not empty output
+      const agent = await agentOrError(herdr, pane);
+      if (!agent) return 0;
       const file = agent.sessionFile ?? findSessionFile(agent.cwd, 0);
       const timeline = file
         ? await readTimeline(file, Number(rest[0] ?? 150))
@@ -354,7 +375,8 @@ async function gate(): Promise<number> {
       else json(await usageLimits(pane === "refresh"));
       return 0;
     case "history": {
-      const agent = await herdr.agent(pane);
+      const agent = await agentOrError(herdr, pane);
+      if (!agent) return 0;
       const file = agent.sessionFile ?? findSessionFile(agent.cwd, 0);
       json({
         events: file ? await readHistory(file, Number(rest[0] ?? 60)) : [],
@@ -400,10 +422,11 @@ async function gate(): Promise<number> {
 }
 
 async function enrollCmd(id: string): Promise<number> {
+  let asked = false;
   try {
     const input = JSON.parse(await readStdinLine()) as { pub?: string; name?: string };
     // `hollr pair` in a terminal asks first: a scanned code alone is not enough
-    await awaitConfirmation(id, input.name ?? "iPhone");
+    asked = await awaitConfirmation(id, input.name ?? "iPhone");
     const device = enroll(id, input.pub ?? "", input.name ?? "iPhone");
     json({
       ok: true,
@@ -413,8 +436,12 @@ async function enrollCmd(id: string): Promise<number> {
     });
     return 0;
   } catch (err) {
+    // a confirmed code that still failed is spent too (never enrolls later without a yes)
+    if (asked) removeBootstrap(id);
     json({ ok: false, error: err instanceof Error ? err.message : String(err) });
     return 1;
+  } finally {
+    if (asked) endConfirmation(id);
   }
 }
 
@@ -467,6 +494,16 @@ async function ensureTailscale(interactive: boolean): Promise<TailscaleInfo | un
 }
 
 async function pair(args: string[]): Promise<number> {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(`hollr pair [--lan|--tailscale] [--code] [--name LABEL] [--host ADDR] [--port N] [--link] [--yes]
+
+  Koppelt ein Gerät: zeigt einen QR-Code (und einen Einmalcode), gültig 10 Minuten, einmal nutzbar.
+  --lan / --tailscale   Verbindungsart (sonst Auswahl)
+  --code                nur den Einmalcode zeigen
+  --link                den Kopplungs-Link ausgeben (für die Mac-/Desktop-App)
+  --yes                 ohne Rückfrage bestätigen`);
+    return 0;
+  }
   const interactive =
     Boolean(process.stdin.isTTY && process.stdout.isTTY) && !args.includes("--yes");
   const hosts = flag(args, "--host");
@@ -541,6 +578,13 @@ async function pair(args: string[]): Promise<number> {
 
   let current = await issue();
   if (!interactive && !current.otp) return 0;
+  // Strg+C, closed terminal: the one-time key must not outlive this command
+  const abort = () => {
+    current.otp?.stop();
+    removeBootstrap(current.id);
+    process.exit(130);
+  };
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, abort);
 
   // wait for the phone: confirm here, "n" = new code, then report the result
   const lines: string[] = [];
@@ -568,6 +612,7 @@ async function pair(args: string[]): Promise<number> {
         const allow = !/^n/i.test(lines.shift()?.trim() ?? "");
         answerRequest(current.id, allow);
         if (!allow) {
+          removeBootstrap(current.id);
           console.log("Abgelehnt – der Code ist damit verbraucht.");
           return 1;
         }
@@ -593,6 +638,9 @@ async function pair(args: string[]): Promise<number> {
     return 1;
   } finally {
     current.otp?.stop();
+    // nothing paired (expired, rejected, aborted): drop the one-time key now, not only at expiry
+    if (!listDevices().some((d) => !before.has(d.id))) removeBootstrap(current.id);
+    for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.off(sig, abort);
     process.stdin.pause();
   }
 }

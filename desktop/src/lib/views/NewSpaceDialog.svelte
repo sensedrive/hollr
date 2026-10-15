@@ -2,7 +2,7 @@
   // Create a herdr space: a git worktree (new branch) of a repo space, or a folder.
   import Modal from "$lib/components/Modal.svelte";
   import { t } from "$lib/i18n";
-  import { app, go, refresh, refreshSpaces } from "$lib/store.svelte";
+  import { app, dialogMemory, go, refresh, refreshSpaces } from "$lib/store.svelte";
   import { space as spaceOp, type FullSpace } from "./spaces/spaces";
 
   let { preset, onClose }: { preset: { server?: string; repo?: string }; onClose: () => void } = $props();
@@ -12,10 +12,15 @@
   let kind = $state<"worktree" | "folder">("worktree");
   // svelte-ignore state_referenced_locally
   let repo = $state(preset.repo ?? "");
-  let branch = $state("");
-  let base = $state("");
-  let folder = $state("~/projects/");
-  let label = $state("");
+  // typed fields survive closing the dialog by accident
+  const memory = dialogMemory.newSpace;
+  let branch = $state(memory.branch);
+  let base = $state(memory.base);
+  let folder = $state(memory.folder);
+  let label = $state(memory.label);
+  $effect(() => {
+    Object.assign(memory, { branch, base, folder, label });
+  });
   let agent = $state("omp");
   let busy = $state(false);
   let error = $state("");
@@ -42,6 +47,7 @@
       const r = await spaceOp(server, kind === "worktree"
         ? { op: "worktree", ws: repo, branch: branch.trim(), ...(base.trim() ? { base: base.trim() } : {}), label, agent }
         : { op: "create", cwd: folder.trim(), label, agent });
+      Object.assign(memory, { branch: "", base: "", folder: "~/projects/", label: "" });
       await Promise.all([refreshSpaces(server), refresh()]);
       onClose();
       if (r.pane && agent) go({ view: "agent", server, pane: r.pane });

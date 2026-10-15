@@ -46,9 +46,17 @@ struct PairingPayload {
     n: Option<String>,
 }
 
+/// One pooled connection per server; its own lock so a slow connect only blocks that server.
+type Slot = Arc<Mutex<Option<Arc<Handle<Pinned>>>>>;
+
+/// Opening a channel on a pooled connection: longer means the connection is dead (e.g. after sleep).
+const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
+/// Upper bound for one gate command's answer (git / worktree ops can take a while).
+const REPLY_TIMEOUT: Duration = Duration::from_secs(120);
+
 pub struct Hollr {
     dir: PathBuf,
-    pool: Mutex<HashMap<String, Arc<Handle<Pinned>>>>,
+    pool: std::sync::Mutex<HashMap<String, Slot>>,
 }
 
 /// Accepts exactly the host key fingerprint from pairing ("SHA256:…").
@@ -74,7 +82,7 @@ impl client::Handler for Pinned {
 impl Hollr {
     pub fn new(dir: PathBuf) -> Self {
         std::fs::create_dir_all(&dir).ok();
-        Self { dir, pool: Mutex::new(HashMap::new()) }
+        Self { dir, pool: Default::default() }
     }
 
     // ------------------------------------------------------------ storage
@@ -98,7 +106,7 @@ impl Hollr {
     pub async fn remove_server(&self, id: &str) -> Result<()> {
         let servers: Vec<Server> = self.servers().into_iter().filter(|s| s.id != id).collect();
         self.save_servers(&servers)?;
-        self.pool.lock().await.remove(id);
+        self.invalidate(id).await;
         Ok(())
     }
 
@@ -140,8 +148,16 @@ impl Hollr {
             .await;
             match attempt {
                 Ok(Ok(mut handle)) => {
-                    let auth = handle.authenticate_publickey(user, PrivateKeyWithHashAlg::new(key.clone(), None)).await?;
-                    if !auth.success() {
+                    let auth = tokio::time::timeout(
+                        Duration::from_secs(8),
+                        handle.authenticate_publickey(user, PrivateKeyWithHashAlg::new(key.clone(), None)),
+                    )
+                    .await;
+                    let Ok(auth) = auth else {
+                        last = anyhow!("{host}: Anmeldung – Zeitüberschreitung");
+                        continue;
+                    };
+                    if !auth?.success() {
                         bail!("Anmeldung abgelehnt – ist dieser Rechner noch gekoppelt?");
                     }
                     return Ok(handle);
@@ -161,7 +177,18 @@ impl Hollr {
 
     /// Drops the pooled connection, the next call reconnects (users of the old handle keep it).
     pub async fn invalidate(&self, server_id: &str) {
-        self.pool.lock().await.remove(server_id);
+        self.pool.lock().unwrap().remove(server_id);
+    }
+
+    /// Like `invalidate`, but only if the pool still holds this (stale) handle – not a fresh reconnect.
+    async fn drop_stale(&self, server_id: &str, stale: &Arc<Handle<Pinned>>) {
+        let slot = self.pool.lock().unwrap().get(server_id).cloned();
+        if let Some(slot) = slot {
+            let mut h = slot.lock().await;
+            if h.as_ref().is_some_and(|h| Arc::ptr_eq(h, stale)) {
+                *h = None;
+            }
+        }
     }
 
     /// Pooled connection to a paired server (live calls open their own channel on it).
@@ -171,8 +198,10 @@ impl Hollr {
     }
 
     async fn handle(&self, server: &Server) -> Result<Arc<Handle<Pinned>>> {
-        let mut pool = self.pool.lock().await;
-        if let Some(h) = pool.get(&server.id)
+        // the map lock is only held for the lookup, the connect waits on this server's slot alone
+        let slot = self.pool.lock().unwrap().entry(server.id.clone()).or_default().clone();
+        let mut pooled = slot.lock().await;
+        if let Some(h) = pooled.as_ref()
             && !h.is_closed()
         {
             return Ok(h.clone());
@@ -180,13 +209,19 @@ impl Hollr {
         let h = Arc::new(
             Self::connect(&server.addresses, server.port, &server.user, &server.host_fingerprint, self.device_key()?).await?,
         );
-        pool.insert(server.id.clone(), h.clone());
+        *pooled = Some(h.clone());
         Ok(h)
     }
 
     /// Runs one `hollr gate` command; `stdin` (one JSON line) is sent first. Returns stdout.
     async fn exec(handle: &Handle<Pinned>, command: &str, stdin: Option<&str>) -> Result<String> {
-        let mut channel = handle.channel_open_session().await?;
+        let channel = Self::open(handle, command, stdin).await?;
+        Self::collect(channel).await
+    }
+
+    /// Opens a channel and starts `command` (stdin is sent right away).
+    async fn open(handle: &Handle<Pinned>, command: &str, stdin: Option<&str>) -> Result<russh::Channel<client::Msg>> {
+        let channel = handle.channel_open_session().await?;
         channel.exec(true, command).await?;
         if let Some(input) = stdin {
             let mut line = input.as_bytes().to_vec();
@@ -194,6 +229,11 @@ impl Hollr {
             channel.data(&line[..]).await?;
             channel.eof().await?;
         }
+        Ok(channel)
+    }
+
+    /// Reads stdout until the command ends.
+    async fn collect(mut channel: russh::Channel<client::Msg>) -> Result<String> {
         let mut out = Vec::new();
         while let Some(msg) = channel.wait().await {
             match msg {
@@ -209,15 +249,28 @@ impl Hollr {
         let server = self.servers().into_iter().find(|s| s.id == server_id).context("Server nicht gefunden")?;
         for attempt in 0..2 {
             let handle = self.handle(&server).await?;
-            match Self::exec(&handle, command, stdin.as_deref()).await {
-                Ok(out) => return Ok(out),
-                Err(e) if attempt == 0 => {
-                    // stale pooled connection: reconnect once
-                    self.pool.lock().await.remove(&server.id);
-                    let _ = e;
+            // a dead connection (e.g. after sleep) never answers the channel open: time out, reconnect once
+            let opened = tokio::time::timeout(OPEN_TIMEOUT, Self::open(&handle, command, stdin.as_deref()))
+                .await
+                .unwrap_or_else(|_| Err(anyhow!("Zeitüberschreitung")));
+            let channel = match opened {
+                Ok(c) => c,
+                Err(e) => {
+                    self.drop_stale(&server.id, &handle).await;
+                    if attempt == 0 {
+                        continue;
+                    }
+                    return Err(e);
                 }
-                Err(e) => return Err(e),
-            }
+            };
+            // the command runs now: no retry (it may not be idempotent), but never hang forever
+            return match tokio::time::timeout(REPLY_TIMEOUT, Self::collect(channel)).await {
+                Ok(out) => out,
+                Err(_) => {
+                    self.drop_stale(&server.id, &handle).await;
+                    Err(anyhow!("Zeitüberschreitung – keine Antwort vom Server"))
+                }
+            };
         }
         unreachable!()
     }

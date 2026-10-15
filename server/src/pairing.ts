@@ -264,19 +264,31 @@ function bonjourName(): string[] {
   }
 }
 
-export function detectAddresses(): string[] {
-  const addrs = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
+// container/VM bridges: not reachable from the phone
+const VIRTUAL_IF = /^(docker|br-|veth|virbr|lxdbr|lxcbr|cni|flannel|cali|vmnet|vboxnet)/;
+
+/** Order for the phone to try: public IPs, the `.local` name (survives IP changes), private IPs. */
+export function orderAddresses(
+  interfaces: Record<string, { family: string; internal: boolean; address: string }[] | undefined>,
+  local: string[] = [],
+): string[] {
+  const addrs = Object.entries(interfaces).flatMap(([name, list]) =>
     (list ?? [])
-      .filter((i) => i.family === "IPv4" && !i.internal && !/^(docker|br-|veth)/.test(name))
-      .map((i) => i.address),
+      .filter((i) => i.family === "IPv4" && !i.internal && !VIRTUAL_IF.test(name))
+      .map((i) => i.address)
+      // link-local (169.254/16, no DHCP): never reachable on purpose
+      .filter((a) => !a.startsWith("169.254.")),
   );
   const isPrivate = (a: string) =>
     /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(a);
-  // macOS: the Bonjour name survives changing Wi-Fi/hotspot IPs on the local network
-  const local = bonjourName();
   return [
-    ...new Set([...addrs.filter((a) => !isPrivate(a)), ...addrs.filter(isPrivate), ...local]),
+    ...new Set([...addrs.filter((a) => !isPrivate(a)), ...local, ...addrs.filter(isPrivate)]),
   ];
+}
+
+export function detectAddresses(): string[] {
+  // macOS: the Bonjour name survives changing Wi-Fi/hotspot IPs on the local network
+  return orderAddresses(networkInterfaces(), bonjourName());
 }
 
 export function buildPayload(opts: {
@@ -310,7 +322,7 @@ export function buildPayload(opts: {
 
 const confirmDir = () =>
   join(Bun.env.HOLLR_STATE_DIR ?? join(homedir(), ".local", "state", "hollr"), "pairing");
-const confirmFile = (id: string, kind: "confirm" | "request" | "answer") =>
+const confirmFile = (id: string, kind: "confirm" | "request" | "answer" | "taken") =>
   join(confirmDir(), `${id.replace(/[^\w]/g, "")}.${kind}`);
 
 export function requireConfirmation(pairingId: string) {
@@ -332,28 +344,53 @@ export function answerRequest(pairingId: string, allow: boolean) {
   writeFileSync(confirmFile(pairingId, "answer"), allow ? "yes" : "no", { mode: 0o600 });
 }
 
-/** In `enroll`: waits for the yes in the terminal (only when `hollr pair` asked for it). */
-export async function awaitConfirmation(pairingId: string, name: string, timeoutMs = 120_000) {
-  if (!existsSync(confirmFile(pairingId, "confirm"))) return;
-  writeFileSync(confirmFile(pairingId, "request"), JSON.stringify({ name: sanitizeName(name) }), {
-    mode: 0o600,
-  });
+/** Removes the confirmation files – only once the bootstrap key is gone (used or dropped). */
+export function endConfirmation(pairingId: string) {
+  for (const k of ["confirm", "request", "answer", "taken"] as const)
+    rmSync(confirmFile(pairingId, k), { force: true });
+}
+
+/**
+ * In `enroll`: waits for the yes in the terminal (only when `hollr pair` asked for it).
+ * Returns whether it asked. A no or timeout drops the bootstrap key, so the same code can
+ * never enroll later without a yes. After a yes the marker stays until `endConfirmation`.
+ */
+export async function awaitConfirmation(
+  pairingId: string,
+  name: string,
+  timeoutMs = 120_000,
+): Promise<boolean> {
+  if (!existsSync(confirmFile(pairingId, "confirm"))) return false;
+  try {
+    // "wx": a second scan must not take over a request that is already waiting
+    writeFileSync(confirmFile(pairingId, "request"), JSON.stringify({ name: sanitizeName(name) }), {
+      mode: 0o600,
+      flag: "wx",
+    });
+  } catch {
+    throw new Error("busy");
+  }
   const until = Date.now() + timeoutMs;
   try {
     while (Date.now() < until) {
+      let answer: string | undefined;
       try {
-        const answer = readFileSync(confirmFile(pairingId, "answer"), "utf8").trim();
-        if (answer === "yes") return;
-        throw new Error("denied");
-      } catch (err) {
-        if (err instanceof Error && err.message === "denied") throw err;
+        answer = readFileSync(confirmFile(pairingId, "answer"), "utf8").trim();
+      } catch {}
+      if (answer === "yes") {
+        rmSync(confirmFile(pairingId, "request"), { force: true });
+        renameSync(confirmFile(pairingId, "answer"), confirmFile(pairingId, "taken"));
+        return true;
       }
+      if (answer !== undefined) throw new Error("denied");
       await Bun.sleep(300);
     }
     throw new Error("not_confirmed");
-  } finally {
-    for (const k of ["confirm", "request", "answer"] as const)
-      rmSync(confirmFile(pairingId, k), { force: true });
+  } catch (err) {
+    // spent: drop the key first, then the marker (never a moment with key but no marker)
+    removeBootstrap(pairingId);
+    endConfirmation(pairingId);
+    throw err;
   }
 }
 

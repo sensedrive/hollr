@@ -10,7 +10,8 @@
   import type { Pane, Timeline } from "../api";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
-  import { allPanes, go, serverById, tabName } from "../store.svelte";
+  import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
+  import { draftKey } from "../drafts";
   import {
     cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, phaseDone, phaseName,
     shortPath, todoColor, urlPort, viaTunnel, workingLabel, type HistoryEvent,
@@ -24,7 +25,11 @@
   import GitPanel from "./GitPanel.svelte";
   import Modal from "./Modal.svelte";
 
-  let { server, pane, title, onClosed }: { server: string; pane: Pane; title: string; onClosed: () => void } = $props();
+  let { server, pane, title, onClosed }: {
+    server: string; pane: Pane; title: string;
+    /** the pane was closed; gets its "serverId|pane" */
+    onClosed: (id: string) => void;
+  } = $props();
 
   const ws = $derived(pane.pane.split(":")[0] ?? "");
   const isOmp = $derived(pane.agent === "omp");
@@ -33,6 +38,8 @@
     pane.agent ? ({ omp: "omp", claude: "Claude", codex: "Codex" } as Record<string, string>)[pane.agent] ?? pane.agent : "Shell",
   );
   const serverLabel = $derived(serverById(server)?.label ?? server);
+  /** drafts / ↑ history of this session */
+  const key = $derived(draftKey(server, pane.pane));
   const mac = navigator.platform.toLowerCase().includes("mac");
   const mod = mac ? "⌘" : "Ctrl+";
   const shift = mac ? "⇧" : "Shift+";
@@ -45,7 +52,11 @@
   let bubbles = $state<Bubble[]>([]);
   let screen = $state("");
   let loaded = $state(false);
-  let error = $state("");
+  /** polling problem – cleared by the next good poll */
+  let pollError = $state("");
+  /** a failed action (send, keys, close …) – stays until the next action works */
+  let actionError = $state("");
+  const error = $derived(actionError || pollError);
   /** typed prompts that are not in the log yet */
   let pending = $state<string[]>([]);
   let lastSig = "";
@@ -94,9 +105,9 @@
       }
       if (showsScreen && mode === "chat") screen = cleanScreen(await api.screen(server, pane.pane, 40));
       else screen = "";
-      error = "";
+      pollError = "";
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      pollError = e instanceof Error ? e.message : String(e);
     } finally {
       loaded = true;
       busy = false;
@@ -138,7 +149,6 @@
   let toast = $state("");
   let composer: Composer | undefined = $state();
   let term: TerminalView | undefined = $state();
-  let text = $state("");
 
   const PW = "hollr.agent.panelWidth";
   let panelWidth = $state(Number(localStorage.getItem(PW)) || 460);
@@ -212,21 +222,31 @@
     if (!isShell) pending = [...pending, msg];
     try {
       await api.prompt(server, pane.pane, msg);
+      actionError = "";
       setTimeout(tick, 500);
       if (mode === "terminal") term?.refresh();
       return true;
     } catch (e) {
       pending = pending.filter((p) => p !== msg);
-      error = t("Senden fehlgeschlagen: {e}", { e: e instanceof Error ? e.message : String(e) });
+      actionError = t("Senden fehlgeschlagen: {e}", { e: e instanceof Error ? e.message : String(e) });
       return false;
     }
+  }
+
+  /** Composer text: stays in the drafts until the server took it (back into the draft if not – even if this view is gone). */
+  async function sendDraft(msg: string): Promise<boolean> {
+    const k = key;
+    drafts.beginSend(k, msg);
+    const ok = await sendText(msg);
+    drafts.endSend(k, msg, ok);
+    return ok;
   }
 
   function sendKeys(keys: string[]) {
     if (mode === "terminal" && term) return term.send(keys);
     api.keys(server, pane.pane, keys)
-      .then(() => setTimeout(tick, 400))
-      .catch((e) => (error = t("Tasten senden fehlgeschlagen: {e}", { e: e instanceof Error ? e.message : String(e) })));
+      .then(() => { actionError = ""; setTimeout(tick, 400); })
+      .catch((e) => (actionError = t("Tasten senden fehlgeschlagen: {e}", { e: e instanceof Error ? e.message : String(e) })));
   }
 
   function openModels() {
@@ -238,12 +258,13 @@
 
   async function close() {
     confirmClose = false;
+    const id = key;
     if (livePhase) await invoke("live_stop").catch(() => {});
     try {
       await api.closePane(server, pane.pane);
-      onClosed();
+      onClosed(id);
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      actionError = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -274,7 +295,7 @@
       // the server's localhost goes through a tunnel (stays open until Hollr quits)
       await openUrl(isLoopback(url) ? viaTunnel(url, await api.tunnelOpen(server, urlPort(url))) : url.href);
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      actionError = e instanceof Error ? e.message : String(e);
     }
   }
   function linkCopy(url: URL) {
@@ -291,6 +312,8 @@
   function onKey(e: KeyboardEvent) {
     const m = e.metaKey || e.ctrlKey;
     if (e.key === "Escape") {
+      // another dialog (new session, model …) handles its own Esc – don't also leave zen
+      if (!linkUrl && document.querySelector('[role="dialog"]')) return;
       if (linkUrl) linkUrl = null;
       else if (menu) menu = false;
       else if (zen && !showModels && !showCodex && !confirmClose) zen = false;
@@ -325,34 +348,56 @@
   let liveError = $state("");
   let liveNote = $state("");
   let unlisten: UnlistenFn[] = [];
+  /** false once this view is gone (a start may still be under way) */
+  let alive = true;
+  /** id from live_start; events of other (older) sessions are ignored */
+  let liveSession: number | null = null;
+  /** events that arrived before live_start returned the id */
+  let early: Record<string, unknown>[] = [];
 
   async function startLive() {
     liveError = "";
     liveNote = "";
     livePhase = "connecting";
-    unlisten.push(await listen<Record<string, unknown>>("live", (e) => {
-      const m = e.payload;
-      if (m.t === "phase") {
-        if (m.phase === "live") livePhase = "live";
-        else if (m.phase === "ended") {
-          if (m.reason === "live_stopped") liveNote = t("Live wurde am Rechner beendet.");
-          endLive();
-        } else if (m.phase === "failed") { liveError = String(m.message ?? m.reason ?? t("Live fehlgeschlagen")); endLive(); }
-      } else if (m.t === "omp") ompState = String(m.state);
-      else if (m.t === "error") liveError = String(m.message ?? m.code);
-      else if (m.t === "audio_error") liveError = String(m.message);
-      else if (m.t === "closed") endLive();
-    }));
-    unlisten.push(await listen<{ input: number; output: number }>("live-levels", (e) => (levels = e.payload)));
+    liveSession = null;
+    early = [];
+    const offs = [
+      await listen<Record<string, unknown>>("live", (e) => {
+        if (liveSession === null) early.push(e.payload);
+        else if (e.payload.session === liveSession) onLive(e.payload);
+      }),
+      await listen<{ input: number; output: number; session?: number }>("live-levels", (e) => {
+        if (e.payload.session === liveSession) levels = e.payload;
+      }),
+    ];
+    if (!alive) return offs.forEach((u) => u());
+    unlisten.push(...offs);
     try {
-      await invoke("live_start", { server, pane: pane.pane });
+      const id = await invoke<number>("live_start", { server, pane: pane.pane });
+      if (!alive) return;
+      liveSession = id;
+      for (const m of early.splice(0)) if (m.session === id) onLive(m);
     } catch (e) {
       liveError = String(e);
       endLive();
     }
   }
+  function onLive(m: Record<string, unknown>) {
+    if (m.t === "phase") {
+      if (m.phase === "live") livePhase = "live";
+      else if (m.phase === "ended") {
+        if (m.reason === "live_stopped") liveNote = t("Live wurde am Rechner beendet.");
+        endLive();
+      } else if (m.phase === "failed") { liveError = String(m.message ?? m.reason ?? t("Live fehlgeschlagen")); endLive(); }
+    } else if (m.t === "omp") ompState = String(m.state);
+    else if (m.t === "error") liveError = String(m.message ?? m.code);
+    else if (m.t === "audio_error") liveError = String(m.message);
+    else if (m.t === "closed") endLive();
+  }
   function endLive() {
     livePhase = "";
+    liveSession = null;
+    early = [];
     ompState = undefined;
     speakerMuted = false;
     for (const u of unlisten) u();
@@ -365,7 +410,8 @@
   }
   const toggleMic = () => { ompState = micMuted ? "listening" : "muted"; invoke("live_mute", { on: ompState === "muted" }); };
   const toggleSpeaker = () => { speakerMuted = !speakerMuted; invoke("live_speaker", { muted: speakerMuted }); };
-  onDestroy(() => { if (livePhase) invoke("live_stop").catch(() => {}); endLive(); });
+  // always: a start may still be under way (live_stop waits for it, then stops it)
+  onDestroy(() => { alive = false; invoke("live_stop").catch(() => {}); endLive(); });
 
   function ompStateLabel(s?: string) {
     if (!s) return t("verbunden");
@@ -577,7 +623,7 @@
         {/if}
       {:else}
         <div class="termwrap">
-          <TerminalView bind:this={term} {server} pane={pane.pane} onError={(m) => (error = m)} />
+          <TerminalView bind:this={term} {server} pane={pane.pane} onError={(m) => (actionError = m)} />
           {#if error}<div class="warnline">⚠ {error}</div>{/if}
         </div>
       {/if}
@@ -586,7 +632,8 @@
         {#if timeline && hudVisible(timeline)}
           <div class="hudwrap" class:glass={zen}>{@render hud(timeline)}</div>
         {/if}
-        <Composer bind:this={composer} bind:value={text} {placeholder} {keysTitle} translucent={zen} onSend={sendText} onKeys={sendKeys}
+        <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
+          bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
           top={liveStrip} trailing={liveButton} />
         {#if !zen}{@render statusLine()}{/if}
       </div>
@@ -694,7 +741,7 @@
         await api.switchModel(server, pane.pane, model, level);
         setTimeout(tick, 1500);
       } catch (e) {
-        error = e instanceof Error ? e.message : String(e);
+        actionError = e instanceof Error ? e.message : String(e);
       }
       showModels = false;
     }} />

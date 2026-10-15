@@ -34,6 +34,8 @@ export interface LiveIO {
 type Control = { t?: string; on?: boolean; text?: string; keys?: string[] };
 
 const SILENCE_20MS = new Uint8Array(960); // 24 kHz * 2 bytes * 0.02 s
+/** The phone sends audio or a ping every 5 s even when muted – silence this long = gone. */
+export const INPUT_TIMEOUT_MS = 20_000;
 
 function lockDir(): string {
   const base = Bun.env.XDG_RUNTIME_DIR || tmpdir();
@@ -61,7 +63,12 @@ function acquireLock(pane: string): { file: string; stale: boolean } | undefined
   return { file, stale };
 }
 
-export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<void> {
+export async function runLive(
+  pane: string,
+  herdr: Herdr,
+  io: LiveIO,
+  timeoutMs = INPUT_TIMEOUT_MS,
+): Promise<void> {
   let broken = false;
   const write = (bytes: Uint8Array) => {
     if (broken) return;
@@ -170,6 +177,12 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
   };
   const speaker = pulse.spawnSpeakerReader();
 
+  // ends the read loop even while it waits for input that never comes (dead network)
+  let stopInput = () => {};
+  const inputStopped = new Promise<IteratorReturnResult<undefined>>((resolve) => {
+    stopInput = () => resolve({ done: true, value: undefined });
+  });
+
   // every caller waits for the same cleanup (restoring devices must finish before the process exits)
   let ended: Promise<void> | undefined;
   const end = (reason: string): Promise<void> => {
@@ -178,6 +191,7 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
   };
   const finish = async (reason: string) => {
     ending = true;
+    stopInput();
     log("live", pane, "end", reason, { startedLive, ms: Date.now() - startedAt });
     for (const t of timers) clearInterval(t);
     tail?.stop();
@@ -234,11 +248,12 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
     // don't leave a half-started /live behind (it would keep listening on the server)
     if (startedLive && (await herdr.liveState(pane).catch(() => undefined)))
       await herdr.sendKeys(pane, ["esc"]).catch(() => {});
-    await end("start_failed");
-    return fail(
+    // error first: after "ended" the phone stops listening
+    fail(
       "start_failed",
       "omp /live ist nicht gestartet. Ist der Agent gerade beschäftigt oder nicht eingeloggt?",
     );
+    return void (await end("start_failed"));
   }
   log("live", pane, "live", { pid, took: Date.now() - startedAt });
   send({ t: "phase", phase: "live" });
@@ -270,9 +285,22 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
 
   // phone -> omp mic + control
   const decoder = new FrameDecoder();
+  const input = io.input[Symbol.asyncIterator]();
+  // heartbeat: a dropped network never closes the channel, sshd would wait ~2 h
+  let lastInputAt = Date.now();
+  // only for clients that ping: older apps send nothing while muted and would be cut off
+  let pings = false;
+  timers.push(
+    setInterval(() => {
+      if (pings && !ending && Date.now() - lastInputAt > timeoutMs) void end("disconnected");
+    }, 1000),
+  );
   try {
-    for await (const chunk of io.input) {
-      if (ending) break;
+    while (true) {
+      const next = await Promise.race([input.next(), inputStopped]);
+      if (next.done || ending) break;
+      const chunk = next.value;
+      lastInputAt = Date.now();
       for (const frame of decoder.push(chunk)) {
         if (frame.type === FRAME_AUDIO) {
           if (!muted) {
@@ -293,7 +321,10 @@ export async function runLive(pane: string, herdr: Herdr, io: LiveIO): Promise<v
           if (c.t === "prompt" && c.text) await herdr.prompt(pane, c.text).catch(() => {});
           if (c.t === "keys" && Array.isArray(c.keys))
             await herdr.sendKeys(pane, c.keys).catch(() => {});
-          if (c.t === "ping") send({ t: "pong" });
+          if (c.t === "ping") {
+            pings = true;
+            send({ t: "pong" });
+          }
         }
       }
     }

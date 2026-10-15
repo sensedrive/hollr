@@ -673,10 +673,80 @@ describe("network modes", () => {
   });
 });
 
+describe("gate", () => {
+  test("timeline of a closed pane answers not_found instead of nothing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-gate-"));
+    try {
+      const herdr = join(dir, "herdr");
+      writeFileSync(
+        herdr,
+        `#!/bin/sh\necho '{"error":{"code":"pane_not_found","message":"no such pane"}}'\nexit 1\n`,
+        { mode: 0o755 },
+      );
+      const proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli.ts"), "gate"], {
+        env: {
+          PATH: Bun.env.PATH ?? "/usr/bin:/bin",
+          HOME: dir,
+          HOLLR_GATE_PATH: "1",
+          HERDR_BIN_PATH: herdr,
+          HOLLR_AUTHORIZED_KEYS: join(dir, "authorized_keys"),
+          HOLLR_STATE_DIR: dir,
+          XDG_STATE_HOME: dir,
+          XDG_CONFIG_HOME: dir,
+          SSH_ORIGINAL_COMMAND: "timeline w1:p9 150",
+        },
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = await new Response(proc.stdout).text();
+      expect(await proc.exited).toBe(0);
+      expect(JSON.parse(out)).toEqual({ error: "not_found" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("addresses", () => {
+  test("public, then .local, then private; no link-local, no bridges", async () => {
+    const { orderAddresses } = await import("../src/pairing");
+    const v4 = (address: string, internal = false) => ({ family: "IPv4", internal, address });
+    const order = orderAddresses(
+      {
+        lo0: [v4("127.0.0.1", true)],
+        en0: [v4("192.168.1.20"), { family: "IPv6", internal: false, address: "fe80::1" }],
+        en1: [v4("169.254.10.3")],
+        en5: [v4("203.0.113.7")],
+        utun4: [v4("100.101.1.2")],
+        docker0: [v4("172.17.0.1")],
+        "br-1a2b": [v4("172.18.0.1")],
+        virbr0: [v4("192.168.122.1")],
+        lxdbr0: [v4("10.10.10.1")],
+        cni0: [v4("10.88.0.1")],
+        "flannel.1": [v4("10.244.0.0")],
+      },
+      ["mac.local"],
+    );
+    expect(order).toEqual(["203.0.113.7", "mac.local", "192.168.1.20", "100.101.1.2"]);
+  });
+});
+
 describe("pairing confirmation", () => {
-  test("waits for yes, rejects no, skips when not asked", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "hollr-confirm-"));
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "hollr-confirm-"));
     Bun.env.HOLLR_STATE_DIR = dir;
+    // a denied code drops its bootstrap key: never touch the real ~/.ssh
+    Bun.env.HOLLR_AUTHORIZED_KEYS = join(dir, "authorized_keys");
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    delete Bun.env.HOLLR_STATE_DIR;
+    delete Bun.env.HOLLR_AUTHORIZED_KEYS;
+  });
+
+  test("waits for yes, rejects no, skips when not asked", async () => {
     const p = await import("../src/pairing");
     await p.awaitConfirmation("nobody", "iPhone", 200); // no confirmation requested → returns at once
     p.requireConfirmation("abc");
@@ -693,8 +763,41 @@ describe("pairing confirmation", () => {
     p.requireConfirmation("ghi");
     expect(p.awaitConfirmation("ghi", "x", 300)).rejects.toThrow("not_confirmed");
     await Bun.sleep(400);
-    rmSync(dir, { recursive: true, force: true });
-    delete Bun.env.HOLLR_STATE_DIR;
+  });
+
+  for (const outcome of ["denied", "not_confirmed"] as const)
+    test(`${outcome}: a second scan of the same code cannot enroll`, async () => {
+      const p = await import("../src/pairing");
+      const { id } = p.addBootstrap(p.newBootstrapKey().publicLine);
+      p.requireConfirmation(id);
+      const first = p.awaitConfirmation(id, "Phone", outcome === "denied" ? 5000 : 300);
+      if (outcome === "denied") {
+        await Bun.sleep(100);
+        p.answerRequest(id, false);
+      }
+      await expect(first).rejects.toThrow(outcome);
+      expect(readFileSync(Bun.env.HOLLR_AUTHORIZED_KEYS ?? "", "utf8")).not.toContain(id);
+      // second scan: no marker any more, but the key is gone too
+      expect(await p.awaitConfirmation(id, "Thief", 300)).toBe(false);
+      expect(() => p.enroll(id, p.newBootstrapKey().publicLine, "Thief")).toThrow(
+        "unknown_pairing",
+      );
+    });
+
+  test("yes: marker stays until enrolled, a parallel scan is busy", async () => {
+    const p = await import("../src/pairing");
+    const { id } = p.addBootstrap(p.newBootstrapKey().publicLine);
+    p.requireConfirmation(id);
+    const first = p.awaitConfirmation(id, "Phone", 5000);
+    await Bun.sleep(100);
+    await expect(p.awaitConfirmation(id, "Thief", 300)).rejects.toThrow("busy");
+    p.answerRequest(id, true);
+    expect(await first).toBe(true);
+    expect(p.pendingRequest(id)).toBeUndefined();
+    // confirmed but not enrolled yet: another scan still has to ask
+    const again = p.awaitConfirmation(id, "Thief", 300);
+    await expect(again).rejects.toThrow("not_confirmed");
+    expect(() => p.enroll(id, p.newBootstrapKey().publicLine, "x")).toThrow("unknown_pairing");
   });
 });
 

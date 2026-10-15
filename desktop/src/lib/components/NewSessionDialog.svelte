@@ -4,7 +4,7 @@
   import * as api from "../api";
   import type { Server, Workspace } from "../api";
   import { t } from "../i18n";
-  import { dialogs, go } from "../store.svelte";
+  import { dialogMemory, dialogs, go } from "../store.svelte";
   import Modal from "./Modal.svelte";
   import ModelDialog from "./ModelDialog.svelte";
 
@@ -29,8 +29,14 @@
   let installed = $state<string[]>([]);
   let kindsLoaded = $state(false);
   let workspace = $state(preset.ws ?? HOME);
-  let folder = $state("");
-  let label = $state("");
+  // typed fields survive closing the dialog by accident
+  const memory = dialogMemory.newSession;
+  let folder = $state(memory.folder);
+  let label = $state(memory.label);
+  $effect(() => {
+    memory.folder = folder;
+    memory.label = label;
+  });
   let model = $state<string | undefined>();
   let level = $state<string | undefined>();
   let picking = $state(false);
@@ -109,6 +115,7 @@
         ...(ws ? { workspace: ws } : cwd ? { cwd } : {}),
         ...(kind !== "shell" ? { model, level } : {}),
       });
+      memory.folder = memory.label = "";
       onCreated(server, pane);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
