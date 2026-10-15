@@ -13,6 +13,8 @@ struct InboxEntry: Identifiable, Equatable {
     var options: [String]
     /// identifies this turn (dismissing hides it until something new happens)
     var turn: String
+    /// index of omp's recommended option
+    var recommended: Int? = nil
 
     var id: String { ref.id }
 
@@ -27,8 +29,9 @@ struct InboxEntry: Identifiable, Equatable {
         let items = timeline?.visibleItems ?? []
         if status == "blocked" {
             for item in items.reversed() {
-                if case let .ask(id, question, options, _, true) = item {
-                    return InboxEntry(ref: ref, kind: .ask, text: plain(question), options: options, turn: id)
+                if case let .ask(id, question, options, _, true, details) = item {
+                    return InboxEntry(ref: ref, kind: .ask, text: plain(question), options: options, turn: id,
+                                      recommended: details.recommended)
                 }
             }
             let last = items.last.map(\.id) ?? "blocked"

@@ -1,6 +1,6 @@
 [package]
 name = "hollr-desktop"
-version = "0.28.0"
+version = "0.29.0"
 description = "Hollr desktop client"
 authors = ["Hollr contributors"]
 license = "MIT"

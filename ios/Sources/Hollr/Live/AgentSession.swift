@@ -74,6 +74,79 @@ final class AgentSession {
         for cont in all.values { cont.resume() }
     }
 
+    /// The chat as a stream (`gate follow`): changes arrive the moment omp writes them, a few KB
+    /// each, instead of a poll every 1.5 s. Returns false when the server is too old (poll then).
+    func follow() async -> Bool {
+        guard usesTimeline else { return false }
+        let pane = ref.pane.pane
+        let server = ref.server
+        let heard = Clock()
+        var supported = true
+        do {
+            let client = try await SSHPool.shared.client(for: server)
+            heard.touch()
+            // the server pings every 20 s: silence = a dead connection
+            let watchdog = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(10))
+                    if heard.age > 50 { await SSHPool.shared.invalidate(server); return }
+                }
+            }
+            defer { watchdog.cancel() }
+            try await client.withExec("follow \(pane) 150") { inbound, _ in
+                var buffer = Data()
+                for try await output in inbound {
+                    guard case .stdout(let bytes) = output else { continue }
+                    heard.touch()
+                    buffer.append(contentsOf: bytes.readableBytesView)
+                    while let nl = buffer.firstIndex(of: 0x0a) {
+                        let line = Data(buffer[buffer.startIndex..<nl])
+                        buffer.removeSubrange(buffer.startIndex...nl)
+                        // decoding a full timeline (~100 KB) stays off the main thread
+                        let event = await Task.detached(priority: .userInitiated) { FollowEvent.decode(line) }.value
+                        switch event {
+                        case .unsupported:
+                            supported = false
+                            return
+                        case .gone:
+                            self.lastError = String(localized: "Die Session gibt es nicht mehr.")
+                            self.historyLoaded = true
+                            return
+                        case let .full(timeline):
+                            self.apply(timeline)
+                        case let .delta(head, order, items):
+                            // an id we don't have (gap): reconnect for a full one
+                            guard let merged = FollowEvent.merge(self.timeline, head: head, order: order, items: items) else { return }
+                            self.apply(merged)
+                        case .other:
+                            break
+                        }
+                    }
+                }
+            }
+        } catch is CancellationError {
+        } catch {
+            HollrLog.error("follow \(pane): \(error)")
+            if HollrError.isTransport(error) { await SSHPool.shared.invalidate(server) }
+        }
+        return supported
+    }
+
+    /// A fresh timeline from the stream or a poll.
+    private func apply(_ fresh: Timeline) {
+        if fresh != timeline { timeline = fresh }
+        if let status = fresh.status, !isLive { agentStatus = status }
+        // typed prompts that now show up in the log are no longer "pending"
+        let logged = Set(fresh.items.compactMap { item -> String? in
+            if case let .user(_, text, _, _) = item { return text }
+            return nil
+        })
+        pendingTyped.removeAll { logged.contains($0) }
+        items.removeAll { $0.kind == .typed && !$0.final && logged.contains($0.text) }
+        historyLoaded = true
+        lastError = nil
+    }
+
     func loadTimeline() async {
         guard usesTimeline else { return }
         do {
@@ -82,17 +155,7 @@ final class AgentSession {
                 lastError = nil
                 return // unchanged
             }
-            if fresh != timeline { timeline = fresh }
-            if let status = fresh.status, !isLive { agentStatus = status }
-            // typed prompts that now show up in the log are no longer "pending"
-            let logged = Set(fresh.items.compactMap { item -> String? in
-                if case let .user(_, text, _, _) = item { return text }
-                return nil
-            })
-            pendingTyped.removeAll { logged.contains($0) }
-            items.removeAll { $0.kind == .typed && !$0.final && logged.contains($0.text) }
-            historyLoaded = true
-            lastError = nil
+            apply(fresh)
         } catch {
             HollrLog.error("timeline \(ref.pane.pane): \(error)")
             lastError = error.localizedDescription

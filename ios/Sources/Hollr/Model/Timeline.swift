@@ -83,20 +83,21 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
     case thinking(id: String, text: String)
     case text(id: String, text: String)
     case tools(id: String, calls: [ToolCall])
-    case ask(id: String, question: String, options: [String], answer: String?, pending: Bool)
+    case ask(id: String, question: String, options: [String], answer: String?, pending: Bool, details: AskDetails = AskDetails())
     case end(id: String, ms: Double, status: String, error: String?)
     case info(id: String, text: String)
 
     var id: String {
         switch self {
         case let .user(id, _, _, _), let .thinking(id, _), let .text(id, _), let .tools(id, _),
-             let .ask(id, _, _, _, _), let .end(id, _, _, _), let .info(id, _):
+             let .ask(id, _, _, _, _, _), let .end(id, _, _, _), let .info(id, _):
             return id
         }
     }
 
     private enum Keys: String, CodingKey {
         case k, id, text, source, at, calls, question, options, answer, pending, ms, status, error
+        case header, descriptions, recommended
     }
 
     init(from decoder: Decoder) throws {
@@ -114,7 +115,10 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
             self = .ask(id: id, question: try c.decode(String.self, forKey: .question),
                         options: (try? c.decode([String].self, forKey: .options)) ?? [],
                         answer: try? c.decode(String.self, forKey: .answer),
-                        pending: (try? c.decode(Bool.self, forKey: .pending)) ?? false)
+                        pending: (try? c.decode(Bool.self, forKey: .pending)) ?? false,
+                        details: AskDetails(header: try? c.decode(String.self, forKey: .header),
+                                            descriptions: (try? c.decode([String].self, forKey: .descriptions)) ?? [],
+                                            recommended: try? c.decode(Int.self, forKey: .recommended)))
         case "end":
             self = .end(id: id, ms: (try? c.decode(Double.self, forKey: .ms)) ?? 0,
                         status: (try? c.decode(String.self, forKey: .status)) ?? "done",
@@ -122,6 +126,17 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
         default:
             self = .info(id: id, text: (try? c.decode(String.self, forKey: .text)) ?? "")
         }
+    }
+}
+
+/// omp's ask extras: short title, a line per option, the recommended one.
+struct AskDetails: Equatable {
+    var header: String?
+    var descriptions: [String] = []
+    var recommended: Int?
+
+    func description(_ index: Int) -> String? {
+        index < descriptions.count && !descriptions[index].isEmpty ? descriptions[index] : nil
     }
 }
 

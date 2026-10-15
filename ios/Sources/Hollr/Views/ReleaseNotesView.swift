@@ -10,6 +10,13 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 42, date: "15.10.2026", items: [
+            ("bolt.horizontal", String(localized: "Live-Chat als Datenstrom: neue Schritte erscheinen sofort, statt alle 1,5 s abgefragt zu werden – und es kommen nur die Änderungen (wenige KB statt ~100 KB)")),
+            ("arrow.up.and.down.text.horizontal", String(localized: "Hochscrollen bleibt stehen: neue Ausgaben ziehen dich nicht mehr nach unten, „↓ Neu“ springt zurück ans Ende")),
+            ("rectangle.bottomthird.inset.filled", String(localized: "Das Eingabefeld schwebt jetzt auch im normalen Modus durchsichtig über dem Chat")),
+            ("star", String(localized: "Fragen von omp zeigen die empfohlene Antwort und die Erklärungen zu jeder Option – auch in „Braucht dich“ und Mitteilungen (★)")),
+            ("arrow.up.left.and.arrow.down.right", String(localized: "Zen-Modus im halb geöffneten Chat öffnet ihn ganz – keine Darstellungsfehler mehr")),
+        ]),
         ReleaseNote(build: 41, date: "15.10.2026", items: [
             ("apple.terminal", String(localized: "Terminal › „Eigene Shell“: ein echtes Terminal im Ordner der Session, passend zur iPhone-Breite, mit Scrollen – der Rechner bleibt unverändert")),
             ("keyboard", String(localized: "Tippen, Einfügen und Diktieren im Terminal laufen jetzt über die normale iOS-Tastatur")),

@@ -59,7 +59,11 @@ export type TimelineItem =
   | { k: "thinking"; id: string; text: string }
   | { k: "text"; id: string; text: string }
   | { k: "tools"; id: string; calls: ToolCall[] }
-  | { k: "ask"; id: string; question: string; options: string[]; answer?: string; pending?: boolean }
+  | {
+      k: "ask"; id: string; question: string; options: string[]; answer?: string; pending?: boolean;
+      /** omp's short title, a line per option, the recommended option's index */
+      header?: string; descriptions?: string[]; recommended?: number;
+    }
   | { k: "end"; id: string; ms: number; status: string; error?: string }
   | { k: "info"; id: string; text: string };
 

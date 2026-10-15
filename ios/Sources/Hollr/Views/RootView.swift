@@ -20,6 +20,7 @@ struct RootView: View {
     @Namespace private var zoom
     @State private var shared: SharedItem?
     @State private var tour: [Tip]?
+    @State private var sheetDetent: PresentationDetent = .fraction(0.82)
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var wide: Bool { sizeClass == .regular }
     @Environment(MySessions.self) private var mySessions
@@ -126,11 +127,14 @@ struct RootView: View {
                     PushManager.shared.updateServers(servers)
                     herdr.startFeeds(servers)
                 }
+                .onChange(of: sheetAgent) { _, _ in sheetDetent = .fraction(0.82) }
                 .sheet(item: Binding(get: { sheetAgent.map(SheetID.init) }, set: { sheetAgent = $0?.id })) { item in
                     AgentSheet(agentId: item.id)
-                        .presentationDetents([.fraction(0.82), .large])
+                        .presentationDetents([.fraction(0.82), .large], selection: $sheetDetent)
                         .presentationDragIndicator(.visible)
                         .presentationBackground(Theme.bg)
+                        // zen mode in a half-open sheet: open it fully (no bars, no room to spare)
+                        .environment(\.expandSheet) { sheetDetent = .large }
                 }
             }
         }
@@ -198,7 +202,8 @@ struct RootView: View {
                     spacesPath.append(SpaceRoute(server: server, space: space))
                 }
             }
-            if let pane = d.string(forKey: "hollrSheetPane"), let server = store.servers.first {
+            if let pane = d.string(forKey: "hollrSheetPane"),
+               let server = d.string(forKey: "hollrServer").flatMap({ l in store.servers.first { $0.label == l } }) ?? store.servers.first {
                 try? await Task.sleep(for: .seconds(2))
                 sheetAgent = "\(server.id.uuidString)|\(pane)"
             }
@@ -368,4 +373,14 @@ extension View {
 struct PairingRequest: Identifiable {
     let id = UUID()
     var link: String?
+}
+
+private struct ExpandSheetKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
+
+extension EnvironmentValues {
+    /// set inside the agent sheet: brings it to full height
+    var expandSheet: (() -> Void)? {
+        get { self[ExpandSheetKey.self] }
+        set { self[ExpandSheetKey.self] = newValue }
+    }
 }

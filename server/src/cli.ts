@@ -62,6 +62,7 @@ import {
   upgradeDeviceKeys,
 } from "./pairing";
 import { webPorts } from "./ports";
+import { runFollow } from "./follow";
 import { runShell } from "./shell";
 import { runTerm } from "./term";
 import { saveUpload, UPLOAD_LIMIT } from "./uploads";
@@ -93,7 +94,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.28.0";
+export const VERSION = "0.29.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -172,6 +173,7 @@ async function gate(): Promise<number> {
       "models",
       "events",
       "dirs",
+      "follow",
     ].includes(cmd)
   )
     log("gate", original);
@@ -241,6 +243,11 @@ async function gate(): Promise<number> {
       await execHerdr(["pane", "close", pane]);
       json({ ok: true });
       return 0;
+    case "follow":
+      // the chat as a stream (only changes) – replaces polling `timeline`
+      return runFollow(new Herdr(), pane, Number(rest[0] ?? 150) || 150, (cwd, screen, model) =>
+        statusLine(cwd, parseFooter(screen), model),
+      );
     case "timeline": {
       // a pane that is gone: an answer the app understands, not empty output
       const agent = await agentOrError(herdr, pane);

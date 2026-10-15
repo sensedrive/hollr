@@ -45,6 +45,10 @@ private struct AgentConversation: View {
     @State private var editing = false
     /// reading mode → transcript only, full screen
     @State private var reading = false
+    /// at the end of the chat: new output scrolls into view
+    @State private var following = true
+    @State private var readingAnchor: String?
+    @State private var unseen = 0
     @Environment(\.dismiss) private var dismiss
     @AppStorage(TextScale.key) private var scaleIndex = TextScale.system
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -88,6 +92,7 @@ private struct AgentConversation: View {
     }
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.expandSheet) private var expandSheet
     /// iPhone in landscape: chat on the left, terminal or changes on the right
     private var landscape: Bool { verticalSizeClass == .compact && !reading }
 
@@ -103,7 +108,10 @@ private struct AgentConversation: View {
         .animation(.easeInOut(duration: 0.2), value: reading)
         .fullScreenCover(isPresented: $showTerminal) { TerminalScreen(ref: ref) }
         // the zen composer goes away with the keyboard up: its focus change never arrives
-        .onChange(of: reading) { _, _ in editing = false }
+        .onChange(of: reading) { _, zen in
+            editing = false
+            if zen { expandSheet?() }
+        }
         .themedPage()
         .toolbar(reading ? .hidden : .visible, for: .navigationBar)
         .toolbar(reading || landscape ? .hidden : .visible, for: .tabBar)
@@ -160,15 +168,30 @@ private struct AgentConversation: View {
             Text("Das Pane „\(ref.title)“ wird in herdr auf \(ref.server.label) geschlossen und \(ref.pane.agentName) beendet.")
         }
         .task {
-            // keep the conversation fresh while visible (live calls stream it themselves)
+            // omp: the chat streams in (`gate follow`); older servers are polled
+            guard session.usesTimeline else { return }
+            var failures = 0
             while !Task.isCancelled {
-                if session.usesTimeline {
-                    await session.loadTimeline()
-                } else {
-                    await session.loadHistory()
+                let started = Date()
+                guard await session.follow() else {
+                    // server without `follow`: poll like before
+                    while !Task.isCancelled {
+                        await session.loadTimeline()
+                        await session.waitForPoll()
+                    }
+                    return
                 }
+                // the stream ended (network, pane gone, gap): reconnect, slower when it keeps failing
+                failures = Date().timeIntervalSince(started) > 30 ? 0 : failures + 1
+                try? await Task.sleep(for: .seconds(min(Double(failures) * 2, 15)))
+            }
+        }
+        .task {
+            // other agents' history, and the terminal screen while one waits for you
+            while !Task.isCancelled {
+                if !session.usesTimeline { await session.loadHistory() }
                 await session.loadScreen()
-                // 1.5 s while omp works or waits, 5 s when idle, paused while dictating – sooner on nudge()
+                // 1.5 s while busy, 5 s idle, paused while dictating – sooner on nudge()
                 await session.waitForPoll()
             }
         }
@@ -211,6 +234,13 @@ private struct AgentConversation: View {
 
     // MARK: Transcript
 
+    /// Follow new output only while you are at the end – scrolling up to read stops it.
+    private func follow(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        guard following else { unseen += 1; return }
+        if animated { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) } }
+        else { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
     private func settleAtBottom(_ proxy: ScrollViewProxy) {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
@@ -221,6 +251,8 @@ private struct AgentConversation: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
+                // computed once per update (it filters the whole list)
+                let visible = session.timeline?.visibleItems ?? []
                 LazyVStack(alignment: .leading, spacing: 10) {
                     Text(session.timeline?.cleanTitle ?? ref.pane.title)
                         .font(.caption)
@@ -230,7 +262,7 @@ private struct AgentConversation: View {
                     if session.usesTimeline {
                         let tl = session.timeline ?? .empty
                         if tl.items.isEmpty && session.items.isEmpty { emptyHint }
-                        ForEach(tl.visibleItems) { item in
+                        ForEach(visible) { item in
                             TimelineRow(item: item) { index, _ in session.answer(option: index) }
                                 .equatable() // unchanged entries are not re-rendered on every refresh
                                 .id(item.id)
@@ -246,9 +278,9 @@ private struct AgentConversation: View {
                         }
                     }
                     // omp's question already shows as an Ask card – the raw screen would only repeat it
-                    let askShown = session.usesTimeline && (session.timeline?.visibleItems.contains {
-                        if case .ask(_, _, _, _, true) = $0 { return true } else { return false }
-                    } ?? false)
+                    let askShown = session.usesTimeline && visible.contains {
+                        if case .ask(_, _, _, _, true, _) = $0 { return true } else { return false }
+                    }
                     if session.showsScreen && !session.screen.isEmpty && !askShown {
                         TerminalCard(text: session.screen, waiting: session.agentStatus == "blocked",
                                      collapsible: session.usesTimeline)
@@ -261,9 +293,39 @@ private struct AgentConversation: View {
                         Text(error).font(.footnote).foregroundStyle(Theme.warn).frame(maxWidth: .infinity)
                     }
                     Color.clear.frame(height: 1).id("bottom")
+                        // iOS 17: the end of the list on screen = following (iOS 18 measures the distance)
+                        .onAppear { if #unavailable(iOS 18) { following = true; unseen = 0 } }
+                        .onDisappear { if #unavailable(iOS 18) { following = false } }
                 }
+                .scrollTargetLayout()
                 .padding()
             }
+            // while you read, the entry at the top stays put – even when entries below change size
+            .scrollPosition(id: $readingAnchor, anchor: .top)
+            .modifier(FollowTracker(following: $following, unseen: $unseen))
+            .overlay(alignment: .bottomTrailing) {
+                if !following {
+                    Button {
+                        following = true
+                        unseen = 0
+                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.down")
+                            if unseen > 0 { Text("Neu").font(.caption.weight(.semibold)) }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, unseen > 0 ? 12 : 10).padding(.vertical, 9)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Theme.fg.opacity(0.12)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 14).padding(.bottom, 10)
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Zum Ende springen")
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: following)
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { if editing { dismissKeyboard() } })
             // pinch to scale all text (one step per pinch)
@@ -273,7 +335,7 @@ private struct AgentConversation: View {
                         if value.magnification > 1.15 { rescale(by: 1) } else if value.magnification < 0.87 { rescale(by: -1) }
                     }
             )
-            .defaultScrollAnchor(.bottom)
+            .modifier(BottomAnchor())
             // zen on/off swaps the composer: the lazy rows lose their layout and stay blank until the
             // list scrolls – scroll once the new layout has settled
             // zen on/off swaps the composer, and a restored multi-line draft makes it tall from the start:
@@ -281,15 +343,10 @@ private struct AgentConversation: View {
             .onChange(of: reading) { settleAtBottom(proxy) }
             .onChange(of: session.historyLoaded) { settleAtBottom(proxy) }
             .task { settleAtBottom(proxy) }
-            .onChange(of: session.screen) {
-                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
-            .onChange(of: session.timeline?.items.count) {
-                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
-            .onChange(of: session.items.count) {
-                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
+            // the waiting screen redraws every second: follow it without animation, and never count it as new
+            .onChange(of: session.screen) { if following { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: session.timeline?.items.count) { follow(proxy) }
+            .onChange(of: session.items.count) { follow(proxy) }
         }
     }
 
@@ -369,11 +426,11 @@ private struct AgentConversation: View {
         VStack(spacing: 0) {
             // omp shows status in its footer; other agents keep the small header
             if !compact && !session.usesTimeline { header }
+            // the composer floats over the chat (frosted, like zen): the conversation shows through
             transcript
                 .overlay(alignment: .top) { scaleToastView }
                 .overlay(alignment: .topTrailing) { if reading { readingBar } }
-                .safeAreaInset(edge: .bottom) { if reading { zenComposer } }
-            if !reading { controls }
+                .safeAreaInset(edge: .bottom) { if reading { zenComposer } else { controls } }
         }
     }
 
@@ -382,9 +439,12 @@ private struct AgentConversation: View {
     private var controls: some View {
         VStack(spacing: 8) {
             if !editing, let timeline = session.timeline, AgentHUD.isVisible(timeline) {
+                // floats over the chat like the composer: needs its own frosted backing
                 AgentHUD(timeline: timeline)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            Composer(session: session, editing: $editing)
+            Composer(session: session, editing: $editing, translucent: true)
             if !editing {
                 // omp's footer sits right under the editor
                 if let line = session.timeline?.line {
@@ -399,6 +459,17 @@ private struct AgentConversation: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 6)
+        // status line and chips stay readable over the chat: the page color fades in towards the bottom
+        .background(alignment: .bottom) {
+            // below the composer (status line, chips) the page is solid; above it the chat shows through
+            LinearGradient(stops: [.init(color: Theme.bg.opacity(0), location: 0),
+                                   .init(color: Theme.bg.opacity(0), location: 0.45),
+                                   .init(color: Theme.bg, location: 0.62),
+                                   .init(color: Theme.bg, location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+        }
     }
 }
 
@@ -636,5 +707,40 @@ private struct SidePanel: View {
             }
         }
         .task { if space == nil { await herdr.refreshSpaces([ref.server]) } }
+    }
+}
+
+/// Starts at the end; growing content no longer drags a reader back down (iOS 18: only the initial
+/// position is anchored at the bottom – iOS 17 anchors everything, follow() keeps it in check).
+private struct BottomAnchor: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content
+                .defaultScrollAnchor(.bottom, for: .initialOffset)
+                .defaultScrollAnchor(.top, for: .sizeChanges)
+        } else {
+            content.defaultScrollAnchor(.bottom)
+        }
+    }
+}
+
+/// iOS 18: "following" = within 80 pt of the end.
+private struct FollowTracker: ViewModifier {
+    @Binding var following: Bool
+    @Binding var unseen: Int
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geo in
+                // distance from the end of the content to the bottom edge of what you see – the
+                // floating composer (bottom inset) covers the last part of the visible rect
+                geo.contentSize.height - (geo.visibleRect.maxY - geo.contentInsets.bottom) < 80
+            } action: { _, atEnd in
+                if atEnd != following { following = atEnd }
+                if atEnd { unseen = 0 }
+            }
+        } else {
+            content
+        }
     }
 }

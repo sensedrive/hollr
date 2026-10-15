@@ -43,7 +43,20 @@ export type TimelineItem =
   | { k: "thinking"; id: string; text: string }
   | { k: "text"; id: string; text: string }
   | { k: "tools"; id: string; calls: ToolCall[] }
-  | { k: "ask"; id: string; question: string; options: string[]; answer?: string; pending: boolean }
+  | {
+      k: "ask";
+      id: string;
+      question: string;
+      options: string[];
+      answer?: string;
+      pending: boolean;
+      /** omp's short title ("Rebase") */
+      header?: string;
+      /** one per option ("" = none) */
+      descriptions?: string[];
+      /** index of omp's recommended option (shown as "(Recommended)" in the TUI) */
+      recommended?: number;
+    }
   | { k: "end"; id: string; ms: number; status: "done" | "aborted" | "error"; error?: string }
   | { k: "info"; id: string; text: string };
 
@@ -349,7 +362,9 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
             const qs =
               (args.questions as Array<{
                 question?: string;
-                options?: Array<{ label?: string }>;
+                header?: string;
+                recommended?: number;
+                options?: Array<{ label?: string; description?: string; recommended?: boolean }>;
               }>) ?? [];
             const q = qs[0];
             const call: ToolCall = {
@@ -363,7 +378,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
               k: "ask",
               id: b.id,
               question: clip(q?.question ?? "Frage", 500),
-              options: (q?.options ?? []).map((o) => o.label ?? "").filter(Boolean),
+              ...askOptions(q),
               pending: true,
             });
             continue;
@@ -510,4 +525,24 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
 export async function readTimeline(file: string, maxItems = 150): Promise<Timeline> {
   if (!existsSync(file)) return { items: [], jobs: [], running: false, waiting: false };
   return buildTimeline(await Bun.file(file).text(), maxItems);
+}
+
+/** Labels, descriptions and the recommended one – as the question index or a flag on the option. */
+export function askOptions(q?: {
+  header?: string;
+  recommended?: number;
+  options?: Array<{ label?: string; description?: string; recommended?: boolean }>;
+}) {
+  const opts = (Array.isArray(q?.options) ? q.options : []).filter((o) => o && typeof o === "object" && o.label);
+  const options = opts.map((o) => clip(String(o.label), 200));
+  const descriptions = opts.map((o) => (typeof o.description === "string" ? clip(o.description, 400) : ""));
+  let recommended = opts.findIndex((o) => o.recommended === true);
+  if (recommended < 0 && Number.isInteger(q?.recommended) && (q?.recommended ?? -1) < opts.length)
+    recommended = q?.recommended ?? -1;
+  return {
+    options,
+    ...(descriptions.some(Boolean) ? { descriptions } : {}),
+    ...(recommended >= 0 ? { recommended } : {}),
+    ...(typeof q?.header === "string" && q.header ? { header: clip(q.header, 60) } : {}),
+  };
 }

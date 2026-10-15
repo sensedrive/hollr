@@ -1647,6 +1647,16 @@
         }
       }
     },
+    "Das Eingabefeld schwebt jetzt auch im normalen Modus durchsichtig über dem Chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The input now floats translucently over the chat in normal mode too"
+          }
+        }
+      }
+    },
     "Das Pane „%@“ wird in herdr auf %@ geschlossen und %@ beendet.": {
       "localizations": {
         "de": {
@@ -2003,6 +2013,16 @@
         }
       }
     },
+    "Die Session gibt es nicht mehr.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The session no longer exists."
+          }
+        }
+      }
+    },
     "Die Sitzung wurde geschlossen.": {
       "localizations": {
         "en": {
@@ -2313,6 +2333,16 @@
         }
       }
     },
+    "Empfohlen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended"
+          }
+        }
+      }
+    },
     "Empfohlen: sehr genau bei Deutsch mit englischen Fachwörtern, läuft auf der Neural Engine.": {
       "localizations": {
         "en": {
@@ -2589,6 +2619,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Questions & confirmations"
+          }
+        }
+      }
+    },
+    "Fragen von omp zeigen die empfohlene Antwort und die Erklärungen zu jeder Option – auch in „Braucht dich“ und Mitteilungen (★)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp’s questions show the recommended answer and each option’s explanation – also in “Needs you” and notifications (★)"
           }
         }
       }
@@ -2909,6 +2949,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add"
+          }
+        }
+      }
+    },
+    "Hochscrollen bleibt stehen: neue Ausgaben ziehen dich nicht mehr nach unten, „↓ Neu“ springt zurück ans Ende": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrolling up stays put: new output no longer drags you down, “↓ New” jumps back to the end"
           }
         }
       }
@@ -3575,6 +3625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Live Activity: working agents on the lock screen and in the Dynamic Island – step, progress, time, orange when they wait for you"
+          }
+        }
+      }
+    },
+    "Live-Chat als Datenstrom: neue Schritte erscheinen sofort, statt alle 1,5 s abgefragt zu werden – und es kommen nur die Änderungen (wenige KB statt ~100 KB)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live chat as a stream: new steps appear instantly instead of being polled every 1.5 s – and only the changes are sent (a few KB instead of ~100 KB)"
           }
         }
       }
@@ -6901,6 +6961,16 @@
         }
       }
     },
+    "Zen-Modus im halb geöffneten Chat öffnet ihn ganz – keine Darstellungsfehler mehr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zen mode in a half-open chat opens it fully – no more layout glitches"
+          }
+        }
+      }
+    },
     "Zen-Modus: nur Chat und durchsichtige Eingabe": {
       "localizations": {
         "en": {
@@ -6947,6 +7017,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recent"
+          }
+        }
+      }
+    },
+    "Zum Ende springen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jump to the end"
           }
         }
       }

@@ -133,4 +133,5 @@ export default {
   Ausblenden: "Dismiss",
   "Taste {n}": "Key {n}",
   "Eigene Antwort": "Own answer",
+  Empfohlen: "Recommended",
 };

@@ -82,8 +82,8 @@ struct TimelineRow: View, Equatable {
             AgentMarkdown(text: text, plain: true)
         case let .tools(_, calls):
             ToolsBlock(calls: calls)
-        case let .ask(_, question, options, answer, pending):
-            AskCard(question: question, options: options, answer: answer, pending: pending) { index in
+        case let .ask(_, question, options, answer, pending, details):
+            AskCard(question: question, options: options, answer: answer, pending: pending, details: details) { index in
                 onAnswer(index, options.count)
             }
         case let .end(_, _, status, error):
@@ -467,6 +467,7 @@ struct AskCard: View {
     let options: [String]
     let answer: String?
     let pending: Bool
+    var details = AskDetails()
     let onPick: (Int) -> Void
     /// marked right away on tap – omp's confirmation follows with the next refresh
     @State private var picked: Int?
@@ -478,13 +479,25 @@ struct AskCard: View {
                 Text("?").font(Omp.mono.weight(.bold)).foregroundStyle(Omp.accent)
                 Text(pending ? String(localized: "Ask – omp wartet auf dich") : String(localized: "Ask"))
                     .font(Omp.monoSmall.weight(.semibold)).foregroundStyle(pending ? Omp.warning : .primary)
+                if let header = details.header {
+                    Text("· \(header)").font(Omp.monoSmall).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             Text(question).font(.body)
             ForEach(Array(options.enumerated()), id: \.offset) { index, option in
                 Button { if open { picked = index; onPick(index) } } label: {
                     HStack(spacing: 8) {
                         Text(answer?.contains(option) == true || picked == index ? "◉" : "○").foregroundStyle(Omp.accent)
-                        Text(option).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(option).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                                if index == details.recommended { RecommendedBadge() }
+                            }
+                            // omp's explanation of the option (only while you still have to choose)
+                            if open, let text = details.description(index) {
+                                Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                            }
+                        }
                         Spacer(minLength: 0)
                     }
                     .font(.subheadline)
@@ -662,5 +675,18 @@ struct TodoRow: View {
         case "blocked": return Omp.warning
         default: return Omp.dim
         }
+    }
+}
+
+/// omp's "(Recommended)" marker.
+struct RecommendedBadge: View {
+    var body: some View {
+        Text("Empfohlen")
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Omp.accent.opacity(0.18), in: Capsule())
+            .foregroundStyle(Omp.accent)
+            .fixedSize()
+            .accessibilityLabel("Empfohlen")
     }
 }

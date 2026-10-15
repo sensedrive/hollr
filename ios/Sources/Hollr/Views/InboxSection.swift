@@ -80,6 +80,7 @@ private struct InboxCard: View {
                             HStack(spacing: 8) {
                                 Text("\(index + 1)").font(.caption.monospacedDigit().weight(.bold)).foregroundStyle(Theme.accent)
                                 Text(option).font(.subheadline).multilineTextAlignment(.leading)
+                                if index == entry.recommended { RecommendedBadge() }
                                 Spacer(minLength: 0)
                             }
                             .padding(.vertical, 9).padding(.horizontal, 12)

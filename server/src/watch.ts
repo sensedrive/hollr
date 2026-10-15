@@ -112,7 +112,11 @@ async function describe(
         const ask = items.find((i) => i.k === "ask" && i.pending);
         if (ask && ask.k === "ask") {
           // the buttons carry the options – the text only needs the question
-          return { body: plain(ask.question), options: ask.options.slice(0, 4).map((o) => plain(o, 60)) };
+          return {
+            body: plain(ask.question),
+            // the recommended one gets a star, like omp's "(Recommended)"
+            options: ask.options.slice(0, 4).map((o, i) => (i === ask.recommended ? `★ ${plain(o, 58)}` : plain(o, 60))),
+          };
         }
       } else {
         const end = items.find((i) => i.k === "end");

@@ -110,3 +110,31 @@ final class LimitsTests: XCTestCase {
         XCTAssertEqual(pooled.first?.used, 0.12) // the fullest one
     }
 }
+
+final class FollowTests: XCTestCase {
+    func testAskDetailsDecode() throws {
+        let json = #"{"title":null,"items":[{"k":"ask","id":"a","question":"Rebase?","options":["Merge","Rebase"],"pending":true,"header":"Rebase","descriptions":["ein Durchgang",""],"recommended":1}],"jobs":[],"running":false,"waiting":true}"#
+        let tl = try JSONDecoder().decode(Timeline.self, from: Data(json.utf8))
+        guard case let .ask(_, _, options, _, pending, details) = tl.items.first else { return XCTFail("no ask") }
+        XCTAssertEqual(options, ["Merge", "Rebase"])
+        XCTAssertTrue(pending)
+        XCTAssertEqual(details.recommended, 1)
+        XCTAssertEqual(details.header, "Rebase")
+        XCTAssertEqual(details.description(0), "ein Durchgang")
+        XCTAssertNil(details.description(1))
+    }
+
+    func testDeltaMergesByIdInOrder() throws {
+        let full = #"{"t":"full","items":[{"k":"text","id":"1","text":"a"},{"k":"text","id":"2","text":"b"}],"jobs":[],"running":true,"waiting":false,"etag":"e1"}"#
+        guard case let .full(first) = FollowEvent.decode(Data(full.utf8)) else { return XCTFail("full") }
+        let delta = #"{"t":"delta","head":{"jobs":[],"running":false,"waiting":false,"status":"idle"},"order":["2","3"],"items":[{"k":"text","id":"3","text":"c"}],"etag":"e2"}"#
+        guard case let .delta(head, order, items) = FollowEvent.decode(Data(delta.utf8)) else { return XCTFail("delta") }
+        let merged = FollowEvent.merge(first, head: head, order: order, items: items)
+        XCTAssertEqual(merged?.items.map(\.id), ["2", "3"]) // "1" fell out of the window, "3" is new
+        XCTAssertEqual(merged?.running, false)
+        XCTAssertEqual(merged?.etag, "e2")
+        // an id the app doesn't have: nil → reconnect for a full timeline
+        XCTAssertNil(FollowEvent.merge(first, head: head, order: ["9"], items: []))
+        XCTAssertTrue({ if case .unsupported = FollowEvent.decode(Data(#"{"error":"not_allowed"}"#.utf8)) { return true }; return false }())
+    }
+}

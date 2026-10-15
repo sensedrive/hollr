@@ -160,11 +160,15 @@
       </div>
     {:else if item.k === "ask"}
       <div class="ask" class:pending={item.pending}>
-        <div class="mono hrow"><b class="acc">?</b> <b class="small" class:warn={item.pending}>{item.pending ? t("Ask – omp wartet auf dich") : t("Ask")}</b></div>
+        <div class="mono hrow"><b class="acc">?</b> <b class="small" class:warn={item.pending}>{item.pending ? t("Ask – omp wartet auf dich") : t("Ask")}</b>{#if item.header}<span class="small muted"> · {item.header}</span>{/if}</div>
         <div class="q">{item.question}</div>
         {#each item.options as opt, i}
           <button class="opt" class:live={item.pending} disabled={!item.pending} onclick={() => onAnswer(i, item.options.length)}>
-            <span class="acc">{item.answer?.includes(opt) ? "◉" : "○"}</span> {opt}
+            <span class="acc">{item.answer?.includes(opt) ? "◉" : "○"}</span>
+            <span class="optbody">
+              <span>{opt}{#if i === item.recommended}<span class="rec">{t("Empfohlen")}</span>{/if}</span>
+              {#if item.pending && item.descriptions?.[i]}<span class="desc">{item.descriptions[i]}</span>{/if}
+            </span>
           </button>
         {/each}
         {#if item.answer}<div class="mono small" class:ok={item.answer !== "abgebrochen"} class:warn={item.answer === "abgebrochen"}>✔ {item.answer}</div>{/if}
@@ -180,6 +184,10 @@
 
 <style>
   .tl { display: flex; flex-direction: column; gap: 12px; }
+  .optbody { display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }
+  .desc { font-size: 12px; color: var(--muted); }
+  .rec { margin-left: 8px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
   .tools { display: flex; flex-direction: column; gap: 10px; }
   .user { background: color-mix(in srgb, var(--orange) 11%, transparent); border-radius: 10px; padding: 10px 12px;
     white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }

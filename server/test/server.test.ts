@@ -991,3 +991,36 @@ describe("phone shell", () => {
     expect(clampSize(Number.NaN, Number.NaN)).toEqual({ cols: 80, rows: 24 });
   });
 });
+
+describe("ask options", () => {
+  test("descriptions and the recommended option, by index or flag", async () => {
+    const { askOptions } = await import("../src/timeline");
+    const q = {
+      header: "Rebase",
+      recommended: 1,
+      options: [{ label: "Merge", description: "ein Durchgang" }, { label: "Rebase" }, { label: "" }],
+    };
+    expect(askOptions(q)).toEqual({ options: ["Merge", "Rebase"], descriptions: ["ein Durchgang", ""], recommended: 1, header: "Rebase" });
+    expect(askOptions({ options: [{ label: "A" }, { label: "B", recommended: true }] })).toEqual({ options: ["A", "B"], recommended: 1 });
+    expect(askOptions({ recommended: 5, options: [{ label: "A" }] })).toEqual({ options: ["A"] });
+    expect(askOptions(undefined)).toEqual({ options: [] });
+  });
+});
+
+describe("follow", () => {
+  test("first a full timeline, then only what changed", async () => {
+    const { diffTimeline } = await import("../src/follow");
+    const a = { k: "text", id: "1", text: "Hallo" } as const;
+    const b = { k: "tools", id: "2", calls: [] } as const;
+    const first = diffTimeline(undefined, { items: [a, b], running: true } as never);
+    expect(first.full).toBe(true);
+    expect(first.order).toEqual(["1", "2"]);
+    const b2 = { k: "tools", id: "2", calls: [{ id: "x", name: "bash", label: "ls", status: "ok" }] };
+    const c = { k: "text", id: "3", text: "fertig" };
+    const next = diffTimeline({ items: [a, b], running: true } as never, { items: [a, b2, c], running: false } as never);
+    expect(next.full).toBe(false);
+    expect(next.items.map((i) => i.id)).toEqual(["2", "3"]); // "1" unchanged: not sent again
+    expect(next.order).toEqual(["1", "2", "3"]);
+    expect(next.head).toEqual({ running: false });
+  });
+});
