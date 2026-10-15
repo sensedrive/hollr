@@ -102,6 +102,9 @@ struct SettingsView: View {
                 Text("Deutsch oder Englisch – iOS stellt die Sprache pro App um.")
             }
             Section {
+                NavigationLink { TipsTour(tips: Tips.all) } label: {
+                    Label("Tipps & Tricks", systemImage: "lightbulb")
+                }
                 NavigationLink { ReleaseNotesView() } label: {
                     HStack {
                         Label("Neuigkeiten", systemImage: "sparkles")

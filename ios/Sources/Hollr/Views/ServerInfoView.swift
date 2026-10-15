@@ -20,7 +20,20 @@ struct ServerInfo: Decodable {
         let ok: Bool
         let detail: String
         let fix: String?
+        /// stable key ("herdr", "Push-Schlüssel" …) – name is translated
+        var key: String? = nil
+        /// what the setup checklist can do: "tool:herdr", "watch", "push"
+        var action: String? = nil
         var id: String { name }
+
+        enum CodingKeys: String, CodingKey { case name, ok, detail, fix, key = "id", action }
+
+        init(name: String, ok: Bool, detail: String, fix: String?) {
+            self.name = name
+            self.ok = ok
+            self.detail = detail
+            self.fix = fix
+        }
     }
 
     let host: String

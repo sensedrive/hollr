@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=6, user-scalable=yes">
 <link rel="stylesheet" href="xterm.css">
 <style>
-  html, body { margin: 0; height: 100%; background: #0f1216; overflow: hidden; touch-action: pan-x pan-y pinch-zoom; }
+  html, body { margin: 0; height: 100%; background: #0f1216; overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y pinch-zoom; }
   #term { position: absolute; inset: 0; padding: 4px; }
   .xterm .xterm-viewport { overflow-y: hidden !important; }
 </style>
@@ -23,7 +23,7 @@
     theme: { background: '#0f1216', foreground: '#d7dae0', cursor: '#7aa2f7' },
   });
   term.open(document.getElementById('term'));
-  let cols = 80, rows = 24, ctrl = false;
+  let cols = 80, rows = 24, ctrl = false, readCols = 0;
 
   // draw at a fixed font size, then scale the drawn screen to the phone's width (exact, whatever the
   // font's real cell width is)
@@ -31,11 +31,16 @@
     const el = document.getElementById('term');
     const screen = el.querySelector('.xterm-screen');
     if (!screen || !screen.offsetWidth) return;
-    const scale = Math.min(1.6, (window.innerWidth - 8) / screen.offsetWidth);
+    // readable: only `readCols` columns fill the width, the rest is reached by swiping sideways
+    const share = readCols > 0 && readCols < cols ? readCols / cols : 1;
+    const scale = Math.min(1.6, (window.innerWidth - 8) / (screen.offsetWidth * share));
     el.style.transformOrigin = '0 0';
     el.style.transform = `scale(${scale})`;
-    el.style.width = `${100 / scale}%`;
-    el.style.height = `${100 / scale}%`;
+    // layout size of the unscaled screen; the scaled box is what scrolls sideways
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+    el.style.width = `${screen.offsetWidth + 8}px`;
+    el.style.height = `${window.innerHeight / scale}px`;
   }
 
   window.render = (ansi, r, c) => {
@@ -43,6 +48,7 @@
     term.write('\x1b[H\x1b[2J\x1b[3J' + ansi.replace(/\r?\n/g, '\r\n'), () => requestAnimationFrame(fit));
   };
   window.armCtrl = (on) => { ctrl = on; };
+  window.setReadable = (n) => { readCols = n; fit(); window.scrollTo(0, 0); };
   window.focusTerm = () => term.focus();
   window.addEventListener('resize', fit);
 

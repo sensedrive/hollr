@@ -87,15 +87,18 @@ private struct AgentConversation: View {
         }
     }
 
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    /// iPhone in landscape: chat on the left, terminal or changes on the right
+    private var landscape: Bool { verticalSizeClass == .compact && !reading }
+
     var body: some View {
-        VStack(spacing: 0) {
-            // omp shows status in its footer; other agents keep the small header
-            if !compact && !session.usesTimeline { header }
-            transcript
-                .overlay(alignment: .top) { scaleToastView }
-                .overlay(alignment: .topTrailing) { if reading { readingBar } }
-                .safeAreaInset(edge: .bottom) { if reading { zenComposer } }
-            if !reading { controls }
+        HStack(spacing: 0) {
+            conversation
+            if landscape {
+                Divider()
+                SidePanel(ref: ref)
+                    .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: reading)
         .fullScreenCover(isPresented: $showTerminal) { TerminalScreen(ref: ref) }
@@ -103,7 +106,7 @@ private struct AgentConversation: View {
         .onChange(of: reading) { _, _ in editing = false }
         .themedPage()
         .toolbar(reading ? .hidden : .visible, for: .navigationBar)
-        .toolbar(reading ? .hidden : .visible, for: .tabBar)
+        .toolbar(reading || landscape ? .hidden : .visible, for: .tabBar)
         .statusBarHidden(reading)
         .navigationTitle(session.timeline?.cleanTitle.map { _ in ref.title } ?? ref.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -362,6 +365,18 @@ private struct AgentConversation: View {
         .padding(.bottom, 4)
     }
 
+    private var conversation: some View {
+        VStack(spacing: 0) {
+            // omp shows status in its footer; other agents keep the small header
+            if !compact && !session.usesTimeline { header }
+            transcript
+                .overlay(alignment: .top) { scaleToastView }
+                .overlay(alignment: .topTrailing) { if reading { readingBar } }
+                .safeAreaInset(edge: .bottom) { if reading { zenComposer } }
+            if !reading { controls }
+        }
+    }
+
     // MARK: Controls
 
     private var controls: some View {
@@ -586,5 +601,40 @@ struct StatusLineView: View {
             .font(.caption2.monospaced())
             .padding(.horizontal, 6)
         }
+    }
+}
+
+/// Landscape: the right half – the live terminal or the uncommitted changes of this chat's repo.
+private struct SidePanel: View {
+    let ref: AgentRef
+    @Environment(HerdrStore.self) private var herdr
+    @AppStorage("landscape.panel") private var panel = "terminal"
+
+    private var space: Space? {
+        let ws = ref.pane.pane.split(separator: ":").first.map(String.init) ?? ""
+        return herdr.spaces[ref.server.id]?.first { $0.id == ws && $0.git != nil }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Ansicht", selection: $panel) {
+                Text("Terminal").tag("terminal")
+                Text("Änderungen").tag("changes")
+            }
+            .pickerStyle(.segmented)
+            .padding(6)
+            switch panel {
+            case "changes":
+                if let space {
+                    ChangesTab(server: ref.server, space: space)
+                } else {
+                    ContentUnavailableView("Kein Git-Repo", systemImage: "arrow.triangle.branch",
+                                           description: Text("Dieser Chat arbeitet nicht in einem Git-Repo."))
+                }
+            default:
+                TerminalPanel(ref: ref).id(ref.id)
+            }
+        }
+        .task { if space == nil { await herdr.refreshSpaces([ref.server]) } }
     }
 }

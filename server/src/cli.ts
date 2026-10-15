@@ -14,7 +14,8 @@
  *   hollr enroll ID → pairing handshake
  */
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import QRCode from "qrcode";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
@@ -66,6 +67,7 @@ import { saveUpload, UPLOAD_LIMIT } from "./uploads";
 import {
   pushConfig,
   pushDevices,
+  pushDir,
   registerDevice,
   sendNotice,
   setActivityToken,
@@ -84,13 +86,13 @@ import {
   statusLine,
   usageLimits,
 } from "./spaces";
-import { sysinfo } from "./sysinfo";
+import { restartWatcher, sysinfo } from "./sysinfo";
 import { readTimeline } from "./timeline";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.26.0";
+export const VERSION = "0.27.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -301,6 +303,11 @@ async function gate(): Promise<number> {
         lang?: string;
       };
       try {
+        if (req.op === "restart-watch") {
+          log("gate", "tools restart-watch");
+          json({ ok: restartWatcher() });
+          return 0;
+        }
         if (req.op === "run") {
           if (!TOOL_NAMES.includes(req.name as ToolName)) throw new Error("unbekanntes Werkzeug");
           log("gate", `tools run ${req.name}`);
@@ -339,6 +346,14 @@ async function gate(): Promise<number> {
           // a Live Activity started on the phone: its update token (null = ended)
           setActivityToken(req.token ?? "", req.pane ?? "", req.activity ?? null);
         else if (req.op === "unregister") unregisterDevice(req.token ?? "");
+        else if (req.op === "export") {
+          // the app copies the team's APNs key to another paired computer (asks you first)
+          const config = pushConfig();
+          if (!config) throw new Error("Auf diesem Rechner ist kein Push-Schlüssel eingerichtet");
+          log("gate", "push key exported to a paired device");
+          json({ ...config, key: readFileSync(join(pushDir(), "apns.p8"), "utf8") });
+          return 0;
+        }
         else if (req.op === "test") {
           const sent = await sendNotice({
             title: "Hollr",

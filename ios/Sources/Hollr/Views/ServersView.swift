@@ -111,6 +111,9 @@ struct ServerDetailView: View {
                         }
                     }
                 }
+                if let info {
+                    SetupChecklist(server: current, checks: info.checks) { await load() }
+                }
                 Section {
                     NavigationLink { ServerInfoView(server: server) } label: {
                         LabeledContent {

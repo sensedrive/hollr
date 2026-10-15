@@ -86,57 +86,100 @@ final class TerminalSession {
     }
 }
 
+/// Full screen terminal (chat menu › Terminal).
 struct TerminalScreen: View {
     let ref: AgentRef
     @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            TerminalPanel(ref: ref, showsToolbar: true)
+                .navigationTitle(ref.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } }
+                }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// The terminal itself – full screen or next to the chat (iPhone in landscape).
+struct TerminalPanel: View {
+    let ref: AgentRef
+    var showsToolbar = false
     @State private var session: TerminalSession
     @State private var ctrl = false
     @State private var web = TerminalWeb()
+    /// wide panes (a Mac terminal: 200+ columns) start readable: ~100 columns fill the width
+    @AppStorage("terminal.readable") private var readable = true
 
-    init(ref: AgentRef) {
+    init(ref: AgentRef, showsToolbar: Bool = false) {
         self.ref = ref
+        self.showsToolbar = showsToolbar
         _session = State(initialValue: TerminalSession(ref: ref))
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ZStack {
-                    TerminalWebView(web: web, onInput: { session.type($0) }, onCtrlUsed: { ctrl = false })
-                    switch session.phase {
-                    case .connecting:
-                        ProgressView("Verbinde …").tint(.white).foregroundStyle(.white)
-                    case let .closed(message):
-                        VStack(spacing: 10) {
-                            Text(message ?? String(localized: "Verbindung beendet.")).foregroundStyle(.white.opacity(0.8))
-                            Button("Neu verbinden") { session.stop(); session.start() }.buttonStyle(.borderedProminent)
-                        }
-                        .padding()
-                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
-                    case .open:
-                        EmptyView()
+        VStack(spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                TerminalWebView(web: web, onInput: { session.type($0) }, onCtrlUsed: { ctrl = false })
+                switch session.phase {
+                case .connecting:
+                    ProgressView("Verbinde …").tint(.white).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case let .closed(message):
+                    VStack(spacing: 10) {
+                        Text(message ?? String(localized: "Verbindung beendet.")).foregroundStyle(.white.opacity(0.8))
+                        Button("Neu verbinden") { session.stop(); session.start() }.buttonStyle(.borderedProminent)
                     }
+                    .padding()
+                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .open:
+                    if !showsToolbar { overlayButtons.padding(8) }
                 }
-                keyBar
             }
-            .background(Color(red: 0.06, green: 0.07, blue: 0.09))
-            .navigationTitle(ref.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } }
+            keyBar
+        }
+        .background(Color(red: 0.06, green: 0.07, blue: 0.09))
+        .toolbar {
+            if showsToolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { web.focus() } label: { Image(systemName: "keyboard") }.accessibilityLabel("Tastatur")
                 }
+                if (session.screen?.cols ?? 0) > 120 {
+                    ToolbarItem(placement: .primaryAction) { readableButton }
+                }
             }
         }
-        .preferredColorScheme(.dark)
         .onAppear { session.start() }
         .onDisappear { session.stop() }
         .onChange(of: session.screen?.ansi) { _, _ in
             if let s = session.screen { web.render(s.ansi, rows: s.rows, cols: s.cols) }
         }
         .onChange(of: ctrl) { _, on in web.armCtrl(on) }
+        .onChange(of: readable, initial: true) { _, on in web.setReadable(on ? 100 : 0) }
+    }
+
+    private var readableButton: some View {
+        Button { readable.toggle() } label: {
+            Image(systemName: readable ? "arrow.left.and.right.square" : "textformat.size.larger")
+        }
+        .accessibilityLabel(readable ? "Ganze Breite zeigen" : "Lesbar (Ausschnitt)")
+    }
+
+    /// embedded (no navigation bar): keyboard and readable as small floating buttons
+    private var overlayButtons: some View {
+        HStack(spacing: 6) {
+            if (session.screen?.cols ?? 0) > 120 { readableButton }
+            Button { web.focus() } label: { Image(systemName: "keyboard") }.accessibilityLabel("Tastatur")
+        }
+        .font(.footnote)
+        .padding(6)
+        .background(.ultraThinMaterial, in: Capsule())
+        .foregroundStyle(.white)
     }
 
     /// Moshi-style row above the keyboard: the keys a phone keyboard doesn't have.
@@ -184,6 +227,7 @@ final class TerminalWeb {
     let view: WKWebView
     private var ready = false
     private var pending: (String, Int, Int)?
+    private var readCols = 100
     fileprivate var onInput: (String) -> Void = { _ in }
     fileprivate var onCtrlUsed: () -> Void = {}
     private let bridge = Bridge()
@@ -214,12 +258,17 @@ final class TerminalWeb {
     }
 
     func armCtrl(_ on: Bool) { view.evaluateJavaScript("armCtrl(\(on))") }
+    func setReadable(_ cols: Int) {
+        readCols = cols
+        if ready { view.evaluateJavaScript("setReadable(\(cols))") }
+    }
     func focus() { view.evaluateJavaScript("focusTerm()") }
 
     fileprivate func received(_ name: String, _ body: Any) {
         switch name {
         case "ready":
             ready = true
+            view.evaluateJavaScript("setReadable(\(readCols))")
             if let p = pending { render(p.0, rows: p.1, cols: p.2); pending = nil }
         case "input":
             if let text = body as? String { onInput(text) }

@@ -19,6 +19,7 @@ struct RootView: View {
     @State private var newChat = false
     @Namespace private var zoom
     @State private var shared: SharedItem?
+    @State private var tour: [Tip]?
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var wide: Bool { sizeClass == .regular }
     @Environment(MySessions.self) private var mySessions
@@ -110,6 +111,14 @@ struct RootView: View {
                 .sheet(item: $shared) { item in
                     SharedItemSheet(item: item) { shared = nil }
                 }
+                // after an update: what's new and where it hides (once; again in Settings › Tipps & Tricks)
+                .task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    if !store.servers.isEmpty, shared == nil, sheetAgent == nil { tour = Tips.pending() }
+                }
+                .sheet(isPresented: Binding(get: { tour != nil }, set: { if !$0 { tour = nil; Tips.markSeen() } })) {
+                    TipsTour(tips: tour ?? []) { tour = nil }
+                }
                 // widgets and Siri read a snapshot of what the app knows
                 .onChange(of: herdr.trees) { writeSnapshot() }
                 .onChange(of: herdr.usage) { writeSnapshot() }
@@ -194,6 +203,11 @@ struct RootView: View {
                 sheetAgent = "\(server.id.uuidString)|\(pane)"
             }
             if d.string(forKey: "hollrSheet") == "newchat" { newChat = true }
+            if d.bool(forKey: "hollrLandscape"),
+               let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                try? await Task.sleep(for: .seconds(3))
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
+            }
             #if canImport(ActivityKit) && !targetEnvironment(macCatalyst)
             if let demo = d.string(forKey: "hollrActivityDemo") {
                 // what the server starts by push – started locally to look at it

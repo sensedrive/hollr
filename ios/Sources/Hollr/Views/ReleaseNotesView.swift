@@ -10,6 +10,13 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 40, date: "15.10.2026", items: [
+            ("checklist", String(localized: "Server › Einrichtung: was noch fehlt, mit „Installieren“, „Neu starten“ oder „Push einrichten“ – der Push-Schlüssel lässt sich von einem anderen Server übernehmen")),
+            ("bell.slash", String(localized: "Fehlt auf einem Server der Push, zeigt die Übersicht es an")),
+            ("apple.terminal", String(localized: "Terminal lesbar: breite Terminals zeigen rund 100 Spalten in normaler Größe – zur Seite wischen oder auf ganze Breite schalten")),
+            ("rectangle.landscape.rotate", String(localized: "iPhone quer: links der Chat, rechts Terminal oder Änderungen")),
+            ("lightbulb", String(localized: "Tipps & Tricks: nach Updates zeigt Hollr kurz, was neu ist und wo es sich versteckt (auch in den Einstellungen)")),
+        ]),
         ReleaseNote(build: 39, date: "15.10.2026", items: [
             ("apple.terminal", String(localized: "Echtes Terminal: Menü › Terminal zeigt die Session live in Farbe, mit Tastenleiste (esc, tab, ctrl, Pfeile) – zum Hineinzoomen aufziehen")),
             ("text.badge.plus", String(localized: "Prompt-Bausteine über der Tastatur und „@“ schlägt Dateien aus dem Repo vor (Einstellungen › Prompt-Bausteine)")),

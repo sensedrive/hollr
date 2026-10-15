@@ -631,6 +631,16 @@
         }
       }
     },
+    "Agents in der Seitenleiste; Rechtsklick › „Rechts daneben öffnen“ zeigt zwei Chats nebeneinander.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents in a sidebar; right-click › “Open beside” shows two chats side by side."
+          }
+        }
+      }
+    },
     "Aktualisieren": {
       "localizations": {
         "en": {
@@ -697,6 +707,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Everything is committed."
+          }
+        }
+      }
+    },
+    "Alles eingerichtet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All set up"
           }
         }
       }
@@ -831,6 +851,16 @@
         }
       }
     },
+    "Anhänge und Teilen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachments and sharing"
+          }
+        }
+      }
+    },
     "Anhänge: Foto, Bildschirmfoto, Datei oder Bild aus der Zwischenablage an den Agent – und „Teilen › Hollr“ aus Safari, Mail oder Fotos": {
       "localizations": {
         "en": {
@@ -961,6 +991,16 @@
         }
       }
     },
+    "Arbeitet ein Agent länger, steht er auf dem Sperrbildschirm und in der Dynamic Island – orange, wenn er auf dich wartet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When an agent works for a while it shows on the lock screen and in the Dynamic Island – orange when it waits for you."
+          }
+        }
+      }
+    },
     "Art": {
       "localizations": {
         "en": {
@@ -1047,6 +1087,16 @@
         }
       }
     },
+    "Auf dem Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On the Mac"
+          }
+        }
+      }
+    },
     "Auf dem Server `hollr pair` ausführen (oder im herdr-Menü „Hollr: iPhone koppeln“) und den QR-Code scannen.": {
       "localizations": {
         "en": {
@@ -1103,6 +1153,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recording interrupted – what you said has been inserted."
+          }
+        }
+      }
+    },
+    "Aus der Mitteilung antworten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answer from the notification"
           }
         }
       }
@@ -1177,6 +1237,16 @@
         }
       }
     },
+    "Bausteine und @": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snippets and @"
+          }
+        }
+      }
+    },
     "Beende …": {
       "localizations": {
         "en": {
@@ -1203,6 +1273,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copy command"
+          }
+        }
+      }
+    },
+    "Beim Schreiben erscheinen deine Prompt-Bausteine über der Tastatur. „@“ schlägt Dateien aus dem Repo vor.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "While you type, your prompt snippets appear above the keyboard. “@” suggests files from the repo."
           }
         }
       }
@@ -1337,6 +1417,16 @@
         }
       }
     },
+    "Büroklammer im Eingabefeld für Fotos und Dateien. Aus Safari, Mail oder Fotos: Teilen › Hollr.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paperclip in the input for photos and files. From Safari, Mail or Photos: Share › Hollr."
+          }
+        }
+      }
+    },
     "CPU": {
       "localizations": {
         "en": {
@@ -1383,6 +1473,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Close chat?"
+          }
+        }
+      }
+    },
+    "Chat-Menü › Terminal. Breite Terminals starten lesbar – wisch zur Seite oder schalte auf ganze Breite. iPhone quer: Terminal oder Änderungen neben dem Chat.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat menu › Terminal. Wide terminals start readable – swipe sideways or switch to full width. iPhone in landscape: terminal or changes next to the chat."
           }
         }
       }
@@ -1629,6 +1729,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copy the link from `hollr pair --link` and paste it below."
+          }
+        }
+      }
+    },
+    "Der APNs-Schlüssel von %@ wird über die gekoppelte Verbindung auf %@ eingerichtet und in Hollr gespeichert.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The APNs key of %@ is set up on %@ over the paired connection and kept in Hollr."
           }
         }
       }
@@ -1903,6 +2013,16 @@
         }
       }
     },
+    "Dieser Chat arbeitet nicht in einem Git-Repo.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This chat doesn’t work in a git repo."
+          }
+        }
+      }
+    },
     "Dieses Gerät": {
       "localizations": {
         "en": {
@@ -2113,12 +2233,32 @@
         }
       }
     },
+    "Einrichtung prüfen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the setup"
+          }
+        }
+      }
+    },
     "Einrichtung · %lld Problem(e)": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Setup · %lld problem(s)"
+          }
+        }
+      }
+    },
+    "Einrichtung · %lld/%lld bereit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup · %lld/%lld ready"
           }
         }
       }
@@ -2139,6 +2279,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Settings"
+          }
+        }
+      }
+    },
+    "Einstellungen › Server & Geräte › Server: was noch fehlt, mit „Installieren“, „Neu starten“ oder „Push einrichten“.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings › Servers & devices › server: what’s missing, with “Install”, “Restart” or “Set up push”."
           }
         }
       }
@@ -2309,6 +2459,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Failed (exit %lld)"
+          }
+        }
+      }
+    },
+    "Fehlt auf einem Server der Push, zeigt die Übersicht es an": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If a server has no push, the overview shows it"
           }
         }
       }
@@ -2523,6 +2683,16 @@
         }
       }
     },
+    "Ganze Breite zeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show full width"
+          }
+        }
+      }
+    },
     "Genutzt": {
       "localizations": {
         "en": {
@@ -2609,6 +2779,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Git & files"
+          }
+        }
+      }
+    },
+    "Git › Änderungen: nach rechts wischen zum Stagen, nach links zum Verwerfen oder Kommentieren. Unten: Commit, Push, PR.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git › Changes: swipe right to stage, left to discard or comment. At the bottom: commit, push, PR."
           }
         }
       }
@@ -2843,6 +3023,16 @@
         }
       }
     },
+    "Installation läuft – in einer Minute neu prüfen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing – check again in a minute."
+          }
+        }
+      }
+    },
     "Installieren": {
       "localizations": {
         "en": {
@@ -2873,6 +3063,16 @@
         }
       }
     },
+    "Kein Git-Repo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No git repo"
+          }
+        }
+      }
+    },
     "Kein Mikrofon verfügbar – läuft gerade ein Anruf?": {
       "localizations": {
         "en": {
@@ -2889,6 +3089,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No project (home)"
+          }
+        }
+      }
+    },
+    "Kein Server mit Push-Schlüssel gefunden – den .p8-Schlüssel einmal unter Einstellungen › Mitteilungen importieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No server with a push key found – import the .p8 key once under Settings › Notifications."
           }
         }
       }
@@ -3169,6 +3379,16 @@
         }
       }
     },
+    "Lesbar (Ausschnitt)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Readable (section)"
+          }
+        }
+      }
+    },
     "Limits": {
       "localizations": {
         "en": {
@@ -3299,6 +3519,16 @@
         }
       }
     },
+    "Live-Aktivität": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live Activity"
+          }
+        }
+      }
+    },
     "Live-Aktivität auf dem Sperrbildschirm": {
       "localizations": {
         "en": {
@@ -3355,6 +3585,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Local network"
+          }
+        }
+      }
+    },
+    "Los geht’s": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Let’s go"
           }
         }
       }
@@ -3519,6 +3759,16 @@
         }
       }
     },
+    "Mikrofon antippen startet und beendet – oder gedrückt halten und sprechen. „… senden“ am Ende schickt ab.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the microphone to start and stop – or hold and speak. “… send” at the end sends."
+          }
+        }
+      }
+    },
     "Mikrofon antippen startet und beendet, gedrückt halten diktiert bis zum Loslassen.": {
       "localizations": {
         "en": {
@@ -3605,6 +3855,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "With search, recently used models and %@ level."
+          }
+        }
+      }
+    },
+    "Mitteilung lange drücken: ein Knopf pro Antwort-Option oder eine eigene Antwort – ohne die App zu öffnen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long-press a notification: a button per answer option or your own reply – without opening the app."
           }
         }
       }
@@ -3799,6 +4059,26 @@
         }
       }
     },
+    "Neu starten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart"
+          }
+        }
+      }
+    },
+    "Neu und praktisch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New and handy"
+          }
+        }
+      }
+    },
     "Neu verbinden": {
       "localizations": {
         "en": {
@@ -3905,6 +4185,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "What's new"
+          }
+        }
+      }
+    },
+    "Neustart hat nicht geklappt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart didn’t work."
           }
         }
       }
@@ -4019,6 +4309,16 @@
         }
       }
     },
+    "Nur Verlauf und Eingabe – dein Entwurf bleibt beim Umschalten erhalten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just the conversation and the input – your draft stays when you switch."
+          }
+        }
+      }
+    },
     "Nur die gestagten Dateien.": {
       "localizations": {
         "en": {
@@ -4115,6 +4415,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Next task"
+          }
+        }
+      }
+    },
+    "Oben auf der Startseite: Fragen von omp mit einem Tipp beantworten, wartenden oder fertigen Agents direkt antworten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At the top of the home screen: answer omp’s questions with a tap, reply to waiting or finished agents right there."
           }
         }
       }
@@ -4489,6 +4799,36 @@
         }
       }
     },
+    "Push eingerichtet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push set up."
+          }
+        }
+      }
+    },
+    "Push einrichten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up push"
+          }
+        }
+      }
+    },
+    "Push fehlt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push missing"
+          }
+        }
+      }
+    },
     "Push-Mitteilungen, wenn ein Agent wartet, fertig ist oder einen Fehler hat": {
       "localizations": {
         "en": {
@@ -4505,6 +4845,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Import the push key once in the app – all servers are set up automatically"
+          }
+        }
+      }
+    },
+    "Push-Schlüssel von %@ übernommen – %@ schickt jetzt Mitteilungen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push key copied from %@ – %@ now sends notifications."
+          }
+        }
+      }
+    },
+    "Push-Schlüssel übernehmen?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the push key?"
           }
         }
       }
@@ -4885,6 +5245,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pair servers by QR code – SSH only, no extra service"
+          }
+        }
+      }
+    },
+    "Server › Einrichtung: was noch fehlt, mit „Installieren“, „Neu starten“ oder „Push einrichten“ – der Push-Schlüssel lässt sich von einem anderen Server übernehmen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server › Setup: what’s still missing, with “Install”, “Restart” or “Set up push” – the push key can be copied from another server"
           }
         }
       }
@@ -5545,6 +5915,16 @@
         }
       }
     },
+    "Terminal lesbar: breite Terminals zeigen rund 100 Spalten in normaler Größe – zur Seite wischen oder auf ganze Breite schalten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Readable terminal: wide terminals show about 100 columns at normal size – swipe sideways or switch to full width"
+          }
+        }
+      }
+    },
     "Terminal · %@": {
       "localizations": {
         "en": {
@@ -5641,6 +6021,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tap to record a test transcription"
+          }
+        }
+      }
+    },
+    "Tipps & Tricks": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tips & tricks"
+          }
+        }
+      }
+    },
+    "Tipps & Tricks: nach Updates zeigt Hollr kurz, was neu ist und wo es sich versteckt (auch in den Einstellungen)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tips & tricks: after updates Hollr shows what’s new and where it hides (also in Settings)"
           }
         }
       }
@@ -5971,6 +6371,16 @@
         }
       }
     },
+    "Von %@ übernehmen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy from %@"
+          }
+        }
+      }
+    },
     "Vorschau": {
       "localizations": {
         "en": {
@@ -6047,6 +6457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Switches the model of this Claude session (/model)."
+          }
+        }
+      }
+    },
+    "Weiter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
           }
         }
       }
@@ -6157,6 +6577,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Widgets for home and lock screen (agents, limits) and Shortcuts/Siri: “Ask … in Hollr”, “Start live”"
+          }
+        }
+      }
+    },
+    "Widgets und Siri": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets and Siri"
+          }
+        }
+      }
+    },
+    "Widgets „Agents“ und „Limits“ für Home- und Sperrbildschirm. „Frag … in Hollr“ und „Live starten“ auch auf der Action-Taste.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets “Agents” and “Limits” for home and lock screen. “Ask … in Hollr” and “Start live” also on the Action button."
           }
         }
       }
@@ -6297,6 +6737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Word replacements"
+          }
+        }
+      }
+    },
+    "Wächter läuft wieder.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watcher is running again."
           }
         }
       }
@@ -6601,6 +7051,16 @@
         }
       }
     },
+    "iPhone quer: links der Chat, rechts Terminal oder Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone in landscape: chat on the left, terminal or changes on the right"
+          }
+        }
+      }
+    },
     "in %@": {
       "localizations": {
         "en": {
@@ -6853,6 +7313,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show changes"
+          }
+        }
+      }
+    },
+    "Änderungen prüfen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review changes"
           }
         }
       }

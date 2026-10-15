@@ -163,6 +163,11 @@ struct DashboardView: View {
                         Text(server.displayAddress).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    if PushManager.shared.enabled, PushManager.shared.serverReady[server.id] == false {
+                        // no APNs key on this computer: no notifications from it (fix: server › Einrichtung)
+                        Image(systemName: "bell.slash.fill").font(.caption).foregroundStyle(Theme.warn)
+                            .accessibilityLabel("Push fehlt")
+                    }
                     Circle().fill(herdr.errors[server.id] == nil ? Theme.live : Theme.warn).frame(width: 9, height: 9)
                     Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
                 }

@@ -29,6 +29,7 @@
 		3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D3180E113553B70CDF4810A /* ProtocolTests.swift */; };
 		4616FBFBDD0A2C5C7D0D9F1A /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68E7E518618373D0E7D72C94 /* SharedInbox.swift */; };
 		47597F2CACD6AFC33AF883C9 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */; };
+		4905A8CE640776C907FF7F8D /* SetupChecklist.swift in Sources */ = {isa = PBXBuildFile; fileRef = F29B51C5F8ECD81F912293BE /* SetupChecklist.swift */; };
 		498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */; };
 		4A07AE229CDF8604DE0CDE12 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BED9544749EEB0E7476BB5 /* Dictation.swift */; };
 		4A0885A915B9E835571CF478 /* Connectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD1F45AC6948A9A031828FB8 /* Connectivity.swift */; };
@@ -87,6 +88,7 @@
 		DAF768FA67BFC81132CF8F1C /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68E7E518618373D0E7D72C94 /* SharedInbox.swift */; };
 		DC0185B6A82AC4BEA8C9BFA6 /* FolderPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C531336AADA7A34435E646E0 /* FolderPicker.swift */; };
 		DC1554928C1EE1201FF08087 /* PairingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052C3A789B4E44E5370C5151 /* PairingCode.swift */; };
+		DD0A79A3825B45CBA7E1E3D5 /* TipsTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A00483388D8758A596AE88E /* TipsTour.swift */; };
 		E9D5887C61EFD31925020282 /* HollrShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D070D46F5A2366A336F5D42E /* HollrShare.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EB34F17435F8ED0E5FD20786 /* SharedItemSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9523164A894458F5EFB90702 /* SharedItemSheet.swift */; };
 		EC80E407D12CBDCD64DD2974 /* GitPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFCAF16DF865175B867F578 /* GitPanel.swift */; };
@@ -206,6 +208,7 @@
 		884677C6949E69CFF3B16284 /* AgentLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivity.swift; sourceTree = "<group>"; };
 		9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		9523164A894458F5EFB90702 /* SharedItemSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedItemSheet.swift; sourceTree = "<group>"; };
+		9A00483388D8758A596AE88E /* TipsTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipsTour.swift; sourceTree = "<group>"; };
 		9A4E25D9270177A46475CB74 /* Frames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Frames.swift; sourceTree = "<group>"; };
 		9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrStore.swift; sourceTree = "<group>"; };
@@ -233,6 +236,7 @@
 		EAE0104B281E4EB7E48086C6 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		F0019B48D52F54784A3AA6AD /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		F00FDEBC95E6346051043CD7 /* HollrMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HollrMac.entitlements; sourceTree = "<group>"; };
+		F29B51C5F8ECD81F912293BE /* SetupChecklist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklist.swift; sourceTree = "<group>"; };
 		F4877B66AFD418DA334916A4 /* AgentMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMarkdown.swift; sourceTree = "<group>"; };
 		F51B20E3F3F3C644B6C70DE7 /* HollrNotify.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HollrNotify.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F86A32D91C8EC8A41DE0ACF3 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
@@ -452,11 +456,13 @@
 				3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */,
 				028DC151D09F4CA7C3915657 /* ServersView.swift */,
 				9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */,
+				F29B51C5F8ECD81F912293BE /* SetupChecklist.swift */,
 				9523164A894458F5EFB90702 /* SharedItemSheet.swift */,
 				5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */,
 				350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */,
 				F86A32D91C8EC8A41DE0ACF3 /* TerminalView.swift */,
 				0C577BF328A3A26A824FF673 /* TimelineViews.swift */,
+				9A00483388D8758A596AE88E /* TipsTour.swift */,
 				6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */,
 				4A6D989EB3307AFD05BD3882 /* UsageHistoryView.swift */,
 				2598F41EFB84959A20866BA9 /* Git */,
@@ -808,6 +814,7 @@
 				37F2B1D094F412EFE1260F1C /* ServersView.swift in Sources */,
 				3798B0DBF4403F8B013306CF /* SessionVocabulary.swift in Sources */,
 				7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */,
+				4905A8CE640776C907FF7F8D /* SetupChecklist.swift in Sources */,
 				A6913BE802943511A652F371 /* SharedInbox.swift in Sources */,
 				EB34F17435F8ED0E5FD20786 /* SharedItemSheet.swift in Sources */,
 				906E81D23156E29DD50D9F7D /* SharedKeychain.swift in Sources */,
@@ -819,6 +826,7 @@
 				AECF890C774D9FD45864DC06 /* TextScale.swift in Sources */,
 				19D52A7B613CFAEFB3BB95E9 /* Timeline.swift in Sources */,
 				831DF3CFA3E88A34A57DA0F3 /* TimelineViews.swift in Sources */,
+				DD0A79A3825B45CBA7E1E3D5 /* TipsTour.swift in Sources */,
 				9A322A6B9A15DE7992DA2C8D /* ToolsView.swift in Sources */,
 				1E9B7CB51322142C450623B9 /* Tunnel.swift in Sources */,
 				9ED7883C647726E54B5F2123 /* UsageHistoryView.swift in Sources */,
@@ -923,7 +931,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 40;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -943,7 +951,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.26.0;
+				MARKETING_VERSION = 0.27.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1032,7 +1040,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 39;
+				CURRENT_PROJECT_VERSION = 40;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1046,7 +1054,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.26.0;
+				MARKETING_VERSION = 0.27.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1173,7 +1181,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hollr überträgt deine Stimme an omp /live auf deinem Server.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1206,7 +1214,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hollr überträgt deine Stimme an omp /live auf deinem Server.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Hollr wandelt deine Sprache direkt auf dem iPhone in Text um.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

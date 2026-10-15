@@ -8,6 +8,7 @@ import {
   arch,
   cpus,
   freemem,
+  homedir,
   hostname,
   loadavg,
   platform,
@@ -19,6 +20,7 @@ import {
 import { collectChecks } from "./doctor";
 import { type Lang, tr } from "./i18n";
 import { pushConfig, pushDevices } from "./push";
+import { usageLimits } from "./spaces";
 
 export interface ProcessInfo {
   pid: number;
@@ -253,14 +255,33 @@ export async function sysinfo(version: string, lang: Lang = "de") {
   const push = pushConfig();
   checks.push({
     name: "Push-Schlüssel",
-    // optional: without it there are just no push notifications
-    ok: true,
+    // without it there are no notifications and no Live Activities – the app offers to set it up
+    ok: Boolean(push),
     detail: push
       ? `Key ${push.keyId} · ${pushDevices().length} ${lang === "en" ? "device(s)" : "Gerät(e)"}`
-      : "optional – in der iPhone-App unter Mitteilungen importieren",
+      : "fehlt – keine Mitteilungen von diesem Rechner",
   });
+  // logged in to a provider: omp reports usage limits only then
+  const usage = await usageLimits().catch(() => undefined);
+  checks.push({
+    name: "omp angemeldet",
+    ok: Boolean(usage?.limits.length),
+    detail: usage?.limits.length
+      ? [...new Set(usage.limits.map((l) => l.provider))].join(", ")
+      : "kein Anbieter – im Terminal: omp, dann /login",
+    fix: "omp   # dann /login",
+  });
+  // what the app's setup checklist can fix with one tap
+  const actions: Record<string, string> = {
+    herdr: "tool:herdr",
+    omp: "tool:omp",
+    "Hollr-Wächter (Push)": "watch",
+    "Push-Schlüssel": "push",
+  };
   const localized = checks.map((c) => ({
     ...c,
+    id: c.name,
+    ...(actions[c.name] ? { action: actions[c.name] } : {}),
     name: tr(lang, c.name),
     detail: tr(lang, c.detail),
   }));
@@ -281,4 +302,16 @@ export async function sysinfo(version: string, lang: Lang = "de") {
     processes: procs,
     checks: localized,
   };
+}
+
+/** Restarts the push watcher (setup checklist "Neu starten"). */
+export function restartWatcher(): boolean {
+  if (mac) {
+    const uid = userInfo().uid;
+    const kick = run(["launchctl", "kickstart", "-k", `gui/${uid}/app.hollr.watch`]);
+    if (kick.ok) return true;
+    const plist = `${homedir()}/Library/LaunchAgents/app.hollr.watch.plist`;
+    return run(["launchctl", "bootstrap", `gui/${uid}`, plist]).ok;
+  }
+  return run(["systemctl", "--user", "restart", "hollr-watch.service"]).ok;
 }
