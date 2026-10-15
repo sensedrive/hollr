@@ -32,7 +32,8 @@ if grep -qE '^ios/' <<<"$changed"; then
   cd "$root/ios"
   command -v xcodegen >/dev/null && xcodegen generate -q
   xcodebuild -project Hollr.xcodeproj -scheme Hollr -destination 'generic/platform=iOS Simulator' -quiet build \
-    2>&1 | grep -E "error:|BUILD FAILED" && { echo "✘ iOS-Build fehlgeschlagen"; exit 1; }
+    2>&1 | grep -v "failed with exit code 0 but produced no further output" \
+    | grep -E "error:|BUILD FAILED" && { echo "✘ iOS-Build fehlgeschlagen"; exit 1; }
 fi
 if grep -qE '^desktop/' <<<"$changed"; then
   echo "▸ desktop: svelte-check · cargo check"
