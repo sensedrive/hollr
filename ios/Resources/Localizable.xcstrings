@@ -711,6 +711,46 @@
         }
       }
     },
+    "Antwort nicht gesendet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply not sent"
+          }
+        }
+      }
+    },
+    "Antworten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply"
+          }
+        }
+      }
+    },
+    "Antworten direkt aus der Mitteilung: lange drücken für die Antwort-Optionen oder eine eigene Antwort": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answer straight from the notification: long-press for the answer options or your own reply"
+          }
+        }
+      }
+    },
+    "Antworten …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply …"
+          }
+        }
+      }
+    },
     "App-Sprache": {
       "localizations": {
         "en": {
@@ -897,6 +937,16 @@
         }
       }
     },
+    "Ausblenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        }
+      }
+    },
     "Auslastung": {
       "localizations": {
         "en": {
@@ -1013,6 +1063,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Branch"
+          }
+        }
+      }
+    },
+    "Braucht dich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs you"
           }
         }
       }
@@ -1613,12 +1673,32 @@
         }
       }
     },
+    "Eigene Antwort": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Own answer"
+          }
+        }
+      }
+    },
     "Eigene Antwort – danach unten eintippen": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Own answer – then type it below"
+          }
+        }
+      }
+    },
+    "Eigene Antwort …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Own answer …"
           }
         }
       }
@@ -2659,6 +2739,26 @@
         }
       }
     },
+    "Live-Aktivität auf dem Sperrbildschirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live Activity on the lock screen"
+          }
+        }
+      }
+    },
+    "Live-Aktivität: arbeitende Agents auf dem Sperrbildschirm und in der Dynamic Island – Schritt, Fortschritt, Laufzeit, orange wenn sie auf dich warten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live Activity: working agents on the lock screen and in the Dynamic Island – step, progress, time, orange when they wait for you"
+          }
+        }
+      }
+    },
     "Live-Gespräche gibt es nur mit omp.": {
       "localizations": {
         "en": {
@@ -3059,6 +3159,16 @@
         }
       }
     },
+    "Nachricht an den Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message to the agent"
+          }
+        }
+      }
+    },
     "Name (optional)": {
       "localizations": {
         "en": {
@@ -3075,6 +3185,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "New"
+          }
+        }
+      }
+    },
+    "Neu auf der Startseite: „Braucht dich“ – Fragen von omp mit einem Tipp beantworten, wartenden oder fertigen Agents direkt antworten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New on the home screen: “Needs you” – answer omp’s questions with one tap, reply to waiting or finished agents right there"
           }
         }
       }
@@ -3355,6 +3475,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Usage limits: resets to the minute (e.g. “in 4 hr, 23 min”)"
+          }
+        }
+      }
+    },
+    "Nächster Auftrag": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next task"
           }
         }
       }
@@ -5101,6 +5231,16 @@
         }
       }
     },
+    "Weiter …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue …"
+          }
+        }
+      }
+    },
     "Weniger anzeigen": {
       "localizations": {
         "en": {
@@ -5517,6 +5657,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "done"
+          }
+        }
+      }
+    },
+    "fragt dich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "asks you"
           }
         }
       }

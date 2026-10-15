@@ -10,10 +10,10 @@ configFiles:
   Release: Config/Base.xcconfig
 settings:
   base:
-    MARKETING_VERSION: "0.24.1"
+    MARKETING_VERSION: "0.25.0"
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
-    CURRENT_PROJECT_VERSION: "37"
+    CURRENT_PROJECT_VERSION: "38"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
 packages:
@@ -35,8 +35,15 @@ targets:
     platform: iOS
     sources:
       - path: Sources/Hollr
+      - path: Sources/Shared
       - path: Resources
     dependencies:
+      - target: HollrWidgets
+        embed: true
+        platformFilter: iOS
+      - target: HollrNotify
+        embed: true
+        platformFilter: iOS
       - package: Citadel
       - package: MarkdownUI
       - package: WhisperKit
@@ -64,6 +71,39 @@ targets:
         INFOPLIST_KEY_NSCameraUsageDescription: Hollr scannt den Kopplungs-QR-Code deines Servers.
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Hollr verbindet sich mit deinen Rechnern im lokalen Netzwerk.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+  HollrWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Widgets
+        excludes: [Info.plist]
+      - path: Sources/Shared
+      - path: Resources/Localizable.xcstrings
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.hollr.ios.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Sources/Widgets/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+  HollrNotify:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/NotifyExtension
+        excludes: [Info.plist]
+      - path: Resources/Localizable.xcstrings
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.hollr.ios.notify
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Sources/NotifyExtension/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
   HollrTests:
     type: bundle.unit-test
     platform: iOS

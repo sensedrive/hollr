@@ -9,20 +9,22 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     static let shared = PushManager()
 
     enum Kind: String, CaseIterable, Identifiable {
-        case waiting, done, error
+        case waiting, done, error, activity
         var id: String { rawValue }
         var title: String {
             switch self {
             case .waiting: return String(localized: "Fragen & Bestätigungen")
             case .done: return String(localized: "Aufgabe fertig")
             case .error: return String(localized: "Fehler")
+            case .activity: return String(localized: "Live-Aktivität auf dem Sperrbildschirm")
             }
         }
     }
 
     var enabled = UserDefaults.standard.bool(forKey: "push.enabled")
     var authorized: UNAuthorizationStatus = .notDetermined
-    var token: String?
+    /// APNs token – kept, so answering from a notification works right after a background launch
+    var token: String? = UserDefaults.standard.string(forKey: "push.token")
     /// per server: nil = unknown, true = APNs key set up on the server
     var serverReady: [UUID: Bool] = [:]
     var lastResult: String?
@@ -32,6 +34,8 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     var visibleAgentId: String?
 
     private var servers: [Server] = []
+    /// launched in the background (notification answer, Live Activity token): no UI has loaded the servers
+    private var knownServers: [Server] { servers.isEmpty ? ServerStore().servers : servers }
 
     func wants(_ kind: Kind) -> Bool {
         UserDefaults.standard.object(forKey: "push.\(kind.rawValue)") as? Bool ?? true
@@ -73,6 +77,7 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
 
     func didRegister(_ data: Data) {
         token = data.map { String(format: "%02x", $0) }.joined()
+        UserDefaults.standard.set(token, forKey: "push.token")
         Task { await registerEverywhere() }
     }
 
@@ -87,17 +92,19 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     func registerEverywhere() async {
         guard enabled, let token else { return }
         let prefs = Dictionary(uniqueKeysWithValues: Kind.allCases.map { ($0.rawValue, wants($0)) })
-        for server in servers {
+        for server in knownServers {
             do {
                 // first: give servers without APNs key the team key from the keychain
                 if serverReady[server.id] != true, let key = PushKey.load() {
                     _ = try? await call(server, ["op": "setup", "key": key.pem, "keyId": key.keyId, "teamId": key.teamId,
                                                  "bundleId": Bundle.main.bundleIdentifier ?? "app.hollr.ios"])
                 }
-                let r = try await call(server, [
+                var body: [String: Any] = [
                     "op": "register", "token": token, "env": environment,
                     "name": UIDevice.current.name, "prefs": prefs, "lang": HollrClient.appLanguage,
-                ])
+                ]
+                if let start = LiveActivities.startToken { body["liveStart"] = start }
+                let r = try await call(server, body)
                 serverReady[server.id] = r.configured ?? false
             } catch {
                 HollrLog.error("push register \(server.label): \(error)")
@@ -132,6 +139,68 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
         lastResult = parts.joined(separator: "\n")
     }
 
+    /// A Live Activity got its update token (nil = it ended): the server it belongs to needs it.
+    func reportActivity(fp: String, pane: String, token activity: String?) async {
+        guard let token, let server = knownServers.first(where: { $0.hostFingerprint == fp }) else { return }
+        do {
+            _ = try await call(server, ["op": "activity", "token": token, "pane": pane, "activity": activity ?? NSNull()])
+        } catch {
+            HollrLog.error("live activity token \(server.label): \(error)")
+        }
+    }
+
+    // MARK: Answering from the notification
+
+    static let replyAction = "hollr.reply"
+    static let openAction = "hollr.open"
+
+    /// Buttons under a notification. Questions get one button per option from the content extension
+    /// (the options differ every time); the static set is the fallback.
+    static func registerCategories() {
+        let reply = UNTextInputNotificationAction(
+            identifier: replyAction, title: String(localized: "Antworten …"), options: [.authenticationRequired],
+            textInputButtonTitle: String(localized: "Senden"), textInputPlaceholder: String(localized: "Nachricht an den Agent")
+        )
+        let more = UNTextInputNotificationAction(
+            identifier: replyAction, title: String(localized: "Weiter …"), options: [.authenticationRequired],
+            textInputButtonTitle: String(localized: "Senden"), textInputPlaceholder: String(localized: "Nächster Auftrag")
+        )
+        let open = UNNotificationAction(identifier: openAction, title: String(localized: "Öffnen"), options: [.foreground])
+        UNUserNotificationCenter.current().setNotificationCategories([
+            UNNotificationCategory(identifier: "HOLLR_ASK", actions: [reply, open], intentIdentifiers: []),
+            UNNotificationCategory(identifier: "HOLLR_WAITING", actions: [reply, open], intentIdentifiers: []),
+            UNNotificationCategory(identifier: "HOLLR_DONE", actions: [more, open], intentIdentifiers: []),
+        ])
+    }
+
+    /// Runs the answer on the server (the app may have been launched in the background just for this).
+    private func answer(_ response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        guard let pane = info["pane"] as? String, let fp = info["fp"] as? String,
+              let server = knownServers.first(where: { $0.hostFingerprint == fp }) else { return }
+        let action = response.actionIdentifier
+        do {
+            if action == Self.replyAction, let text = (response as? UNTextInputNotificationResponse)?.userText
+                .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+                try await HollrClient.prompt(server, pane: pane, text: text)
+                HollrLog.info("push: replied to \(pane)")
+            } else if action.hasPrefix("opt."), let index = Int(action.dropFirst(4)) {
+                // omp's ask dialog: the cursor starts on the first option
+                try await HollrClient.keys(server, pane: pane, keys: Array(repeating: "down", count: index) + ["enter"])
+                HollrLog.info("push: picked option \(index) for \(pane)")
+            }
+        } catch {
+            HollrLog.error("push answer \(pane): \(error)")
+            // say so – the user believes it was sent
+            let content = UNMutableNotificationContent()
+            content.title = String(localized: "Antwort nicht gesendet")
+            content.body = error.localizedDescription
+            content.userInfo = info
+            content.categoryIdentifier = response.notification.request.content.categoryIdentifier
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        }
+    }
+
     private struct Reply: Decodable {
         let configured: Bool?
         let sent: Int?
@@ -156,11 +225,29 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
         let info = response.notification.request.content.userInfo
         guard let pane = info["pane"] as? String else { return }
         let fp = info["fp"] as? String ?? ""
-        await MainActor.run { openRequest = (fp, pane) }
+        switch response.actionIdentifier {
+        case UNNotificationDefaultActionIdentifier, Self.openAction:
+            await MainActor.run { openRequest = (fp, pane) }
+        case UNNotificationDismissActionIdentifier:
+            break
+        default:
+            await answer(response)
+        }
     }
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Also runs for background launches (notification answers, Live Activity tokens): the delegate and
+    /// the categories must be in place before any UI exists.
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        MainActor.assumeIsolated {
+            UNUserNotificationCenter.current().delegate = PushManager.shared
+            PushManager.registerCategories()
+            LiveActivities.start()
+        }
+        return true
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Task { @MainActor in PushManager.shared.didRegister(deviceToken) }
     }

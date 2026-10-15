@@ -10,6 +10,11 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 38, date: "15.10.2026", items: [
+            ("tray.full", String(localized: "Neu auf der Startseite: „Braucht dich“ – Fragen von omp mit einem Tipp beantworten, wartenden oder fertigen Agents direkt antworten")),
+            ("bell.badge", String(localized: "Antworten direkt aus der Mitteilung: lange drücken für die Antwort-Optionen oder eine eigene Antwort")),
+            ("platter.filled.bottom.iphone", String(localized: "Live-Aktivität: arbeitende Agents auf dem Sperrbildschirm und in der Dynamic Island – Schritt, Fortschritt, Laufzeit, orange wenn sie auf dich warten")),
+        ]),
         ReleaseNote(build: 37, date: "15.10.2026", items: [
             ("doc.text", String(localized: "Entwürfe gehen nicht mehr verloren: Zen-Modus, Chat-Wechsel oder App-Neustart behalten den getippten Text – pro Chat")),
             ("waveform", String(localized: "Ein Diktat läuft beim Umschalten in den Zen-Modus weiter und landet im richtigen Chat")),

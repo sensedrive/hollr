@@ -12,6 +12,7 @@
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
   import { draftKey } from "../drafts";
+  import { askKeys } from "../inbox";
   import {
     cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, phaseDone, phaseName,
     shortPath, todoColor, urlPort, viaTunnel, workingLabel, type HistoryEvent,
@@ -584,7 +585,7 @@
             <div class="ttl">{transcriptTitle}</div>
             {#if isOmp && timeline}
               {#if !timeline.items.length && !pending.length}{@render emptyHint()}{/if}
-              <TimelineView {timeline} {onLink} onAnswer={(i) => sendKeys([...Array(i).fill("down"), "enter"])} />
+              <TimelineView {timeline} {onLink} onAnswer={(i) => sendKeys(askKeys(i))} />
             {:else if !isOmp}
               {#if !bubbles.length && !pending.length && (!screen || !showsScreen)}{@render emptyHint()}{/if}
               {#each bubbles as b, i (i)}

@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Übersicht: the sessions you opened in Hollr (grouped by machine, live previews),
-  // usage limits and the paired servers.
+  // Übersicht: "Braucht dich" (agents waiting for you), the sessions you opened in Hollr (grouped by machine,
+  // live previews), usage limits and the paired servers.
   import { onMount } from "svelte";
   import * as api from "$lib/api";
   import type { Server } from "$lib/api";
@@ -13,12 +13,35 @@
   import ConfirmDialog from "./dashboard/ConfirmDialog.svelte";
   import LimitsDialog from "./dashboard/LimitsDialog.svelte";
   import { providerName, refreshUsage, usage, usedColor } from "./dashboard/usage.svelte";
+  import InboxCard from "./dashboard/InboxCard.svelte";
   import { arrowNav, refTitle, type MenuItem } from "./dashboard/util";
+  import { answer, fetchInbox, inboxEntries } from "$lib/inbox.svelte";
 
   onMount(() => {
     const timer = setInterval(() => refreshUsage(), 120_000);
-    return () => clearInterval(timer);
+    // inbox details: only while the dashboard shows (each pane at most every 5 s, see inbox.svelte.ts)
+    fetchInbox();
+    const inboxTimer = setInterval(() => fetchInbox(), 2500);
+    return () => {
+      clearInterval(timer);
+      clearInterval(inboxTimer);
+    };
   });
+
+  const entries = $derived(inboxEntries());
+
+  /** 1–4 answer the first open question (only when nothing else has the keyboard) */
+  function onKey(e: KeyboardEvent) {
+    if (e.metaKey || e.ctrlKey || e.altKey || menu || ending || removing || showLimits) return;
+    const el = e.target as HTMLElement | null;
+    if (el?.matches?.("input, textarea, select") || el?.isContentEditable || document.querySelector("dialog[open], .modal")) return;
+    const n = Number(e.key);
+    if (!Number.isInteger(n) || n < 1 || n > 4) return;
+    const ask = entries.find((x) => x.kind === "ask");
+    if (!ask || n > (ask.options?.length ?? 0)) return;
+    e.preventDefault();
+    answer(ask, n - 1);
+  }
   // load as soon as the paired servers are known (on app start they come in after mount)
   $effect(() => {
     if (app.servers.length) refreshUsage();
@@ -100,6 +123,8 @@
   const address = (s: Server) => `${s.user}@${s.addresses[0] ?? "?"}`;
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 <div class="page">
   <div class="page-head">
     <h1>{t("Übersicht")}</h1>
@@ -116,6 +141,16 @@
       {/each}
       <span class="grow"></span><span class="dim">›</span>
     </button>
+  {/if}
+
+  <!-- needs you -->
+  {#if entries.length}
+    <div class="section">{t("Braucht dich")} ({entries.length})</div>
+    <div class="inbox">
+      {#each entries as e (e.id)}
+        <InboxCard entry={e} onOpen={() => open(e.ref)} />
+      {/each}
+    </div>
   {/if}
 
   <!-- sessions -->
@@ -194,6 +229,7 @@
 
 <style>
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px 16px; }
+  .inbox { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px; }
   .head { display: flex; align-items: center; gap: 8px; }
   .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
   .sdot.big { width: 9px; height: 9px; }

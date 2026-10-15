@@ -10,6 +10,7 @@ struct HollrApp: App {
     @State private var mySessions = MySessions()
     @State private var drafts = DraftStore()
     @State private var dictator = Dictator()
+    @State private var inbox = Inbox()
     @State private var pairing: PairingRequest?
 
     var body: some Scene {
@@ -25,6 +26,7 @@ struct HollrApp: App {
                 .environment(mySessions)
                 .environment(drafts)
                 .environment(dictator)
+                .environment(inbox)
                 .appTextScale()
                 .appLock()
                 // dictation models take hundreds of MB: give them back when iOS asks or we go away
@@ -43,6 +45,11 @@ struct HollrApp: App {
                     drafts.save()
                 }
                 .onOpenURL { url in
+                    // Live Activity / widget: hollr://open?fp=…&pane=…
+                    if let target = HollrLink.parseOpen(url) {
+                        PushManager.shared.openRequest = target
+                        return
+                    }
                     // QR code scanned with the iPhone camera opens hollr://pair?c=…
                     pairing = PairingRequest(link: url.absoluteString)
                 }

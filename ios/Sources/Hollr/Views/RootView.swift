@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(ActivityKit) && !targetEnvironment(macCatalyst)
+import ActivityKit
+#endif
 #if DEBUG
 import WhisperKit
 #endif
@@ -65,6 +68,7 @@ struct RootView: View {
                     PushManager.shared.openRequest = nil
                     let server = store.servers.first { $0.hostFingerprint == request.fp } ?? store.servers.first
                     if let server { sheetAgent = "\(server.id.uuidString)|\(pane)" }
+                    LiveActivities.endIfDone(pane: pane) // seen – no need to keep it on the lock screen
                 }
                 .task { PushManager.shared.start(servers: store.servers) }
                 .onChange(of: store.servers) { _, servers in
@@ -148,6 +152,16 @@ struct RootView: View {
                 sheetAgent = "\(server.id.uuidString)|\(pane)"
             }
             if d.string(forKey: "hollrSheet") == "newchat" { newChat = true }
+            #if canImport(ActivityKit) && !targetEnvironment(macCatalyst)
+            if let demo = d.string(forKey: "hollrActivityDemo") {
+                // what the server starts by push – started locally to look at it
+                let attrs = AgentActivityAttributes(pane: "w1:p1", host: "workr", fp: "", title: "Patricks Tickets", agent: "omp")
+                let state = AgentActivityAttributes.ContentState(
+                    status: demo, step: demo == "waiting" ? "Darf ich die Änderungen auf main pushen?" : "Tests laufen: bun test (42 Dateien)",
+                    todoDone: 3, todoTotal: 7, since: Date().timeIntervalSince1970 - 754)
+                _ = try? Activity.request(attributes: attrs, content: .init(state: state, staleDate: nil))
+            }
+            #endif
             if d.string(forKey: "hollrSheet") == "pair" { pairing = PairingRequest() }
             if let clip = d.string(forKey: "hollrDictate") {
                 let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(clip)

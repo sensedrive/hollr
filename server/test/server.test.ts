@@ -434,7 +434,15 @@ describe("push", () => {
       prefs: { done: false } as never,
     });
     expect(push.pushDevices()).toHaveLength(1);
-    expect(push.pushDevices()[0]?.prefs).toEqual({ waiting: true, done: false, error: true });
+    expect(push.pushDevices()[0]?.prefs).toEqual({ waiting: true, done: false, error: true, activity: true });
+    // Live Activity tokens: kept across re-registration, removed when the activity ends
+    push.setActivityToken("ab".repeat(32), "w1:p1", "cd".repeat(40));
+    push.registerDevice({ token: "ab".repeat(32), env: "production", liveStart: "ef".repeat(40) } as never);
+    expect(push.pushDevices()[0]?.activities).toEqual({ "w1:p1": "cd".repeat(40) });
+    expect(push.pushDevices()[0]?.liveStart).toBe("ef".repeat(40));
+    expect(() => push.setActivityToken("ab".repeat(32), "w1 p1; rm", "cd".repeat(40))).toThrow("invalid_pane");
+    push.setActivityToken("ab".repeat(32), "w1:p1", null);
+    expect(push.pushDevices()[0]?.activities).toEqual({});
     const { generateKeyPairSync, verify } = await import("node:crypto");
     const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
     const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -847,4 +855,46 @@ describe("one-time code", () => {
     locked.stop();
     await Bun.sleep(300);
   }, 20_000);
+});
+
+describe("live activity", () => {
+  test("starts after a while, updates on new steps, alerts when waiting, ends with the turn", async () => {
+    const { planActivity, START_AFTER_MS, UPDATE_EVERY_MS } = await import("../src/activity");
+    const t0 = 1_000_000;
+    const track = { active: false, since: t0, lastAt: 0 };
+    const p = { step: "Tests laufen", todoDone: 1, todoTotal: 4 };
+    expect(planActivity(track, "working", p, t0 + 5_000)).toBeUndefined(); // short turns stay quiet
+    const start = planActivity(track, "working", p, t0 + START_AFTER_MS);
+    expect(start?.event).toBe("start");
+    expect(start?.state).toEqual({ ...p, status: "working", since: t0 / 1000 });
+    const active = { ...track, active: true, lastStatus: "working", lastStep: p.step, lastAt: t0 + START_AFTER_MS };
+    expect(planActivity(active, "working", p, t0 + 60_000)).toBeUndefined(); // nothing new
+    const next = { ...p, step: "Build" };
+    expect(planActivity(active, "working", next, t0 + START_AFTER_MS + 1000)).toBeUndefined(); // too soon
+    expect(planActivity(active, "working", next, t0 + START_AFTER_MS + UPDATE_EVERY_MS)?.event).toBe("update");
+    const waiting = planActivity(active, "blocked", { ...p, step: "Darf ich pushen?" }, t0 + 70_000);
+    expect(waiting).toMatchObject({ event: "update", alert: true, state: { status: "waiting" } });
+    expect(planActivity({ ...active, lastStatus: "waiting" }, "blocked", p, t0 + 72_000)).toBeUndefined();
+    expect(planActivity(active, "idle", p, t0 + 90_000)).toMatchObject({ event: "end", state: { status: "done" } });
+    expect(planActivity(active, "idle", p, t0 + 90_000, true)?.state.status).toBe("error");
+    expect(planActivity(track, "idle", p, t0 + 90_000)).toBeUndefined(); // never started
+  });
+
+  test("progress from todo, running tool or question", async () => {
+    const { describeProgress } = await import("../src/activity");
+    const tl = {
+      items: [
+        { k: "text", id: "1", text: "Ich **schaue** mir das an" },
+        { k: "tools", id: "2", calls: [{ id: "a", name: "bash", label: "bun test", status: "running" }] },
+      ],
+      jobs: [],
+      running: true,
+      waiting: false,
+      todo: [{ name: "P1", tasks: [{ content: "Fix", status: "completed" }, { content: "Deploy", status: "in_progress" }] }],
+    } as never;
+    expect(describeProgress(tl, "x")).toEqual({ step: "Deploy", todoDone: 1, todoTotal: 2 });
+    const noTodo = { ...(tl as object), todo: undefined } as never;
+    expect(describeProgress(noTodo, "x").step).toBe("bun test");
+    expect(describeProgress(undefined, "omp arbeitet")).toEqual({ step: "omp arbeitet", todoDone: 0, todoTotal: 0 });
+  });
 });

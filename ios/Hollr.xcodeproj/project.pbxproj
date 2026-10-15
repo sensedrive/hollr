@@ -13,6 +13,7 @@
 		19D52A7B613CFAEFB3BB95E9 /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC7D7F8A66E83200A70DFE0 /* Timeline.swift */; };
 		1B600C8A88DB172BF3AF81A1 /* NewSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A023AAFBC21566CC6D1ADA2 /* NewSpaceView.swift */; };
 		1E9B7CB51322142C450623B9 /* Tunnel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0020C719F00C6559F36F7ABF /* Tunnel.swift */; };
+		218A5C2CCABCECBF8E022951 /* Inbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C668FA2DF4CBF5846457A16 /* Inbox.swift */; };
 		23B99D1989E9A4E9CED63CCF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 788426E5E1D9A21D681E6CF5 /* FluidAudio */; };
 		2A701E77575F00114E32F0E0 /* AgentListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3ED3BEFB75306D075EA6E8 /* AgentListView.swift */; };
 		2D7C5884F52A6D1C08649E2A /* DraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5936D3405E68394D4F9C20 /* DraftTests.swift */; };
@@ -26,8 +27,10 @@
 		498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */; };
 		4A07AE229CDF8604DE0CDE12 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BED9544749EEB0E7476BB5 /* Dictation.swift */; };
 		4A0885A915B9E835571CF478 /* Connectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD1F45AC6948A9A031828FB8 /* Connectivity.swift */; };
+		4BD5EA36B53748EBE45321B2 /* InboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF87247E6B2C42C39C700C1 /* InboxTests.swift */; };
 		514B2B079668C322CA6DBE91 /* HollrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AD5CD41D0A367E7C71A73F /* HollrApp.swift */; };
 		51F68E40F60C46E32A53305B /* DictationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DBAEB7961669E5A00031A5B /* DictationSettings.swift */; };
+		52B3F93C63FCC3B00DA8EB71 /* HollrWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67416D92D1B97CCECB9B8EDB /* HollrWidgets.swift */; };
 		5D1B9D75B607E536BB19C722 /* DiffViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92221483A7A40DA45402706 /* DiffViewer.swift */; };
 		5E62D25E3C3B0B23D6070423 /* HollrClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */; };
 		600EC276313BAAE941AFEB1C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EAC832FAD971F0528242B59E /* Assets.xcassets */; };
@@ -36,22 +39,32 @@
 		7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D5C6613C409FB4F134C940D7 /* WhisperKit */; };
 		7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */; };
 		7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */; };
+		803D6476F6760DA7C5D5DFFD /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */; };
 		831DF3CFA3E88A34A57DA0F3 /* TimelineViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C577BF328A3A26A824FF673 /* TimelineViews.swift */; };
+		856F4B68158DCDED6DE454D9 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AF766E32AE6F1D0411CDCE /* AgentActivity.swift */; };
 		8A575E6E850F340FB5D79772 /* GitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AD6EE69ADDD4E7DF04704C /* GitModels.swift */; };
 		8ECE8D1C3BB595B2E7C2FB6F /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0EB84E73241B4C0E156B01F0 /* InfoPlist.xcstrings */; };
+		8F2A2A99ABBA64EE6FE5B3E2 /* InboxSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28DF57FDC8FE93780D52F1D7 /* InboxSection.swift */; };
 		961FD016CC39FD7331ED4530 /* VoiceIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6AB6D608815833828B30FD /* VoiceIO.swift */; };
 		9A322A6B9A15DE7992DA2C8D /* ToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */; };
 		9D058E4BBCBF3F3B20CD881D /* Frames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A4E25D9270177A46475CB74 /* Frames.swift */; };
 		9ED347BE7C6BE7CD221B3BFE /* Spaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD0AF2665A02292636F1A65 /* Spaces.swift */; };
 		9ED7883C647726E54B5F2123 /* UsageHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A6D989EB3307AFD05BD3882 /* UsageHistoryView.swift */; };
+		9F9ECD718EB45259334FF748 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */; };
 		A0BF4F1DECDBFFDC1548104E /* PairView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76055EDBFA8BC5F8A7E7BDBB /* PairView.swift */; };
+		A1580D405C4143B7E3A214B7 /* NotificationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834464FCAB246AC3556B31AB /* NotificationViewController.swift */; };
 		A604541D3BD8DC89D95DF2E7 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC7D0F3B418EE3043DECA56B /* DashboardView.swift */; };
 		A6DE61EE1B7B43C2BC6EB9A4 /* AgentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9B7EF593C0D1C6A9B89F1F /* AgentSession.swift */; };
+		A85F5C2CEB1E7368D096F705 /* HollrNotify.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F51B20E3F3F3C644B6C70DE7 /* HollrNotify.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA4DE42BBB6E341C7E168CAD /* AgentMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4877B66AFD418DA334916A4 /* AgentMarkdown.swift */; };
 		AA9E1B34B06011317DE36E11 /* ReleaseNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C0187F573B70F2EFC959C6 /* ReleaseNotesView.swift */; };
 		AECF890C774D9FD45864DC06 /* TextScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4B6116C23D43D57F42D49E /* TextScale.swift */; };
+		B28776F1C4ADDAD81C5411F6 /* LiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAE0104B281E4EB7E48086C6 /* LiveActivities.swift */; };
+		BBEBB199ED6EE9F6803F5F78 /* AgentLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884677C6949E69CFF3B16284 /* AgentLiveActivity.swift */; };
 		C526B25F09F82C4463F22E33 /* HerdrStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */; };
 		C8DC245B9AE249921AC87F4E /* Server.swift in Sources */ = {isa = PBXBuildFile; fileRef = 805E396247941037A1716917 /* Server.swift */; };
+		CDB56723DCF03942C9A45B55 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AF766E32AE6F1D0411CDCE /* AgentActivity.swift */; };
+		CF321DE4E7BA0A72D7965815 /* HollrWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A55104AD94854AC1E2EA3A6B /* HollrWidgets.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D1F535B9BB70EF91478E8A57 /* ServerInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */; };
 		DC0185B6A82AC4BEA8C9BFA6 /* FolderPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C531336AADA7A34435E646E0 /* FolderPicker.swift */; };
 		DC1554928C1EE1201FF08087 /* PairingCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052C3A789B4E44E5370C5151 /* PairingCode.swift */; };
@@ -69,6 +82,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		6EBEF68127A575FFE3A2931C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DA354FD9430AE34E07DD43B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 686F4ACB720D4FD4548E8A22;
+			remoteInfo = HollrNotify;
+		};
+		821E51CE1F81D7438E82ABE5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DA354FD9430AE34E07DD43B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ECFED84E9AB8C64C16CD0C55;
+			remoteInfo = HollrWidgets;
+		};
 		CD83AAF2CFC57D053FFE2A44 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1DA354FD9430AE34E07DD43B /* Project object */;
@@ -78,12 +105,28 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		68B9C73F293CA528DEAA4EF6 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CF321DE4E7BA0A72D7965815 /* HollrWidgets.appex in Embed Foundation Extensions */,
+				A85F5C2CEB1E7368D096F705 /* HollrNotify.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0020C719F00C6559F36F7ABF /* Tunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tunnel.swift; sourceTree = "<group>"; };
 		028DC151D09F4CA7C3915657 /* ServersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServersView.swift; sourceTree = "<group>"; };
 		052C3A789B4E44E5370C5151 /* PairingCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCode.swift; sourceTree = "<group>"; };
 		05524A71BC53973DF98B0626 /* Hollr.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Hollr.entitlements; sourceTree = "<group>"; };
 		06AD5CD41D0A367E7C71A73F /* HollrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrApp.swift; sourceTree = "<group>"; };
+		06AF766E32AE6F1D0411CDCE /* AgentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivity.swift; sourceTree = "<group>"; };
 		0C3322CFB07BC55EC7BD14BA /* Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Composer.swift; sourceTree = "<group>"; };
 		0C577BF328A3A26A824FF673 /* TimelineViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineViews.swift; sourceTree = "<group>"; };
 		0EB84E73241B4C0E156B01F0 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
@@ -92,9 +135,12 @@
 		1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
 		1D506F45973D977B4EB1B01E /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
 		20135523C477C7E3FF4526F3 /* PairingPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPayload.swift; sourceTree = "<group>"; };
+		28DF57FDC8FE93780D52F1D7 /* InboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxSection.swift; sourceTree = "<group>"; };
+		2FF87247E6B2C42C39C700C1 /* InboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxTests.swift; sourceTree = "<group>"; };
 		32AD6EE69ADDD4E7DF04704C /* GitModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitModels.swift; sourceTree = "<group>"; };
 		350E7D4926CDDCCF09AE5E7A /* SpacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesView.swift; sourceTree = "<group>"; };
 		3B6AB6D608815833828B30FD /* VoiceIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceIO.swift; sourceTree = "<group>"; };
+		3C668FA2DF4CBF5846457A16 /* Inbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Inbox.swift; sourceTree = "<group>"; };
 		3FF5F83DE41FC7AD25E8D9E1 /* ServerInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoView.swift; sourceTree = "<group>"; };
 		436A87439A46CBB4E9A580B7 /* AgentDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDetailView.swift; sourceTree = "<group>"; };
 		45BED9544749EEB0E7476BB5 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
@@ -105,6 +151,7 @@
 		57C0187F573B70F2EFC959C6 /* ReleaseNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotesView.swift; sourceTree = "<group>"; };
 		5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		5F48A8E3BC209F72881B3D5B /* Hollr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Hollr.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		67416D92D1B97CCECB9B8EDB /* HollrWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrWidgets.swift; sourceTree = "<group>"; };
 		6AA1704D3CDC1B9C74AA81A4 /* ToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsView.swift; sourceTree = "<group>"; };
 		6B93593C5F420AEB419328B5 /* BrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserView.swift; sourceTree = "<group>"; };
 		6D3180E113553B70CDF4810A /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
@@ -114,11 +161,14 @@
 		7AFCAF16DF865175B867F578 /* GitPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitPanel.swift; sourceTree = "<group>"; };
 		7DBAEB7961669E5A00031A5B /* DictationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationSettings.swift; sourceTree = "<group>"; };
 		805E396247941037A1716917 /* Server.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Server.swift; sourceTree = "<group>"; };
+		834464FCAB246AC3556B31AB /* NotificationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationViewController.swift; sourceTree = "<group>"; };
 		839D4D17A770C43AC204CED4 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		884677C6949E69CFF3B16284 /* AgentLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivity.swift; sourceTree = "<group>"; };
 		9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		9A4E25D9270177A46475CB74 /* Frames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Frames.swift; sourceTree = "<group>"; };
 		9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrStore.swift; sourceTree = "<group>"; };
+		A55104AD94854AC1E2EA3A6B /* HollrWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HollrWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A92221483A7A40DA45402706 /* DiffViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffViewer.swift; sourceTree = "<group>"; };
 		ACA1716A49A0CA301933CD58 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		AF5CA60C68CE01EC72C2754E /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
@@ -135,9 +185,11 @@
 		DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HollrClient.swift; sourceTree = "<group>"; };
 		DEF330646E3FAD8E17D97E02 /* HollrTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HollrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EAC832FAD971F0528242B59E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		EAE0104B281E4EB7E48086C6 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		F0019B48D52F54784A3AA6AD /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		F00FDEBC95E6346051043CD7 /* HollrMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HollrMac.entitlements; sourceTree = "<group>"; };
 		F4877B66AFD418DA334916A4 /* AgentMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMarkdown.swift; sourceTree = "<group>"; };
+		F51B20E3F3F3C644B6C70DE7 /* HollrNotify.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HollrNotify.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA9B7EF593C0D1C6A9B89F1F /* AgentSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSession.swift; sourceTree = "<group>"; };
 		FD1F45AC6948A9A031828FB8 /* Connectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connectivity.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -161,6 +213,9 @@
 			isa = PBXGroup;
 			children = (
 				86AC98EC7D9B65638161D060 /* Hollr */,
+				C9B2D9389772B0E6636A3120 /* NotifyExtension */,
+				D98DAB876C2BF66EA3EE4427 /* Shared */,
+				CF383D4AB902FD90A4A3D0D7 /* Widgets */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -190,6 +245,7 @@
 		4D2631890049C296733C507D /* Push */ = {
 			isa = PBXGroup;
 			children = (
+				EAE0104B281E4EB7E48086C6 /* LiveActivities.swift */,
 				0FB461C556C5E5C219B20FCB /* PushKey.swift */,
 				AF5CA60C68CE01EC72C2754E /* PushManager.swift */,
 			);
@@ -239,6 +295,7 @@
 				FD1F45AC6948A9A031828FB8 /* Connectivity.swift */,
 				498ED45F8B15C93BC90B1859 /* Drafts.swift */,
 				9E1070BAFE8AABB62FC73622 /* HerdrStore.swift */,
+				3C668FA2DF4CBF5846457A16 /* Inbox.swift */,
 				515576480CDB424E848FA072 /* MySessions.swift */,
 				20135523C477C7E3FF4526F3 /* PairingPayload.swift */,
 				805E396247941037A1716917 /* Server.swift */,
@@ -267,13 +324,32 @@
 			);
 			sourceTree = "<group>";
 		};
+		C9B2D9389772B0E6636A3120 /* NotifyExtension */ = {
+			isa = PBXGroup;
+			children = (
+				834464FCAB246AC3556B31AB /* NotificationViewController.swift */,
+			);
+			path = NotifyExtension;
+			sourceTree = "<group>";
+		};
 		CE165FBB5FC2ECF492B64547 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				5F48A8E3BC209F72881B3D5B /* Hollr.app */,
+				F51B20E3F3F3C644B6C70DE7 /* HollrNotify.appex */,
 				DEF330646E3FAD8E17D97E02 /* HollrTests.xctest */,
+				A55104AD94854AC1E2EA3A6B /* HollrWidgets.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		CF383D4AB902FD90A4A3D0D7 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				884677C6949E69CFF3B16284 /* AgentLiveActivity.swift */,
+				67416D92D1B97CCECB9B8EDB /* HollrWidgets.swift */,
+			);
+			path = Widgets;
 			sourceTree = "<group>";
 		};
 		D0BE3ECE7CCB3B9A67580384 /* Views */ = {
@@ -286,6 +362,7 @@
 				0C3322CFB07BC55EC7BD14BA /* Composer.swift */,
 				BC7D0F3B418EE3043DECA56B /* DashboardView.swift */,
 				C531336AADA7A34435E646E0 /* FolderPicker.swift */,
+				28DF57FDC8FE93780D52F1D7 /* InboxSection.swift */,
 				B8962791A94FF32DBFE98885 /* ModelPicker.swift */,
 				1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */,
 				1A023AAFBC21566CC6D1ADA2 /* NewSpaceView.swift */,
@@ -309,6 +386,7 @@
 			isa = PBXGroup;
 			children = (
 				BA5936D3405E68394D4F9C20 /* DraftTests.swift */,
+				2FF87247E6B2C42C39C700C1 /* InboxTests.swift */,
 				6D3180E113553B70CDF4810A /* ProtocolTests.swift */,
 			);
 			path = HollrTests;
@@ -324,6 +402,14 @@
 				0020C719F00C6559F36F7ABF /* Tunnel.swift */,
 			);
 			path = SSH;
+			sourceTree = "<group>";
+		};
+		D98DAB876C2BF66EA3EE4427 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				06AF766E32AE6F1D0411CDCE /* AgentActivity.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		E4C931101FBAE429E2E4182E /* Live */ = {
@@ -362,10 +448,13 @@
 				D8C9A59B9FE022C156ADF9BB /* Sources */,
 				D0AD619934F46F7F79200AA9 /* Resources */,
 				2D105B6FE588450B9EFF4C34 /* Frameworks */,
+				68B9C73F293CA528DEAA4EF6 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				85DFDF6D0486251D4CE9A865 /* PBXTargetDependency */,
+				9EFE4F8468C75344083392C8 /* PBXTargetDependency */,
 			);
 			name = Hollr;
 			packageProductDependencies = (
@@ -377,6 +466,42 @@
 			productName = Hollr;
 			productReference = 5F48A8E3BC209F72881B3D5B /* Hollr.app */;
 			productType = "com.apple.product-type.application";
+		};
+		686F4ACB720D4FD4548E8A22 /* HollrNotify */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 58CF9B28549B689C862C8333 /* Build configuration list for PBXNativeTarget "HollrNotify" */;
+			buildPhases = (
+				3D199FDB997AA5A607CF517F /* Sources */,
+				67B2944336A8DED42B7A55AC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HollrNotify;
+			packageProductDependencies = (
+			);
+			productName = HollrNotify;
+			productReference = F51B20E3F3F3C644B6C70DE7 /* HollrNotify.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		ECFED84E9AB8C64C16CD0C55 /* HollrWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 357B54D14C117130309EF441 /* Build configuration list for PBXNativeTarget "HollrWidgets" */;
+			buildPhases = (
+				F12510D4BE026B695DC7D7FA /* Sources */,
+				70E887081E815858797B344B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HollrWidgets;
+			packageProductDependencies = (
+			);
+			productName = HollrWidgets;
+			productReference = A55104AD94854AC1E2EA3A6B /* HollrWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		EEBEA2DC8216467025B9FB0D /* HollrTests */ = {
 			isa = PBXNativeTarget;
@@ -409,6 +534,14 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					686F4ACB720D4FD4548E8A22 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					ECFED84E9AB8C64C16CD0C55 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
 					EEBEA2DC8216467025B9FB0D = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -437,12 +570,30 @@
 			projectRoot = "";
 			targets = (
 				3A1A95EE0A964544BC8966D9 /* Hollr */,
+				ECFED84E9AB8C64C16CD0C55 /* HollrWidgets */,
+				686F4ACB720D4FD4548E8A22 /* HollrNotify */,
 				EEBEA2DC8216467025B9FB0D /* HollrTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		67B2944336A8DED42B7A55AC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				803D6476F6760DA7C5D5DFFD /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		70E887081E815858797B344B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9F9ECD718EB45259334FF748 /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0AD619934F46F7F79200AA9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -456,11 +607,20 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3D199FDB997AA5A607CF517F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1580D405C4143B7E3A214B7 /* NotificationViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5177746783C7B60756278035 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				2D7C5884F52A6D1C08649E2A /* DraftTests.swift in Sources */,
+				4BD5EA36B53748EBE45321B2 /* InboxTests.swift in Sources */,
 				3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -469,6 +629,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				856F4B68158DCDED6DE454D9 /* AgentActivity.swift in Sources */,
 				F9CE19BF9FBFEE6F57C473EF /* AgentDetailView.swift in Sources */,
 				2A701E77575F00114E32F0E0 /* AgentListView.swift in Sources */,
 				AA4DE42BBB6E341C7E168CAD /* AgentMarkdown.swift in Sources */,
@@ -492,6 +653,9 @@
 				514B2B079668C322CA6DBE91 /* HollrApp.swift in Sources */,
 				5E62D25E3C3B0B23D6070423 /* HollrClient.swift in Sources */,
 				EEE855EFD83914A10A5DCE86 /* HollrLog.swift in Sources */,
+				218A5C2CCABCECBF8E022951 /* Inbox.swift in Sources */,
+				8F2A2A99ABBA64EE6FE5B3E2 /* InboxSection.swift in Sources */,
+				B28776F1C4ADDAD81C5411F6 /* LiveActivities.swift in Sources */,
 				6038A998B56A056E0EFED763 /* ModelPicker.swift in Sources */,
 				F88B8CA99190A2DA65E6C8C6 /* MySessions.swift in Sources */,
 				498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */,
@@ -522,6 +686,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F12510D4BE026B695DC7D7FA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDB56723DCF03942C9A45B55 /* AgentActivity.swift in Sources */,
+				BBEBB199ED6EE9F6803F5F78 /* AgentLiveActivity.swift in Sources */,
+				52B3F93C63FCC3B00DA8EB71 /* HollrWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -529,6 +703,18 @@
 			isa = PBXTargetDependency;
 			target = 3A1A95EE0A964544BC8966D9 /* Hollr */;
 			targetProxy = CD83AAF2CFC57D053FFE2A44 /* PBXContainerItemProxy */;
+		};
+		85DFDF6D0486251D4CE9A865 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = ECFED84E9AB8C64C16CD0C55 /* HollrWidgets */;
+			targetProxy = 821E51CE1F81D7438E82ABE5 /* PBXContainerItemProxy */;
+		};
+		9EFE4F8468C75344083392C8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = 686F4ACB720D4FD4548E8A22 /* HollrNotify */;
+			targetProxy = 6EBEF68127A575FFE3A2931C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -586,7 +772,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -606,7 +792,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.24.1;
+				MARKETING_VERSION = 0.25.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -616,6 +802,44 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		1E2DD1BB15854039ED260AC7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios.widgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		2FEB3DF36F379606E1B23BEB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios.widgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -655,7 +879,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -669,7 +893,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.24.1;
+				MARKETING_VERSION = 0.25.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -678,6 +902,25 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4D4FDF136918AE1E28E56F80 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/NotifyExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios.notify;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -697,6 +940,25 @@
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hollr.app/Hollr";
 			};
 			name = Release;
+		};
+		AADC810F9FA4CCFF0BB53EED /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/NotifyExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.hollr.ios.notify;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
 		};
 		D34A45D46E9E12EFB3F53781 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -776,11 +1038,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		357B54D14C117130309EF441 /* Build configuration list for PBXNativeTarget "HollrWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2FEB3DF36F379606E1B23BEB /* Debug */,
+				1E2DD1BB15854039ED260AC7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		484B76B80E36289956312F4E /* Build configuration list for PBXProject "Hollr" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0FD11A9EA7CC1DA2C155FAF9 /* Debug */,
 				33BCBA9C7593802FAC46E402 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		58CF9B28549B689C862C8333 /* Build configuration list for PBXNativeTarget "HollrNotify" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AADC810F9FA4CCFF0BB53EED /* Debug */,
+				4D4FDF136918AE1E28E56F80 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

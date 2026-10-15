@@ -1,7 +1,7 @@
 <script lang="ts">
   // Hollr desktop shell: sidebar (navigation + my sessions) and the current view on the right.
   import "../app.css";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { statusLabel, t } from "$lib/i18n";
   import { settings } from "$lib/settings.svelte";
@@ -21,6 +21,7 @@
   import Tools from "$lib/views/Tools.svelte";
   import NewSpaceDialog from "$lib/views/NewSpaceDialog.svelte";
   import Notifier from "$lib/views/Notifier.svelte";
+  import { inboxEntries, trackInbox } from "$lib/inbox.svelte";
 
   // ---- theme (fixed palette or following the system)
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
@@ -80,6 +81,13 @@
     };
   });
 
+  // "Braucht dich": note when agents start waiting (on every tree refresh); the count goes on the Übersicht item
+  $effect(() => {
+    for (const s of app.servers) void app.trees[s.id];
+    untrack(() => trackInbox());
+  });
+  const needsYou = $derived(inboxEntries().length);
+
   const NAV: { route: Route; label: string; icon: string; key: string }[] = [
     { route: { view: "dashboard" }, label: "Übersicht", icon: "▦", key: "1" },
     { route: { view: "agents" }, label: "Agents", icon: "◉", key: "2" },
@@ -113,7 +121,10 @@
     <nav>
       {#each NAV as item}
         <button class="nav" class:active={isActive(item.route)} onclick={() => go(item.route)} title={`${mod}${item.key}`}>
-          <span class="ico">{item.icon}</span>{t(item.label)}
+          <span class="ico">{item.icon}</span><span class="grow">{t(item.label)}</span>
+          {#if item.route.view === "dashboard" && needsYou}
+            <span class="count" title={t("Braucht dich")}>{needsYou}</span>
+          {/if}
         </button>
       {/each}
     </nav>
@@ -194,6 +205,8 @@
   .nav { all: unset; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; color: var(--muted); }
   .nav:hover { background: var(--card); color: var(--fg); }
   .nav.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--orange); }
   .ico { width: 16px; text-align: center; font-size: 13px; }
   .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
   .group { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px 4px; }

@@ -66,6 +66,7 @@ import {
   pushDevices,
   registerDevice,
   sendNotice,
+  setActivityToken,
   setupPush,
   setupPushKey,
   unregisterDevice,
@@ -87,7 +88,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.24.1";
+export const VERSION = "0.25.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -321,6 +322,8 @@ async function gate(): Promise<number> {
         env?: "sandbox" | "production";
         name?: string;
         prefs?: Record<string, boolean>;
+        pane?: string;
+        activity?: string | null;
       };
       try {
         if (req.op === "setup") {
@@ -330,6 +333,9 @@ async function gate(): Promise<number> {
             log("gate", "push key installed from app");
           }
         } else if (req.op === "register") registerDevice(req as never);
+        else if (req.op === "activity")
+          // a Live Activity started on the phone: its update token (null = ended)
+          setActivityToken(req.token ?? "", req.pane ?? "", req.activity ?? null);
         else if (req.op === "unregister") unregisterDevice(req.token ?? "");
         else if (req.op === "test") {
           const sent = await sendNotice({

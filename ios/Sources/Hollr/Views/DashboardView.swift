@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Environment(MySessions.self) private var mySessions
     @State private var confirmRemove: Server?
     @Environment(\.openInBrowser) private var openInBrowser
+    @Environment(Inbox.self) private var inbox
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -18,6 +19,7 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 limitsStrip
+                InboxSection { sheetAgent = $0 }
                 sessionsSection
                 connectionsSection
             }
@@ -26,6 +28,8 @@ struct DashboardView: View {
         }
         .navigationTitle("Hollr")
         .themedPage()
+        // what waits for you – on every herdr change (the live feed makes this immediate)
+        .task(id: herdr.trees) { await inbox.update(herdr.allAgents(store.servers, includeShells: false)) }
         .onChange(of: herdr.trees) { _, trees in
             // forget sessions that were closed elsewhere
             let loaded = Set(trees.keys).filter { herdr.errors[$0] == nil }

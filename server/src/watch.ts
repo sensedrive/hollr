@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { execHerdr, Herdr, type TreeWorkspace } from "./herdr";
 import { log } from "./log";
 import { hostKeyFingerprint } from "./pairing";
-import { type Notice, pushConfig, pushDevices, sendNotice } from "./push";
+import { describeProgress, planActivity, START_AFTER_MS, type Track, UPDATE_EVERY_MS } from "./activity";
+import { type Notice, pushConfig, pushDevices, sendActivity, sendNotice } from "./push";
 import { findSessionFile } from "./sessionlog";
 import { usageLimits } from "./spaces";
 import { readTimeline } from "./timeline";
@@ -99,7 +100,7 @@ async function describe(
   herdr: Herdr,
   pane: string,
   kind: "waiting" | "done",
-): Promise<{ body: string; error?: boolean; fallback?: boolean }> {
+): Promise<{ body: string; error?: boolean; fallback?: boolean; options?: string[] }> {
   try {
     const agent = await herdr.agent(pane);
     const file =
@@ -110,8 +111,8 @@ async function describe(
       if (kind === "waiting") {
         const ask = items.find((i) => i.k === "ask" && i.pending);
         if (ask && ask.k === "ask") {
-          const options = ask.options.length ? ` (${ask.options.slice(0, 3).join(" / ")})` : "";
-          return { body: plain(ask.question + options) };
+          // the buttons carry the options – the text only needs the question
+          return { body: plain(ask.question), options: ask.options.slice(0, 4).map((o) => plain(o, 60)) };
         }
       } else {
         const end = items.find((i) => i.k === "end");
@@ -164,6 +165,7 @@ export async function runWatch(): Promise<number> {
   log("watch", `started (push ${pushConfig() ? "ready" : "not configured"})`);
   // usage history (beta): limits every 10 min, agent working time per hour
   const recorder = new UsageRecorder();
+  const tracks = new Map<string, Track & { readAt: number }>();
   let nextLimits = 0;
   prune();
   let stopping = false;
@@ -210,12 +212,20 @@ export async function runWatch(): Promise<number> {
             thread: `${host}:${e.pane}`,
             collapse: `${e.pane}:${kind}`,
             kind,
-            data: { pane: e.pane, fp, host },
+            // answer straight from the notification: option buttons for a question, a reply field otherwise
+            category: info.options?.length ? "HOLLR_ASK" : kind === "waiting" ? "HOLLR_WAITING" : "HOLLR_DONE",
+            data: {
+              pane: e.pane,
+              fp,
+              host,
+              ...(info.options?.length ? { options: JSON.stringify(info.options) } : {}),
+            },
           };
           const n = await sendNotice(notice);
           log("watch", `${e.pane} ${kind} → ${n} device(s)`);
         }
       }
+      if (activityPhones()) await stepActivities(herdr, agents, tracks, { host, fp });
     } catch (err) {
       log("watch", `poll failed: ${err instanceof Error ? err.message : err}`);
     }
@@ -223,4 +233,87 @@ export async function runWatch(): Promise<number> {
   }
   recorder.flush();
   return 0;
+}
+
+/** Phones that can show Live Activities (push-to-start token or one already running). */
+function activityPhones(): boolean {
+  if (!pushConfig()) return false;
+  return pushDevices().some(
+    (d) => d.prefs.activity !== false && (d.liveStart || Object.keys(d.activities ?? {}).length),
+  );
+}
+
+async function stepActivities(
+  herdr: Herdr,
+  agents: Array<{ pane: string; status: string; kind?: string }>,
+  tracks: Map<string, Track & { readAt: number }>,
+  where: { host: string; fp: string },
+) {
+  const now = Date.now();
+  let tree: TreeWorkspace[] | undefined;
+  const present = new Set<string>();
+  for (const a of agents) {
+    if (!a.kind) continue; // plain shells
+    present.add(a.pane);
+    let t = tracks.get(a.pane);
+    if (!t) {
+      t = { active: false, since: now, lastAt: 0, readAt: 0 };
+      tracks.set(a.pane, t);
+    }
+    if (a.status === "working" && t.lastStatus !== "working" && !t.active) t.since = now;
+    // reading the session log costs: only when something could be sent
+    const due =
+      a.status === "working"
+        ? t.active
+          ? now - t.readAt >= UPDATE_EVERY_MS
+          : now - t.since >= START_AFTER_MS
+        : t.active;
+    if (!due) {
+      if (!t.active) t.lastStatus = a.status === "working" ? "working" : a.status;
+      continue;
+    }
+    if (liveLocked(a.pane)) continue; // talking to it on the phone already
+    t.readAt = now;
+    tree ??= await herdr.tree();
+    const names = labels(tree, a.pane);
+    const progress = await progressOf(herdr, a.pane, names.agent);
+    const action = planActivity(t, a.status, progress.state, now, progress.error);
+    if (!action) continue;
+    const info = { pane: a.pane, host: where.host, fp: where.fp, title: names.tab, agent: names.agent };
+    const alert =
+      action.event === "update" && action.alert
+        ? { title: names.tab, body: `${names.agent} wartet auf dich: ${action.state.step}` }
+        : undefined;
+    const n = await sendActivity(action.event, info, action.state, alert);
+    log("watch", `activity ${action.event} ${a.pane} (${action.state.status}) → ${n} device(s)`);
+    t.active = action.event !== "end" && n > 0 ? true : action.event === "end" ? false : t.active;
+    t.lastStatus = action.state.status;
+    t.lastStep = action.state.step;
+    t.lastAt = now;
+  }
+  // closed panes: end their activities
+  for (const [pane, t] of tracks) {
+    if (present.has(pane)) continue;
+    if (t.active) {
+      const state = { status: "done", step: "", todoDone: 0, todoTotal: 0, since: Math.floor(t.since / 1000) };
+      await sendActivity("end", { pane, host: where.host, fp: where.fp, title: pane, agent: "" }, state);
+    }
+    tracks.delete(pane);
+  }
+}
+
+async function progressOf(herdr: Herdr, pane: string, agentName: string) {
+  try {
+    const agent = await herdr.agent(pane);
+    const file = agent.sessionFile ?? (agent.kind === "omp" ? findSessionFile(agent.cwd, 0) : undefined);
+    if (file) {
+      const tl = await readTimeline(file, 40);
+      const end = [...tl.items].reverse().find((i) => i.k === "end");
+      return {
+        state: describeProgress(tl, `${agentName} arbeitet`),
+        error: Boolean(end && end.k === "end" && end.status === "error" && !tl.running),
+      };
+    }
+  } catch {}
+  return { state: describeProgress(undefined, `${agentName} arbeitet`), error: false };
 }

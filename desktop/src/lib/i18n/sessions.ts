@@ -125,4 +125,12 @@ export default {
   "Oh My Pi – mit Live-Sprachmodus": "Oh My Pi – with live voice mode",
   "Text-Chat": "Text chat",
   "Standard": "Default",
+  // "Braucht dich" inbox on the dashboard
+  "Braucht dich": "Needs you",
+  "Mit einem Fehler gestoppt": "Stopped with an error",
+  "Antworten …": "Reply …",
+  "Weiter …": "Continue …",
+  Ausblenden: "Dismiss",
+  "Taste {n}": "Key {n}",
+  "Eigene Antwort": "Own answer",
 };
