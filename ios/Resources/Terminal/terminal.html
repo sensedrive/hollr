@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=6, user-scalable=yes">
+<link rel="stylesheet" href="xterm.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1216; overflow: hidden; touch-action: pan-x pan-y pinch-zoom; }
+  #term { position: absolute; inset: 0; padding: 4px; }
+  .xterm .xterm-viewport { overflow-y: hidden !important; }
+</style>
+</head>
+<body>
+<div id="term"></div>
+<script src="xterm.js"></script>
+<script>
+  // Hollr terminal: the server sends the pane's visible screen (ANSI) – this draws it at a font size
+  // that fits the phone, and passes what you type back. The pane itself is never resized.
+  const post = (name, value) => window.webkit?.messageHandlers?.[name]?.postMessage(value);
+  const term = new Terminal({
+    fontFamily: 'Menlo, ui-monospace, monospace', fontSize: 12, lineHeight: 1.0,
+    cursorBlink: false, scrollback: 0, convertEol: false, allowProposedApi: true,
+    theme: { background: '#0f1216', foreground: '#d7dae0', cursor: '#7aa2f7' },
+  });
+  term.open(document.getElementById('term'));
+  let cols = 80, rows = 24, ctrl = false;
+
+  // draw at a fixed font size, then scale the drawn screen to the phone's width (exact, whatever the
+  // font's real cell width is)
+  function fit() {
+    const el = document.getElementById('term');
+    const screen = el.querySelector('.xterm-screen');
+    if (!screen || !screen.offsetWidth) return;
+    const scale = Math.min(1.6, (window.innerWidth - 8) / screen.offsetWidth);
+    el.style.transformOrigin = '0 0';
+    el.style.transform = `scale(${scale})`;
+    el.style.width = `${100 / scale}%`;
+    el.style.height = `${100 / scale}%`;
+  }
+
+  window.render = (ansi, r, c) => {
+    if (c > 0 && r > 0 && (c !== cols || r !== rows)) { cols = c; rows = r; term.resize(cols, rows); }
+    term.write('\x1b[H\x1b[2J\x1b[3J' + ansi.replace(/\r?\n/g, '\r\n'), () => requestAnimationFrame(fit));
+  };
+  window.armCtrl = (on) => { ctrl = on; };
+  window.focusTerm = () => term.focus();
+  window.addEventListener('resize', fit);
+
+  term.onData((data) => {
+    if (ctrl && data.length === 1) {
+      const code = data.toUpperCase().charCodeAt(0);
+      if (code >= 64 && code <= 95) data = String.fromCharCode(code - 64);
+      ctrl = false;
+      post('ctrlUsed', true);
+    }
+    post('input', data);
+  });
+  post('ready', true);
+</script>
+</body>
+</html>

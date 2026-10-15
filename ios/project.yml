@@ -10,10 +10,10 @@ configFiles:
   Release: Config/Base.xcconfig
 settings:
   base:
-    MARKETING_VERSION: "0.25.0"
+    MARKETING_VERSION: "0.26.0"
     SWIFT_EMIT_LOC_STRINGS: YES
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
-    CURRENT_PROJECT_VERSION: "38"
+    CURRENT_PROJECT_VERSION: "39"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
 packages:
@@ -42,6 +42,9 @@ targets:
         embed: true
         platformFilter: iOS
       - target: HollrNotify
+        embed: true
+        platformFilter: iOS
+      - target: HollrShare
         embed: true
         platformFilter: iOS
       - package: Citadel
@@ -76,12 +79,13 @@ targets:
     platform: iOS
     sources:
       - path: Sources/Widgets
-        excludes: [Info.plist]
+        excludes: [Info.plist, Widgets.entitlements]
       - path: Sources/Shared
       - path: Resources/Localizable.xcstrings
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.hollr.ios.widgets
+        CODE_SIGN_ENTITLEMENTS: Sources/Widgets/Widgets.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Sources/Widgets/Info.plist
         TARGETED_DEVICE_FAMILY: "1"
@@ -100,6 +104,25 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.hollr.ios.notify
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Sources/NotifyExtension/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+  HollrShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/ShareExtension
+        excludes: [Info.plist, Share.entitlements]
+      - path: Sources/Shared/SharedInbox.swift
+      - path: Sources/Shared/SharedKeychain.swift
+      - path: Resources/Localizable.xcstrings
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.hollr.ios.share
+        CODE_SIGN_ENTITLEMENTS: Sources/ShareExtension/Share.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Sources/ShareExtension/Info.plist
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
         SKIP_INSTALL: YES

@@ -111,4 +111,11 @@ export default {
   verbindet: "connecting",
   verbunden: "connected",
   "Über {server}": "Via {server}",
+  // composer: snippets, "@" files, attachments
+  "Prompt-Bausteine": "Prompt snippets",
+  "Hochladen fehlgeschlagen: {e}": "Upload failed: {e}",
+  "Datei anhängen (auch einfügen oder hierher ziehen)": "Attach a file (or paste / drop it here)",
+  "Datei anhängen": "Attach file",
+  "Lädt hoch …": "Uploading …",
+  "{name} ist zu groß (höchstens 20 MB).": "{name} is too large (20 MB at most).",
 };

@@ -106,8 +106,8 @@ export const servers = () => invoke<Server[]>("servers");
 export const pair = (link: string, deviceName: string) => invoke<Server>("pair", { link, deviceName });
 export const removeServer = (id: string) => invoke<void>("remove_server", { id });
 
-export async function gate<T>(server: string, command: string, body?: unknown): Promise<T> {
-  const out = await invoke<string>("gate", {
+export async function gate<T>(server: string, command: string, body?: unknown, long = false): Promise<T> {
+  const out = await invoke<string>(long ? "gate_long" : "gate", {
     server,
     command,
     stdin: body === undefined ? null : JSON.stringify(body),
@@ -132,6 +132,9 @@ export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
 export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
 export const models = (s: string, kind: string) => gate<ModelList>(s, `models ${kind}`);
+/** A file for the agent (base64): lands outside the repo on the server, gives back its absolute path. */
+export const upload = (s: string, name: string, data: string) =>
+  gate<{ path: string }>(s, "upload", { name, data }, true).then((r) => r.path);
 export const switchModel = (s: string, pane: string, model: string, level?: string) =>
   gate(s, `model ${pane}`, { model, level });
 

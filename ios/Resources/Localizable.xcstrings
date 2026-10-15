@@ -93,12 +93,52 @@
         }
       }
     },
+    "%@ die Nachricht schreiben lassen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Let %@ write the message"
+          }
+        }
+      }
+    },
     "%@ ist gekoppelt": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ is paired"
+          }
+        }
+      }
+    },
+    "%@ schreibt die Commit-Nachricht und committet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ writes the commit message and commits."
+          }
+        }
+      }
+    },
+    "%@ wird auf den letzten Commit zurückgesetzt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is reset to the last commit."
+          }
+        }
+      }
+    },
+    "%@ wird gelöscht – das lässt sich nicht rückgängig machen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is deleted – this can’t be undone."
           }
         }
       }
@@ -175,6 +215,16 @@
         }
       }
     },
+    "%lld Agents arbeiten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld agents working"
+          }
+        }
+      }
+    },
     "%lld Agents · Gerät %@": {
       "localizations": {
         "de": {
@@ -241,12 +291,32 @@
         }
       }
     },
+    "%lld Werkzeuge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld tools"
+          }
+        }
+      }
+    },
     "%lld Werkzeuge installieren/aktualisieren": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Install/update %lld tools"
+          }
+        }
+      }
+    },
+    "%lld arbeiten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld working"
           }
         }
       }
@@ -287,6 +357,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld unchanged lines"
+          }
+        }
+      }
+    },
+    "%lld warten auf dich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld waiting for you"
           }
         }
       }
@@ -491,6 +571,16 @@
         }
       }
     },
+    "Agent fragen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask agent"
+          }
+        }
+      }
+    },
     "Agent nicht gefunden": {
       "localizations": {
         "en": {
@@ -507,6 +597,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Start agent"
+          }
+        }
+      }
+    },
+    "Agent öffnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open agent"
           }
         }
       }
@@ -567,6 +667,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "All known addresses in turn."
+          }
+        }
+      }
+    },
+    "Alle Änderungen, auch neue Dateien.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All changes, including new files."
           }
         }
       }
@@ -641,12 +751,42 @@
         }
       }
     },
+    "An %@ gesendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to %@."
+          }
+        }
+      }
+    },
     "An %@ kannst du unten Text schicken.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "You can send text to %@ below."
+          }
+        }
+      }
+    },
+    "An Hollr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To Hollr"
+          }
+        }
+      }
+    },
+    "An welchen Agent?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which agent?"
           }
         }
       }
@@ -667,6 +807,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beginning"
+          }
+        }
+      }
+    },
+    "Anhang": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment"
+          }
+        }
+      }
+    },
+    "Anhang nicht gesendet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment not sent"
+          }
+        }
+      }
+    },
+    "Anhänge: Foto, Bildschirmfoto, Datei oder Bild aus der Zwischenablage an den Agent – und „Teilen › Hollr“ aus Safari, Mail oder Fotos": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachments: photo, screenshot, file or clipboard image for the agent – and “Share › Hollr” from Safari, Mail or Photos"
           }
         }
       }
@@ -827,6 +997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Also delete on origin"
+          }
+        }
+      }
+    },
+    "Auch nicht gestagte Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unstaged changes too"
           }
         }
       }
@@ -1027,6 +1207,16 @@
         }
       }
     },
+    "Beim nächsten Öffnen fragt Hollr, an welchen Agent es geht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next time you open Hollr it asks which agent gets it."
+          }
+        }
+      }
+    },
     "Beste Genauigkeit, 25 Sprachen, Deutsch + Englisch gemischt": {
       "localizations": {
         "en": {
@@ -1043,6 +1233,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beta. Percentages come from the providers (omp usage) and are recorded by the Hollr server; agent time is measured by the server itself. 30 days are kept."
+          }
+        }
+      }
+    },
+    "Bild / Datei": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image / file"
+          }
+        }
+      }
+    },
+    "Bild aus der Zwischenablage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image from the clipboard"
           }
         }
       }
@@ -1137,6 +1347,16 @@
         }
       }
     },
+    "Chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat"
+          }
+        }
+      }
+    },
     "Chat konnte nicht geöffnet werden.": {
       "localizations": {
         "en": {
@@ -1173,6 +1393,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Claude Code"
+          }
+        }
+      }
+    },
+    "Claude, ChatGPT & Co. – wie viel vom Limit verbraucht ist.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude, ChatGPT & co. – how much of the limit is used."
           }
         }
       }
@@ -1217,12 +1447,72 @@
         }
       }
     },
+    "Commit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit"
+          }
+        }
+      }
+    },
+    "Commit …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit …"
+          }
+        }
+      }
+    },
     "Commit-Hash kopieren": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Copy commit hash"
+          }
+        }
+      }
+    },
+    "Commit-Nachricht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit message"
+          }
+        }
+      }
+    },
+    "Committe mit einer sinnvollen Nachricht und öffne einen PR.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit with a sensible message and open a PR."
+          }
+        }
+      }
+    },
+    "Committen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit"
+          }
+        }
+      }
+    },
+    "Committet: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Committed: %@"
           }
         }
       }
@@ -1279,6 +1569,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "This is not an APNs key file (.p8)."
+          }
+        }
+      }
+    },
+    "Datei": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File"
+          }
+        }
+      }
+    },
+    "Datei ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "file"
+          }
+        }
+      }
+    },
+    "Datei nicht lesbar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File not readable"
           }
         }
       }
@@ -1443,6 +1763,16 @@
         }
       }
     },
+    "Der Server dieses Agents ist nicht mehr gekoppelt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This agent’s server is no longer paired."
+          }
+        }
+      }
+    },
     "Der letzte Teil wurde nicht erkannt.": {
       "localizations": {
         "en": {
@@ -1533,12 +1863,32 @@
         }
       }
     },
+    "Die Nachricht ist leer.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The message is empty."
+          }
+        }
+      }
+    },
     "Die Session existiert in herdr nicht mehr.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "The session no longer exists in herdr."
+          }
+        }
+      }
+    },
+    "Die Sitzung wurde geschlossen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The session was closed."
           }
         }
       }
@@ -1659,6 +2009,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "RECOMMENDED"
+          }
+        }
+      }
+    },
+    "Echtes Terminal: Menü › Terminal zeigt die Session live in Farbe, mit Tastenleiste (esc, tab, ctrl, Pfeile) – zum Hineinzoomen aufziehen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Real terminal: menu › Terminal shows the session live in color, with a key bar (esc, tab, ctrl, arrows) – pinch to zoom in"
           }
         }
       }
@@ -1833,12 +2193,32 @@
         }
       }
     },
+    "Erkläre mir den Plan, bevor du anfängst.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explain the plan before you start."
+          }
+        }
+      }
+    },
     "Error: %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Error: %@"
+          }
+        }
+      }
+    },
+    "Erscheinen beim Schreiben über der Tastatur – ein Tipp fügt den Text ein. Tipp: „@“ im Eingabefeld schlägt Dateien aus dem Repo vor.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shown above the keyboard while you type – a tap inserts the text. Tip: “@” in the input suggests files from the repo."
           }
         }
       }
@@ -1889,6 +2269,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "If the computer asks: confirm there with “J”."
+          }
+        }
+      }
+    },
+    "Fasse kurz zusammen, was du gemacht hast.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Briefly summarize what you did."
           }
         }
       }
@@ -1963,12 +2353,52 @@
         }
       }
     },
+    "Fertige Werkzeug-Gruppen erscheinen als eine Zeile („12 Werkzeuge · 3 Dateien geändert“) – antippen klappt sie auf.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finished tool groups show as one line (“12 tools · 3 files changed”) – tap to expand."
+          }
+        }
+      }
+    },
     "Feste Ersetzungen nach der Erkennung, z. B. „Komma“ → „,“.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Fixed replacements after recognition, e.g. “comma” → “,”."
+          }
+        }
+      }
+    },
+    "Foto oder Bildschirmfoto": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo or screenshot"
+          }
+        }
+      }
+    },
+    "Frag ${agent}: ${text}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask ${agent}: ${text}"
+          }
+        }
+      }
+    },
+    "Frag einen Agent in ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask an agent in ${applicationName}"
           }
         }
       }
@@ -2103,6 +2533,16 @@
         }
       }
     },
+    "Gepusht.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pushed."
+          }
+        }
+      }
+    },
     "Gerade läuft dort kein Web-Dienst auf localhost.": {
       "localizations": {
         "en": {
@@ -2139,6 +2579,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Device name"
+          }
+        }
+      }
+    },
+    "Geteilt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared"
           }
         }
       }
@@ -2203,6 +2653,16 @@
         }
       }
     },
+    "Größer als 20 MB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larger than 20 MB"
+          }
+        }
+      }
+    },
     "Hell": {
       "localizations": {
         "en": {
@@ -2239,6 +2699,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No agent runs here, just a shell."
+          }
+        }
+      }
+    },
+    "Hinzufügen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
           }
         }
       }
@@ -2393,6 +2863,16 @@
         }
       }
     },
+    "Kein Agent gewählt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No agent selected"
+          }
+        }
+      }
+    },
     "Kein Mikrofon verfügbar – läuft gerade ein Anruf?": {
       "localizations": {
         "en": {
@@ -2439,6 +2919,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No agents"
+          }
+        }
+      }
+    },
+    "Keine Agents erreichbar.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No agents reachable."
           }
         }
       }
@@ -2525,6 +3015,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Smaller"
+          }
+        }
+      }
+    },
+    "Kommentar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment"
+          }
+        }
+      }
+    },
+    "Kommentar an %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment to %@"
+          }
+        }
+      }
+    },
+    "Kommentar an %@ gesendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment sent to %@."
           }
         }
       }
@@ -2619,6 +3139,16 @@
         }
       }
     },
+    "Lass die Tests laufen und behebe, was rot ist.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run the tests and fix what’s red."
+          }
+        }
+      }
+    },
     "Last": {
       "localizations": {
         "en": {
@@ -2639,12 +3169,32 @@
         }
       }
     },
+    "Limits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limits"
+          }
+        }
+      }
+    },
     "Link kopieren": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Copy link"
+          }
+        }
+      }
+    },
+    "Links einen Agent wählen – Rechtsklick › „Rechts daneben öffnen“ zeigt einen zweiten daneben.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick an agent on the left – right-click › “Open beside” shows a second one next to it."
           }
         }
       }
@@ -2715,6 +3265,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Talk live with omp"
+          }
+        }
+      }
+    },
+    "Live starten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start live"
           }
         }
       }
@@ -2825,6 +3385,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Also deletes the branch in the remote repository (e.g. GitHub)."
+          }
+        }
+      }
+    },
+    "Mac: Agents in der Seitenleiste, zwei Chats nebeneinander (Rechtsklick › Rechts daneben öffnen)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac: agents in a sidebar, two chats side by side (right-click › Open beside)"
+          }
+        }
+      }
+    },
+    "Mach weiter.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep going."
           }
         }
       }
@@ -3149,6 +3729,16 @@
         }
       }
     },
+    "Nachricht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message"
+          }
+        }
+      }
+    },
     "Nachricht an %@ …": {
       "localizations": {
         "en": {
@@ -3209,12 +3799,32 @@
         }
       }
     },
+    "Neu verbinden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnect"
+          }
+        }
+      }
+    },
     "Neue Sitzung": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "New session"
+          }
+        }
+      }
+    },
+    "Neuer Baustein …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New snippet …"
           }
         }
       }
@@ -3369,6 +3979,16 @@
         }
       }
     },
+    "Noch keine Daten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data yet"
+          }
+        }
+      }
+    },
     "Noch keine Daten. Der Hollr-Server zeichnet ab jetzt alle 10 Minuten auf – schau in einer Stunde wieder vorbei.": {
       "localizations": {
         "en": {
@@ -3395,6 +4015,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Try again"
+          }
+        }
+      }
+    },
+    "Nur die gestagten Dateien.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the staged files."
           }
         }
       }
@@ -3669,6 +4299,16 @@
         }
       }
     },
+    "PR: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PR: %@"
+          }
+        }
+      }
+    },
     "Pairing-Code": {
       "localizations": {
         "en": {
@@ -3745,6 +4385,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Project locations"
+          }
+        }
+      }
+    },
+    "Prompt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt"
+          }
+        }
+      }
+    },
+    "Prompt-Bausteine": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt snippets"
+          }
+        }
+      }
+    },
+    "Prompt-Bausteine über der Tastatur und „@“ schlägt Dateien aus dem Repo vor (Einstellungen › Prompt-Bausteine)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prompt snippets above the keyboard, and “@” suggests files from the repo (Settings › Prompt snippets)"
           }
         }
       }
@@ -3839,6 +4509,26 @@
         }
       }
     },
+    "Pushen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push"
+          }
+        }
+      }
+    },
+    "Pushen und PR öffnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push and open PR"
+          }
+        }
+      }
+    },
     "QR-Code scannen": {
       "localizations": {
         "en": {
@@ -3899,6 +4589,16 @@
         }
       }
     },
+    "Rechts daneben öffnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open beside"
+          }
+        }
+      }
+    },
     "Repo": {
       "localizations": {
         "en": {
@@ -3919,12 +4619,32 @@
         }
       }
     },
+    "Ruhigerer Chat: Werkzeuge als eine Zeile zusammengefasst, Farbe pro Workspace, Zoom von der Karte in den Chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calmer chat: tools folded into one line, a color per workspace, zoom from the card into the chat"
+          }
+        }
+      }
+    },
     "Satzzeichen & Großschreibung": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Punctuation & capitalization"
+          }
+        }
+      }
+    },
+    "Schickt eine Nachricht an einen Agent auf deinem Server.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends a message to an agent on your server."
           }
         }
       }
@@ -4275,6 +4995,16 @@
         }
       }
     },
+    "Sichern": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
     "Sitzung beenden": {
       "localizations": {
         "en": {
@@ -4495,6 +5225,16 @@
         }
       }
     },
+    "Später": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        }
+      }
+    },
     "Stagen": {
       "localizations": {
         "en": {
@@ -4535,12 +5275,32 @@
         }
       }
     },
+    "Standardbausteine wiederherstellen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore default snippets"
+          }
+        }
+      }
+    },
     "Standardliste wiederherstellen": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Restore default list"
+          }
+        }
+      }
+    },
+    "Starte Live in ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start live in ${applicationName}"
           }
         }
       }
@@ -4675,6 +5435,16 @@
         }
       }
     },
+    "Tastatur": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard"
+          }
+        }
+      }
+    },
     "Tastatur schließen": {
       "localizations": {
         "en": {
@@ -4751,6 +5521,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Team: everyone pairs their own iPhone with `hollr pair`. Remove on the server with `hollr revoke <name>`."
+          }
+        }
+      }
+    },
+    "Teilen an …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share to …"
           }
         }
       }
@@ -4995,6 +5775,16 @@
         }
       }
     },
+    "Verbindung beendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection ended."
+          }
+        }
+      }
+    },
     "Verbindung unterbrochen – bitte neu starten.": {
       "localizations": {
         "en": {
@@ -5171,6 +5961,16 @@
         }
       }
     },
+    "Verwerfen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard"
+          }
+        }
+      }
+    },
     "Vorschau": {
       "localizations": {
         "en": {
@@ -5211,12 +6011,32 @@
         }
       }
     },
+    "Was soll der Agent damit tun?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What should the agent do with it?"
+          }
+        }
+      }
+    },
     "Was soll passieren?": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "What should happen?"
+          }
+        }
+      }
+    },
+    "Was soll sich an der Datei ändern?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What should change in this file?"
           }
         }
       }
@@ -5251,6 +6071,16 @@
         }
       }
     },
+    "Wer arbeitet, wer auf dich wartet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who is working, who is waiting for you."
+          }
+        }
+      }
+    },
     "Werkzeuge": {
       "localizations": {
         "en": {
@@ -5267,6 +6097,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tools on %@"
+          }
+        }
+      }
+    },
+    "Werkzeuge im Chat zusammenfassen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fold tools in the chat"
           }
         }
       }
@@ -5307,6 +6147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Whisper models (multilingual)"
+          }
+        }
+      }
+    },
+    "Widgets für Home- und Sperrbildschirm (Agents, Limits) und Kurzbefehle/Siri: „Frag … in Hollr“, „Live starten“": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets for home and lock screen (agents, limits) and Shortcuts/Siri: “Ask … in Hollr”, “Start live”"
           }
         }
       }
@@ -5561,6 +6411,16 @@
         }
       }
     },
+    "Zuklappen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse"
+          }
+        }
+      }
+    },
     "Zuletzt": {
       "localizations": {
         "en": {
@@ -5587,6 +6447,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Extra model (≈ 100 MB) spots your technical terms in the audio and fixes them"
+          }
+        }
+      }
+    },
+    "Zweiten Chat schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close second chat"
           }
         }
       }
@@ -5921,6 +6791,16 @@
         }
       }
     },
+    "· %lld %@ geändert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %lld %@ changed"
+          }
+        }
+      }
+    },
     "· %lld/%lld": {
       "localizations": {
         "de": {
@@ -5957,6 +6837,16 @@
         }
       }
     },
+    "Änderungen an dieser Datei verwerfen?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard the changes to this file?"
+          }
+        }
+      }
+    },
     "Änderungen anzeigen": {
       "localizations": {
         "en": {
@@ -5967,12 +6857,42 @@
         }
       }
     },
+    "Änderungen prüfen: wischen zum Stagen, Verwerfen oder Kommentieren, dann Commit (oder vom Agent schreiben lassen), Push und PR": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review changes: swipe to stage, discard or comment, then commit (or let the agent write it), push and PR"
+          }
+        }
+      }
+    },
     "Änderungen, Verlauf und Branches ansehen": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "View changes, history and branches"
+          }
+        }
+      }
+    },
+    "Öffne ${agent} in ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open ${agent} in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Öffne Hollr einmal, dann erscheinen hier deine Agents.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Hollr once, then your agents show up here."
           }
         }
       }
@@ -5993,6 +6913,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Opens as a new tab in this workspace's folder."
+          }
+        }
+      }
+    },
+    "Öffnet den Agent und startet ein Live-Gespräch mit omp.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the agent and starts a live conversation with omp."
           }
         }
       }

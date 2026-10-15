@@ -170,15 +170,60 @@ struct ToolsBlock: View {
         return out
     }
 
+    @AppStorage("chat.compactTools") private var compact = true
+    @State private var expanded = false
+
+    /// Finished groups of several calls fold into one line – the chat reads like a conversation;
+    /// running ones and errors stay open.
+    private var folds: Bool {
+        compact && !expanded && calls.count > 2 && !calls.contains { $0.status == "running" || $0.status == "error" }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(pieces) { piece in
-                switch piece {
-                case let .reads(group): ReadLines(calls: group)
-                case let .call(call): ToolView(call: call)
+        if folds {
+            Button { withAnimation(.easeInOut(duration: 0.2)) { expanded = true } } label: { summary }
+                .buttonStyle(.plain)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                if compact && expanded {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { expanded = false } } label: {
+                        Label("Zuklappen", systemImage: "chevron.up").font(Omp.monoSmall).foregroundStyle(Omp.dim)
+                    }
+                    .buttonStyle(.plain)
+                }
+                ForEach(pieces) { piece in
+                    switch piece {
+                    case let .reads(group): ReadLines(calls: group)
+                    case let .call(call): ToolView(call: call)
+                    }
                 }
             }
         }
+    }
+
+    /// "12 Werkzeuge · 3 Dateien geändert +40 −12 ›"
+    private var summary: some View {
+        let edits = calls.filter { $0.name == "edit" || $0.name == "write" }
+        let files = Set(edits.compactMap { $0.path ?? $0.detail }).count
+        let add = calls.compactMap(\.add).reduce(0, +), del = calls.compactMap(\.del).reduce(0, +)
+        return HStack(spacing: 8) {
+            Image(systemName: "wrench.and.screwdriver").foregroundStyle(Omp.dim)
+            Text("\(calls.count) Werkzeuge").foregroundStyle(.secondary)
+            if files > 0 {
+                Text("· \(files) \(files == 1 ? String(localized: "Datei") : String(localized: "Dateien")) geändert")
+                    .foregroundStyle(.secondary)
+            }
+            if add + del > 0 {
+                Text("+\(add)").foregroundStyle(Omp.success)
+                Text("−\(del)").foregroundStyle(Omp.error)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.down").font(.caption2).foregroundStyle(Omp.dim)
+        }
+        .font(Omp.monoSmall)
+        .padding(.vertical, 6).padding(.horizontal, 10)
+        .background(Omp.dim.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
     }
 }
 

@@ -635,7 +635,7 @@
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
           bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
-          top={liveStrip} trailing={liveButton} />
+          {server} {ws} top={liveStrip} trailing={liveButton} />
         {#if !zen}{@render statusLine()}{/if}
       </div>
 

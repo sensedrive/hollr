@@ -168,4 +168,11 @@ export default {
   "omp, Claude Code, Codex und Terminals öffnen, lesen, schreiben und schließen":
     "Open, read, write to and close omp, Claude Code, Codex and terminals",
   "Übersicht zeigt deine Sitzungen, gruppiert nach Maschine": "Overview shows your sessions, grouped by machine",
+  // prompt snippets
+  "Nach oben": "Move up",
+  "Keine Bausteine.": "No snippets.",
+  "Neuer Baustein …": "New snippet …",
+  "Hinzufügen": "Add",
+  "Erscheinen als Chips über dem Eingabefeld; ein Klick fügt den Text an der Schreibmarke ein.": "Shown as chips above the input field; a click inserts the text at the cursor.",
+  "Standard wiederherstellen": "Restore defaults",
 };

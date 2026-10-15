@@ -22,6 +22,9 @@ struct SettingsView: View {
                         }
                     } icon: { Image(systemName: "waveform") }
                 }
+                NavigationLink { SnippetSettingsView() } label: {
+                    Label("Prompt-Bausteine", systemImage: "text.badge.plus")
+                }
             }
             Section {
                 VStack(alignment: .leading, spacing: 10) {

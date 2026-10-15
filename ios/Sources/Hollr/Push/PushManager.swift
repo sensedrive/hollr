@@ -30,6 +30,8 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
     var lastResult: String?
     /// set when a notification is tapped: open this agent
     var openRequest: (fp: String, pane: String)?
+    /// Shortcut / Siri "Live starten": open this agent and start /live
+    var liveRequest: (fp: String, pane: String)?
     /// the agent currently on screen (no banner for it)
     var visibleAgentId: String?
 

@@ -17,11 +17,19 @@ struct RootView: View {
     @State private var spacesPath = NavigationPath()
     @State private var agentPath: [String] = []
     @State private var newChat = false
+    @Namespace private var zoom
+    @State private var shared: SharedItem?
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var wide: Bool { sizeClass == .regular }
     @Environment(MySessions.self) private var mySessions
 
     enum RootTab { case home, spaces, agents, settings }
 
     var body: some View {
+        content.environment(\.zoomNamespace, zoom)
+    }
+
+    private var content: some View {
         Group {
             if store.servers.isEmpty {
                 WelcomeView { pairing = PairingRequest() }
@@ -50,9 +58,17 @@ struct RootView: View {
                     .tabItem { Label("Spaces", systemImage: "square.stack.3d.up") }
                     .tag(RootTab.spaces)
 
-                    NavigationStack(path: $agentPath) {
-                        AgentListView(onNewChat: { newChat = true })
-                            .navigationDestination(for: String.self) { id in AgentDetailView(agentId: id, path: $agentPath) }
+                    Group {
+                        if wide {
+                            // Mac / wide window: sidebar + one or two chats side by side
+                            AgentsSplitView(onNewChat: { newChat = true }, selection: Binding(
+                                get: { agentPath.last }, set: { agentPath = $0.map { [$0] } ?? [] }))
+                        } else {
+                            NavigationStack(path: $agentPath) {
+                                AgentListView(onNewChat: { newChat = true })
+                                    .navigationDestination(for: String.self) { id in AgentDetailView(agentId: id, path: $agentPath) }
+                            }
+                        }
                     }
                     .safeAreaInset(edge: .bottom) { LiveBar(path: $agentPath, tab: $tab) }
                     .tabItem { Label("Agents", systemImage: "waveform.circle") }
@@ -70,7 +86,33 @@ struct RootView: View {
                     if let server { sheetAgent = "\(server.id.uuidString)|\(pane)" }
                     LiveActivities.endIfDone(pane: pane) // seen – no need to keep it on the lock screen
                 }
+                .onChange(of: PushManager.shared.liveRequest?.pane) { _, pane in
+                    guard let pane, let request = PushManager.shared.liveRequest else { return }
+                    PushManager.shared.liveRequest = nil
+                    guard let server = store.servers.first(where: { $0.hostFingerprint == request.fp }) else { return }
+                    let id = "\(server.id.uuidString)|\(pane)"
+                    sheetAgent = id
+                    Task {
+                        // the tree may still be loading after a cold start
+                        for _ in 0..<20 where herdr.ref(id: id, servers: store.servers) == nil {
+                            try? await Task.sleep(for: .milliseconds(300))
+                        }
+                        guard let ref = herdr.ref(id: id, servers: store.servers), ref.pane.live else { return }
+                        sessions.endOtherLiveCalls(except: id)
+                        sessions.session(for: ref).start()
+                    }
+                }
                 .task { PushManager.shared.start(servers: store.servers) }
+                // shared from another app: which agent gets it?
+                .onChange(of: scenePhase, initial: true) { _, phase in
+                    if phase == .active, shared == nil { shared = SharedItem.pending().first }
+                }
+                .sheet(item: $shared) { item in
+                    SharedItemSheet(item: item) { shared = nil }
+                }
+                // widgets and Siri read a snapshot of what the app knows
+                .onChange(of: herdr.trees) { writeSnapshot() }
+                .onChange(of: herdr.usage) { writeSnapshot() }
                 .onChange(of: store.servers) { _, servers in
                     PushManager.shared.updateServers(servers)
                     herdr.startFeeds(servers)
@@ -198,6 +240,12 @@ struct RootView: View {
     }
 }
 
+extension RootView {
+    func writeSnapshot() {
+        SnapshotWriter.write(agents: herdr.allAgents(store.servers), usage: herdr.usage.values.flatMap { $0 })
+    }
+}
+
 #if DEBUG
 /// Test hooks for simulator/device runs (not in release builds):
 ///   -hollrPair <hollr://pair?c=…>   pair without the system "open in" dialog
@@ -268,7 +316,39 @@ struct AgentSheet: View {
         NavigationStack {
             AgentDetailView(agentId: path.last ?? agentId, path: $path)
         }
+        .zoomDestination(agentId)
     }
+}
+
+/// Card → chat zooms out of the card (iOS 18); one namespace for the whole app.
+private struct ZoomNamespaceKey: EnvironmentKey { static let defaultValue: Namespace.ID? = nil }
+
+extension EnvironmentValues {
+    var zoomNamespace: Namespace.ID? {
+        get { self[ZoomNamespaceKey.self] }
+        set { self[ZoomNamespaceKey.self] = newValue }
+    }
+}
+
+private struct ZoomSource: ViewModifier {
+    let id: String
+    @Environment(\.zoomNamespace) private var ns
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *), let ns { content.matchedTransitionSource(id: id, in: ns) } else { content }
+    }
+}
+
+private struct ZoomDestination: ViewModifier {
+    let id: String
+    @Environment(\.zoomNamespace) private var ns
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *), let ns { content.navigationTransition(.zoom(sourceID: id, in: ns)) } else { content }
+    }
+}
+
+extension View {
+    func zoomSource(_ id: String) -> some View { modifier(ZoomSource(id: id)) }
+    func zoomDestination(_ id: String) -> some View { modifier(ZoomDestination(id: id)) }
 }
 
 struct PairingRequest: Identifiable {

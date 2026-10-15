@@ -52,3 +52,43 @@ final class InboxTests: XCTestCase {
         XCTAssertNil(HollrLink.parseOpen(URL(string: "hollr://pair?c=abc")!))
     }
 }
+
+final class MentionTests: XCTestCase {
+    func testFindsFragmentAfterAt() {
+        XCTAssertEqual(Mention.find(in: "schau dir @Agent", cursor: nil)?.query, "Agent")
+        XCTAssertEqual(Mention.find(in: "@", cursor: nil)?.query, "")
+        XCTAssertEqual(Mention.find(in: "in (@src/li", cursor: nil)?.query, "src/li")
+        XCTAssertNil(Mention.find(in: "mail an a@b.de", cursor: nil)) // e-mail, not a mention
+        XCTAssertNil(Mention.find(in: "@Agent fertig", cursor: nil)) // the word is over
+        XCTAssertEqual(Mention.find(in: "@Agent fertig", cursor: 4)?.query, "Age") // cursor inside the word
+    }
+
+    func testInsertReplacesFragment() {
+        let r = Mention.insert("src/AgentSession.swift", into: "fix @Agse bitte", cursor: 9)
+        XCTAssertEqual(r?.text, "fix @src/AgentSession.swift  bitte")
+        XCTAssertEqual(r?.cursor, "fix @src/AgentSession.swift ".count)
+    }
+
+    @MainActor func testSnippetTitle() {
+        XCTAssertEqual(PromptSnippets.title("Mach weiter."), "Mach weiter.")
+        XCTAssertEqual(PromptSnippets.title("Lass die Tests laufen und behebe alles"), "Lass die Tests laufen …")
+    }
+}
+
+final class SharedStorageTests: XCTestCase {
+    func testSnapshotAndSharedItemsRoundTrip() throws {
+        try XCTSkipIf(SharedKeychain.group == nil, "no team id in this build")
+        var snap = WidgetSnapshot()
+        snap.agents = [.init(id: "s|w1:p1", fp: "fp", pane: "w1:p1", server: "mac", title: "tendr", agent: "omp", status: "blocked")]
+        snap.updated = .now
+        snap.save()
+        XCTAssertEqual(WidgetSnapshot.load().agents.first?.title, "tendr")
+        XCTAssertEqual(WidgetSnapshot.load().waiting, 1)
+        let before = SharedItem.pending()
+        let item = SharedItem(text: "Schau dir das an", fileName: "a.jpg", file: Data([1, 2, 3]))
+        XCTAssertTrue(SharedItem.add(item))
+        XCTAssertEqual(SharedItem.pending().last?.file, Data([1, 2, 3]))
+        SharedItem.remove(item)
+        XCTAssertEqual(SharedItem.pending(), before)
+    }
+}

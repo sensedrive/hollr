@@ -11,6 +11,7 @@ struct HollrApp: App {
     @State private var drafts = DraftStore()
     @State private var dictator = Dictator()
     @State private var inbox = Inbox()
+    @State private var snippets = PromptSnippets()
     @State private var pairing: PairingRequest?
 
     var body: some Scene {
@@ -27,6 +28,7 @@ struct HollrApp: App {
                 .environment(drafts)
                 .environment(dictator)
                 .environment(inbox)
+                .environment(snippets)
                 .appTextScale()
                 .appLock()
                 // dictation models take hundreds of MB: give them back when iOS asks or we go away
@@ -73,6 +75,14 @@ enum Theme {
     static var fg: Color { Color(hex: p.fg) }
     /// text/icons on an accent-filled surface
     static var onAccent: Color { p.isDark ? .black : .white }
+
+    /// A workspace's own color (same name → same color on every device): cards, rows, chips, chat.
+    static func identity(_ name: String) -> Color {
+        let hues: [Double] = [0.58, 0.76, 0.93, 0.03, 0.09, 0.14, 0.36, 0.47]
+        var hash: UInt64 = 1469598103934665603 // FNV-1a: stable, unlike hashValue
+        for byte in name.lowercased().utf8 { hash = (hash ^ UInt64(byte)) &* 1099511628211 }
+        return Color(hue: hues[Int(hash % UInt64(hues.count))], saturation: p.isDark ? 0.55 : 0.6, brightness: p.isDark ? 0.95 : 0.75)
+    }
 
     static func statusColor(_ status: String) -> Color {
         switch status {

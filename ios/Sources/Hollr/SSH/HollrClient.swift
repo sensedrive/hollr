@@ -205,14 +205,22 @@ enum HollrClient {
     }
 
     /// Read-only git / file access inside a space (server checks the path stays inside).
-    static func fs<T: Decodable>(_ server: Server, _ body: [String: Any], as: T.Type, command: String = "fs") async throws -> T {
+    /// Sends a file to the server for the agent; returns where it was stored (outside the repo).
+    static func upload(_ server: Server, name: String, data: Data) async throws -> String {
+        struct R: Decodable { let path: String }
+        let body: [String: Any] = ["name": name, "data": data.base64EncodedString()]
+        return try await fs(server, body, as: R.self, command: "upload", seconds: 180).path
+    }
+
+    static func fs<T: Decodable>(_ server: Server, _ body: [String: Any], as: T.Type, command: String = "fs",
+                                 seconds: Double = 30) async throws -> T {
         let client = try await SSHPool.shared.client(for: server)
         var payload = try JSONSerialization.data(withJSONObject: body)
         payload.append(0x0a)
         var collected = Data()
         let box = DataBox()
         do {
-            try await SSHPool.deadline(server, seconds: 30) {
+            try await SSHPool.deadline(server, seconds: seconds) {
                 try await client.withExec(command) { inbound, outbound in
                     try await outbound.write(ByteBuffer(bytes: payload))
                     for try await output in inbound {

@@ -53,6 +53,8 @@ type Slot = Arc<Mutex<Option<Arc<Handle<Pinned>>>>>;
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 /// Upper bound for one gate command's answer (git / worktree ops can take a while).
 const REPLY_TIMEOUT: Duration = Duration::from_secs(120);
+/// Uploads (up to 20 MB of base64 on stdin) over a slow link.
+pub const LONG_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub struct Hollr {
     dir: PathBuf,
@@ -224,12 +226,18 @@ impl Hollr {
         let channel = handle.channel_open_session().await?;
         channel.exec(true, command).await?;
         if let Some(input) = stdin {
-            let mut line = input.as_bytes().to_vec();
-            line.push(b'\n');
-            channel.data(&line[..]).await?;
-            channel.eof().await?;
+            Self::send_line(&channel, input).await?;
         }
         Ok(channel)
+    }
+
+    /// One line on stdin, then EOF.
+    async fn send_line(channel: &russh::Channel<client::Msg>, input: &str) -> Result<()> {
+        let mut line = input.as_bytes().to_vec();
+        line.push(b'\n');
+        channel.data(&line[..]).await?;
+        channel.eof().await?;
+        Ok(())
     }
 
     /// Reads stdout until the command ends.
@@ -246,11 +254,19 @@ impl Hollr {
     }
 
     pub async fn gate(&self, server_id: &str, command: &str, stdin: Option<String>) -> Result<String> {
+        self.gate_with(server_id, command, stdin, REPLY_TIMEOUT).await
+    }
+
+    /// `gate` for big stdin (uploads): only the channel open has the short timeout, sending the
+    /// data counts into `reply`.
+    pub async fn gate_with(&self, server_id: &str, command: &str, stdin: Option<String>, reply: Duration) -> Result<String> {
         let server = self.servers().into_iter().find(|s| s.id == server_id).context("Server nicht gefunden")?;
+        let late = reply > REPLY_TIMEOUT;
         for attempt in 0..2 {
             let handle = self.handle(&server).await?;
+            let early = if late { None } else { stdin.as_deref() };
             // a dead connection (e.g. after sleep) never answers the channel open: time out, reconnect once
-            let opened = tokio::time::timeout(OPEN_TIMEOUT, Self::open(&handle, command, stdin.as_deref()))
+            let opened = tokio::time::timeout(OPEN_TIMEOUT, Self::open(&handle, command, early))
                 .await
                 .unwrap_or_else(|_| Err(anyhow!("Zeitüberschreitung")));
             let channel = match opened {
@@ -264,7 +280,13 @@ impl Hollr {
                 }
             };
             // the command runs now: no retry (it may not be idempotent), but never hang forever
-            return match tokio::time::timeout(REPLY_TIMEOUT, Self::collect(channel)).await {
+            let run = async {
+                if late && let Some(input) = stdin.as_deref() {
+                    Self::send_line(&channel, input).await?;
+                }
+                Self::collect(channel).await
+            };
+            return match tokio::time::timeout(reply, run).await {
                 Ok(out) => out,
                 Err(_) => {
                     self.drop_stale(&server.id, &handle).await;

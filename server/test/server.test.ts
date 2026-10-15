@@ -898,3 +898,86 @@ describe("live activity", () => {
     expect(describeProgress(undefined, "omp arbeitet")).toEqual({ step: "omp arbeitet", todoDone: 0, todoTotal: 0 });
   });
 });
+
+describe("@ file completion", () => {
+  test("name prefix before contains before path before fuzzy, shorter first", async () => {
+    const { matchFiles } = await import("../src/spaces");
+    const files = [
+      "src/live/AgentSession.swift",
+      "src/views/Agent.swift",
+      "docs/agents.md",
+      "src/model/session.ts",
+      "README.md",
+      "test/agent-session.test.ts",
+    ];
+    expect(matchFiles(files, "agent")).toEqual([
+      "docs/agents.md",
+      "src/views/Agent.swift",
+      "test/agent-session.test.ts",
+      "src/live/AgentSession.swift",
+    ]);
+    expect(matchFiles(files, "sess")[0]).toBe("src/model/session.ts");
+    expect(matchFiles(files, "agsw")).toEqual(["src/views/Agent.swift", "src/live/AgentSession.swift"]);
+    expect(matchFiles(files, "")).toEqual(["README.md"]);
+    expect(matchFiles(files, "agent", 2)).toHaveLength(2);
+  });
+});
+
+describe("uploads", () => {
+  test("saved outside the repo under a safe name, size limited", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-up-"));
+    Bun.env.HOLLR_UPLOAD_DIR = dir;
+    try {
+      const { saveUpload, safeName } = await import("../src/uploads");
+      expect(safeName("../../etc/passwd")).toBe("passwd");
+      expect(safeName(".hidden")).toBe("hidden");
+      expect(safeName("Bildschirmfoto 2026.png")).toBe("Bildschirmfoto 2026.png");
+      expect(safeName("a;rm -rf.png")).toBe("a_rm -rf.png");
+      const path = saveUpload("shot.png", Buffer.from("png-bytes").toString("base64"), new Date("2026-10-15T08:30:05Z"));
+      expect(path).toBe(join(dir, "2026-10-15", "083005-shot.png"));
+      expect(readFileSync(path, "utf8")).toBe("png-bytes");
+      expect(() => saveUpload("x", "")).toThrow("empty");
+    } finally {
+      delete Bun.env.HOLLR_UPLOAD_DIR;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("review actions", () => {
+  test("discard, commit (staged or all), nothing to commit", async () => {
+    const { commit, discard } = await import("../src/git");
+    const repo = mkdtempSync(join(tmpdir(), "hollr-git-"));
+    const sh = (...cmd: string[]) => Bun.spawnSync(cmd, { cwd: repo, stdout: "pipe", stderr: "pipe" });
+    try {
+      sh("git", "init", "-q");
+      sh("git", "config", "user.email", "t@example.com");
+      sh("git", "config", "user.name", "T");
+      writeFileSync(join(repo, "a.txt"), "eins\n");
+      sh("git", "add", ".");
+      sh("git", "commit", "-qm", "init");
+      writeFileSync(join(repo, "a.txt"), "zwei\n");
+      writeFileSync(join(repo, "neu.txt"), "neu\n");
+      discard(repo, "a.txt");
+      expect(readFileSync(join(repo, "a.txt"), "utf8")).toBe("eins\n");
+      discard(repo, "neu.txt");
+      expect(Bun.file(join(repo, "neu.txt")).size).toBe(0);
+      expect(() => commit(repo, "x", false)).toThrow("Nichts gestaged");
+      expect(() => commit(repo, "  ", true)).toThrow("Commit-Nachricht fehlt");
+      writeFileSync(join(repo, "b.txt"), "b\n");
+      const c = commit(repo, "füge b hinzu", true);
+      expect(c.hash).toMatch(/^[0-9a-f]{7,}$/);
+      expect(sh("git", "log", "-1", "--format=%s").stdout.toString().trim()).toBe("füge b hinzu");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("terminal", () => {
+  test("screen size ignores colors and escape sequences", async () => {
+    const { screenSize } = await import("../src/term");
+    expect(screenSize("\x1b[38;2;1;2;3mhallo\x1b[0m welt\nab\n\x1b]0;title\x07x")).toEqual({ rows: 3, cols: 10 });
+    expect(screenSize("äöü")).toEqual({ rows: 1, cols: 3 });
+  });
+});

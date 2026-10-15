@@ -40,6 +40,7 @@ private struct AgentConversation: View {
     @State private var confirmClose = false
     @State private var gitSpace: Space?
     @State private var switchModel = false
+    @State private var showTerminal = false
     /// keyboard is up → hide everything but transcript and composer
     @State private var editing = false
     /// reading mode → transcript only, full screen
@@ -97,6 +98,7 @@ private struct AgentConversation: View {
             if !reading { controls }
         }
         .animation(.easeInOut(duration: 0.2), value: reading)
+        .fullScreenCover(isPresented: $showTerminal) { TerminalScreen(ref: ref) }
         // the zen composer goes away with the keyboard up: its focus change never arrives
         .onChange(of: reading) { _, _ in editing = false }
         .themedPage()
@@ -118,6 +120,9 @@ private struct AgentConversation: View {
                         Button { switchModel = true } label: {
                             Label("Modell wechseln", systemImage: "cpu")
                         }
+                    }
+                    Button { showTerminal = true } label: {
+                        Label("Terminal", systemImage: "apple.terminal")
                     }
                     Button { Task { await openGit() } } label: {
                         Label("Git & Dateien", systemImage: "arrow.triangle.branch")
@@ -443,6 +448,8 @@ private struct AgentSwitcher: View {
                                 HStack(spacing: 6) {
                                     Circle().fill(Theme.statusColor(ref.pane.status)).frame(width: 7, height: 7)
                                     Text(ref.title).lineLimit(1)
+                                    // the workspace's color
+                                    Capsule().fill(Theme.identity(ref.workspace)).frame(width: 3, height: 12)
                                     if sessions.sessions[ref.id]?.isLive == true {
                                         Image(systemName: "waveform").foregroundStyle(Theme.live)
                                     }

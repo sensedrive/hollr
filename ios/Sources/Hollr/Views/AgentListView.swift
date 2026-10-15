@@ -8,6 +8,10 @@ struct AgentListView: View {
     @AppStorage("hollr.grouping") private var grouping: Grouping = .status
     @AppStorage("hollr.showShells") private var showShells = false
     var onNewChat: () -> Void = {}
+    /// Mac: sidebar of the split view – rows select instead of pushing
+    var selection: Binding<String?>? = nil
+    /// Mac: open a second chat next to the first
+    var openBeside: ((String) -> Void)? = nil
 
     enum Grouping: String, CaseIterable {
         case status, workspace
@@ -15,7 +19,7 @@ struct AgentListView: View {
     }
 
     var body: some View {
-        List {
+        List(selection: selection ?? .constant(nil)) {
             Group {
             ForEach(store.servers) { server in
                 if let error = herdr.errors[server.id] {
@@ -75,9 +79,21 @@ struct AgentListView: View {
 
     @State private var closing: AgentRef?
 
+    @ViewBuilder private func rowLink(_ ref: AgentRef, showServer: Bool) -> some View {
+        let label = AgentRow(ref: ref, showServer: showServer, live: sessions.sessions[ref.id]?.isLive == true)
+        if selection != nil {
+            label.tag(ref.id)
+        } else {
+            NavigationLink(value: ref.id) { label }
+        }
+    }
+
     private func row(_ ref: AgentRef, showServer: Bool) -> some View {
-        NavigationLink(value: ref.id) {
-            AgentRow(ref: ref, showServer: showServer, live: sessions.sessions[ref.id]?.isLive == true)
+        rowLink(ref, showServer: showServer)
+        .contextMenu {
+            if let openBeside {
+                Button { openBeside(ref.id) } label: { Label("Rechts daneben öffnen", systemImage: "rectangle.split.2x1") }
+            }
         }
         .swipeActions {
             Button("Schließen", role: .destructive) { closing = ref }
@@ -106,6 +122,10 @@ struct AgentRow: View {
     var body: some View {
         HStack(spacing: 12) {
             AgentBadge(pane: ref.pane)
+                .overlay(alignment: .leading) {
+                    // the workspace's color, like a tab color
+                    Capsule().fill(Theme.identity(ref.workspace)).frame(width: 3).padding(.vertical, 4).offset(x: -8)
+                }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     // workspace (and server) like herdr's sidebar group

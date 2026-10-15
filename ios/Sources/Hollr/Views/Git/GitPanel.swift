@@ -228,9 +228,21 @@ struct FileViewer: View {
 struct ChangesTab: View {
     let server: Server
     let space: Space
+    @Environment(HerdrStore.self) private var herdr
+    @Environment(SessionStore.self) private var sessions
     @State private var data: ChangesResponse?
     @State private var error: String?
     @State private var busy: String?
+    @State private var confirmDiscard: FileChange?
+    @State private var commenting: FileChange?
+    @State private var comment = ""
+    @State private var showCommit = false
+    @State private var notice: String?
+
+    /// the space's agent: comments and "write the commit message" go to it
+    private var agent: AgentRef? {
+        herdr.agents(on: server).first { $0.pane.pane.hasPrefix(space.id + ":") && $0.pane.agent != nil }
+    }
 
     var body: some View {
         List {
@@ -260,15 +272,80 @@ struct ChangesTab: View {
                 if !data.staged.isEmpty { section("Gestaged", data.staged, staged: true) }
                 if !data.unstaged.isEmpty { section("Nicht gestaged", data.unstaged, staged: false) }
             }
-            Color.clear.frame(height: 60).listRowBackground(Color.clear).listRowSeparator(.hidden)
+            Color.clear.frame(height: 120).listRowBackground(Color.clear).listRowSeparator(.hidden)
         }
             .listRowBackground(Theme.card)
         }.themedList()
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .overlay { if data == nil && error == nil { Skeleton(style: .iconList, count: 10).background(GitStyle.background) } }
+        .safeAreaInset(edge: .bottom) { reviewBar }
         .refreshable { await load() }
         .task { await load() }
+        .confirmationDialog("Änderungen an dieser Datei verwerfen?", isPresented: Binding(
+            get: { confirmDiscard != nil }, set: { if !$0 { confirmDiscard = nil } }), titleVisibility: .visible,
+                            presenting: confirmDiscard) { file in
+            Button("Verwerfen", role: .destructive) { Task { await discard(file) } }
+        } message: { file in
+            Text(file.status == "?" || file.status == "A"
+                 ? String(localized: "\(file.name) wird gelöscht – das lässt sich nicht rückgängig machen.")
+                 : String(localized: "\(file.name) wird auf den letzten Commit zurückgesetzt."))
+        }
+        .alert("Kommentar an \(agent?.pane.agentName ?? "den Agent")", isPresented: Binding(
+            get: { commenting != nil }, set: { if !$0 { commenting = nil } })) {
+            TextField("Was soll sich an der Datei ändern?", text: $comment, axis: .vertical)
+            Button("Senden") { sendComment() }
+            Button("Abbrechen", role: .cancel) { comment = "" }
+        } message: { Text(commenting?.path ?? "") }
+        .sheet(isPresented: $showCommit) {
+            CommitComposer(server: server, space: space, agent: agent, hasStaged: !(data?.staged.isEmpty ?? true)) { result in
+                notice = result
+                Task { await load() }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// Commit / push / PR at the bottom of the changes.
+    @ViewBuilder private var reviewBar: some View {
+        if let data, !(data.staged.isEmpty && data.unstaged.isEmpty) || notice != nil {
+            VStack(spacing: 6) {
+                if let notice {
+                    Text(notice).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if !(data.staged.isEmpty && data.unstaged.isEmpty) {
+                    Button { showCommit = true } label: {
+                        Label("Commit …", systemImage: "checkmark.circle").frame(maxWidth: .infinity).padding(.vertical, 4)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 64) // above the tab capsule
+        }
+    }
+
+    private func discard(_ file: FileChange) async {
+        busy = file.path
+        defer { busy = nil }
+        do {
+            struct R: Decodable { let ok: Bool }
+            _ = try await HollrClient.fs(server, ["op": "discard", "ws": space.id, "path": file.path], as: R.self)
+            Haptics.notify(.success)
+            await load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func sendComment() {
+        let text = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let file = commenting, let agent, !text.isEmpty else { return }
+        sessions.session(for: agent).sendText("Zu \(file.path): \(text)")
+        notice = String(localized: "Kommentar an \(agent.title) gesendet.")
+        comment = ""
+        Haptics.notify(.success)
     }
 
     private func summary(_ d: ChangesResponse) -> String {
@@ -310,6 +387,21 @@ struct ChangesTab: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                .swipeActions(edge: .leading) {
+                    Button { Task { await toggleStage(file, staged: staged) } } label: {
+                        Label(staged ? "Unstagen" : "Stagen", systemImage: staged ? "minus.circle" : "plus.circle")
+                    }
+                    .tint(staged ? .gray : .green)
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) { confirmDiscard = file } label: {
+                        Label("Verwerfen", systemImage: "arrow.uturn.backward")
+                    }
+                    if agent != nil {
+                        Button { commenting = file } label: { Label("Kommentar", systemImage: "text.bubble") }
+                            .tint(Theme.accent)
+                    }
+                }
             }
         } header: {
             HStack {
@@ -618,6 +710,109 @@ struct BranchesTab: View {
         do {
             data = try await HollrClient.fs(server, ["op": "branches", "ws": space.id], as: BranchesResponse.self)
             error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Commit sheet: own message, or let the agent write it (and commit) – then push / open a PR.
+private struct CommitComposer: View {
+    let server: Server
+    let space: Space
+    let agent: AgentRef?
+    let hasStaged: Bool
+    let done: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(SessionStore.self) private var sessions
+    @State private var message = ""
+    @State private var all = true
+    @State private var busy = false
+    @State private var error: String?
+    @State private var committed: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let committed {
+                    Section {
+                        Label("Committet: \(committed)", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.live)
+                        Button { Task { await run("push") } } label: { Label("Pushen", systemImage: "arrow.up.circle") }
+                        Button { Task { await run("pr") } } label: { Label("Pushen und PR öffnen", systemImage: "arrow.triangle.pull") }
+                    }
+                } else {
+                    Section {
+                        TextField("Commit-Nachricht", text: $message, axis: .vertical)
+                            .lineLimit(2...6)
+                            .focused($focused)
+                        if hasStaged {
+                            Toggle("Auch nicht gestagte Änderungen", isOn: $all)
+                        }
+                    } footer: {
+                        Text(hasStaged && !all ? "Nur die gestagten Dateien." : "Alle Änderungen, auch neue Dateien.")
+                    }
+                    Section {
+                        Button { Task { await commit() } } label: {
+                            Label("Committen", systemImage: "checkmark.circle")
+                        }
+                        .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+                        if let agent {
+                            Button {
+                                sessions.session(for: agent).sendText(
+                                    "Schau dir die aktuellen Änderungen an und committe sie mit einer passenden, kurzen Commit-Nachricht.")
+                                done(String(localized: "\(agent.title) schreibt die Commit-Nachricht und committet."))
+                                dismiss()
+                            } label: {
+                                Label("\(agent.pane.agentName) die Nachricht schreiben lassen", systemImage: "sparkles")
+                            }
+                        }
+                    }
+                }
+                if let error {
+                    Section { Text(error).foregroundStyle(Theme.warn).font(.footnote) }
+                }
+            }
+            .navigationTitle("Commit")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } }
+                if busy { ToolbarItem(placement: .confirmationAction) { ProgressView() } }
+            }
+            .onAppear { focused = true }
+        }
+    }
+
+    private func commit() async {
+        busy = true
+        defer { busy = false }
+        do {
+            struct R: Decodable { let hash: String }
+            let r = try await HollrClient.fs(server, ["op": "gitcommit", "ws": space.id, "message": message, "all": all || !hasStaged],
+                                             as: R.self, seconds: 60)
+            committed = r.hash
+            error = nil
+            Haptics.notify(.success)
+            done(String(localized: "Committet: \(r.hash)"))
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func run(_ op: String) async {
+        busy = true
+        defer { busy = false }
+        do {
+            struct R: Decodable { let url: String? }
+            let r = try await HollrClient.fs(server, ["op": op, "ws": space.id], as: R.self, seconds: 90)
+            Haptics.notify(.success)
+            if let url = r.url {
+                done(String(localized: "PR: \(url)"))
+                if let link = URL(string: url) { await UIApplication.shared.open(link) }
+            } else {
+                done(String(localized: "Gepusht."))
+            }
+            dismiss()
         } catch {
             self.error = error.localizedDescription
         }

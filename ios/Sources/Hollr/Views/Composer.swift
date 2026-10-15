@@ -47,14 +47,26 @@ struct Composer: View {
             if mine, let notice = dictator.notice, !dictating {
                 Text(notice).font(.caption).foregroundStyle(.secondary)
             }
+            if focused, !dictating, let mention = Mention.find(in: draft.text, cursor: draft.cursor) {
+                MentionSuggestions(ref: ref, query: mention.query) { path in
+                    if let r = Mention.insert(path, into: draft.text, cursor: draft.cursor) {
+                        draft.text = r.text
+                        draft.cursor = r.cursor
+                    }
+                }
+            }
             ComposerField(placeholder: placeholder, text: dictating ? .constant(dictationPreview) : textBinding, cursor: cursorBinding)
-                .font(.system(.body, design: .monospaced))
+                // proportional: easier to read and type than terminal type (code stays mono in the chat)
+                .font(.body)
                 .lineLimit(1...6)
                 .focused($focused)
                 .disabled(!hasAgent || dictating)
                 .foregroundStyle(dictating ? .secondary : .primary)
                 .submitLabel(.send)
                 .onSubmit(send)
+            if focused, !dictating, !isShell, Mention.find(in: draft.text, cursor: draft.cursor) == nil {
+                SnippetChips { insertSnippet($0) }
+            }
             actions
         }
         .padding(.horizontal, 16)
@@ -116,6 +128,9 @@ struct Composer: View {
                 }
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Tastatur schließen")
+            }
+            if !isShell {
+                AttachButton(ref: ref) { insertSnippet($0) }
             }
             Spacer()
             micButton
@@ -296,6 +311,17 @@ struct Composer: View {
         }
         .disabled(trimmed.isEmpty || !hasAgent || dictating)
         .accessibilityLabel("Senden")
+    }
+
+    /// Inserts a saved prompt at the cursor.
+    private func insertSnippet(_ prompt: String) {
+        Haptics.tap(.light)
+        let chars = Array(draft.text)
+        let at = min(max(draft.cursor ?? chars.count, 0), chars.count)
+        let before = String(chars[..<at]), after = String(chars[at...])
+        let glue = before.isEmpty || before.hasSuffix(" ") || before.hasSuffix("\n") ? "" : " "
+        draft.text = before + glue + prompt + after
+        draft.cursor = (before + glue + prompt).count
     }
 
     private func send() {

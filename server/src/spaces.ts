@@ -14,7 +14,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { branches, changes, commitDetails, commitDiff, fileDiff, graph, stage } from "./git";
+import {
+  branches,
+  changes,
+  commit,
+  commitDetails,
+  commitDiff,
+  discard,
+  fileDiff,
+  graph,
+  openPr,
+  push,
+  stage,
+} from "./git";
 import { type Exec, execHerdr } from "./herdr";
 import { dedupeLimits } from "./usagehistory";
 
@@ -140,8 +152,18 @@ export interface FsRequest {
     | "changes"
     | "branches"
     | "stage"
-    | "unstage";
+    | "unstage"
+    | "files"
+    | "discard"
+    | "gitcommit"
+    | "push"
+    | "pr";
   ws: string;
+  /** files: what was typed after "@" */
+  query?: string;
+  /** gitcommit */
+  message?: string;
+  all?: boolean;
   path?: string;
   limit?: number;
   hash?: string;
@@ -154,6 +176,8 @@ const HASH_RE = /^[0-9a-f]{4,40}$/;
 export async function spaceFs(req: FsRequest, exec: Exec = execHerdr): Promise<unknown> {
   const root = await spaceRoot(req.ws, exec);
   switch (req.op) {
+    case "files":
+      return { files: matchFiles(listFiles(root), req.query ?? "", req.limit ?? 30) };
     case "log": {
       const n = Math.min(req.limit ?? 40, 200);
       const out = run(
@@ -212,6 +236,17 @@ export async function spaceFs(req: FsRequest, exec: Exec = execHerdr): Promise<u
       return changes(root);
     case "branches":
       return branches(root);
+    case "discard": {
+      const rel = relative(root, resolve(root, (req.path ?? "").replace(/^\/+/, "")));
+      if (!rel || rel.startsWith("..")) throw new Error("Pfad außerhalb des Space");
+      return discard(root, rel);
+    }
+    case "gitcommit":
+      return commit(root, req.message ?? "", req.all === true);
+    case "push":
+      return push(root);
+    case "pr":
+      return openPr(root);
     case "stage":
     case "unstage": {
       // the file may be deleted in the working tree: check the path lexically
@@ -607,4 +642,39 @@ export async function manageSpace(
     ]).catch(() => {});
   }
   return { ws, pane };
+}
+
+/** Repo files for "@" completion: tracked + untracked, ignored ones left out. */
+function listFiles(root: string): string[] {
+  const git = run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], root);
+  if (git.ok) return git.out.split("\n").filter(Boolean).slice(0, 50_000);
+  return [];
+}
+
+/**
+ * Best matches for a typed fragment: exact file-name prefix first, then name contains, then path
+ * contains, then the letters in order (fuzzy) – shorter paths first within a group.
+ */
+export function matchFiles(files: string[], query: string, limit = 30): string[] {
+  const q = query.toLowerCase().trim();
+  if (!q) return files.filter((f) => !f.includes("/")).slice(0, limit);
+  const scored: Array<[number, string]> = [];
+  for (const f of files) {
+    const path = f.toLowerCase();
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    let score = -1;
+    if (name.startsWith(q)) score = 0;
+    else if (name.includes(q)) score = 1;
+    else if (path.includes(q)) score = 2;
+    else {
+      let i = 0;
+      for (const ch of path) if (ch === q[i]) i++;
+      if (i === q.length) score = 3;
+    }
+    if (score >= 0) scored.push([score * 10_000 + Math.min(f.length, 9_999), f]);
+  }
+  return scored
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, limit)
+    .map(([, f]) => f);
 }

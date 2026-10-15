@@ -37,6 +37,15 @@ export const commit = (s: string, ws: string, hash: string) => fs<CommitDetail>(
 export const commitDiff = (s: string, ws: string, hash: string, path?: string) =>
   fs<{ text: string }>(s, { op: "commitdiff", ws, hash, ...(path ? { path } : {}) }).then((r) => r.text);
 export const branches = (s: string, ws: string) => fs<Branches>(s, { op: "branches", ws });
+/** "@" completion in the composer: files of the space matching what was typed */
+export const files = (s: string, ws: string, query: string, limit = 8) =>
+  fs<{ files: string[] }>(s, { op: "files", ws, query, limit }).then((r) => r.files);
+// review actions (Änderungen)
+export const discard = (s: string, ws: string, path: string) => fs(s, { op: "discard", ws, path });
+export const gitCommit = (s: string, ws: string, message: string, all: boolean) =>
+  fs<{ hash: string }>(s, { op: "gitcommit", ws, message, all }).then((r) => r.hash);
+export const push = (s: string, ws: string) => fs(s, { op: "push", ws });
+export const openPr = (s: string, ws: string) => fs<{ url: string }>(s, { op: "pr", ws }).then((r) => r.url);
 
 // ------------------------------------------------------------ small helpers
 

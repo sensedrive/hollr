@@ -34,6 +34,12 @@ async fn gate(state: tauri::State<'_, Hollr>, server: String, command: String, s
     state.gate(&server, &command, stdin).await.map_err(err)
 }
 
+/// `gate` with a long timeout for big stdin (file uploads to the agent).
+#[tauri::command]
+async fn gate_long(state: tauri::State<'_, Hollr>, server: String, command: String, stdin: Option<String>) -> R<String> {
+    state.gate_with(&server, &command, stdin, hollr::LONG_TIMEOUT).await.map_err(err)
+}
+
 #[derive(Default)]
 struct Live(tokio::sync::Mutex<Option<live::LiveSession>>, std::sync::atomic::AtomicU64);
 
@@ -107,7 +113,7 @@ pub fn run() {
             app.manage(tunnel::Tunnels::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, servers, pair, remove_server, gate, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
+        .invoke_handler(tauri::generate_handler![feeds_sync, servers, pair, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -144,6 +144,15 @@ struct DesignSettingsView: View {
                     LabeledContent("Helles Design", value: lightName)
                 }
             }
+            Section {
+                Toggle("Werkzeuge im Chat zusammenfassen", isOn: Binding(
+                    get: { UserDefaults.standard.object(forKey: "chat.compactTools") as? Bool ?? true },
+                    set: { UserDefaults.standard.set($0, forKey: "chat.compactTools") }))
+            } header: {
+                Text("Chat")
+            } footer: {
+                Text("Fertige Werkzeug-Gruppen erscheinen als eine Zeile („12 Werkzeuge · 3 Dateien geändert“) – antippen klappt sie auf.")
+            }
             Section("Dunkel") { rows(Palette.dark) }
             Section("Hell") { rows(Palette.light) }
         }

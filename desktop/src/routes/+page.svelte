@@ -110,7 +110,9 @@
   const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+";
 </script>
 
-<svelte:window onkeydown={onKey} />
+<!-- files dropped next to the composer must not replace the app with the file (drop target: Composer) -->
+<svelte:window onkeydown={onKey} ondragover={(e) => e.dataTransfer?.types.includes("Files") && e.preventDefault()}
+  ondrop={(e) => e.dataTransfer?.types.includes("Files") && e.preventDefault()} />
 
 <main>
   <aside>

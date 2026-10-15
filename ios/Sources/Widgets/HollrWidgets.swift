@@ -5,5 +5,7 @@ import WidgetKit
 struct HollrWidgets: WidgetBundle {
     var body: some Widget {
         AgentLiveActivity()
+        AgentsWidget()
+        LimitsWidget()
     }
 }

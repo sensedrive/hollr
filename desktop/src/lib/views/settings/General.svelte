@@ -1,10 +1,11 @@
 <script lang="ts">
-  // Settings → general: zoom, app language, notifications, shells, shortcuts to design / servers / notes.
+  // Settings → general: zoom, app language, notifications, shells, prompt snippets, shortcuts to design / servers / notes.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n";
   import { hasUnseen } from "$lib/releaseNotes";
   import { settings } from "$lib/settings.svelte";
   import { app, go } from "$lib/store.svelte";
+  import Snippets from "./Snippets.svelte";
   import { checkPermission, ensurePermission, KINDS, notify, notifyKinds, permission } from "./notify.svelte";
 
   // the ten iOS TextScale steps, mapped onto the desktop zoom factor 0.7 … 1.6
@@ -107,6 +108,8 @@
     </label>
   </div>
   <p class="foot">{t("Zeigt auch Terminals ohne Agent in den Listen.")}</p>
+
+  <Snippets />
 
   <div class="section">{t("Mehr")}</div>
   <div class="rows">

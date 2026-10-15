@@ -318,3 +318,76 @@ export function branches(root: string, run: Run = gitRun) {
   }
   return { local: local.slice(0, 200), remote: remote.slice(0, 300) };
 }
+
+// ---------------------------------------------------------------- review actions (app: "Änderungen")
+
+type RunErr = (cmd: string[], cwd: string) => { ok: boolean; out: string; err: string };
+
+export const gitRunErr: RunErr = (cmd, cwd) => {
+  try {
+    const res = Bun.spawnSync(cmd, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+      env: { ...Bun.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
+    });
+    return { ok: res.exitCode === 0, out: res.stdout.toString(), err: res.stderr.toString() };
+  } catch (e) {
+    return { ok: false, out: "", err: e instanceof Error ? e.message : String(e) };
+  }
+};
+
+const firstLine = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("hint:"))
+    .slice(-2)
+    .join(" ")
+    .slice(0, 300);
+
+/** Throws away the changes of one file (tracked: back to HEAD, untracked: deleted). */
+export function discard(root: string, rel: string, run: RunErr = gitRunErr) {
+  const tracked = run(["git", "ls-files", "--error-unmatch", "--", rel], root).ok;
+  const res = tracked
+    ? run(["git", "restore", "--source=HEAD", "--staged", "--worktree", "--", rel], root)
+    : run(["git", "clean", "-f", "--", rel], root);
+  if (!res.ok) throw new Error(firstLine(res.err) || "Verwerfen fehlgeschlagen");
+  return { ok: true };
+}
+
+/** Commits what is staged – or everything when `all` (and nothing is staged). */
+export function commit(root: string, message: string, all: boolean, run: RunErr = gitRunErr) {
+  const msg = message.trim();
+  if (!msg) throw new Error("Commit-Nachricht fehlt");
+  const staged = !run(["git", "diff", "--cached", "--quiet"], root).ok;
+  if (!staged) {
+    if (!all) throw new Error("Nichts gestaged");
+    const add = run(["git", "add", "-A"], root);
+    if (!add.ok) throw new Error(firstLine(add.err) || "Stagen fehlgeschlagen");
+  }
+  const res = run(["git", "commit", "-m", msg], root);
+  if (!res.ok) throw new Error(firstLine(res.err || res.out) || "Commit fehlgeschlagen");
+  const hash = run(["git", "rev-parse", "--short", "HEAD"], root).out.trim();
+  return { ok: true, hash };
+}
+
+/** Pushes the current branch (sets the upstream the first time). */
+export function push(root: string, run: RunErr = gitRunErr) {
+  const upstream = run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], root).ok;
+  const res = upstream ? run(["git", "push"], root) : run(["git", "push", "-u", "origin", "HEAD"], root);
+  if (!res.ok) throw new Error(firstLine(res.err) || "Push fehlgeschlagen");
+  return { ok: true };
+}
+
+/** Opens a PR for the current branch with `gh` (title/body from the commits); returns its URL. */
+export function openPr(root: string, run: RunErr = gitRunErr) {
+  const existing = run(["gh", "pr", "view", "--json", "url", "-q", ".url"], root);
+  if (existing.ok && existing.out.trim()) return { ok: true, url: existing.out.trim(), existed: true };
+  push(root, run);
+  const res = run(["gh", "pr", "create", "--fill"], root);
+  if (!res.ok) throw new Error(firstLine(res.err) || "PR konnte nicht erstellt werden (gh installiert und angemeldet?)");
+  const url = res.out.trim().split("\n").find((l) => l.startsWith("http")) ?? res.out.trim();
+  return { ok: true, url, existed: false };
+}

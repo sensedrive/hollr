@@ -235,13 +235,17 @@ struct SessionCard: View {
                 .frame(height: 150)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(ref.pane.status == "blocked" ? Theme.warn : Omp.border, lineWidth: ref.pane.status == "blocked" ? 1.5 : 0.8))
-                Text(ref.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2).fill(Theme.identity(ref.workspace)).frame(width: 4, height: 14)
+                    Text(ref.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                }
                 let status = ref.pane.agent == nil ? String(localized: "Terminal") : Theme.statusLabel(ref.pane.status)
                 Text(ref.title == ref.workspace ? status : "\(ref.workspace) · \(status)")
                     .font(.caption).foregroundStyle(Theme.statusColor(ref.pane.status)).lineLimit(1)
             }
         }
         .buttonStyle(.plain)
+        .zoomSource(ref.id)
         .task(id: ref.id) {
             while !Task.isCancelled {
                 if let text = try? await HollrClient.screen(ref.server, pane: ref.pane.pane, lines: 30) {

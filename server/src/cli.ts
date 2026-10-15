@@ -61,6 +61,8 @@ import {
   upgradeDeviceKeys,
 } from "./pairing";
 import { webPorts } from "./ports";
+import { runTerm } from "./term";
+import { saveUpload, UPLOAD_LIMIT } from "./uploads";
 import {
   pushConfig,
   pushDevices,
@@ -88,7 +90,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.25.0";
+export const VERSION = "0.26.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -358,6 +360,19 @@ async function gate(): Promise<number> {
     case "spaces":
       json({ spaces: await listSpaces() });
       return 0;
+    case "term":
+      // live terminal: screen out, typing in (runs until the app closes the channel)
+      return runTerm(pane);
+    case "upload": {
+      // a photo / file from the phone for the agent: stored outside the repo, the path goes into the prompt
+      const req = JSON.parse((await readStdinLine(UPLOAD_LIMIT * 1.4)) || "{}") as { name?: string; data?: string };
+      try {
+        json({ path: saveUpload(req.name ?? "", req.data ?? "") });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     case "fs": {
       const req = JSON.parse((await readStdinLine()) || "{}") as FsRequest;
       try {

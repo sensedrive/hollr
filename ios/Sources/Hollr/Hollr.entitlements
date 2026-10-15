@@ -6,5 +6,7 @@
   <string>development</string>
   <key>com.apple.developer.usernotifications.time-sensitive</key>
   <true/>
+  <key>keychain-access-groups</key>
+  <array><string>$(AppIdentifierPrefix)app.hollr.shared</string></array>
 </dict>
 </plist>

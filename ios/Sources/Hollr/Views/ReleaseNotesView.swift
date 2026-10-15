@@ -10,6 +10,15 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 39, date: "15.10.2026", items: [
+            ("apple.terminal", String(localized: "Echtes Terminal: Menü › Terminal zeigt die Session live in Farbe, mit Tastenleiste (esc, tab, ctrl, Pfeile) – zum Hineinzoomen aufziehen")),
+            ("text.badge.plus", String(localized: "Prompt-Bausteine über der Tastatur und „@“ schlägt Dateien aus dem Repo vor (Einstellungen › Prompt-Bausteine)")),
+            ("paperclip", String(localized: "Anhänge: Foto, Bildschirmfoto, Datei oder Bild aus der Zwischenablage an den Agent – und „Teilen › Hollr“ aus Safari, Mail oder Fotos")),
+            ("checkmark.circle", String(localized: "Änderungen prüfen: wischen zum Stagen, Verwerfen oder Kommentieren, dann Commit (oder vom Agent schreiben lassen), Push und PR")),
+            ("square.grid.2x2", String(localized: "Widgets für Home- und Sperrbildschirm (Agents, Limits) und Kurzbefehle/Siri: „Frag … in Hollr“, „Live starten“")),
+            ("paintbrush", String(localized: "Ruhigerer Chat: Werkzeuge als eine Zeile zusammengefasst, Farbe pro Workspace, Zoom von der Karte in den Chat")),
+            ("rectangle.split.2x1", String(localized: "Mac: Agents in der Seitenleiste, zwei Chats nebeneinander (Rechtsklick › Rechts daneben öffnen)")),
+        ]),
         ReleaseNote(build: 38, date: "15.10.2026", items: [
             ("tray.full", String(localized: "Neu auf der Startseite: „Braucht dich“ – Fragen von omp mit einem Tipp beantworten, wartenden oder fertigen Agents direkt antworten")),
             ("bell.badge", String(localized: "Antworten direkt aus der Mitteilung: lange drücken für die Antwort-Optionen oder eine eigene Antwort")),
