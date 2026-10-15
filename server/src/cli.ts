@@ -62,6 +62,7 @@ import {
   upgradeDeviceKeys,
 } from "./pairing";
 import { webPorts } from "./ports";
+import { runShell } from "./shell";
 import { runTerm } from "./term";
 import { saveUpload, UPLOAD_LIMIT } from "./uploads";
 import {
@@ -92,7 +93,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.27.0";
+export const VERSION = "0.28.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -375,6 +376,9 @@ async function gate(): Promise<number> {
     case "spaces":
       json({ spaces: await listSpaces() });
       return 0;
+    case "shell":
+      // the phone's own shell (PTY) in the pane's folder, sized to the phone
+      return runShell(pane, Number(rest[0]), Number(rest[1]));
     case "term":
       // live terminal: screen out, typing in (runs until the app closes the channel)
       return runTerm(pane);

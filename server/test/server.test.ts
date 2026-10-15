@@ -981,3 +981,13 @@ describe("terminal", () => {
     expect(screenSize("äöü")).toEqual({ rows: 1, cols: 3 });
   });
 });
+
+describe("phone shell", () => {
+  test("size is clamped to something a terminal can show", async () => {
+    const { clampSize } = await import("../src/shell");
+    expect(clampSize(72, 30)).toEqual({ cols: 72, rows: 30 });
+    expect(clampSize(5, 1)).toEqual({ cols: 20, rows: 5 });
+    expect(clampSize(9999, 9999)).toEqual({ cols: 300, rows: 200 });
+    expect(clampSize(Number.NaN, Number.NaN)).toEqual({ cols: 80, rows: 24 });
+  });
+});

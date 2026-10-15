@@ -126,10 +126,37 @@ struct DashboardView: View {
         var all: [UsageCapacity] = []
         for server in store.servers { all += herdr.capacity[server.id] ?? [] }
         let providers: Set<String> = ["anthropic", "openai-codex"]
-        return all.filter { cap in
+        let main = all.filter { cap in
             let mainMeter = cap.meter == nil || cap.meter == "chat"
             return mainMeter && providers.contains(cap.provider)
         }
+        return Self.pooled(main)
+    }
+
+    /// One value per provider and window: several servers (and the same login on each) report the
+    /// same limit – the line shows the fullest one, in a stable order (5h before 7d).
+    static func pooled(_ caps: [UsageCapacity]) -> [UsageCapacity] {
+        var best: [String: UsageCapacity] = [:]
+        var order: [String] = []
+        for cap in caps {
+            let key = "\(cap.provider)|\(cap.window)"
+            if let current = best[key] {
+                if cap.used > current.used { best[key] = cap }
+            } else {
+                best[key] = cap
+                order.append(key)
+            }
+        }
+        return order.compactMap { best[$0] }.sorted {
+            ($0.provider, Self.windowRank($0.window)) < ($1.provider, Self.windowRank($1.window))
+        }
+    }
+
+    private static func windowRank(_ window: String) -> Int {
+        let digits = Int(window.prefix { $0.isNumber }) ?? 0
+        let unit = window.drop { $0.isNumber }
+        let hours = unit.hasPrefix("h") ? 1 : unit.hasPrefix("d") ? 24 : unit.hasPrefix("w") ? 168 : 720
+        return digits * hours
     }
 
     /// one quiet line: "Claude 5h 2% 7d 64%  ChatGPT 5h 1% 7d 5%" (pooled over all accounts)

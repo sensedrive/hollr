@@ -92,3 +92,21 @@ final class SharedStorageTests: XCTestCase {
         XCTAssertEqual(SharedItem.pending(), before)
     }
 }
+
+final class LimitsTests: XCTestCase {
+    func testTwoServersReportTheSameLimitOnce() {
+        let caps = [
+            UsageCapacity(provider: "anthropic", window: "7d", meter: nil, accounts: 1, used: 0.95),
+            UsageCapacity(provider: "anthropic", window: "5h", meter: nil, accounts: 1, used: 0.09),
+            UsageCapacity(provider: "openai-codex", window: "5h", meter: nil, accounts: 1, used: 0),
+            // the same logins again from the second server
+            UsageCapacity(provider: "anthropic", window: "5h", meter: nil, accounts: 1, used: 0.12),
+            UsageCapacity(provider: "anthropic", window: "7d", meter: nil, accounts: 1, used: 0.95),
+            UsageCapacity(provider: "openai-codex", window: "7d", meter: nil, accounts: 1, used: 0.02),
+        ]
+        let pooled = DashboardView.pooled(caps)
+        XCTAssertEqual(pooled.map { "\($0.provider) \($0.window)" },
+                       ["anthropic 5h", "anthropic 7d", "openai-codex 5h", "openai-codex 7d"])
+        XCTAssertEqual(pooled.first?.used, 0.12) // the fullest one
+    }
+}

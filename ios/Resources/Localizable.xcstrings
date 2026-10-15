@@ -1487,6 +1487,16 @@
         }
       }
     },
+    "Chat-Menü › Terminal: „Session“ zeigt das Terminal am Rechner, „Eigene Shell“ ein eigenes im selben Ordner – passend zum iPhone. iPhone quer: Terminal oder Änderungen neben dem Chat.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat menu › Terminal: “Session” shows the computer’s terminal, “Own shell” a separate one in the same folder – sized to the iPhone. iPhone in landscape: terminal or changes next to the chat."
+          }
+        }
+      }
+    },
     "Claude Code": {
       "localizations": {
         "en": {
@@ -2179,6 +2189,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Own answer …"
+          }
+        }
+      }
+    },
+    "Eigene Shell": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Own shell"
           }
         }
       }
@@ -3385,6 +3405,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Readable (section)"
+          }
+        }
+      }
+    },
+    "Limit-Leiste: mehrere Server mit demselben Login zählen nur einmal – keine abgeschnittenen Einträge mehr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limits bar: several servers with the same login count once – no more cut-off entries"
           }
         }
       }
@@ -5305,12 +5335,32 @@
         }
       }
     },
+    "Session": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        }
+      }
+    },
     "Session-Wörter: Projekt, Ordner, Tickets (z. B. TENDR-725) und Dateinamen aus dem Chat helfen der Erkennung und werden richtig geschrieben. Der Feinschliff korrigiert Satzzeichen und Schreibweisen auf dem Gerät – dauert etwa eine Sekunde.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Session words: project, folder, tickets (e.g. TENDR-725) and file names from the chat help recognition and are spelled right. Polish fixes punctuation and spelling on the device – takes about a second."
+          }
+        }
+      }
+    },
+    "Shell beendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell ended."
           }
         }
       }
@@ -5935,6 +5985,16 @@
         }
       }
     },
+    "Terminal › „Eigene Shell“: ein echtes Terminal im Ordner der Session, passend zur iPhone-Breite, mit Scrollen – der Rechner bleibt unverändert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal › “Own shell”: a real terminal in the session’s folder, sized to the iPhone, with scrolling – nothing changes on the computer"
+          }
+        }
+      }
+    },
     "Terminals starten – auch ohne Projekt im Home-Verzeichnis": {
       "localizations": {
         "en": {
@@ -6011,6 +6071,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tap to start and stop – or hold and speak"
+          }
+        }
+      }
+    },
+    "Tippen, Einfügen und Diktieren im Terminal laufen jetzt über die normale iOS-Tastatur": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typing, pasting and dictation in the terminal now go through the normal iOS keyboard"
           }
         }
       }

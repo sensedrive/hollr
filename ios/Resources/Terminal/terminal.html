@@ -8,6 +8,9 @@
   html, body { margin: 0; height: 100%; background: #0f1216; overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y pinch-zoom; }
   #term { position: absolute; inset: 0; padding: 4px; }
   .xterm .xterm-viewport { overflow-y: hidden !important; }
+  /* own shell: a normal terminal – scrolls, no sideways panning */
+  body.shell { overflow: hidden; }
+  body.shell .xterm .xterm-viewport { overflow-y: auto !important; }
 </style>
 </head>
 <body>
@@ -19,7 +22,7 @@
   const post = (name, value) => window.webkit?.messageHandlers?.[name]?.postMessage(value);
   const term = new Terminal({
     fontFamily: 'Menlo, ui-monospace, monospace', fontSize: 12, lineHeight: 1.0,
-    cursorBlink: false, scrollback: 0, convertEol: false, allowProposedApi: true,
+    cursorBlink: false, scrollback: 0, disableStdin: true, convertEol: false, allowProposedApi: true,
     theme: { background: '#0f1216', foreground: '#d7dae0', cursor: '#7aa2f7' },
   });
   term.open(document.getElementById('term'));
@@ -50,7 +53,27 @@
   window.armCtrl = (on) => { ctrl = on; };
   window.setReadable = (n) => { readCols = n; fit(); window.scrollTo(0, 0); };
   window.focusTerm = () => term.focus();
-  window.addEventListener('resize', fit);
+  // own shell (`hollr gate shell`): the terminal takes the phone's size, output is a raw stream
+  let shell = false;
+  function fitShell() {
+    const cell = term._core?._renderService?.dimensions?.css?.cell;
+    if (!cell || !cell.width || !cell.height) return;
+    const c = Math.max(20, Math.floor((window.innerWidth - 8) / cell.width));
+    const r = Math.max(5, Math.floor((window.innerHeight - 8) / cell.height));
+    if (c !== term.cols || r !== term.rows) term.resize(c, r);
+    post('size', { cols: c, rows: r });
+  }
+  window.shellMode = () => {
+    shell = true;
+    document.body.classList.add('shell');
+    const el = document.getElementById('term');
+    el.style.transform = ''; el.style.width = ''; el.style.height = ''; el.style.right = ''; el.style.bottom = '';
+    term.options.scrollback = 3000;
+    term.options.fontSize = 13;
+    requestAnimationFrame(fitShell);
+  };
+  window.writeRaw = (data) => term.write(data);
+  window.addEventListener('resize', () => (shell ? fitShell() : fit()));
 
   term.onData((data) => {
     if (ctrl && data.length === 1) {
@@ -61,6 +84,20 @@
     }
     post('input', data);
   });
+  // iOS pastes into xterm's hidden textarea as an `insertFromPaste` input (no paste event, which
+  // xterm would handle and cancel) – pass it on, line breaks as Enter
+  term.textarea?.addEventListener('input', (e) => {
+    if (e.inputType === 'insertFromPaste' && e.data) {
+      post('input', e.data.replace(/\r?\n/g, '\r'));
+      term.textarea.value = '';
+    }
+  });
+  // typing goes through the app's own key input: xterm's textarea must not take the focus
+  if (term.textarea) {
+    term.textarea.readOnly = true;
+    term.textarea.tabIndex = -1;
+    term.textarea.addEventListener('focus', () => term.textarea.blur());
+  }
   post('ready', true);
 </script>
 </body>

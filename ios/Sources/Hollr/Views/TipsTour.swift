@@ -13,7 +13,7 @@ struct Tip: Identifiable {
 
 enum Tips {
     /// raise when the tour has new pages: it shows once more after the update
-    static let version = 40
+    static let version = 41
 
     static let all: [Tip] = [
         Tip(id: "inbox", icon: "tray.full", title: String(localized: "Braucht dich"),
@@ -23,7 +23,7 @@ enum Tips {
         Tip(id: "activity", icon: "platter.filled.bottom.iphone", title: String(localized: "Live-Aktivität"),
             text: String(localized: "Arbeitet ein Agent länger, steht er auf dem Sperrbildschirm und in der Dynamic Island – orange, wenn er auf dich wartet."), since: 38),
         Tip(id: "terminal", icon: "apple.terminal", title: String(localized: "Terminal"),
-            text: String(localized: "Chat-Menü › Terminal. Breite Terminals starten lesbar – wisch zur Seite oder schalte auf ganze Breite. iPhone quer: Terminal oder Änderungen neben dem Chat."), since: 39),
+            text: String(localized: "Chat-Menü › Terminal: „Session“ zeigt das Terminal am Rechner, „Eigene Shell“ ein eigenes im selben Ordner – passend zum iPhone. iPhone quer: Terminal oder Änderungen neben dem Chat."), since: 41),
         Tip(id: "snippets", icon: "text.badge.plus", title: String(localized: "Bausteine und @"),
             text: String(localized: "Beim Schreiben erscheinen deine Prompt-Bausteine über der Tastatur. „@“ schlägt Dateien aus dem Repo vor."), since: 39),
         Tip(id: "attach", icon: "paperclip", title: String(localized: "Anhänge und Teilen"),
