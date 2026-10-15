@@ -10,6 +10,13 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 44, date: "15.10.2026", items: [
+            ("hand.tap", String(localized: "In der Agents-Liste öffnet ein Tipp den Chat wieder (seit Build 39 kaputt)")),
+        ]),
+        ReleaseNote(build: 43, date: "15.10.2026", items: [
+            ("gauge.with.dots.needle.33percent", String(localized: "Limit-Leiste: „ChatGPT“ wird nicht mehr abgeschnitten – wird es eng, rückt die Leiste zusammen")),
+            ("desktopcomputer", String(localized: "Hollr Desktop: der Chat kommt jetzt ebenfalls als Datenstrom – sofort und nur mit den Änderungen")),
+        ]),
         ReleaseNote(build: 42, date: "15.10.2026", items: [
             ("bolt.horizontal", String(localized: "Live-Chat als Datenstrom: neue Schritte erscheinen sofort, statt alle 1,5 s abgefragt zu werden – und es kommen nur die Änderungen (wenige KB statt ~100 KB)")),
             ("arrow.up.and.down.text.horizontal", String(localized: "Hochscrollen bleibt stehen: neue Ausgaben ziehen dich nicht mehr nach unten, „↓ Neu“ springt zurück ans Ende")),

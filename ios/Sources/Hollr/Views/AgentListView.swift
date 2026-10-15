@@ -19,7 +19,16 @@ struct AgentListView: View {
     }
 
     var body: some View {
-        List(selection: selection ?? .constant(nil)) {
+        // a selection (Mac sidebar) only where there is one – a constant selection swallowed the taps
+        // on the iPhone's navigation links
+        if let selection {
+            List(selection: selection) { rows }.modifier(ListChrome(onNewChat: onNewChat, grouping: $grouping, showShells: $showShells, loaded: herdr.loaded))
+        } else {
+            List { rows }.modifier(ListChrome(onNewChat: onNewChat, grouping: $grouping, showShells: $showShells, loaded: herdr.loaded))
+        }
+    }
+
+    @ViewBuilder private var rows: some View {
             Group {
             ForEach(store.servers) { server in
                 if let error = herdr.errors[server.id] {
@@ -33,18 +42,7 @@ struct AgentListView: View {
                 ForEach(agents) { ref in row(ref, showServer: store.servers.count > 1) }
             case .workspace:
                 ForEach(store.servers) { server in
-                    ForEach(herdr.trees[server.id] ?? []) { ws in
-                        let refs = herdr.agents(on: server).filter {
-                            $0.workspace == ws.label && (showShells || $0.pane.agent != nil)
-                        }
-                        if !refs.isEmpty {
-                            Section {
-                                ForEach(refs) { row($0, showServer: false) }
-                            } header: {
-                                Text(store.servers.count > 1 ? "\(server.label) · \(ws.label)" : ws.label)
-                            }
-                        }
-                    }
+                    ForEach(herdr.trees[server.id] ?? []) { ws in workspaceSection(server, ws) }
                 }
             }
             if herdr.loaded && herdr.allAgents(store.servers, includeShells: showShells).isEmpty {
@@ -55,24 +53,24 @@ struct AgentListView: View {
             }
         }
             .listRowBackground(Theme.card)
-        }.themedList()
-        .overlay { if !herdr.loaded { Skeleton(style: .list, count: 10).background(Theme.bg) } }
-        .navigationTitle("Agents")
-        .refreshable { await herdr.refresh(store.servers, force: true) }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: onNewChat) { Image(systemName: "square.and.pencil") }
-                    .accessibilityLabel("Neuer Chat")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("Sortierung", selection: $grouping) {
-                        ForEach(Grouping.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    Toggle("Shells anzeigen", isOn: $showShells)
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                }
+    }
+
+    // own functions with explicit types: one big nested expression made the Release compiler give
+    // up on the CI machines ("unable to type-check this expression in reasonable time")
+    private func refs(on server: Server, in ws: Workspace) -> [AgentRef] {
+        herdr.agents(on: server).filter { ref in
+            ref.workspace == ws.label && (showShells || ref.pane.agent != nil)
+        }
+    }
+
+    @ViewBuilder private func workspaceSection(_ server: Server, _ ws: Workspace) -> some View {
+        let refs: [AgentRef] = refs(on: server, in: ws)
+        if !refs.isEmpty {
+            let title: String = store.servers.count > 1 ? "\(server.label) · \(ws.label)" : ws.label
+            Section {
+                ForEach(refs) { ref in row(ref, showServer: false) }
+            } header: {
+                Text(title)
             }
         }
     }
@@ -208,4 +206,38 @@ struct AgentBadge: View {
 
 extension String {
     func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
+}
+
+/// Title, toolbar and refresh around the agent list (both list variants).
+private struct ListChrome: ViewModifier {
+    let onNewChat: () -> Void
+    @Binding var grouping: AgentListView.Grouping
+    @Binding var showShells: Bool
+    let loaded: Bool
+    @Environment(ServerStore.self) private var store
+    @Environment(HerdrStore.self) private var herdr
+
+    func body(content: Content) -> some View {
+        content
+            .themedList()
+            .overlay { if !loaded { Skeleton(style: .list, count: 10).background(Theme.bg) } }
+            .navigationTitle("Agents")
+            .refreshable { await herdr.refresh(store.servers, force: true) }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onNewChat) { Image(systemName: "square.and.pencil") }
+                        .accessibilityLabel("Neuer Chat")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Picker("Sortierung", selection: $grouping) {
+                            ForEach(AgentListView.Grouping.allCases, id: \.self) { Text($0.label).tag($0) }
+                        }
+                        Toggle("Shells anzeigen", isOn: $showShells)
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+    }
 }

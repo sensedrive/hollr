@@ -325,11 +325,34 @@ struct LimitsSheet: View {
     @State private var loading = false
     @State private var updated: Date?
 
+    /// several servers report the same accounts: one row per limit (the highest value wins)
+    private var limits: [UsageLimit] {
+        let all: [UsageLimit] = store.servers.flatMap { herdr.usage[$0.id] ?? [] }
+        let best: [UsageLimit] = Dictionary(grouping: all, by: \.id).compactMap { $0.value.max { $0.used < $1.used } }
+        return best.sorted { ($0.label, $0.window) < ($1.label, $1.window) }
+    }
+
+    private var providers: [(name: String, items: [UsageLimit])] {
+        Dictionary(grouping: limits, by: \.providerName).map { ($0.key, $0.value) }.sorted { $0.name < $1.name }
+    }
+
+    // split up: as one expression the Release compiler took >500 ms to type-check it
+    private func providerSection(_ provider: String, _ items: [UsageLimit]) -> some View {
+        let accounts: [(String, [UsageLimit])] = Dictionary(grouping: items, by: { $0.account ?? "" })
+            .map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
+        let several: Bool = Set(items.compactMap(\.account)).count > 1
+        return Section(provider) {
+            ForEach(accounts, id: \.0) { account, rows in
+                VStack(alignment: .leading, spacing: 8) {
+                    if several { Text("Konto \(account)").font(.caption).foregroundStyle(.secondary) }
+                    ForEach(rows) { LimitBar(limit: $0) }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
     var body: some View {
-        // several servers report the same accounts: one row per limit (the highest value wins)
-        let limits = Dictionary(grouping: store.servers.flatMap { herdr.usage[$0.id] ?? [] }, by: \.id)
-            .compactMap { $0.value.max { $0.used < $1.used } }
-            .sorted { ($0.label, $0.window) < ($1.label, $1.window) }
         NavigationStack {
             List {
             Group {
@@ -343,19 +366,7 @@ struct LimitsSheet: View {
                         }
                     }
                 }
-                ForEach(Dictionary(grouping: limits, by: \.providerName).sorted { $0.key < $1.key }, id: \.key) { provider, items in
-                    Section(provider) {
-                        ForEach(Dictionary(grouping: items, by: { $0.account ?? "" }).sorted { $0.key < $1.key }, id: \.key) { account, rows in
-                            VStack(alignment: .leading, spacing: 8) {
-                                if Set(items.compactMap(\.account)).count > 1 {
-                                    Text("Konto \(account)").font(.caption).foregroundStyle(.secondary)
-                                }
-                                ForEach(rows) { LimitBar(limit: $0) }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                }
+                ForEach(providers, id: \.name) { provider in providerSection(provider.name, provider.items) }
             }
             .listRowBackground(Theme.card)
         }.themedList()
@@ -397,28 +408,41 @@ private struct LimitsLine: View {
         Dictionary(grouping: caps, by: \.provider).map { ($0.key, $0.value) }.sorted { $0.provider < $1.provider }
     }
 
+    /// The widest version that fits: "Claude 5h 43% 7d 53%" → tighter → "C 5h 43 7d 53" – never "ChatG…".
     var body: some View {
-        HStack(spacing: 14) {
-            ForEach(groups, id: \.provider) { group in
-                HStack(spacing: 5) {
-                    Text(UsageLimit.name(group.provider)).foregroundStyle(.secondary)
-                    ForEach(group.rows) { cap in CapText(cap: cap) }
-                }
+        HStack(spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                line(name: { UsageLimit.name($0) }, spacing: 14, percent: true)
+                line(name: { UsageLimit.name($0) }, spacing: 9, percent: false)
+                line(name: { String(UsageLimit.name($0).prefix(1)) }, spacing: 8, percent: false)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
         }
         .font(.caption.monospacedDigit())
+    }
+
+    private func line(name: @escaping (String) -> String, spacing: CGFloat, percent: Bool) -> some View {
+        HStack(spacing: spacing) {
+            ForEach(groups, id: \.provider) { group in
+                HStack(spacing: 4) {
+                    Text(name(group.provider)).foregroundStyle(.secondary)
+                    ForEach(group.rows) { cap in CapText(cap: cap, percent: percent) }
+                }
+                .fixedSize()
+            }
+        }
         .lineLimit(1)
     }
 }
 
 private struct CapText: View {
     let cap: UsageCapacity
+    var percent = true
 
     var body: some View {
-        let percent = Int((cap.used * 100).rounded())
+        let value = Int((cap.used * 100).rounded())
         let color: Color = cap.used > 0.85 ? Omp.error : cap.used > 0.6 ? Omp.warning : .secondary
-        Text("\(cap.window) \(percent)%").foregroundStyle(color)
+        Text(percent ? "\(cap.window) \(value)%" : "\(cap.window) \(value)").foregroundStyle(color)
     }
 }

@@ -4,6 +4,9 @@ name: mac
 on:
   push:
     tags: ["v*"]
+    # build every change to the app on main too: a broken Mac build shows up before the release
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/mac.yml"]
   workflow_dispatch:
 
 jobs:

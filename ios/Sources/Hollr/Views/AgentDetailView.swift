@@ -248,12 +248,8 @@ private struct AgentConversation: View {
         }
     }
 
-    private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                // computed once per update (it filters the whole list)
-                let visible = session.timeline?.visibleItems ?? []
-                LazyVStack(alignment: .leading, spacing: 10) {
+    /// The chat's rows (own function: inside `transcript` the Release compiler needed >300 ms).
+    @ViewBuilder private func transcriptRows(_ visible: [TimelineItem]) -> some View {
                     Text(session.timeline?.cleanTitle ?? ref.pane.title)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -296,7 +292,14 @@ private struct AgentConversation: View {
                         // iOS 17: the end of the list on screen = following (iOS 18 measures the distance)
                         .onAppear { if #unavailable(iOS 18) { following = true; unseen = 0 } }
                         .onDisappear { if #unavailable(iOS 18) { following = false } }
-                }
+                    }
+
+    private var transcript: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                // computed once per update (it filters the whole list)
+                let visible = session.timeline?.visibleItems ?? []
+                LazyVStack(alignment: .leading, spacing: 10) { transcriptRows(visible) }
                 .scrollTargetLayout()
                 .padding()
             }
@@ -305,24 +308,11 @@ private struct AgentConversation: View {
             .modifier(FollowTracker(following: $following, unseen: $unseen))
             .overlay(alignment: .bottomTrailing) {
                 if !following {
-                    Button {
+                    JumpToEnd(unseen: unseen) {
                         following = true
                         unseen = 0
                         withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "arrow.down")
-                            if unseen > 0 { Text("Neu").font(.caption.weight(.semibold)) }
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, unseen > 0 ? 12 : 10).padding(.vertical, 9)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Theme.fg.opacity(0.12)))
                     }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 14).padding(.bottom, 10)
-                    .transition(.scale.combined(with: .opacity))
-                    .accessibilityLabel("Zum Ende springen")
                 }
             }
             .animation(.easeOut(duration: 0.15), value: following)
@@ -742,5 +732,28 @@ private struct FollowTracker: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// "↓ Neu": back to the end of the chat.
+private struct JumpToEnd: View {
+    let unseen: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.down")
+                if unseen > 0 { Text("Neu").font(.caption.weight(.semibold)) }
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, unseen > 0 ? 12 : 10).padding(.vertical, 9)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Theme.fg.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 14).padding(.bottom, 10)
+        .transition(.scale.combined(with: .opacity))
+        .accessibilityLabel("Zum Ende springen")
     }
 }

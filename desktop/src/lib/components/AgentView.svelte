@@ -13,6 +13,7 @@
   import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
   import { draftKey } from "../drafts";
   import { askKeys } from "../inbox";
+  import { followTimeline } from "../follow";
   import {
     cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, phaseDone, phaseName,
     shortPath, todoColor, urlPort, viaTunnel, workingLabel, type HistoryEvent,
@@ -57,7 +58,9 @@
   let pollError = $state("");
   /** a failed action (send, keys, close …) – stays until the next action works */
   let actionError = $state("");
-  const error = $derived(actionError || pollError);
+  /** chat stream problem – cleared by its next timeline */
+  let streamError = $state("");
+  const error = $derived(actionError || pollError || streamError);
   /** typed prompts that are not in the log yet */
   let pending = $state<string[]>([]);
   let lastSig = "";
@@ -81,17 +84,48 @@
     return out;
   }
 
+  function setTimeline(tl: Timeline) {
+    timeline = tl;
+    const logged = new Set(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
+    if (pending.some((p) => logged.has(p))) pending = pending.filter((p) => !logged.has(p));
+  }
+
+  /** omp's chat comes as a stream (`follow`); false = poll `timeline` (older server) */
+  let streaming = false;
+  $effect(() => {
+    if (!isOmp) return;
+    streaming = true;
+    const stop = untrack(() =>
+      followTimeline(server, pane.pane, {
+        timeline: (tl) => {
+          setTimeline(tl);
+          streamError = "";
+          loaded = true;
+        },
+        error: (e) => (streamError = e),
+        unsupported: () => {
+          streaming = false;
+          streamError = "";
+          tick();
+        },
+      }),
+    );
+    return () => {
+      streaming = false;
+      stop();
+    };
+  });
+
   async function tick() {
     if (busy || isShell) return;
     busy = true;
     try {
       if (isOmp) {
-        // unchanged → the server answers a few bytes instead of the whole timeline
-        const tl = await api.timeline(server, pane.pane, timeline?.etag);
-        if (tl) {
-          timeline = tl;
-          const logged = new Set(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
-          if (pending.some((p) => logged.has(p))) pending = pending.filter((p) => !logged.has(p));
+        // the stream brings the timeline; polled only from servers without `follow`
+        if (!streaming) {
+          // unchanged → the server answers a few bytes instead of the whole timeline
+          const tl = await api.timeline(server, pane.pane, timeline?.etag);
+          if (tl) setTimeline(tl);
         }
       } else {
         const h = await loadHistory(server, pane.pane);

@@ -1,5 +1,6 @@
 pub mod hollr;
 mod feed;
+mod follow;
 mod live;
 mod tunnel;
 
@@ -100,6 +101,18 @@ async fn feeds_sync(app: tauri::AppHandle, feeds: tauri::State<'_, feed::Feeds>,
     Ok(())
 }
 
+/// Streams one omp chat (`hollr gate follow`) as `hollr-follow` events; returns the stream id.
+#[tauri::command]
+async fn follow_start(app: tauri::AppHandle, follows: tauri::State<'_, follow::Follows>, server: String, pane: String) -> R<u64> {
+    Ok(follows.start(app, server, pane).await)
+}
+
+#[tauri::command]
+async fn follow_stop(follows: tauri::State<'_, follow::Follows>, id: u64) -> R<()> {
+    follows.stop(id).await;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -110,10 +123,11 @@ pub fn run() {
             app.manage(Hollr::new(dir));
             app.manage(Live::default());
             app.manage(feed::Feeds::default());
+            app.manage(follow::Follows::default());
             app.manage(tunnel::Tunnels::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, servers, pair, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
+        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

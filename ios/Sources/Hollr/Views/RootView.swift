@@ -31,6 +31,41 @@ struct RootView: View {
         content.environment(\.zoomNamespace, zoom)
     }
 
+    // the tabs as their own properties: in one body the Release compiler needed >300 ms to type-check
+
+    private var spacesTab: some View {
+        NavigationStack(path: $spacesPath) {
+            SpacesView()
+                .navigationDestination(for: String.self) { id in
+                    // switching chats (chips) replaces the chat on the stack, closing pops it
+                    AgentDetailView(agentId: id, path: spacesChatPath(id))
+                }
+        }
+    }
+
+    private func spacesChatPath(_ id: String) -> Binding<[String]> {
+        Binding(
+            get: { [id] },
+            set: { new in
+                if !spacesPath.isEmpty { spacesPath.removeLast() }
+                if let next = new.last { spacesPath.append(next) }
+            }
+        )
+    }
+
+    @ViewBuilder private var agentsTab: some View {
+        if wide {
+            // Mac / wide window: sidebar + one or two chats side by side
+            AgentsSplitView(onNewChat: { newChat = true }, selection: Binding(
+                get: { agentPath.last }, set: { agentPath = $0.map { [$0] } ?? [] }))
+        } else {
+            NavigationStack(path: $agentPath) {
+                AgentListView(onNewChat: { newChat = true })
+                    .navigationDestination(for: String.self) { id in AgentDetailView(agentId: id, path: $agentPath) }
+            }
+        }
+    }
+
     private var content: some View {
         Group {
             if store.servers.isEmpty {
@@ -44,34 +79,11 @@ struct RootView: View {
                     .tabItem { Label("Übersicht", systemImage: "square.grid.2x2") }
                     .tag(RootTab.home)
 
-                    NavigationStack(path: $spacesPath) {
-                        SpacesView()
-                            .navigationDestination(for: String.self) { id in
-                                // switching chats (chips) replaces the chat on the stack, closing pops it
-                                AgentDetailView(agentId: id, path: Binding(
-                                    get: { [id] },
-                                    set: { new in
-                                        if !spacesPath.isEmpty { spacesPath.removeLast() }
-                                        if let next = new.last { spacesPath.append(next) }
-                                    }
-                                ))
-                            }
-                    }
+                    spacesTab
                     .tabItem { Label("Spaces", systemImage: "square.stack.3d.up") }
                     .tag(RootTab.spaces)
 
-                    Group {
-                        if wide {
-                            // Mac / wide window: sidebar + one or two chats side by side
-                            AgentsSplitView(onNewChat: { newChat = true }, selection: Binding(
-                                get: { agentPath.last }, set: { agentPath = $0.map { [$0] } ?? [] }))
-                        } else {
-                            NavigationStack(path: $agentPath) {
-                                AgentListView(onNewChat: { newChat = true })
-                                    .navigationDestination(for: String.self) { id in AgentDetailView(agentId: id, path: $agentPath) }
-                            }
-                        }
-                    }
+                    agentsTab
                     .safeAreaInset(edge: .bottom) { LiveBar(path: $agentPath, tab: $tab) }
                     .tabItem { Label("Agents", systemImage: "waveform.circle") }
                     .tag(RootTab.agents)

@@ -34,6 +34,21 @@ if grep -qE '^ios/' <<<"$changed"; then
   xcodebuild -project Hollr.xcodeproj -scheme Hollr -destination 'generic/platform=iOS Simulator' -quiet build \
     2>&1 | grep -v "failed with exit code 0 but produced no further output" \
     | grep -E "error:|BUILD FAILED" && { echo "✘ iOS-Build fehlgeschlagen"; exit 1; }
+  # what the mac workflow builds (Catalyst, Release): it failed there when an expression was too slow
+  # to type-check on the CI machines – anything over 300 ms here counts as a failure
+  echo "▸ ios: Mac (Catalyst, Release) like CI"
+  log="$(mktemp)"
+  xcodebuild -project Hollr.xcodeproj -scheme Hollr -configuration Release \
+    -destination 'generic/platform=macOS,variant=Mac Catalyst' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+    OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -warn-long-expression-type-checking=300 -Xfrontend -warn-long-function-bodies=300' \
+    -derivedDataPath build/dd-prepush build >"$log" 2>&1 || true
+  if grep -v "failed with exit code 0 but produced no further output" "$log" | grep -E "error:|BUILD FAILED|ms to type-check" \
+    | sed 's|.*/Sources/|Sources/|' | sort -u; then
+    echo "✘ Mac-Build (wie CI) fehlgeschlagen – zu langsame Ausdrücke in kleinere Teile zerlegen"
+    rm -f "$log"
+    exit 1
+  fi
+  rm -f "$log"
 fi
 if grep -qE '^desktop/' <<<"$changed"; then
   echo "▸ desktop: svelte-check · cargo check"

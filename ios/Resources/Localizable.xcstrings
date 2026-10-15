@@ -2983,6 +2983,16 @@
         }
       }
     },
+    "Hollr Desktop: der Chat kommt jetzt ebenfalls als Datenstrom – sofort und nur mit den Änderungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr Desktop: the chat now streams too – instantly and only the changes"
+          }
+        }
+      }
+    },
     "Hollr für den Mac (DMG) – koppeln per Link aus hollr pair --link": {
       "localizations": {
         "en": {
@@ -3089,6 +3099,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Allow in iOS Settings"
+          }
+        }
+      }
+    },
+    "In der Agents-Liste öffnet ein Tipp den Chat wieder (seit Build 39 kaputt)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tapping an agent in the Agents list opens the chat again (broken since build 39)"
           }
         }
       }
@@ -3465,6 +3485,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Limits bar: several servers with the same login count once – no more cut-off entries"
+          }
+        }
+      }
+    },
+    "Limit-Leiste: „ChatGPT“ wird nicht mehr abgeschnitten – wird es eng, rückt die Leiste zusammen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limits bar: “ChatGPT” is no longer cut off – when space is tight the bar tightens up"
           }
         }
       }
