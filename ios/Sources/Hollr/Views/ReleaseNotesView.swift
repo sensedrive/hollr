@@ -10,14 +10,16 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
-        ReleaseNote(build: 36, date: "15.10.2026", items: [
-            ("ladybug", String(localized: "Absturz beim Öffnen mancher Chats behoben (Cursor-Position im Eingabefeld)")),
+        ReleaseNote(build: 37, date: "15.10.2026", items: [
             ("doc.text", String(localized: "Entwürfe gehen nicht mehr verloren: Zen-Modus, Chat-Wechsel oder App-Neustart behalten den getippten Text – pro Chat")),
             ("waveform", String(localized: "Ein Diktat läuft beim Umschalten in den Zen-Modus weiter und landet im richtigen Chat")),
             ("wifi.exclamationmark", String(localized: "Nach Ruhezustand oder Netzwechsel hängt nichts mehr minutenlang – tote Verbindungen werden erkannt und neu aufgebaut")),
             ("phone.connection", String(localized: "Live erkennt Verbindungsabbrüche und zeigt, warum ein Anruf endete")),
             ("mic", String(localized: "Mikrofon-Knopf bleibt nach einem Anruf oder einer Abfrage nicht mehr hängen, kein Doppelstart")),
             ("square.stack.3d.up", String(localized: "Spaces: Chat-Wechsel und „Chat schließen“ funktionieren, Koppeln per Code wartet auf die Netzwerk-Freigabe")),
+        ]),
+        ReleaseNote(build: 36, date: "15.10.2026", items: [
+            ("ladybug", String(localized: "Absturz beim Öffnen mancher Chats behoben (Cursor-Position im Eingabefeld)")),
         ]),
         ReleaseNote(build: 35, date: "14.10.2026", items: [
             ("waveform", String(localized: "Diktat mit Parakeet und Whisper erkennt schon beim Sprechen – nach dem Stopp ist der Text fast sofort da")),
