@@ -120,6 +120,12 @@ private struct AgentConversation: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Button { toggleView() } label: {
+                    Image(systemName: terminalView ? "text.bubble" : "apple.terminal")
+                }
+                .accessibilityLabel(terminalView ? "Als Chat zeigen" : "Als Terminal zeigen")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button { dismissKeyboard(); reading = true } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                 }
@@ -412,7 +418,31 @@ private struct AgentConversation: View {
         .padding(.bottom, 4)
     }
 
-    private var conversation: some View {
+    /// Chat (Hollr's own rendering of omp's log) or Terminal (the agent's real TUI via herdr attach –
+    /// works for every agent, Heeler-style). Remembered separately for omp and the others.
+    @AppStorage("chat.view.omp") private var ompView = "chat"
+    @AppStorage("chat.view.other") private var otherView = "terminal"
+    private var terminalView: Bool { (session.usesTimeline ? ompView : otherView) == "terminal" }
+
+    private func toggleView() {
+        let next = terminalView ? "chat" : "terminal"
+        if session.usesTimeline { ompView = next } else { otherView = next }
+    }
+
+    @ViewBuilder private var conversation: some View {
+        if terminalView {
+            // the TUI draws its own input line and footer: the composer sits below, not over it
+            VStack(spacing: 0) {
+                AgentTerminalView(ref: ref)
+                    .overlay(alignment: .topTrailing) { if reading { readingBar } }
+                if reading { zenComposer } else { controls }
+            }
+        } else {
+            chatConversation
+        }
+    }
+
+    private var chatConversation: some View {
         VStack(spacing: 0) {
             // omp shows status in its footer; other agents keep the small header
             if !compact && !session.usesTimeline { header }
@@ -428,7 +458,7 @@ private struct AgentConversation: View {
 
     private var controls: some View {
         VStack(spacing: 8) {
-            if !editing, let timeline = session.timeline, AgentHUD.isVisible(timeline) {
+            if !editing, !terminalView, let timeline = session.timeline, AgentHUD.isVisible(timeline) {
                 // floats over the chat like the composer: needs its own frosted backing
                 AgentHUD(timeline: timeline)
                     .padding(.horizontal, 10).padding(.vertical, 6)
@@ -437,7 +467,7 @@ private struct AgentConversation: View {
             Composer(session: session, editing: $editing, translucent: true)
             if !editing {
                 // omp's footer sits right under the editor
-                if let line = session.timeline?.line {
+                if !terminalView, let line = session.timeline?.line {
                     // tap the model to switch it (like clicking omp's status line)
                     StatusLineView(line: line, running: session.timeline?.running == true)
                         .contentShape(Rectangle())

@@ -10,6 +10,10 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 45, date: "16.10.2026", items: [
+            ("apple.terminal", String(localized: "Neu: jede Session nativ als Terminal – omp, Claude, Codex und Shells zeigen ihre echte Oberfläche, in iPhone-Breite (Knopf oben rechts: Chat ↔ Terminal)")),
+            ("hand.draw", String(localized: "Im Terminal scrollt Wischen die Oberfläche des Agents – wie mit dem Trackpad am Rechner")),
+        ]),
         ReleaseNote(build: 44, date: "15.10.2026", items: [
             ("hand.tap", String(localized: "In der Agents-Liste öffnet ein Tipp den Chat wieder (seit Build 39 kaputt)")),
         ]),

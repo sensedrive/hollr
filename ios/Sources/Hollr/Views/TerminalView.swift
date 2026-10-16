@@ -9,8 +9,14 @@ import WebKit
 @Observable
 final class TerminalSession {
     enum Phase: Equatable { case connecting, open, closed(String?) }
-    /// pane: watch and type into the herdr pane (`term`) · shell: the phone's own shell (`shell`)
+    /// pane: the herdr pane itself, natively (`attach`: herdr's attach in a PTY sized to the phone,
+    /// like Heeler – older servers: screen snapshots via `term`) · shell: the phone's own shell
     enum Mode: String { case pane, shell }
+
+    /// screen snapshots (`term`) instead of the native attach – kept for wide-screen viewing
+    private(set) var legacy = false
+    /// a raw terminal stream (attach / shell) – sized by the phone, output written as it comes
+    var streams: Bool { mode == .shell || !legacy }
 
     let ref: AgentRef
     let mode: Mode
@@ -32,7 +38,7 @@ final class TerminalSession {
     func resize(cols: Int, rows: Int) {
         let first = size == (80, 24) && task == nil
         size = (cols, rows)
-        if mode == .shell {
+        if streams {
             if first { start() } else { send(["t": "resize", "cols": cols, "rows": rows]) }
         }
     }
@@ -50,7 +56,7 @@ final class TerminalSession {
     }
 
     func type(_ text: String) {
-        send(mode == .shell ? ["t": "in", "d": text] : ["t": "text", "text": text])
+        send(streams ? ["t": "in", "d": text] : ["t": "text", "text": text])
     }
     func keys(_ keys: [String]) { send(["t": "keys", "keys": keys]) }
 
@@ -66,7 +72,9 @@ final class TerminalSession {
         do {
             let client = try await HollrClient.connect(ref.server)
             defer { Task { try? await client.close() } }
-            let command = mode == .shell ? "shell \(ref.pane.pane) \(size.cols) \(size.rows)" : "term \(ref.pane.pane)"
+            let pane = ref.pane.pane
+            let command = mode == .shell ? "shell \(pane) \(size.cols) \(size.rows)"
+                : legacy ? "term \(pane)" : "attach \(pane) \(size.cols) \(size.rows)"
             try await client.withExec(command) { inbound, outbound in
                 let writer = Task {
                     for await chunk in stream { try? await outbound.write(ByteBuffer(bytes: chunk)) }
@@ -103,7 +111,11 @@ final class TerminalSession {
         case "exit":
             phase = .closed(String(localized: "Shell beendet."))
         case "error":
-            phase = .closed(obj["error"] as? String)
+            phase = .closed(obj["error"] as? String == "not_found"
+                            ? String(localized: "Die Session gibt es nicht mehr.") : obj["error"] as? String)
+        case nil where obj["error"] as? String == "not_allowed":
+            // older server without `attach` / `shell`
+            phase = .closed(String(localized: "Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren."))
         case "closed":
             phase = .closed(String(localized: "Die Sitzung wurde geschlossen."))
         default:
@@ -166,10 +178,14 @@ private struct TerminalBody: View {
     /// wide panes (a Mac terminal: 200+ columns) start readable: ~100 columns fill the width
     @AppStorage("terminal.readable") private var readable = true
 
-    init(ref: AgentRef, mode: TerminalSession.Mode, showsToolbar: Bool) {
+    /// inside the chat: display only (the composer below types, keys come from its menu)
+    var embedded = false
+
+    init(ref: AgentRef, mode: TerminalSession.Mode, showsToolbar: Bool, embedded: Bool = false) {
         self.ref = ref
         self.mode = mode
         self.showsToolbar = showsToolbar
+        self.embedded = embedded
         _session = State(initialValue: TerminalSession(ref: ref, mode: mode))
     }
 
@@ -203,10 +219,10 @@ private struct TerminalBody: View {
                     .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .open:
-                    if !showsToolbar { overlayButtons.padding(8) }
+                    if !showsToolbar && !embedded { overlayButtons.padding(8) }
                 }
             }
-            keyBar
+            if !embedded || keyboard { keyBar }
         }
         .background(Color(red: 0.06, green: 0.07, blue: 0.09))
         .toolbar {
@@ -220,7 +236,7 @@ private struct TerminalBody: View {
             }
         }
         .onAppear {
-            if mode == .shell {
+            if session.streams {
                 // starts once the terminal knows its size (TerminalWeb → onSize)
                 session.onOutput = { [web] in web.write($0) }
                 web.shellMode()
@@ -231,6 +247,8 @@ private struct TerminalBody: View {
         .onDisappear { session.stop() }
         // a tap on the terminal brings up the keyboard
         .simultaneousGesture(TapGesture().onEnded {
+            // in the chat a tap is for scrolling and links – the keyboard button types into the TUI
+            guard !embedded else { return }
             keyboard = true
             focusRequest += 1
         })
@@ -483,5 +501,15 @@ private struct TerminalKeyInput: UIViewRepresentable {
             onText("\r")
             return false
         }
+    }
+}
+
+/// The agent's own terminal inside the chat (Chat | Terminal): its real TUI at the phone's width.
+struct AgentTerminalView: View {
+    let ref: AgentRef
+
+    var body: some View {
+        TerminalBody(ref: ref, mode: .pane, showsToolbar: false, embedded: true)
+            .id(ref.id)
     }
 }

@@ -741,6 +741,26 @@
         }
       }
     },
+    "Als Chat zeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show as chat"
+          }
+        }
+      }
+    },
+    "Als Terminal zeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show as terminal"
+          }
+        }
+      }
+    },
     "Am Rechner `hollr pair` ausführen – der Code steht unter dem QR-Code, gilt 10 Minuten und nur einmal. Von unterwegs: am Rechner „Tailscale / Fernzugriff“ wählen und Tailscale auf dem iPhone verbinden.": {
       "localizations": {
         "en": {
@@ -2993,6 +3013,16 @@
         }
       }
     },
+    "Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr on the server is too old – update it under Server › Tools."
+          }
+        }
+      }
+    },
     "Hollr für den Mac (DMG) – koppeln per Link aus hollr pair --link": {
       "localizations": {
         "en": {
@@ -3059,6 +3089,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "In Hollr browser"
+          }
+        }
+      }
+    },
+    "Im Terminal scrollt Wischen die Oberfläche des Agents – wie mit dem Trackpad am Rechner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the terminal a swipe scrolls the agent’s interface – like a trackpad on the computer"
           }
         }
       }
@@ -4205,6 +4245,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reconnect"
+          }
+        }
+      }
+    },
+    "Neu: jede Session nativ als Terminal – omp, Claude, Codex und Shells zeigen ihre echte Oberfläche, in iPhone-Breite (Knopf oben rechts: Chat ↔ Terminal)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New: every session natively as a terminal – omp, Claude, Codex and shells show their real interface at iPhone width (button top right: chat ↔ terminal)"
           }
         }
       }

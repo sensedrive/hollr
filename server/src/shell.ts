@@ -9,7 +9,7 @@
 import { existsSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
-import { execHerdr } from "./herdr";
+import { execHerdr, herdrBin } from "./herdr";
 
 export const shellDisabled = () => existsSync(join(homedir(), ".config", "hollr", "no-shell"));
 
@@ -30,23 +30,48 @@ async function paneCwd(pane: string): Promise<string> {
   return homedir();
 }
 
+const out = (line: object) => {
+  try {
+    process.stdout.write(`${JSON.stringify(line)}\n`);
+  } catch {
+    process.exit(0);
+  }
+};
+
 export async function runShell(pane: string, cols: number, rows: number): Promise<number> {
-  const out = (line: object) => {
-    try {
-      process.stdout.write(`${JSON.stringify(line)}\n`);
-    } catch {
-      process.exit(0);
-    }
-  };
   if (shellDisabled()) {
     out({ t: "error", error: "Eigene Shell ist auf diesem Rechner abgeschaltet (~/.config/hollr/no-shell)." });
     return 1;
   }
-  const size = clampSize(cols, rows);
-  const cwd = await paneCwd(pane);
   const shell = Bun.env.SHELL || userInfo().shell || "/bin/bash";
+  return runPty([shell, "-l"], await paneCwd(pane), cols, rows);
+}
+
+/**
+ * `hollr gate attach <pane> <cols> <rows>`: the pane itself, natively – like Heeler. herdr's own
+ * attach runs in a PTY sized to the phone, so omp, Claude, Codex … draw their real TUI at the
+ * phone's width (herdr sizes the pane to the attached client while it is attached).
+ */
+export async function runAttach(pane: string, cols: number, rows: number): Promise<number> {
+  let target: string[];
+  try {
+    const info = (await execHerdr(["pane", "get", pane])) as { pane?: { agent?: string; terminal_id?: string } };
+    if (!info?.pane) throw new Error("gone");
+    // agents attach by pane (herdr knows their session); plain shells by their terminal
+    target = info.pane.agent
+      ? ["agent", "attach", pane]
+      : ["terminal", "attach", info.pane.terminal_id ?? pane];
+  } catch {
+    out({ t: "error", error: "not_found" });
+    return 1;
+  }
+  return runPty([herdrBin(), ...target], homedir(), cols, rows);
+}
+
+async function runPty(command: string[], cwd: string, cols: number, rows: number): Promise<number> {
+  const size = clampSize(cols, rows);
   const decoder = new TextDecoder();
-  const proc = Bun.spawn([shell, "-l"], {
+  const proc = Bun.spawn(command, {
     cwd,
     env: { ...Bun.env, TERM: "xterm-256color", COLORTERM: "truecolor", HOLLR_PHONE: "1" },
     terminal: {

@@ -51,7 +51,7 @@
     term.write('\x1b[H\x1b[2J\x1b[3J' + ansi.replace(/\r?\n/g, '\r\n'), () => requestAnimationFrame(fit));
   };
   window.armCtrl = (on) => { ctrl = on; };
-  window.setReadable = (n) => { readCols = n; fit(); window.scrollTo(0, 0); };
+  window.setReadable = (n) => { readCols = n; if (!shell) { fit(); window.scrollTo(0, 0); } };
   window.focusTerm = () => term.focus();
   // own shell (`hollr gate shell`): the terminal takes the phone's size, output is a raw stream
   let shell = false;
@@ -73,6 +73,29 @@
     requestAnimationFrame(fitShell);
   };
   window.writeRaw = (data) => term.write(data);
+
+  // a full-screen TUI (omp, Claude …) has no scrollback of its own: a swipe becomes mouse-wheel
+  // input for it, the way a trackpad scrolls it on the computer
+  let touchY = null, acc = 0;
+  const el = document.getElementById('term');
+  el.addEventListener('touchstart', (e) => { touchY = e.touches[0].clientY; acc = 0; }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!shell || touchY === null) return;
+    const alt = term.buffer.active.type === 'alternate';
+    if (!alt || term.modes.mouseTrackingMode === 'none') return; // normal screen: xterm scrolls itself
+    const y = e.touches[0].clientY;
+    acc += y - touchY;
+    touchY = y;
+    const step = 18;
+    const col = Math.floor(term.cols / 2) + 1, row = Math.floor(term.rows / 2) + 1;
+    while (Math.abs(acc) >= step) {
+      // finger down = content down = scroll up (button 64), finger up = scroll down (65)
+      post('input', `\x1b[<${acc > 0 ? 64 : 65};${col};${row}M`);
+      acc += acc > 0 ? -step : step;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  el.addEventListener('touchend', () => { touchY = null; });
   window.addEventListener('resize', () => (shell ? fitShell() : fit()));
 
   term.onData((data) => {
