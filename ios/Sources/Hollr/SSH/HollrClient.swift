@@ -293,9 +293,38 @@ enum HollrClient {
         _ = try await client.exec("keys \(pane) \(keys.joined(separator: " "))", on: server)
     }
 
+    /// Sends a message. If omp waits on a question, the server makes the text its own answer.
     static func prompt(_ server: Server, pane: String, text: String) async throws {
         let client = try await SSHPool.shared.client(for: server)
-        _ = try await requestLine(client, server: server, seconds: 30, command: "prompt \(pane)", body: ["text": text])
+        let line = try await requestLine(client, server: server, seconds: 30, command: "prompt \(pane)", body: ["text": text])
+        if let reply = try? JSONDecoder().decode([String: String].self, from: Data(line.utf8)), let code = reply["error"] {
+            throw HollrError.server(answerMessage(code))
+        }
+    }
+
+    /// Answers omp's open question `ask` (its id): one pick per question. The server works out
+    /// the keys – omp's cursor starts on the recommended option, multi-select toggles with Space.
+    static func answer(_ server: Server, pane: String, ask: String?, picks: [AskPick]) async throws {
+        var body: [String: Any] = ["picks": picks.map(\.json)]
+        if let ask { body["id"] = ask }
+        struct R: Decodable { let ok: Bool? }
+        do {
+            _ = try await fs(server, body, as: R.self, command: "answer \(pane)")
+        } catch let HollrError.server(code) {
+            throw HollrError.server(answerMessage(code))
+        }
+    }
+
+    private static func answerMessage(_ code: String) -> String {
+        switch code {
+        case "no_question": String(localized: "omp fragt gerade nichts mehr.")
+        case "stale_question": String(localized: "omp fragt inzwischen etwas anderes – bitte neu wählen.")
+        case "bad_answer": String(localized: "Diese Antwort passt nicht zur Frage.")
+        case "several_questions": String(localized: "omp stellt mehrere Fragen – bitte im Chat beantworten.")
+        case "agent_blocked": String(localized: "Der Agent wartet auf eine Eingabe im Terminal – dort antworten.")
+        case "not_allowed": String(localized: "Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren.")
+        default: code
+        }
     }
 
     /// Sends one JSON line on stdin and returns the first line of stdout.

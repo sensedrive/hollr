@@ -187,8 +187,8 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
                 try await HollrClient.prompt(server, pane: pane, text: text)
                 HollrLog.info("push: replied to \(pane)")
             } else if action.hasPrefix("opt."), let index = Int(action.dropFirst(4)) {
-                // omp's ask dialog: the cursor starts on the first option
-                try await HollrClient.keys(server, pane: pane, keys: Array(repeating: "down", count: index) + ["enter"])
+                // the server types the keys (omp's cursor starts on the recommended option)
+                try await HollrClient.answer(server, pane: pane, ask: info["ask"] as? String, picks: [AskPick(options: [index])])
                 HollrLog.info("push: picked option \(index) for \(pane)")
             }
         } catch {

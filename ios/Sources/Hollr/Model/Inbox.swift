@@ -29,9 +29,11 @@ struct InboxEntry: Identifiable, Equatable {
         let items = timeline?.visibleItems ?? []
         if status == "blocked" {
             for item in items.reversed() {
-                if case let .ask(id, question, options, _, true, details) = item {
-                    return InboxEntry(ref: ref, kind: .ask, text: plain(question), options: options, turn: id,
-                                      recommended: details.recommended)
+                if case let .ask(id, questions, _, true) = item, let first = questions.first {
+                    // several questions (or multi-select) need the chat: no one-tap options here
+                    return InboxEntry(ref: ref, kind: .ask, text: plain(first.question),
+                                      options: questions.answeredByTap ? first.options : [], turn: id,
+                                      recommended: first.recommended)
                 }
             }
             let last = items.last.map(\.id) ?? "blocked"

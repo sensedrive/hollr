@@ -38,7 +38,7 @@
   } = $props();
 
   const KEYS: [string, string][] = $derived([
-    ["Enter", "enter"], ["Esc", "esc"], ["Tab", "tab"], ["↑", "up"], ["↓", "down"], ["←", "left"], ["→", "right"],
+    ["Enter", "enter"], ["Esc", "esc"], ["Tab", "tab"], [t("Leertaste"), "space"], ["↑", "up"], ["↓", "down"], ["←", "left"], ["→", "right"],
     [t("y (ja)"), "y"], [t("n (nein)"), "n"], ["Ctrl+C", "ctrl+c"], ["Ctrl+D", "ctrl+d"], ["Ctrl+L", "ctrl+l"],
   ]);
   /** always visible on wide windows */

@@ -7,12 +7,11 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
-  import type { Pane, Timeline } from "../api";
+  import type { AskPick, Pane, Timeline } from "../api";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
   import { draftKey } from "../drafts";
-  import { askKeys } from "../inbox";
   import { followTimeline } from "../follow";
   import {
     cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, phaseDone, phaseName,
@@ -254,7 +253,9 @@
 
   async function sendText(msg: string): Promise<boolean> {
     stick = true;
-    if (!isShell) pending = [...pending, msg];
+    // omp waits on its question: the server makes the text the own answer – it never shows as a message
+    const answering = askShown;
+    if (!isShell && !answering) pending = [...pending, msg];
     try {
       await api.prompt(server, pane.pane, msg);
       actionError = "";
@@ -263,7 +264,20 @@
       return true;
     } catch (e) {
       pending = pending.filter((p) => p !== msg);
-      actionError = t("Senden fehlgeschlagen: {e}", { e: e instanceof Error ? e.message : String(e) });
+      const why = e instanceof Error ? e.message : String(e);
+      actionError = answering ? t("Antwort nicht gesendet: {e}", { e: why }) : t("Senden fehlgeschlagen: {e}", { e: why });
+      return false;
+    }
+  }
+
+  async function answerAsk(ask: string, picks: AskPick[]): Promise<boolean> {
+    try {
+      await api.answer(server, pane.pane, ask, picks);
+      actionError = "";
+      setTimeout(tick, 400);
+      return true;
+    } catch (e) {
+      actionError = t("Antwort nicht gesendet: {e}", { e: e instanceof Error ? e.message : String(e) });
       return false;
     }
   }
@@ -619,7 +633,7 @@
             <div class="ttl">{transcriptTitle}</div>
             {#if isOmp && timeline}
               {#if !timeline.items.length && !pending.length}{@render emptyHint()}{/if}
-              <TimelineView {timeline} {onLink} onAnswer={(i) => sendKeys(askKeys(i))} />
+              <TimelineView {timeline} {onLink} onAnswer={answerAsk} />
             {:else if !isOmp}
               {#if !bubbles.length && !pending.length && (!screen || !showsScreen)}{@render emptyHint()}{/if}
               {#each bubbles as b, i (i)}

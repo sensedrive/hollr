@@ -3,7 +3,7 @@
 // the timelines of those panes (ETag, at most every 5 s each) for question, options and last answer.
 import * as api from "./api";
 import { history } from "./agent";
-import { askKeys, buildEntries, fromHistory, fromTimeline, isDue, wantsYou, type InboxDetail, type InboxEntry } from "./inbox";
+import { buildEntries, fromHistory, fromTimeline, isDue, wantsYou, type InboxDetail, type InboxEntry } from "./inbox";
 import { allPanes, refresh, type PaneRef } from "./store.svelte";
 
 export type { InboxEntry } from "./inbox";
@@ -118,9 +118,9 @@ async function act(e: InboxEntry & { ref: PaneRef }, send: () => Promise<unknown
   return true;
 }
 
-/** Picks option `index` of the pending ask (↓ × index, Enter – like the session view). */
+/** Picks option `index` of the pending ask (`turn` is the ask's id – a newer question isn't answered by mistake). */
 export const answer = (e: InboxEntry & { ref: PaneRef }, index: number) =>
-  act(e, () => api.keys(e.ref.server.id, e.ref.pane.pane, askKeys(index)));
+  act(e, () => api.answer(e.ref.server.id, e.ref.pane.pane, e.turn, [{ options: [index] }]));
 
 /** Sends a message like the composer does. */
 export const reply = (e: InboxEntry & { ref: PaneRef }, text: string) =>

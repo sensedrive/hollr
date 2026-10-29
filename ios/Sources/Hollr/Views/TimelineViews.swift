@@ -68,7 +68,8 @@ struct BrailleSpinner: View {
 
 struct TimelineRow: View, Equatable {
     let item: TimelineItem
-    var onAnswer: (Int, Int) -> Void = { _, _ in }
+    /// answers omp's question (ask id, one pick per question); false = not sent
+    var onAnswer: (String, [AskPick]) async -> Bool = { _, _ in false }
 
     static func == (a: TimelineRow, b: TimelineRow) -> Bool { a.item == b.item }
 
@@ -82,10 +83,8 @@ struct TimelineRow: View, Equatable {
             AgentMarkdown(text: text, plain: true)
         case let .tools(_, calls):
             ToolsBlock(calls: calls)
-        case let .ask(_, question, options, answer, pending, details):
-            AskCard(question: question, options: options, answer: answer, pending: pending, details: details) { index in
-                onAnswer(index, options.count)
-            }
+        case let .ask(id, questions, answer, pending):
+            AskCard(id: id, questions: questions, answer: answer, pending: pending, onSubmit: onAnswer)
         case let .end(_, _, status, error):
             // omp shows no "done" marker, only aborts and errors
             if status != "done" { EndRow(status: status, error: error) }
@@ -463,15 +462,33 @@ private struct GenericTool: View {
 }
 
 struct AskCard: View {
-    let question: String
-    let options: [String]
+    let id: String
+    let questions: [AskQuestion]
     let answer: String?
     let pending: Bool
-    var details = AskDetails()
-    let onPick: (Int) -> Void
-    /// marked right away on tap – omp's confirmation follows with the next refresh
-    @State private var picked: Int?
-    private var open: Bool { pending && picked == nil }
+    let onSubmit: (String, [AskPick]) async -> Bool
+    /// what you picked, shown right away – omp's confirmation follows with the next refresh
+    @State private var picks: [AskPick]
+    @State private var sending = false
+    @State private var sent = false
+
+    init(id: String, questions: [AskQuestion], answer: String?, pending: Bool,
+         onSubmit: @escaping (String, [AskPick]) async -> Bool) {
+        self.id = id
+        self.questions = questions
+        self.answer = answer
+        self.pending = pending
+        self.onSubmit = onSubmit
+        _picks = State(initialValue: Array(repeating: AskPick(), count: questions.count))
+    }
+
+    private var open: Bool { pending && !sent && !sending }
+    /// every single-choice question has its answer (multi-select may stay empty, like in omp)
+    private var complete: Bool {
+        zip(questions, picks).allSatisfy { q, p in
+            q.multi || !p.options.isEmpty || !p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -479,47 +496,29 @@ struct AskCard: View {
                 Text("?").font(Omp.mono.weight(.bold)).foregroundStyle(Omp.accent)
                 Text(pending ? String(localized: "Ask – omp wartet auf dich") : String(localized: "Ask"))
                     .font(Omp.monoSmall.weight(.semibold)).foregroundStyle(pending ? Omp.warning : .primary)
-                if let header = details.header {
+                if questions.count == 1, let header = questions.first?.header {
                     Text("· \(header)").font(Omp.monoSmall).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
-            Text(question).font(.body)
-            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                Button { if open { picked = index; onPick(index) } } label: {
-                    HStack(spacing: 8) {
-                        Text(answer?.contains(option) == true || picked == index ? "◉" : "○").foregroundStyle(Omp.accent)
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text(option).foregroundStyle(.primary).multilineTextAlignment(.leading)
-                                if index == details.recommended { RecommendedBadge() }
-                            }
-                            // omp's explanation of the option (only while you still have to choose)
-                            if open, let text = details.description(index) {
-                                Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .font(.subheadline)
-                    .padding(.vertical, 8).padding(.horizontal, 10)
-                    .background(open ? Omp.pendingBg : picked == index ? Omp.pendingBg.opacity(0.5) : .clear,
-                                in: RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-                .disabled(!open)
+            ForEach(Array(questions.enumerated()), id: \.offset) { qi, q in
+                questionBlock(qi, q)
             }
-            if open {
-                // omp's own last entry "Other (type your own)": select it, then type the answer below
-                Button { picked = options.count; onPick(options.count) } label: {
-                    HStack(spacing: 8) {
-                        Text("✎").foregroundStyle(Omp.accent)
-                        Text("Eigene Antwort – danach unten eintippen").foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
+            if pending && !sent {
+                if questions.answeredByTap {
+                    Label("Eigene Antwort? Einfach unten eintippen.", systemImage: "pencil")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Button { submit() } label: {
+                        HStack(spacing: 6) {
+                            if sending { ProgressView().controlSize(.small) }
+                            Text("Antworten senden")
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .font(.subheadline)
-                    .padding(.vertical, 8).padding(.horizontal, 10)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Omp.accent)
+                    .disabled(!complete || sending)
                 }
-                .buttonStyle(.plain)
             }
             if let answer {
                 Text("✔ \(answer)").font(Omp.monoSmall).foregroundStyle(answer == "abgebrochen" ? Omp.warning : Omp.success)
@@ -529,6 +528,78 @@ struct AskCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Omp.successBg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(pending ? Omp.warning.opacity(0.7) : Omp.border.opacity(0.6)))
+    }
+
+    @ViewBuilder private func questionBlock(_ qi: Int, _ q: AskQuestion) -> some View {
+        if questions.count > 1 {
+            HStack(spacing: 6) {
+                Text("\(qi + 1).").font(Omp.monoSmall.weight(.bold)).foregroundStyle(Omp.accent)
+                if let header = q.header { Text(header).font(Omp.monoSmall).foregroundStyle(.secondary).lineLimit(1) }
+                if q.multi { Text("mehrere möglich").font(.caption2).foregroundStyle(.secondary) }
+            }
+            .padding(.top, qi == 0 ? 0 : 6)
+        } else if q.multi {
+            Text("mehrere möglich").font(.caption2).foregroundStyle(.secondary)
+        }
+        Text(q.question).font(.body)
+        ForEach(Array(q.options.enumerated()), id: \.offset) { index, option in
+            let chosen = picks[qi].options.contains(index) || answer?.contains(option) == true
+            Button { tap(qi, index) } label: {
+                HStack(spacing: 8) {
+                    Text(q.multi ? (chosen ? "☑" : "☐") : (chosen ? "◉" : "○")).foregroundStyle(Omp.accent)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(option).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                            if index == q.recommended { RecommendedBadge() }
+                        }
+                        // omp's explanation of the option (only while you still have to choose)
+                        if open, let text = q.description(index) {
+                            Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.subheadline)
+                .padding(.vertical, 8).padding(.horizontal, 10)
+                .background(open ? Omp.pendingBg : chosen ? Omp.pendingBg.opacity(0.5) : .clear,
+                            in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .disabled(!open)
+        }
+        if open && !questions.answeredByTap {
+            // omp's own last row "Other (type your own)"
+            TextField("Eigene Antwort …", text: Binding(get: { picks[qi].text }, set: { text in
+                picks[qi].text = text
+                if !q.multi && !text.trimmingCharacters(in: .whitespaces).isEmpty { picks[qi].options = [] }
+            }), axis: .vertical)
+                .font(.subheadline)
+                .lineLimit(1...3)
+                .padding(.vertical, 8).padding(.horizontal, 10)
+                .background(Omp.pendingBg, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func tap(_ qi: Int, _ index: Int) {
+        if questions.answeredByTap {
+            picks[qi] = AskPick(options: [index])
+            submit()
+        } else if questions[qi].multi {
+            if picks[qi].options.remove(index) == nil { picks[qi].options.insert(index) }
+        } else {
+            picks[qi] = AskPick(options: [index])
+        }
+    }
+
+    private func submit() {
+        sending = true
+        Task {
+            let ok = await onSubmit(id, picks)
+            sending = false
+            sent = ok
+            // not sent: choose again
+            if !ok && questions.answeredByTap { picks = Array(repeating: AskPick(), count: questions.count) }
+        }
     }
 }
 

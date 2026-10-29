@@ -146,6 +146,7 @@ struct Composer: View {
                 key("Enter", "enter")
                 key("Esc", "esc")
                 key("Tab", "tab")
+                key(String(localized: "Leertaste"), "space")
                 key("↑", "up")
                 key("↓", "down")
                 key("y (ja)", "y")

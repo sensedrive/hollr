@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import QRCode from "qrcode";
+import { type AskPick, answerAsk, answerWithText } from "./ask";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { runEvents } from "./events";
@@ -94,7 +95,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.30.0";
+export const VERSION = "0.31.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -454,9 +455,33 @@ async function gate(): Promise<number> {
     case "prompt": {
       const { text } = JSON.parse((await readStdinLine()) || "{}") as { text?: string };
       if (!text) return 2;
-      await herdr.prompt(pane, text);
+      try {
+        await herdr.prompt(pane, text);
+      } catch (err) {
+        // herdr refuses prompts while the agent waits – omp's open question takes the text as its answer
+        if (!(err instanceof HerdrError && err.code === "agent_blocked")) throw err;
+        try {
+          await answerWithText(herdr, pane, text);
+        } catch (e) {
+          // codes (agent_blocked, several_questions …): the app says it in its language
+          json({ error: e instanceof HerdrError ? e.code : String(e) });
+          return 1;
+        }
+      }
       json({ ok: true });
       return 0;
+    }
+    case "answer": {
+      // {"id":"<ask call>","picks":[{"options":[1]},{"text":"…"}]} – one pick per question
+      const req = JSON.parse((await readStdinLine()) || "{}") as { id?: string; picks?: AskPick[] };
+      try {
+        await answerAsk(herdr, pane, { id: req.id, picks: Array.isArray(req.picks) ? req.picks : [] });
+        json({ ok: true });
+        return 0;
+      } catch (err) {
+        json({ error: err instanceof HerdrError ? err.code : String(err) });
+        return 1;
+      }
     }
     case "keys":
       await herdr.sendKeys(pane, rest.slice(0, 10));
@@ -465,7 +490,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | ports | history <pane> | live <pane> | prompt <pane> | keys <pane> <key>...",
+        hint: "hello | events | tree | kinds | new | close <pane> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>...",
       });
       return 2;
   }

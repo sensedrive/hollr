@@ -12,7 +12,8 @@ extension DictationContext {
         for item in (session.timeline?.items ?? []).suffix(40) {
             switch item {
             case let .user(_, text, _, _), let .text(_, text): texts.append(String(text.prefix(4000)))
-            case let .ask(_, question, options, _, _, _): texts.append(question + " " + options.joined(separator: " "))
+            case let .ask(_, questions, _, _):
+                texts += questions.map { $0.question + " " + $0.options.joined(separator: " ") }
             case let .tools(_, calls): paths += calls.compactMap(\.path)
             default: break
             }

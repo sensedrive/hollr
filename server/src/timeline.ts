@@ -43,22 +43,30 @@ export type TimelineItem =
   | { k: "thinking"; id: string; text: string }
   | { k: "text"; id: string; text: string }
   | { k: "tools"; id: string; calls: ToolCall[] }
-  | {
+  | ({
       k: "ask";
       id: string;
-      question: string;
-      options: string[];
       answer?: string;
       pending: boolean;
-      /** omp's short title ("Rebase") */
-      header?: string;
-      /** one per option ("" = none) */
-      descriptions?: string[];
-      /** index of omp's recommended option (shown as "(Recommended)" in the TUI) */
-      recommended?: number;
-    }
+      /** every question when omp asks several at once (the question fields here are the first one) */
+      questions?: AskQuestion[];
+    } & AskQuestion)
   | { k: "end"; id: string; ms: number; status: "done" | "aborted" | "error"; error?: string }
   | { k: "info"; id: string; text: string };
+
+/** One question of omp's ask dialog. */
+export interface AskQuestion {
+  question: string;
+  options: string[];
+  /** omp's short title ("Rebase") */
+  header?: string;
+  /** one per option ("" = none) */
+  descriptions?: string[];
+  /** index of omp's recommended option (shown as "(Recommended)" in the TUI) */
+  recommended?: number;
+  /** several options can be picked (Space toggles in the TUI) */
+  multi?: boolean;
+}
 
 export interface TodoPhase {
   name: string;
@@ -359,26 +367,23 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
         } else if (b.type === "toolCall" && b.id && b.name) {
           const args = (b.arguments ?? {}) as Record<string, unknown>;
           if (b.name === "ask") {
-            const qs =
-              (args.questions as Array<{
-                question?: string;
-                header?: string;
-                recommended?: number;
-                options?: Array<{ label?: string; description?: string; recommended?: boolean }>;
-              }>) ?? [];
-            const q = qs[0];
+            const qs = Array.isArray(args.questions)
+              ? (args.questions as Array<Parameters<typeof askQuestion>[0]>)
+              : [];
+            const questions = qs.map(askQuestion);
+            const first = questions[0] ?? askQuestion(undefined);
             const call: ToolCall = {
               id: b.id,
               name: "ask",
-              label: q?.question ?? "Frage",
+              label: first.question,
               status: "running",
             };
             calls.set(b.id, call);
             pushItem({
               k: "ask",
               id: b.id,
-              question: clip(q?.question ?? "Frage", 500),
-              ...askOptions(q),
+              ...first,
+              ...(questions.length > 1 ? { questions } : {}),
               pending: true,
             });
             continue;
@@ -459,10 +464,19 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
           if (item) {
             item.pending = false;
             const sel = (details.selectedOptions as string[] | undefined) ?? [];
+            // several questions: omp reports one result per question
+            const results = Array.isArray(details.results)
+              ? (details.results as Array<{ selectedOptions?: string[]; customInput?: string }>)
+              : [];
             item.answer = m.isError
               ? "abgebrochen"
               : clip(
-                  [...sel, str(details.customInput)].filter(Boolean).join(", ") ||
+                  (results.length > 1
+                    ? results
+                        .map((r) => [...(r.selectedOptions ?? []), str(r.customInput)].filter(Boolean).join(", "))
+                        .filter(Boolean)
+                        .join(" · ")
+                    : [...sel, str(details.customInput)].filter(Boolean).join(", ")) ||
                     textOf(m.content),
                   300,
                 );
@@ -531,6 +545,7 @@ export async function readTimeline(file: string, maxItems = 150): Promise<Timeli
 export function askOptions(q?: {
   header?: string;
   recommended?: number;
+  multi?: boolean;
   options?: Array<{ label?: string; description?: string; recommended?: boolean }>;
 }) {
   const opts = (Array.isArray(q?.options) ? q.options : []).filter((o) => o && typeof o === "object" && o.label);
@@ -544,5 +559,11 @@ export function askOptions(q?: {
     ...(descriptions.some(Boolean) ? { descriptions } : {}),
     ...(recommended >= 0 ? { recommended } : {}),
     ...(typeof q?.header === "string" && q.header ? { header: clip(q.header, 60) } : {}),
+    ...(q?.multi === true ? { multi: true } : {}),
   };
+}
+
+/** One question of an ask call's arguments, as the timeline shows it. */
+function askQuestion(q?: Parameters<typeof askOptions>[0] & { question?: string }): AskQuestion {
+  return { question: clip(q?.question ?? "Frage", 500), ...askOptions(q) };
 }

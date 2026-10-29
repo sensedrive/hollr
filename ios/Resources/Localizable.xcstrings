@@ -941,6 +941,16 @@
         }
       }
     },
+    "Antwort nicht gesendet: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answer not sent: %@"
+          }
+        }
+      }
+    },
     "Antworten": {
       "localizations": {
         "en": {
@@ -957,6 +967,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Answer straight from the notification: long-press for the answer options or your own reply"
+          }
+        }
+      }
+    },
+    "Antworten senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send answers"
           }
         }
       }
@@ -1783,6 +1803,16 @@
         }
       }
     },
+    "Der Agent wartet auf eine Eingabe im Terminal – dort antworten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent waits for input in its terminal – answer there."
+          }
+        }
+      }
+    },
     "Der Code hat 16 Zeichen, z. B. K7Q2-M9XA-3PLD-W8RT.": {
       "localizations": {
         "en": {
@@ -2053,6 +2083,16 @@
         }
       }
     },
+    "Diese Antwort passt nicht zur Frage.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This answer doesn’t fit the question."
+          }
+        }
+      }
+    },
     "Diesen wählen": {
       "localizations": {
         "en": {
@@ -2213,12 +2253,12 @@
         }
       }
     },
-    "Eigene Antwort – danach unten eintippen": {
+    "Eigene Antwort auf eine Frage: einfach unten eintippen – auch in „Braucht dich“ und in der Mitteilung": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Own answer – then type it below"
+            "value": "Own answer to a question: just type it below – also in “Needs you” and in the notification"
           }
         }
       }
@@ -2229,6 +2269,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Own answer …"
+          }
+        }
+      }
+    },
+    "Eigene Antwort? Einfach unten eintippen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Own answer? Just type it below."
           }
         }
       }
@@ -2649,6 +2699,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "omp’s questions show the recommended answer and each option’s explanation – also in “Needs you” and notifications (★)"
+          }
+        }
+      }
+    },
+    "Fragen von omp: ein Tipp wählt genau diese Antwort – vorher landete die Auswahl daneben, sobald omp eine Option empfahl": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp’s questions: a tap picks exactly that answer – before, the choice went to the wrong one whenever omp recommended an option"
           }
         }
       }
@@ -3509,6 +3569,16 @@
         }
       }
     },
+    "Leertaste": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Space"
+          }
+        }
+      }
+    },
     "Lesbar (Ausschnitt)": {
       "localizations": {
         "en": {
@@ -3625,6 +3695,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Live goes straight into this session – like /live on the computer."
+          }
+        }
+      }
+    },
+    "Live mit omp auf einem Mac: du hörst omp wieder – seine Stimme kam bisher als Stille an, weil macOS per SSH gestarteten Programmen keine Aufnahme erlaubt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live with omp on a Mac: you hear omp again – its voice used to arrive as silence because macOS doesn’t let programs started over SSH record"
           }
         }
       }
@@ -3845,6 +3925,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "More retries = more robust on hard passages, but slower."
+          }
+        }
+      }
+    },
+    "Mehrere Fragen auf einmal und Mehrfachauswahl lassen sich im Chat beantworten, mit eigener Antwort pro Frage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Several questions at once and multi-select can be answered in the chat, with an own answer per question"
           }
         }
       }
@@ -6055,6 +6145,16 @@
         }
       }
     },
+    "Tasten senden: jetzt auch die Leertaste": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send keys: now with the space bar too"
+          }
+        }
+      }
+    },
     "Team-ID": {
       "localizations": {
         "en": {
@@ -7361,6 +7461,16 @@
         }
       }
     },
+    "mehrere möglich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "several allowed"
+          }
+        }
+      }
+    },
     "nicht installiert": {
       "localizations": {
         "en": {
@@ -7397,6 +7507,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Starting omp /live …"
+          }
+        }
+      }
+    },
+    "omp fragt gerade nichts mehr.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp isn’t asking anything anymore."
+          }
+        }
+      }
+    },
+    "omp fragt inzwischen etwas anderes – bitte neu wählen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp is asking something else by now – please choose again."
+          }
+        }
+      }
+    },
+    "omp stellt mehrere Fragen – bitte im Chat beantworten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "omp asks several questions – please answer them in the chat."
           }
         }
       }

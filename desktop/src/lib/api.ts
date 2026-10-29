@@ -1,6 +1,7 @@
 // Calls into the Rust backend (pinned SSH → `hollr gate` on the server).
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { t } from "./i18n";
 
 export interface Server {
   id: string;
@@ -59,13 +60,29 @@ export type TimelineItem =
   | { k: "thinking"; id: string; text: string }
   | { k: "text"; id: string; text: string }
   | { k: "tools"; id: string; calls: ToolCall[] }
-  | {
-      k: "ask"; id: string; question: string; options: string[]; answer?: string; pending?: boolean;
-      /** omp's short title, a line per option, the recommended option's index */
-      header?: string; descriptions?: string[]; recommended?: number;
-    }
+  | ({
+      k: "ask"; id: string; answer?: string; pending?: boolean;
+      /** every question when omp asks several at once (the question fields here are the first one) */
+      questions?: AskQuestion[];
+    } & AskQuestion)
   | { k: "end"; id: string; ms: number; status: string; error?: string }
   | { k: "info"; id: string; text: string };
+
+/** One of omp's questions: short title, a line per option, the recommended option's index, multi-select. */
+export interface AskQuestion {
+  question: string;
+  options: string[];
+  header?: string;
+  descriptions?: string[];
+  recommended?: number;
+  multi?: boolean;
+}
+
+/** The answer to one question: picked option indexes and/or an own text (the server types the keys). */
+export interface AskPick {
+  options?: number[];
+  text?: string;
+}
 
 export interface TodoTask {
   content: string;
@@ -129,8 +146,27 @@ export const timeline = (s: string, pane: string, etag?: string) =>
   );
 export const screen = (s: string, pane: string, lines = 80) =>
   gate<{ text: string }>(s, `screen ${pane} ${lines}`).then((r) => r.text);
-export const prompt = (s: string, pane: string, text: string) => gate(s, `prompt ${pane}`, { text });
+/** Sends a message. If omp waits on a question, the server makes the text its own answer. */
+export const prompt = (s: string, pane: string, text: string) =>
+  gate(s, `prompt ${pane}`, { text }).catch((e) => Promise.reject(answerError(e)));
 export const keys = (s: string, pane: string, k: string[]) => gate(s, `keys ${pane} ${k.join(" ")}`);
+/** Answers omp's question `ask` (its id): one pick per question – the server works out the keys. */
+export const answer = (s: string, pane: string, ask: string | undefined, picks: AskPick[]) =>
+  gate(s, `answer ${pane}`, { id: ask, picks }).catch((e) => Promise.reject(answerError(e)));
+
+function answerError(e: unknown): Error {
+  const code = e instanceof Error ? e.message : String(e);
+  const known: Record<string, string> = {
+    no_question: t("omp fragt gerade nichts mehr."),
+    stale_question: t("omp fragt inzwischen etwas anderes – bitte neu wählen."),
+    bad_answer: t("Diese Antwort passt nicht zur Frage."),
+    several_questions: t("omp stellt mehrere Fragen – bitte im Chat beantworten."),
+    agent_blocked: t("Der Agent wartet auf eine Eingabe im Terminal – dort antworten."),
+    not_allowed: t("Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren."),
+  };
+  return new Error(known[code] ?? code);
+}
+
 export const kinds = (s: string) => gate<{ kinds: string[] }>(s, "kinds").then((r) => r.kinds);
 export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);

@@ -134,4 +134,17 @@ export default {
   "Taste {n}": "Key {n}",
   "Eigene Antwort": "Own answer",
   Empfohlen: "Recommended",
+  // omp's question in the chat
+  "mehrere möglich": "several allowed",
+  "Eigene Antwort …": "Own answer …",
+  "Eigene Antwort? Einfach unten eintippen.": "Own answer? Just type it below.",
+  "Antworten senden": "Send answers",
+  "Antwort nicht gesendet: {e}": "Answer not sent: {e}",
+  "omp fragt gerade nichts mehr.": "omp isn't asking anything anymore.",
+  "omp fragt inzwischen etwas anderes – bitte neu wählen.": "omp is asking something else by now – please choose again.",
+  "Diese Antwort passt nicht zur Frage.": "This answer doesn't fit the question.",
+  "omp stellt mehrere Fragen – bitte im Chat beantworten.": "omp asks several questions – please answer them in the chat.",
+  "Der Agent wartet auf eine Eingabe im Terminal – dort antworten.": "The agent waits for input in its terminal – answer there.",
+  "Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren.":
+    "Hollr on the server is too old – update it under Server › Tools.",
 };

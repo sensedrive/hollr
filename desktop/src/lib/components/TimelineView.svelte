@@ -1,15 +1,16 @@
 <script lang="ts">
   // omp's transcript, rendered like its TUI (same rules as the iPhone app, TimelineViews.swift):
   // read/grep/glob as compact lines (consecutive reads merged), bash & edits as framed cards, thinking folded.
-  import type { Timeline, ToolCall } from "../api";
+  import type { AskPick, Timeline, ToolCall } from "../api";
   import { t } from "../i18n";
   import { duration, shortPath, thinkingProse, toolIcon, toolTitle, visibleItems } from "../agent";
+  import AskCard from "./AskCard.svelte";
   import Markdown from "./Markdown.svelte";
 
   let { timeline, onAnswer, onLink }: {
     timeline: Timeline;
-    /** pick option `index` of a pending ask (cursor starts on the first option) */
-    onAnswer: (index: number, count: number) => void;
+    /** answers omp's question (ask id, one pick per question); false = not sent */
+    onAnswer: (ask: string, picks: AskPick[]) => Promise<boolean>;
     onLink?: (url: string) => void;
   } = $props();
 
@@ -159,20 +160,7 @@
         {/each}
       </div>
     {:else if item.k === "ask"}
-      <div class="ask" class:pending={item.pending}>
-        <div class="mono hrow"><b class="acc">?</b> <b class="small" class:warn={item.pending}>{item.pending ? t("Ask – omp wartet auf dich") : t("Ask")}</b>{#if item.header}<span class="small muted"> · {item.header}</span>{/if}</div>
-        <div class="q">{item.question}</div>
-        {#each item.options as opt, i}
-          <button class="opt" class:live={item.pending} disabled={!item.pending} onclick={() => onAnswer(i, item.options.length)}>
-            <span class="acc">{item.answer?.includes(opt) ? "◉" : "○"}</span>
-            <span class="optbody">
-              <span>{opt}{#if i === item.recommended}<span class="rec">{t("Empfohlen")}</span>{/if}</span>
-              {#if item.pending && item.descriptions?.[i]}<span class="desc">{item.descriptions[i]}</span>{/if}
-            </span>
-          </button>
-        {/each}
-        {#if item.answer}<div class="mono small" class:ok={item.answer !== "abgebrochen"} class:warn={item.answer === "abgebrochen"}>✔ {item.answer}</div>{/if}
-      </div>
+      <AskCard {item} {onAnswer} />
     {:else if item.k === "end"}
       {#if item.status === "aborted"}<div class="mono small warn">⏹ {t("Abgebrochen")}</div>
       {:else if item.status !== "done"}<div class="mono small err clamp8">Error: {item.error ?? t("unbekannt")}</div>{/if}
@@ -184,10 +172,6 @@
 
 <style>
   .tl { display: flex; flex-direction: column; gap: 12px; }
-  .optbody { display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }
-  .desc { font-size: 12px; color: var(--muted); }
-  .rec { margin-left: 8px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px;
-    background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
   .tools { display: flex; flex-direction: column; gap: 10px; }
   .user { background: color-mix(in srgb, var(--orange) 11%, transparent); border-radius: 10px; padding: 10px 12px;
     white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
@@ -231,11 +215,4 @@
   .muted { color: var(--muted); }
   .small { font-size: 12px; }
   .info { text-align: center; color: var(--dim); font-size: 12px; }
-  .ask { border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); border-radius: 10px; padding: 12px; background: var(--raised);
-    display: flex; flex-direction: column; gap: 8px; }
-  .ask.pending { border-color: color-mix(in srgb, var(--yellow) 70%, transparent); }
-  .q { white-space: pre-wrap; user-select: text; }
-  .opt { all: unset; display: flex; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; cursor: default; }
-  .opt.live { cursor: pointer; background: color-mix(in srgb, var(--accent) 8%, transparent); }
-  .opt.live:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 </style>

@@ -10,6 +10,13 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 46, date: "29.10.2026", items: [
+            ("speaker.wave.2", String(localized: "Live mit omp auf einem Mac: du hörst omp wieder – seine Stimme kam bisher als Stille an, weil macOS per SSH gestarteten Programmen keine Aufnahme erlaubt")),
+            ("questionmark.bubble", String(localized: "Fragen von omp: ein Tipp wählt genau diese Antwort – vorher landete die Auswahl daneben, sobald omp eine Option empfahl")),
+            ("checklist", String(localized: "Mehrere Fragen auf einmal und Mehrfachauswahl lassen sich im Chat beantworten, mit eigener Antwort pro Frage")),
+            ("pencil", String(localized: "Eigene Antwort auf eine Frage: einfach unten eintippen – auch in „Braucht dich“ und in der Mitteilung")),
+            ("space", String(localized: "Tasten senden: jetzt auch die Leertaste")),
+        ]),
         ReleaseNote(build: 45, date: "16.10.2026", items: [
             ("apple.terminal", String(localized: "Neu: jede Session nativ als Terminal – omp, Claude, Codex und Shells zeigen ihre echte Oberfläche, in iPhone-Breite (Knopf oben rechts: Chat ↔ Terminal)")),
             ("hand.draw", String(localized: "Im Terminal scrollt Wischen die Oberfläche des Agents – wie mit dem Trackpad am Rechner")),

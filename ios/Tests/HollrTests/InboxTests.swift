@@ -10,13 +10,26 @@ final class InboxTests: XCTestCase {
     func testPendingQuestionBecomesAskWithOptions() {
         let tl = Timeline(items: [
             .text(id: "t1", text: "Ich bin fast fertig."),
-            .ask(id: "a1", question: "Darf ich **pushen**?", options: ["Ja", "Nein"], answer: nil, pending: true),
+            .ask(id: "a1", questions: [AskQuestion(question: "Darf ich **pushen**?", options: ["Ja", "Nein"])],
+                 answer: nil, pending: true),
         ], jobs: [], running: false, waiting: false)
         let entry = InboxEntry.make(ref: ref("blocked"), timeline: tl)
         XCTAssertEqual(entry?.kind, .ask)
         XCTAssertEqual(entry?.text, "Darf ich pushen?")
         XCTAssertEqual(entry?.options, ["Ja", "Nein"])
         XCTAssertEqual(entry?.turn, "a1")
+    }
+
+    func testSeveralQuestionsOrMultiSelectHaveNoOneTapOptions() {
+        let several = Timeline(items: [
+            .ask(id: "a1", questions: [AskQuestion(question: "DB?", options: ["SQLite", "Postgres"]),
+                                       AskQuestion(question: "Extras?", options: ["Auth"], multi: true)],
+                 answer: nil, pending: true),
+        ], jobs: [], running: false, waiting: false)
+        let entry = InboxEntry.make(ref: ref("blocked"), timeline: several)
+        XCTAssertEqual(entry?.kind, .ask)
+        XCTAssertEqual(entry?.text, "DB?")
+        XCTAssertEqual(entry?.options, [])
     }
 
     func testWaitingWithoutQuestionShowsLastWords() {
@@ -115,13 +128,24 @@ final class FollowTests: XCTestCase {
     func testAskDetailsDecode() throws {
         let json = #"{"title":null,"items":[{"k":"ask","id":"a","question":"Rebase?","options":["Merge","Rebase"],"pending":true,"header":"Rebase","descriptions":["ein Durchgang",""],"recommended":1}],"jobs":[],"running":false,"waiting":true}"#
         let tl = try JSONDecoder().decode(Timeline.self, from: Data(json.utf8))
-        guard case let .ask(_, _, options, _, pending, details) = tl.items.first else { return XCTFail("no ask") }
-        XCTAssertEqual(options, ["Merge", "Rebase"])
+        guard case let .ask(_, questions, _, pending) = tl.items.first, let q = questions.first else { return XCTFail("no ask") }
+        XCTAssertEqual(questions.count, 1)
+        XCTAssertEqual(q.options, ["Merge", "Rebase"])
         XCTAssertTrue(pending)
-        XCTAssertEqual(details.recommended, 1)
-        XCTAssertEqual(details.header, "Rebase")
-        XCTAssertEqual(details.description(0), "ein Durchgang")
-        XCTAssertNil(details.description(1))
+        XCTAssertEqual(q.recommended, 1)
+        XCTAssertEqual(q.header, "Rebase")
+        XCTAssertEqual(q.description(0), "ein Durchgang")
+        XCTAssertNil(q.description(1))
+        XCTAssertFalse(q.multi)
+    }
+
+    func testSeveralQuestionsDecodeInOrder() throws {
+        let json = #"{"items":[{"k":"ask","id":"a","question":"DB?","options":["SQLite"],"pending":true,"questions":[{"question":"DB?","options":["SQLite"]},{"question":"Extras?","options":["Auth","Cache"],"multi":true}]}],"jobs":[],"running":false,"waiting":true}"#
+        let tl = try JSONDecoder().decode(Timeline.self, from: Data(json.utf8))
+        guard case let .ask(_, questions, _, _) = tl.items.first else { return XCTFail("no ask") }
+        XCTAssertEqual(questions.map(\.question), ["DB?", "Extras?"])
+        XCTAssertEqual(questions.map(\.multi), [false, true])
+        XCTAssertFalse(questions.answeredByTap)
     }
 
     func testDeltaMergesByIdInOrder() throws {

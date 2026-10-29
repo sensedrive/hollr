@@ -102,6 +102,7 @@ export default {
   "localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.":
     "Hollr opens localhost addresses through the SSH connection to the server.",
   läuft: "running",
+  Leertaste: "Space",
   "n (nein)": "n (no)",
   "y (ja)": "y (yes)",
   "omp /live wird gestartet …": "Starting omp /live …",

@@ -130,7 +130,7 @@ export async function runLive(
 
   if (!mac) await cleanupStale();
   const pulse: AudioRoute = mac
-    ? new MacAudioSession(() => herdr.liveActive(pane))
+    ? new MacAudioSession(herdr, pane, agent.workspace)
     : new PulseSession(String(process.pid));
   let ending = false;
   // a crashed previous call left /live running – treat it as ours so it gets stopped

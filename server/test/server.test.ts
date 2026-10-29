@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { encodeFrame, encodeJson, FRAME_AUDIO, FRAME_JSON, FrameDecoder } from "../src/frames";
 import { Herdr, toAgent } from "../src/herdr";
+import { SpeakerCapture, speakerCaptureCommand } from "../src/macaudio";
 import {
   addBootstrap,
   buildPayload,
@@ -133,6 +134,43 @@ describe("pulse", () => {
     await s.attach(42);
     const moves = calls.filter((c) => c[1] === "move-source-output");
     expect(moves).toEqual([["pactl", "move-source-output", "5", "hollr_mic_1234"]]);
+  });
+});
+
+describe("mac speaker capture", () => {
+  // sshd's children get no microphone permission on macOS: recording BlackHole there is silent
+  test("records in a herdr tab next to omp and hands the audio over through a FIFO", async () => {
+    const calls: string[][] = [];
+    const herdr = new Herdr(async (args) => {
+      calls.push(args);
+      if (args[0] === "tab" && args[1] === "create")
+        return { tab: { tab_id: "w9:t2" }, root_pane: { pane_id: "w9:p2" } };
+      return {};
+    });
+    const dir = mkdtempSync(join(tmpdir(), "hollr-capture-"));
+    try {
+      const cap = new SpeakerCapture(herdr, "w9", "/opt/homebrew/bin/sox", dir, 0);
+      await cap.start();
+      expect(statSync(cap.fifo).isFIFO()).toBe(true);
+      expect(calls).toEqual([
+        ["tab", "create", "--no-focus", "--label", "hollr live audio", "--workspace", "w9"],
+        ["pane", "run", "w9:p2", speakerCaptureCommand("/opt/homebrew/bin/sox", cap.fifo)],
+      ]);
+      // stands in for sox in the tab
+      Bun.spawn(["sh", "-c", 'printf voice > "$0"', cap.fifo]);
+      expect(await new Response(cap.reader().stdout).text()).toBe("voice");
+      await cap.stop();
+      expect(calls.at(-1)).toEqual(["tab", "close", "w9:t2"]);
+      expect(existsSync(cap.fifo)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the tab's command records BlackHole 16ch as wire PCM and ends with sox", () => {
+    expect(speakerCaptureCommand("/opt/homebrew/bin/sox", "/tmp/it's.fifo")).toBe(
+      " exec '/opt/homebrew/bin/sox' '-q' '-t' 'coreaudio' 'BlackHole 16ch' '-t' 'raw' '-r' '24000' '-e' 'signed-integer' '-b' '16' '-c' '1' '/tmp/it'\\''s.fifo' 'remix' '-m' '1-16'",
+    );
   });
 });
 
@@ -1004,6 +1042,145 @@ describe("ask options", () => {
     expect(askOptions({ options: [{ label: "A" }, { label: "B", recommended: true }] })).toEqual({ options: ["A", "B"], recommended: 1 });
     expect(askOptions({ recommended: 5, options: [{ label: "A" }] })).toEqual({ options: ["A"] });
     expect(askOptions(undefined)).toEqual({ options: [] });
+  });
+});
+
+describe("answering omp's ask", () => {
+  const q = (options: string[], extra: { multi?: boolean; recommended?: number } = {}) => ({
+    question: "?",
+    options,
+    ...extra,
+  });
+
+  test("an option is reached from the top, wherever omp put the cursor", async () => {
+    const { askSteps } = await import("../src/ask");
+    // omp starts on the recommended option (2): ↓ from there would pick the wrong one
+    expect(askSteps([q(["Red", "Green", "Blue"], { recommended: 2 })], [{ options: [1] }])).toEqual([
+      { keys: ["up", "up", "up", "down", "enter"] },
+    ]);
+    expect(askSteps([q(["Red", "Green"])], [{ options: [0] }])).toEqual([{ keys: ["up", "up", "enter"] }]);
+  });
+
+  test("own text goes through the Other row, then omp's prompt", async () => {
+    const { askSteps } = await import("../src/ask");
+    expect(askSteps([q(["A", "B"])], [{ text: "  lieber\nC " }])).toEqual([
+      { keys: ["up", "up", "down", "down", "enter"] },
+      { text: "lieber C" },
+    ]);
+  });
+
+  test("multi-select toggles with Space; a lone one submits with Enter", async () => {
+    const { askSteps } = await import("../src/ask");
+    expect(askSteps([q(["A", "B", "C"], { multi: true })], [{ options: [2, 0] }])).toEqual([
+      { keys: ["up", "up", "up", "space", "down", "down", "space", "enter"] },
+    ]);
+    // with an own text it ends on the Submit tab: one more Enter
+    expect(askSteps([q(["A", "B"], { multi: true })], [{ options: [1], text: "D" }])).toEqual([
+      { keys: ["up", "up", "down", "space", "down", "enter"] },
+      { text: "D" },
+      { keys: ["enter"] },
+    ]);
+  });
+
+  test("several questions are answered in turn and end on the Submit tab", async () => {
+    const { askSteps } = await import("../src/ask");
+    expect(
+      askSteps([q(["A", "B"], { recommended: 1 }), q(["X", "Y"], { multi: true })], [{ options: [0] }, { options: [1] }]),
+    ).toEqual([{ keys: ["up", "up", "enter", "up", "up", "down", "space", "enter", "enter"] }]);
+  });
+
+  test("an answer that doesn't fit the question is refused", async () => {
+    const { askSteps } = await import("../src/ask");
+    expect(() => askSteps([q(["A"])], [{ options: [1] }])).toThrow();
+    expect(() => askSteps([q(["A", "B"])], [{ options: [0, 1] }])).toThrow();
+    expect(() => askSteps([q(["A", "B"])], [{}])).toThrow();
+    expect(() => askSteps([q(["A"]), q(["B"])], [{ options: [0] }])).toThrow();
+  });
+
+  test("timeline: all questions, multi-select, one answer per question", async () => {
+    const { buildTimeline } = await import("../src/timeline");
+    const ask = {
+      type: "message",
+      message: {
+        role: "assistant",
+        stopReason: "toolUse",
+        content: [
+          {
+            type: "toolCall",
+            id: "a1",
+            name: "ask",
+            arguments: {
+              questions: [
+                { id: "db", question: "DB?", options: [{ label: "SQLite" }, { label: "Postgres" }], recommended: 1 },
+                { id: "ex", question: "Extras?", options: [{ label: "Auth" }, { label: "Cache" }], multi: true },
+              ],
+            },
+          },
+        ],
+      },
+    };
+    const open = buildTimeline(JSON.stringify(ask)).items[0];
+    expect(open).toMatchObject({ k: "ask", question: "DB?", recommended: 1, pending: true });
+    expect(open?.k === "ask" && open.questions?.map((x) => [x.question, x.multi])).toEqual([
+      ["DB?", undefined],
+      ["Extras?", true],
+    ]);
+    const result = {
+      type: "message",
+      message: {
+        role: "toolResult",
+        toolCallId: "a1",
+        toolName: "ask",
+        content: [{ type: "text", text: "…" }],
+        details: {
+          results: [
+            { selectedOptions: ["Postgres"] },
+            { selectedOptions: ["Auth", "Cache"], customInput: "Logs" },
+          ],
+        },
+      },
+    };
+    const done = buildTimeline([ask, result].map((o) => JSON.stringify(o)).join("\n")).items[0];
+    expect(done).toMatchObject({ k: "ask", pending: false, answer: "Postgres · Auth, Cache, Logs" });
+  });
+
+  test("answers only the question still open, typing an own text after the prompt opened", async () => {
+    const { answerAsk } = await import("../src/ask");
+    const dir = mkdtempSync(join(tmpdir(), "hollr-ask-"));
+    const file = join(dir, "s.jsonl");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        type: "message",
+        message: {
+          role: "assistant",
+          stopReason: "toolUse",
+          content: [
+            { type: "toolCall", id: "a2", name: "ask", arguments: { questions: [{ question: "?", options: [{ label: "A" }] }] } },
+          ],
+        },
+      }),
+    );
+    const calls: string[][] = [];
+    const herdr = new Herdr(async (args) => {
+      if (args[0] === "agent" && args[1] === "get")
+        return { agent: { agent: "omp", pane_id: "w1:p1", agent_session: { kind: "path", value: file } } };
+      if (args[1] === "list") return { agents: [{ agent: "omp", pane_id: "w1:p1" }] };
+      if (args[1]?.startsWith("send-")) calls.push(args);
+      return "";
+    });
+    try {
+      await expect(answerAsk(herdr, "w1:p1", { id: "old", picks: [{ options: [0] }] }, 0)).rejects.toThrow();
+      expect(calls).toEqual([]);
+      await answerAsk(herdr, "w1:p1", { id: "a2", picks: [{ text: "B" }] }, 0);
+      expect(calls).toEqual([
+        ["agent", "send-keys", "w1:p1", "up", "down", "enter"],
+        ["pane", "send-text", "w1:p1", "B"],
+        ["agent", "send-keys", "w1:p1", "enter"],
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

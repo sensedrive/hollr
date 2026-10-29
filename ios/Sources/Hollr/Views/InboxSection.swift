@@ -138,7 +138,9 @@ private struct InboxCard: View {
 
     private func pick(_ index: Int) {
         Haptics.tap(.medium)
-        sessions.session(for: entry.ref).answer(option: index)
+        let session = sessions.session(for: entry.ref)
+        let ask = entry.turn
+        Task { await session.answer(ask: ask, picks: [AskPick(options: [index])]) }
         withAnimation { inbox.markAnswered(entry) }
     }
 

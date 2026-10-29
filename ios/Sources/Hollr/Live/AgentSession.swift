@@ -165,10 +165,24 @@ final class AgentSession {
         }
     }
 
-    /// Picks option `index` in omp's ask dialog (cursor starts on the first option).
-    func answer(option index: Int) {
-        sendKeys(Array(repeating: "down", count: index) + ["enter"])
+    /// Answers omp's question `ask` – one pick per question. false: not sent (`lastError` says why).
+    @discardableResult
+    func answer(ask: String, picks: [AskPick]) async -> Bool {
+        do {
+            try await HollrClient.answer(ref.server, pane: ref.pane.pane, ask: ask, picks: picks)
+            nudge()
+            return true
+        } catch {
+            lastError = String(localized: "Antwort nicht gesendet: \(error.localizedDescription)")
+            return false
+        }
     }
+
+    /// omp waits on a question shown in the chat: typed text answers it instead of starting a turn.
+    private var asking: Bool {
+        timeline?.items.contains { if case .ask(_, _, _, true) = $0 { true } else { false } } == true
+    }
+
     /// Terminal screen – shown for agents without a parsed chat (Claude …) and while one waits for you.
     private(set) var screen = ""
 
@@ -281,6 +295,18 @@ final class AgentSession {
                     await loadScreen()
                 } catch {
                     lastError = "Senden fehlgeschlagen: \(error.localizedDescription)"
+                }
+            }
+            return
+        }
+        if asking {
+            // the server turns it into omp's "Other (type your own)" answer – it never shows as a message
+            Task {
+                do {
+                    try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: trimmed)
+                    nudge()
+                } catch {
+                    lastError = String(localized: "Antwort nicht gesendet: \(error.localizedDescription)")
                 }
             }
             return

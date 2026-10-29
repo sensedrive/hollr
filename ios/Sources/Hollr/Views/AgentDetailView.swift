@@ -265,7 +265,7 @@ private struct AgentConversation: View {
                         let tl = session.timeline ?? .empty
                         if tl.items.isEmpty && session.items.isEmpty { emptyHint }
                         ForEach(visible) { item in
-                            TimelineRow(item: item) { index, _ in session.answer(option: index) }
+                            TimelineRow(item: item) { ask, picks in await session.answer(ask: ask, picks: picks) }
                                 .equatable() // unchanged entries are not re-rendered on every refresh
                                 .id(item.id)
                         }
@@ -281,7 +281,7 @@ private struct AgentConversation: View {
                     }
                     // omp's question already shows as an Ask card – the raw screen would only repeat it
                     let askShown = session.usesTimeline && visible.contains {
-                        if case .ask(_, _, _, _, true, _) = $0 { return true } else { return false }
+                        if case .ask(_, _, _, true) = $0 { return true } else { return false }
                     }
                     if session.showsScreen && !session.screen.isEmpty && !askShown {
                         TerminalCard(text: session.screen, waiting: session.agentStatus == "blocked",

@@ -100,7 +100,7 @@ async function describe(
   herdr: Herdr,
   pane: string,
   kind: "waiting" | "done",
-): Promise<{ body: string; error?: boolean; fallback?: boolean; options?: string[] }> {
+): Promise<{ body: string; error?: boolean; fallback?: boolean; options?: string[]; ask?: string }> {
   try {
     const agent = await herdr.agent(pane);
     const file =
@@ -111,11 +111,14 @@ async function describe(
       if (kind === "waiting") {
         const ask = items.find((i) => i.k === "ask" && i.pending);
         if (ask && ask.k === "ask") {
+          // several questions at once can't be answered with one button – the chat does that
+          if (ask.questions) return { body: plain(ask.question) };
           // the buttons carry the options – the text only needs the question
           return {
             body: plain(ask.question),
             // the recommended one gets a star, like omp's "(Recommended)"
             options: ask.options.slice(0, 4).map((o, i) => (i === ask.recommended ? `★ ${plain(o, 58)}` : plain(o, 60))),
+            ask: ask.id,
           };
         }
       } else {
@@ -223,6 +226,7 @@ export async function runWatch(): Promise<number> {
               fp,
               host,
               ...(info.options?.length ? { options: JSON.stringify(info.options) } : {}),
+              ...(info.ask ? { ask: info.ask } : {}),
             },
           };
           const n = await sendNotice(notice);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ANSWERED_MS, askKeys, buildEntries, fromHistory, fromTimeline, isDue, plain, type InboxDetail } from "../src/lib/inbox";
+import { ANSWERED_MS, buildEntries, fromHistory, fromTimeline, isDue, plain, type InboxDetail } from "../src/lib/inbox";
 import type { TimelineItem } from "../src/lib/api";
 
 const NOW = 1_800_000_000_000;
@@ -14,6 +14,16 @@ describe("fromTimeline", () => {
       { k: "ask", id: "a1", question: "Welche **Datenbank**?", options: ["Postgres", "SQLite"], pending: true },
     ));
     expect(d).toEqual({ kind: "ask", turn: "a1", question: "Welche Datenbank?", options: ["Postgres", "SQLite"] });
+  });
+
+  test("several questions or multi-select: no one-click options (the chat answers them)", () => {
+    const several = fromTimeline("blocked", tl({
+      k: "ask", id: "a1", question: "DB?", options: ["SQLite"], pending: true,
+      questions: [{ question: "DB?", options: ["SQLite"] }, { question: "Extras?", options: ["Auth"], multi: true }],
+    }));
+    expect(several).toEqual({ kind: "ask", turn: "a1", question: "DB?", options: [] });
+    const multi = fromTimeline("blocked", tl({ k: "ask", id: "a2", question: "Extras?", options: ["Auth"], multi: true, pending: true }));
+    expect(multi.options).toEqual([]);
   });
 
   test("blocked without an ask: waiting with the last text of this turn", () => {
@@ -115,10 +125,6 @@ describe("buildEntries", () => {
 });
 
 describe("helpers", () => {
-  test("askKeys: ↓ × index, then Enter", () => {
-    expect(askKeys(0)).toEqual(["enter"]);
-    expect(askKeys(2)).toEqual(["down", "down", "enter"]);
-  });
   test("isDue", () => {
     expect(isDue(undefined, NOW)).toBe(true);
     expect(isDue(NOW - 4000, NOW)).toBe(false);

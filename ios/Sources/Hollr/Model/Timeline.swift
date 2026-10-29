@@ -83,21 +83,21 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
     case thinking(id: String, text: String)
     case text(id: String, text: String)
     case tools(id: String, calls: [ToolCall])
-    case ask(id: String, question: String, options: [String], answer: String?, pending: Bool, details: AskDetails = AskDetails())
+    /// omp's question(s) – usually one; `questions` keeps the order omp asks them in
+    case ask(id: String, questions: [AskQuestion], answer: String?, pending: Bool)
     case end(id: String, ms: Double, status: String, error: String?)
     case info(id: String, text: String)
 
     var id: String {
         switch self {
         case let .user(id, _, _, _), let .thinking(id, _), let .text(id, _), let .tools(id, _),
-             let .ask(id, _, _, _, _, _), let .end(id, _, _, _), let .info(id, _):
+             let .ask(id, _, _, _), let .end(id, _, _, _), let .info(id, _):
             return id
         }
     }
 
     private enum Keys: String, CodingKey {
-        case k, id, text, source, at, calls, question, options, answer, pending, ms, status, error
-        case header, descriptions, recommended
+        case k, id, text, source, at, calls, questions, answer, pending, ms, status, error
     }
 
     init(from decoder: Decoder) throws {
@@ -112,13 +112,11 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
         case "text": self = .text(id: id, text: try c.decode(String.self, forKey: .text))
         case "tools": self = .tools(id: id, calls: try c.decode([ToolCall].self, forKey: .calls))
         case "ask":
-            self = .ask(id: id, question: try c.decode(String.self, forKey: .question),
-                        options: (try? c.decode([String].self, forKey: .options)) ?? [],
+            // several questions come as a list, a single one in the item itself
+            let questions = try (try? c.decode([AskQuestion].self, forKey: .questions)) ?? [AskQuestion(from: decoder)]
+            self = .ask(id: id, questions: questions,
                         answer: try? c.decode(String.self, forKey: .answer),
-                        pending: (try? c.decode(Bool.self, forKey: .pending)) ?? false,
-                        details: AskDetails(header: try? c.decode(String.self, forKey: .header),
-                                            descriptions: (try? c.decode([String].self, forKey: .descriptions)) ?? [],
-                                            recommended: try? c.decode(Int.self, forKey: .recommended)))
+                        pending: (try? c.decode(Bool.self, forKey: .pending)) ?? false)
         case "end":
             self = .end(id: id, ms: (try? c.decode(Double.self, forKey: .ms)) ?? 0,
                         status: (try? c.decode(String.self, forKey: .status)) ?? "done",
@@ -129,15 +127,53 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
     }
 }
 
-/// omp's ask extras: short title, a line per option, the recommended one.
-struct AskDetails: Equatable {
+/// One of omp's questions: options, short title, a line per option, the recommended one.
+struct AskQuestion: Equatable {
+    var question: String
+    var options: [String] = []
     var header: String?
     var descriptions: [String] = []
     var recommended: Int?
+    /// several options can be picked
+    var multi = false
 
     func description(_ index: Int) -> String? {
         index < descriptions.count && !descriptions[index].isEmpty ? descriptions[index] : nil
     }
+}
+
+// in an extension, so the memberwise init stays
+extension AskQuestion: Decodable {
+    private enum Keys: String, CodingKey { case question, options, header, descriptions, recommended, multi }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        question = try c.decode(String.self, forKey: .question)
+        options = (try? c.decode([String].self, forKey: .options)) ?? []
+        header = try? c.decode(String.self, forKey: .header)
+        descriptions = (try? c.decode([String].self, forKey: .descriptions)) ?? []
+        recommended = try? c.decode(Int.self, forKey: .recommended)
+        multi = (try? c.decode(Bool.self, forKey: .multi)) ?? false
+    }
+}
+
+/// The answer to one question: picked options and/or an own text (the server types the keys).
+struct AskPick: Equatable {
+    var options: Set<Int> = []
+    var text = ""
+
+    var json: [String: Any] {
+        var out: [String: Any] = [:]
+        if !options.isEmpty { out["options"] = options.sorted() }
+        let own = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !own.isEmpty { out["text"] = own }
+        return out
+    }
+}
+
+extension [AskQuestion] {
+    /// one question, one choice: a tap answers it (several, or multi-select, need a send button)
+    var answeredByTap: Bool { count == 1 && first?.multi == false }
 }
 
 struct TodoPhase: Decodable, Equatable, Identifiable {

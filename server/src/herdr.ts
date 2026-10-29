@@ -73,10 +73,14 @@ export const execHerdr: Exec = async (args) => {
     json = JSON.parse(stdout);
   } catch {
     if (proc.exitCode === 0) return stdout;
-    throw new HerdrError(
-      "herdr_failed",
-      (stderr || stdout).trim() || `herdr exit ${proc.exitCode}`,
-    );
+    // refusals (agent_blocked …) come as JSON on stderr
+    let refusal: typeof json | undefined;
+    try {
+      refusal = JSON.parse(stderr);
+    } catch {}
+    if (!refusal?.error)
+      throw new HerdrError("herdr_failed", (stderr || stdout).trim() || `herdr exit ${proc.exitCode}`);
+    json = refusal;
   }
   if (json.error)
     throw new HerdrError(json.error.code ?? "error", json.error.message ?? "herdr error");
@@ -108,6 +112,9 @@ export function toAgent(raw: RawAgent): Agent {
     sessionFile: raw.agent_session?.kind === "path" ? raw.agent_session.value : undefined,
   };
 }
+
+/** Label of the tab that records omp's voice during a live call on a Mac (macaudio.ts). */
+export const LIVE_AUDIO_TAB = "hollr live audio";
 
 export class Herdr {
   constructor(private readonly exec: Exec = execHerdr) {}
@@ -154,7 +161,8 @@ export class Herdr {
         focused: w.focused === true,
         status: str(w.agent_status, "unknown"),
         tabs: (tabs.tabs ?? [])
-          .filter((t) => t.workspace_id === w.workspace_id)
+          // the Mac's live call records omp's voice in its own tab – plumbing, not a session
+          .filter((t) => t.workspace_id === w.workspace_id && t.label !== LIVE_AUDIO_TAB)
           .map((t) => ({
             id: str(t.tab_id),
             label: str(t.label) || `Tab ${num(t.number)}`,
@@ -195,6 +203,24 @@ export class Herdr {
     await this.exec(["pane", "run", pane, text]);
   }
 
+  /** A new shell tab that doesn't take the focus; `workspace` "" = herdr's choice. */
+  async openTab(workspace: string, label: string): Promise<{ tab: string; pane: string }> {
+    const args = ["tab", "create", "--no-focus", "--label", label];
+    if (workspace) args.push("--workspace", workspace);
+    const res = (await this.exec(args)) as {
+      tab?: { tab_id?: string };
+      root_pane?: { pane_id?: string };
+    };
+    const tab = res.tab?.tab_id;
+    const pane = res.root_pane?.pane_id;
+    if (!tab || !pane) throw new HerdrError("create_failed", "herdr hat keinen Tab geliefert");
+    return { tab, pane };
+  }
+
+  async closeTab(tab: string): Promise<void> {
+    await this.exec(["tab", "close", tab]);
+  }
+
   async prompt(pane: string, text: string): Promise<void> {
     if (await this.isAgent(pane)) await this.exec(["agent", "prompt", pane, text]);
     // plain terminal: type the command and press Enter
@@ -206,16 +232,25 @@ export class Herdr {
     return (await this.agents()).some((a) => a.pane === pane);
   }
 
+  /** The visible lines at the bottom of the agent's terminal. */
+  async screen(pane: string, lines: number): Promise<string> {
+    const screen = await this.exec(["agent", "read", pane, "--source", "visible", "--lines", String(lines)]);
+    return typeof screen === "string" ? screen : "";
+  }
+
   /** omp shows its live footer ("… · ␣ mute · ⎋ end"), whatever state it is in. */
   async liveActive(pane: string): Promise<boolean> {
-    const screen = await this.exec(["agent", "read", pane, "--source", "visible", "--lines", "6"]);
-    return hasLiveFooter(typeof screen === "string" ? screen : "");
+    return hasLiveFooter(await this.screen(pane, 6));
   }
 
   /** omp's live footer state ("listening", "muted", "speaking", "working", …) or undefined. */
   async liveState(pane: string): Promise<string | undefined> {
-    const screen = await this.exec(["agent", "read", pane, "--source", "visible", "--lines", "6"]);
-    return parseLiveState(typeof screen === "string" ? screen : "");
+    return parseLiveState(await this.screen(pane, 6));
+  }
+
+  /** Types text as is, without pressing Enter. */
+  async typeText(pane: string, text: string): Promise<void> {
+    await this.exec(["pane", "send-text", pane, text]);
   }
 
   async sendKeys(pane: string, keys: string[]): Promise<void> {

@@ -53,7 +53,11 @@ export function plain(markdown: string, max = 200): string {
 export function fromTimeline(status: string, tl: Pick<Timeline, "items">): InboxDetail {
   const items = tl.items;
   const ask = items.findLast((i) => i.k === "ask" && i.pending);
-  if (ask?.k === "ask") return { kind: "ask", turn: ask.id, question: plain(ask.question), options: ask.options };
+  if (ask?.k === "ask") {
+    // several questions (or multi-select) need the chat: no one-tap options here
+    const oneTap = !ask.questions && !ask.multi;
+    return { kind: "ask", turn: ask.id, question: plain(ask.question), options: oneTap ? ask.options : [] };
+  }
   // only look at the current turn (after the last user message)
   const start = items.findLastIndex((i) => i.k === "user") + 1;
   const turn = items.slice(start);
@@ -106,9 +110,6 @@ export function buildEntries(
   }
   return out.sort((a, b) => RANK[a.kind] - RANK[b.kind] || (a.kind === "done" ? b.since - a.since : a.since - b.since));
 }
-
-/** Keys that answer option `index` of a pending ask (the cursor starts on the first option). */
-export const askKeys = (index: number) => [...Array<string>(index).fill("down"), "enter"];
 
 /** Per pane at most every FETCH_EVERY ms. */
 export const isDue = (lastFetch: number | undefined, now: number, every = FETCH_EVERY) =>
