@@ -183,6 +183,8 @@ export async function runLive(
     stopInput = () => resolve({ done: true, value: undefined });
   });
 
+  /** what went to the phone – "nothing to hear" shows here whether omp's voice left this side */
+  const spoken = { bytes: 0, peak: 0 };
   // every caller waits for the same cleanup (restoring devices must finish before the process exits)
   let ended: Promise<void> | undefined;
   const end = (reason: string): Promise<void> => {
@@ -192,7 +194,7 @@ export async function runLive(
   const finish = async (reason: string) => {
     ending = true;
     stopInput();
-    log("live", pane, "end", reason, { startedLive, ms: Date.now() - startedAt });
+    log("live", pane, "end", reason, { startedLive, ms: Date.now() - startedAt, speaker: spoken });
     for (const t of timers) clearInterval(t);
     tail?.stop();
     try {
@@ -220,6 +222,9 @@ export async function runLive(
   void (async () => {
     for await (const chunk of speaker.stdout) {
       if (ending) break;
+      spoken.bytes += chunk.length;
+      const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.length);
+      for (let i = 0; i + 1 < chunk.length; i += 2) spoken.peak = Math.max(spoken.peak, Math.abs(view.getInt16(i, true)));
       write(encodeFrame(FRAME_AUDIO, chunk));
     }
   })();

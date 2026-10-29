@@ -3699,6 +3699,16 @@
         }
       }
     },
+    "Live mit einem Mac: omp kommt in voller Lautstärke an, auch wenn am Mac während eines Anrufs die Lautstärke verstellt wurde": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live with a Mac: omp arrives at full volume, even if the Mac’s volume was changed during a call"
+          }
+        }
+      }
+    },
     "Live mit omp auf einem Mac: du hörst omp wieder – seine Stimme kam bisher als Stille an, weil macOS per SSH gestarteten Programmen keine Aufnahme erlaubt": {
       "localizations": {
         "en": {
@@ -3805,6 +3815,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Live voice now also works with Macs as servers (install BlackHole once, see server info)"
+          }
+        }
+      }
+    },
+    "Live: omps Stimme ist jetzt wirklich zu hören – nach dem Umschalten aufs Telefonat blieb die Wiedergabe stumm, bis man den Ton aus- und wieder einschaltete": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live: you really hear omp now – after switching to call mode, playback stayed silent until you turned the sound off and on again"
           }
         }
       }

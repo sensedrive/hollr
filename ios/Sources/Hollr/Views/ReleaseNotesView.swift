@@ -10,6 +10,10 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 47, date: "29.10.2026", items: [
+            ("speaker.wave.2", String(localized: "Live: omps Stimme ist jetzt wirklich zu hören – nach dem Umschalten aufs Telefonat blieb die Wiedergabe stumm, bis man den Ton aus- und wieder einschaltete")),
+            ("speaker.wave.3", String(localized: "Live mit einem Mac: omp kommt in voller Lautstärke an, auch wenn am Mac während eines Anrufs die Lautstärke verstellt wurde")),
+        ]),
         ReleaseNote(build: 46, date: "29.10.2026", items: [
             ("speaker.wave.2", String(localized: "Live mit omp auf einem Mac: du hörst omp wieder – seine Stimme kam bisher als Stille an, weil macOS per SSH gestarteten Programmen keine Aufnahme erlaubt")),
             ("questionmark.bubble", String(localized: "Fragen von omp: ein Tipp wählt genau diese Antwort – vorher landete die Auswahl daneben, sobald omp eine Option empfahl")),

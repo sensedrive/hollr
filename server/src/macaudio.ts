@@ -47,8 +47,8 @@ export function macAudioMissing(): string[] {
   return missing;
 }
 
-const current = (type: "input" | "output") => run(["SwitchAudioSource", "-c", "-t", type]);
-const select = (type: "input" | "output", name: string) =>
+const current = (type: "input" | "output" | "system") => run(["SwitchAudioSource", "-c", "-t", type]);
+const select = (type: "input" | "output" | "system", name: string) =>
   run(["SwitchAudioSource", "-t", type, "-s", name]);
 
 /** Puts back the defaults a previous (crashed) call left switched. */
@@ -150,6 +150,13 @@ export class MacAudioSession {
     }
     select("input", MIC_DEVICE);
     select("output", SPEAKER_DEVICE);
+    // The volume slider/keys act on the default output – BlackHole now. At 69 % omp reached the
+    // phone ~20 dB too quiet (peaks ~0.04): nothing to hear. AppleScript sets the alert ("system")
+    // device too, i.e. the Mac's speakers – point that at BlackHole for the moment.
+    const system = current("system");
+    select("system", SPEAKER_DEVICE);
+    run(["osascript", "-e", "set volume output volume 100 without output muted"]);
+    if (system) select("system", system);
     // without it the call still works, omp just isn't heard
     await this.capture
       .start()

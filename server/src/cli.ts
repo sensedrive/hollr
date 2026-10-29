@@ -95,7 +95,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.31.0";
+export const VERSION = "0.31.1";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 

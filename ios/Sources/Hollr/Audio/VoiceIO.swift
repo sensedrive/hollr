@@ -147,7 +147,10 @@ final class VoiceIO {
         do {
             engine.prepare()
             try engine.start()
-            player.play()
+            // The player keeps its "playing" state across the stop, but no longer consumes what was
+            // queued: no buffer completes, the queue counter sticks above maxQueued and every reply
+            // is dropped – silence until "Ton aus/an" flushes it. Start it afresh, like that toggle.
+            flushPlayback()
             HollrLog.info("audio: engine restarted (\(format.sampleRate) Hz)")
         } catch {
             HollrLog.error("audio: restart failed \(error) – rebuilding")
