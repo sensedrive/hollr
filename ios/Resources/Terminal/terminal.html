@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="xterm.css">
 <style>
   html, body { margin: 0; height: 100%; background: #0f1216; overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y pinch-zoom; }
-  #term { position: absolute; inset: 0; padding: 4px; }
+  #term { position: absolute; inset: 0; padding: 4px; -webkit-touch-callout: none; }
   .xterm .xterm-viewport { overflow-y: hidden !important; }
   /* own shell: a normal terminal – scrolls, no sideways panning */
   body.shell { overflow: hidden; }
@@ -24,6 +24,8 @@
     fontFamily: 'Menlo, ui-monospace, monospace', fontSize: 12, lineHeight: 1.0,
     cursorBlink: false, scrollback: 0, disableStdin: true, convertEol: false, allowProposedApi: true,
     theme: { background: '#0f1216', foreground: '#d7dae0', cursor: '#7aa2f7' },
+    // OSC 8 hyperlinks (a click on them)
+    linkHandler: { activate: (e, uri) => post('link', uri) },
   });
   term.open(document.getElementById('term'));
   let cols = 80, rows = 24, ctrl = false, readCols = 0;
@@ -97,6 +99,98 @@
   }, { passive: false });
   el.addEventListener('touchend', () => { touchY = null; });
   window.addEventListener('resize', () => (shell ? fitShell() : fit()));
+
+  // ---- text under the finger: links (tap) and selecting text (long press) ----
+  // buffer cell under a point – from the drawn screen's box, so the CSS scale doesn't matter
+  function cellAt(x, y) {
+    const screen = document.querySelector('.xterm-screen');
+    if (!screen) return null;
+    const r = screen.getBoundingClientRect();
+    if (x < r.left || y < r.top || x >= r.right || y >= r.bottom) return null;
+    const col = Math.floor((x - r.left) / (r.width / term.cols));
+    const row = Math.floor((y - r.top) / (r.height / term.rows));
+    return { row: term.buffer.active.viewportY + row, col };
+  }
+  // a wrapped line as one string, and the string index of a cell in it (wide chars take two cells)
+  function logicalLine(row, col) {
+    const buf = term.buffer.active;
+    let first = row;
+    while (first > 0 && buf.getLine(first)?.isWrapped) first--;
+    let text = '', at = 0;
+    for (let y = first; y < buf.length; y++) {
+      const line = buf.getLine(y);
+      if (!line || (y > first && !line.isWrapped)) break;
+      if (y === row) at = text.length + line.translateToString(false, 0, col).length;
+      text += line.translateToString(false);
+    }
+    return { text, at };
+  }
+  const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"'`]+|\b(?:localhost|127\.0\.0\.1):\d{2,5}(?:\/[^\s<>"'`]*)?/g;
+  const count = (s, c) => s.split(c).length - 1;
+  // sentence punctuation after a link, a closing bracket the link didn't open
+  function trimUrl(url) {
+    while (/[.,;:!?'"\]}>]$/.test(url) || (url.endsWith(')') && count(url, '(') < count(url, ')'))) url = url.slice(0, -1);
+    return url;
+  }
+  function urlAt(x, y) {
+    const cell = cellAt(x, y);
+    if (!cell) return null;
+    const { text, at } = logicalLine(cell.row, cell.col);
+    for (const m of text.matchAll(URL_RE)) {
+      const url = trimUrl(m[0]);
+      if (at >= m.index && at < m.index + url.length) {
+        return /^https?:/i.test(url) ? url : (url.startsWith('www.') ? 'https://' : 'http://') + url;
+      }
+    }
+    return null;
+  }
+  // everything in the buffer (scrollback + screen) as plain text, and where the finger was in it
+  function allText(x, y) {
+    const buf = term.buffer.active;
+    const cell = cellAt(x, y);
+    let text = '', offset = 0;
+    for (let row = 0; row < buf.length; row++) {
+      const line = buf.getLine(row);
+      if (!line) continue;
+      if (row > 0 && !line.isWrapped) text += '\n';
+      if (cell && row === cell.row) offset = text.length + line.translateToString(false, 0, cell.col).length;
+      // trailing blanks only where the line really ends, not where it wraps on
+      text += line.translateToString(!buf.getLine(row + 1)?.isWrapped);
+    }
+    text = text.replace(/\s+$/, '');
+    return { text, offset: Math.min(offset, text.length) };
+  }
+
+  // tap: a link opens (else the app brings up the keyboard) · long press: select text natively
+  // a handled tap / long press: no synthetic click for xterm (would go to the TUI as a mouse click)
+  let press = null, consumed = false;
+  el.addEventListener('pointerdown', (e) => {
+    if (!e.isPrimary || e.button > 0) return;
+    const p = { x: e.clientX, y: e.clientY, done: false };
+    if (e.pointerType !== 'mouse') {
+      p.timer = setTimeout(() => {
+        p.done = true;
+        post('select', allText(p.x, p.y));
+      }, 500);
+    }
+    press = p;
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) { clearTimeout(press.timer); press.moved = true; }
+  });
+  el.addEventListener('pointercancel', () => { if (press) clearTimeout(press.timer); press = null; });
+  el.addEventListener('pointerup', (e) => {
+    const p = press;
+    press = null;
+    if (!p) return;
+    clearTimeout(p.timer);
+    if (p.done || p.moved) { consumed = p.done; return; }
+    const url = urlAt(e.clientX, e.clientY);
+    if (url) { consumed = true; post('link', url); } else post('tap', true);
+  });
+  el.addEventListener('touchend', (e) => { if (consumed) e.preventDefault(); consumed = false; }, { passive: false });
+  // mouse (Mac): right click selects text
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); post('select', allText(e.clientX, e.clientY)); });
 
   term.onData((data) => {
     if (ctrl && data.length === 1) {

@@ -711,6 +711,16 @@
         }
       }
     },
+    "Alles kopieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy all"
+          }
+        }
+      }
+    },
     "Alles eingerichtet": {
       "localizations": {
         "en": {
@@ -3153,12 +3163,32 @@
         }
       }
     },
+    "Im Terminal lange drücken: Text auswählen und kopieren – das Wort unter dem Finger ist schon markiert, Links darin öffnen ebenfalls": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long press in the terminal: select and copy text – the word under your finger is already selected, links in it open too"
+          }
+        }
+      }
+    },
     "Im Terminal scrollt Wischen die Oberfläche des Agents – wie mit dem Trackpad am Rechner": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "In the terminal a swipe scrolls the agent’s interface – like a trackpad on the computer"
+          }
+        }
+      }
+    },
+    "Im Terminal: ein Tipp auf eine Adresse öffnet sie – im Hollr-Browser oder in Safari (auch localhost:PORT)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the terminal: tap an address to open it – in the Hollr browser or in Safari (localhost:PORT too)"
           }
         }
       }
@@ -6255,6 +6285,16 @@
         }
       }
     },
+    "Terminal verbindet sich selbst neu, wenn die Verbindung abbricht (Netzwechsel, zurück aus dem Hintergrund) – kein Fehler mit „Neu verbinden“ mehr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The terminal reconnects by itself when the connection drops (network change, back from the background) – no more error with “Reconnect”"
+          }
+        }
+      }
+    },
     "Terminals starten – auch ohne Projekt im Home-Verzeichnis": {
       "localizations": {
         "en": {
@@ -6281,6 +6321,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text"
+          }
+        }
+      }
+    },
+    "Text auswählen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select text"
           }
         }
       }
@@ -6491,6 +6541,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Connecting …"
+          }
+        }
+      }
+    },
+    "Verbinde neu …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting …"
           }
         }
       }

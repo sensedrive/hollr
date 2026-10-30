@@ -8,7 +8,9 @@ import WebKit
 @MainActor
 @Observable
 final class TerminalSession {
-    enum Phase: Equatable { case connecting, open, closed(String?) }
+    /// reconnecting: the connection dropped (network, Mac asleep, back from the background) – it
+    /// comes back by itself, the last screen stays visible · closed: an answer, no retry
+    enum Phase: Equatable { case connecting, open, reconnecting, closed(String?) }
     /// pane: the herdr pane itself, natively (`attach`: herdr's attach in a PTY sized to the phone,
     /// like Heeler – older servers: screen snapshots via `term`) · shell: the phone's own shell
     enum Mode: String { case pane, shell }
@@ -55,6 +57,20 @@ final class TerminalSession {
         outgoing?.finish()
     }
 
+    /// The view is back: connect again unless a first size is still awaited (resize starts that one).
+    func resume() {
+        guard task == nil, size != (80, 24) else { return }
+        if case .closed = phase { return }
+        start()
+    }
+
+    /// Back in the foreground: a dropped connection retries right away instead of after its pause.
+    func reconnectNow() {
+        guard phase == .reconnecting else { return }
+        stop()
+        task = Task { await run() }
+    }
+
     func type(_ text: String) {
         send(streams ? ["t": "in", "d": text] : ["t": "text", "text": text])
     }
@@ -66,7 +82,25 @@ final class TerminalSession {
         outgoing?.yield(data)
     }
 
+    /// Connects and keeps the connection: a dropped one comes back by itself (sooner the first times,
+    /// then every 10 s) – only an answer from the server (shell ended, pane gone …) ends it.
     private func run() async {
+        var failures = 0
+        while !Task.isCancelled {
+            let started = Date()
+            let retry = await connectOnce()
+            guard !Task.isCancelled else { return }
+            guard let retry else { return }
+            // a connection that held a while starts over with a short pause
+            failures = Date().timeIntervalSince(started) > 30 ? 0 : failures + 1
+            phase = .reconnecting
+            HollrLog.error("terminal \(ref.server.label) \(ref.pane.pane): \(retry) – reconnect #\(failures)")
+            try? await Task.sleep(for: .seconds(min(0.5 * pow(2, Double(max(failures - 1, 0))), 10)))
+        }
+    }
+
+    /// One connection. nil: ended for good (phase is `.closed`) · otherwise why it dropped.
+    private func connectOnce() async -> String? {
         let (stream, continuation) = AsyncStream<Data>.makeStream()
         outgoing = continuation
         do {
@@ -92,11 +126,19 @@ final class TerminalSession {
                     }
                 }
             }
-            if case .closed = phase {} else { phase = .closed(nil) }
+            if case .closed = phase { return nil }
+            // the stream ended without a word from the server: the connection is gone
+            return "stream ended"
         } catch is CancellationError {
-            phase = .closed(nil)
+            return nil
         } catch {
-            phase = .closed(error.localizedDescription)
+            guard !Task.isCancelled else { return nil }
+            // a wrong host key is not going to fix itself
+            if !HollrError.isTransport(error) {
+                phase = .closed(error.localizedDescription)
+                return nil
+            }
+            return String(describing: error)
         }
     }
 
@@ -140,6 +182,8 @@ struct TerminalScreen: View {
                 }
         }
         .preferredColorScheme(.dark)
+        // a cover of its own: links tapped in the terminal ask here, not behind it
+        .linkChooser()
     }
 }
 
@@ -177,6 +221,10 @@ private struct TerminalBody: View {
     @State private var web = TerminalWeb()
     /// wide panes (a Mac terminal: 200+ columns) start readable: ~100 columns fill the width
     @AppStorage("terminal.readable") private var readable = true
+    /// long press: the terminal's text to select and copy natively
+    @State private var selection: TerminalText?
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
 
     /// inside the chat: display only (the composer below types, keys come from its menu)
     var embedded = false
@@ -205,7 +253,19 @@ private struct TerminalBody: View {
                 .frame(width: 1, height: 1)
                 .opacity(0.01)
                 TerminalWebView(web: web, onInput: { session.type($0) }, onCtrlUsed: { ctrl = false },
-                                onSize: { session.resize(cols: $0, rows: $1) })
+                                onSize: { session.resize(cols: $0, rows: $1) },
+                                onLink: { openURL($0) },
+                                onTap: {
+                                    // a tap brings up the keyboard – in the chat a tap is for scrolling and
+                                    // links, the keyboard button types into the TUI
+                                    guard !embedded else { return }
+                                    keyboard = true
+                                    focusRequest += 1
+                                },
+                                onSelect: { text in
+                                    Haptics.tap(.medium)
+                                    selection = text
+                                })
                 switch session.phase {
                 case .connecting:
                     ProgressView("Verbinde …").tint(.white).foregroundStyle(.white)
@@ -218,6 +278,15 @@ private struct TerminalBody: View {
                     .padding()
                     .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .reconnecting:
+                    // the last screen stays readable – the connection comes back by itself
+                    Label("Verbinde neu …", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(8)
                 case .open:
                     if !showsToolbar && !embedded { overlayButtons.padding(8) }
                 }
@@ -240,23 +309,23 @@ private struct TerminalBody: View {
                 // starts once the terminal knows its size (TerminalWeb → onSize)
                 session.onOutput = { [web] in web.write($0) }
                 web.shellMode()
+                // back on a terminal that was left: connect again (the first start waits for the size)
+                session.resume()
             } else {
                 session.start()
             }
         }
         .onDisappear { session.stop() }
-        // a tap on the terminal brings up the keyboard
-        .simultaneousGesture(TapGesture().onEnded {
-            // in the chat a tap is for scrolling and links – the keyboard button types into the TUI
-            guard !embedded else { return }
-            keyboard = true
-            focusRequest += 1
-        })
+        // back from the background: the connection is usually gone – don't wait for the next try
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { session.reconnectNow() }
+        }
         .onChange(of: session.screen?.ansi) { _, _ in
             if let s = session.screen { web.render(s.ansi, rows: s.rows, cols: s.cols) }
         }
         .onChange(of: ctrl) { _, on in web.armCtrl(on) }
         .onChange(of: readable, initial: true) { _, on in web.setReadable(on ? 100 : 0) }
+        .sheet(item: $selection) { TerminalTextSheet(content: $0) }
     }
 
     private var readableButton: some View {
@@ -327,15 +396,17 @@ final class TerminalWeb {
     fileprivate var onInput: (String) -> Void = { _ in }
     fileprivate var onCtrlUsed: () -> Void = {}
     fileprivate var onSize: (Int, Int) -> Void = { _, _ in }
+    fileprivate var onLink: (URL) -> Void = { _ in }
+    fileprivate var onTap: () -> Void = {}
+    fileprivate var onSelect: (TerminalText) -> Void = { _ in }
     private var wantsShell = false
     private let bridge = Bridge()
 
     init() {
         let config = WKWebViewConfiguration()
-        config.userContentController.add(bridge, name: "input")
-        config.userContentController.add(bridge, name: "ready")
-        config.userContentController.add(bridge, name: "ctrlUsed")
-        config.userContentController.add(bridge, name: "size")
+        for name in ["input", "ready", "ctrlUsed", "size", "link", "tap", "select"] {
+            config.userContentController.add(bridge, name: name)
+        }
         view = WKWebView(frame: .zero, configuration: config)
         view.isOpaque = false
         view.backgroundColor = .clear
@@ -391,6 +462,14 @@ final class TerminalWeb {
             onCtrlUsed()
         case "size":
             if let d = body as? [String: Any], let c = d["cols"] as? Int, let r = d["rows"] as? Int { onSize(c, r) }
+        case "link":
+            if let raw = body as? String, let url = URL(string: raw) { onLink(url) }
+        case "tap":
+            onTap()
+        case "select":
+            if let d = body as? [String: Any], let text = d["text"] as? String, !text.isEmpty {
+                onSelect(TerminalText(text: text, offset: d["offset"] as? Int ?? 0))
+            }
         default:
             break
         }
@@ -410,11 +489,12 @@ private struct TerminalWebView: UIViewRepresentable {
     let onInput: (String) -> Void
     let onCtrlUsed: () -> Void
     var onSize: (Int, Int) -> Void = { _, _ in }
+    var onLink: (URL) -> Void = { _ in }
+    var onTap: () -> Void = {}
+    var onSelect: (TerminalText) -> Void = { _ in }
 
     func makeUIView(context: Context) -> WKWebView {
-        web.onInput = onInput
-        web.onCtrlUsed = onCtrlUsed
-        web.onSize = onSize
+        updateUIView(web.view, context: context)
         return web.view
     }
 
@@ -422,6 +502,9 @@ private struct TerminalWebView: UIViewRepresentable {
         web.onInput = onInput
         web.onCtrlUsed = onCtrlUsed
         web.onSize = onSize
+        web.onLink = onLink
+        web.onTap = onTap
+        web.onSelect = onSelect
     }
 }
 
@@ -500,6 +583,95 @@ private struct TerminalKeyInput: UIViewRepresentable {
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             onText("\r")
             return false
+        }
+    }
+}
+
+/// The terminal's text (scrollback and screen) for selecting and copying; `offset` is where the
+/// long press was (UTF-16 index, the same as JavaScript's).
+struct TerminalText: Identifiable {
+    let id = UUID()
+    let text: String
+    let offset: Int
+}
+
+/// Long press in the terminal: its text with the native selection (handles, loupe, Copy / Share),
+/// the word under the finger already selected; links in it ask Hollr browser or Safari.
+private struct TerminalTextSheet: View {
+    let content: TerminalText
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SelectableText(content: content)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle("Text auswählen")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Fertig") { dismiss() } }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Alles kopieren") {
+                            UIPasteboard.general.string = content.text
+                            Haptics.notify(.success)
+                            dismiss()
+                        }
+                    }
+                }
+        }
+        .preferredColorScheme(.dark)
+        .linkChooser()
+    }
+}
+
+private struct SelectableText: UIViewRepresentable {
+    let content: TerminalText
+    @Environment(\.openURL) private var openURL
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.dataDetectorTypes = [.link]
+        view.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        view.textColor = UIColor(red: 0.84, green: 0.85, blue: 0.88, alpha: 1)
+        view.backgroundColor = UIColor(red: 0.06, green: 0.07, blue: 0.09, alpha: 1)
+        view.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 24, right: 8)
+        view.delegate = context.coordinator
+        view.text = content.text
+        context.coordinator.openURL = openURL
+        // once laid out: select the pressed word and show it
+        DispatchQueue.main.async {
+            let offset = min(max(content.offset, 0), (view.text as NSString).length)
+            guard let at = view.position(from: view.beginningOfDocument, offset: offset) else { return }
+            let word = view.tokenizer.rangeEnclosingPosition(at, with: .word, inDirection: .storage(.forward))
+                ?? view.tokenizer.rangeEnclosingPosition(at, with: .word, inDirection: .storage(.backward))
+            let range = word ?? view.textRange(from: at, to: at)
+            if let range {
+                let start = view.offset(from: view.beginningOfDocument, to: range.start)
+                view.scrollRangeToVisible(NSRange(location: start, length: 0))
+                if word != nil {
+                    view.becomeFirstResponder()
+                    view.selectedTextRange = range
+                }
+            }
+        }
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.openURL = openURL
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var openURL: OpenURLAction?
+
+        func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem,
+                      defaultAction: UIAction) -> UIAction? {
+            guard case let .link(url) = textItem.content, let openURL else { return defaultAction }
+            return UIAction { _ in openURL(url) }
         }
     }
 }

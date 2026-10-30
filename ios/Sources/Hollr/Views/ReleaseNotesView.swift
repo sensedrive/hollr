@@ -10,6 +10,11 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 48, date: "30.10.2026", items: [
+            ("link", String(localized: "Im Terminal: ein Tipp auf eine Adresse öffnet sie – im Hollr-Browser oder in Safari (auch localhost:PORT)")),
+            ("character.cursor.ibeam", String(localized: "Im Terminal lange drücken: Text auswählen und kopieren – das Wort unter dem Finger ist schon markiert, Links darin öffnen ebenfalls")),
+            ("arrow.triangle.2.circlepath", String(localized: "Terminal verbindet sich selbst neu, wenn die Verbindung abbricht (Netzwechsel, zurück aus dem Hintergrund) – kein Fehler mit „Neu verbinden“ mehr")),
+        ]),
         ReleaseNote(build: 47, date: "29.10.2026", items: [
             ("speaker.wave.2", String(localized: "Live: omps Stimme ist jetzt wirklich zu hören – nach dem Umschalten aufs Telefonat blieb die Wiedergabe stumm, bis man den Ton aus- und wieder einschaltete")),
             ("speaker.wave.3", String(localized: "Live mit einem Mac: omp kommt in voller Lautstärke an, auch wenn am Mac während eines Anrufs die Lautstärke verstellt wurde")),
