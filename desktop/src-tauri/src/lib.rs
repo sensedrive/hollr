@@ -7,6 +7,7 @@ mod pairing_code;
 pub mod applock;
 pub mod term;
 pub mod dictation;
+mod notice;
 
 use hollr::{Hollr, Server};
 use tauri::Manager;
@@ -184,9 +185,10 @@ pub fn run() {
             app.manage(follow::Follows::default());
             app.manage(tunnel::Tunnels::default());
             app.manage(term::Terms::default());
+            notice::init(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel])
+        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

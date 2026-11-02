@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 13,
+    version: "0.32.9",
+    date: "02.11.2026",
+    items: [
+      { icon: "◉", text: "Mac: ein Klick auf eine Mitteilung öffnet jetzt wirklich die Session, um die es geht" },
+    ],
+  },
+  {
     build: 12,
     version: "0.32.8",
     date: "02.11.2026",

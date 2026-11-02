@@ -2185,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "hollr-desktop"
-version = "0.32.8"
+version = "0.32.9"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -2196,6 +2196,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hmac",
  "hound",
+ "mac-notification-sys",
  "objc2",
  "objc2-foundation",
  "objc2-local-authentication",

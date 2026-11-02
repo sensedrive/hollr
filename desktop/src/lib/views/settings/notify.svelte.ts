@@ -1,4 +1,6 @@
 // Desktop notifications: which kinds to show (like iOS "Melden, wenn …") and the plugin wrappers.
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, onAction, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
@@ -63,10 +65,15 @@ export interface NoticeTarget {
   pane: string;
 }
 
+// macOS: the plugin never reports a click on a notification without buttons – src-tauri/src/notice.rs
+// sends them itself and waits for the click; elsewhere the plugin's own click report (`tap`) works
+const mac = navigator.platform.includes("Mac");
+
 export async function notify(title: string, body: string, target?: NoticeTarget): Promise<boolean> {
   if (!(await ensurePermission())) return false;
   try {
-    sendNotification({ title, body, ...(target ? { extra: { server: target.server, pane: target.pane } } : {}) });
+    if (mac) await invoke("notice_show", { title, body, server: target?.server ?? null, pane: target?.pane ?? null });
+    else sendNotification({ title, body, ...(target ? { extra: { server: target.server, pane: target.pane } } : {}) });
     return true;
   } catch {
     return false;
@@ -74,10 +81,18 @@ export async function notify(title: string, body: string, target?: NoticeTarget)
 }
 
 /**
- * Calls `open` when a notification of this app is clicked: brings the window to the front first
- * (also out of the Dock). Only notifications shown while this listener exists report their click.
+ * Calls `open` when a notification of this app is clicked, after the window came to the front (also
+ * out of the Dock). Only notifications shown while this listener exists report their click.
  */
 export async function onNoticeClick(open: (target: NoticeTarget) => void): Promise<() => void> {
+  const go = (server: unknown, pane: unknown) => {
+    if (typeof server === "string" && typeof pane === "string") open({ server, pane });
+  };
+  if (mac) {
+    // notice.rs has already brought the window forward
+    const off = await listen<{ server?: string | null; pane?: string | null }>("notice-click", (e) => go(e.payload.server, e.payload.pane));
+    return off;
+  }
   const listener = await onAction(async (e) => {
     if (e.actionId !== "tap") return;
     const win = getCurrentWindow();
@@ -85,7 +100,7 @@ export async function onNoticeClick(open: (target: NoticeTarget) => void): Promi
     await win.show().catch(() => {});
     await win.setFocus().catch(() => {});
     const extra = e.notification?.extra ?? {};
-    if (typeof extra.server === "string" && typeof extra.pane === "string") open({ server: extra.server, pane: extra.pane });
+    go(extra.server, extra.pane);
   });
   return () => void listener.unregister().catch(() => {});
 }

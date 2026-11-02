@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Mac: ein Klick auf eine Mitteilung öffnet jetzt wirklich die Session, um die es geht":
+    "Mac: clicking a notification now really opens the session it is about",
   "Jede Session merkt sich Chat oder Terminal – beim Wechsel der Tabs und nach einem Neustart":
     "Every session remembers chat or terminal – when switching tabs and after a restart",
   "Terminal wie Ghostty: markieren kopiert sofort, „Auswahl kopiert“ bestätigt es – ohne Füll-Leerzeichen und Rand der Oberfläche":

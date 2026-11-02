@@ -1,6 +1,6 @@
 [package]
 name = "hollr-desktop"
-version = "0.32.8"
+version = "0.32.9"
 description = "Hollr desktop client"
 authors = ["Hollr contributors"]
 license = "MIT"
@@ -48,6 +48,7 @@ objc2 = "0.6"
 block2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError"] }
 objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "block2", "LAContext", "LABiometryType"] }
+mac-notification-sys = "0.6"
 
 [dev-dependencies]
 # examples/dictate.rs reads WAV files
