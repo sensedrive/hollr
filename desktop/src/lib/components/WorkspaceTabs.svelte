@@ -26,7 +26,6 @@
   // ---- rename
   let editing = $state<string | null>(null);
   let draft = $state("");
-  let saving = $state(false);
   let error = $state("");
   let input = $state<HTMLInputElement>();
 
@@ -40,25 +39,20 @@
   }
 
   async function commit(tab: Tab) {
-    if (editing !== tab.id || saving) return;
+    if (editing !== tab.id) return;
+    editing = null;
     const label = draft.replace(/\s+/g, " ").trim();
-    if (!label || label === tab.label) {
-      editing = null;
-      return;
-    }
-    saving = true;
+    if (!label || label === tab.label) return;
+    // shown right away; the server round trip (SSH) takes a moment – back to the old name if it fails
+    const before = tab.label;
+    tab.label = label;
     try {
       await api.renameTab(server, tab.id, label);
-      // optimistic: the next tree refresh confirms it
-      tab.label = label;
-      editing = null;
       refresh(server);
     } catch (e) {
+      tab.label = before;
       const msg = e instanceof Error ? e.message : String(e);
       error = msg === "not_allowed" ? t("Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren.") : msg;
-      editing = null;
-    } finally {
-      saving = false;
     }
   }
 
@@ -90,7 +84,7 @@
         {#if editing === tab.id && i === 0}
           <div class="tab on edit">
             <span class="num">{tab.number}</span>
-            <input bind:this={input} bind:value={draft} placeholder={nameOf(tab, pane)} disabled={saving} maxlength="80"
+            <input bind:this={input} bind:value={draft} placeholder={nameOf(tab, pane)} maxlength="80"
               aria-label={t("Tab umbenennen")} onkeydown={(e) => onKey(e, tab)} onblur={() => commit(tab)} />
           </div>
         {:else}
