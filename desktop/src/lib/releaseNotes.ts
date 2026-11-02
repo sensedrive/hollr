@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 10,
+    version: "0.32.6",
+    date: "02.11.2026",
+    items: [
+      { icon: "⌶", text: "Terminal: Text markieren und mit ⌘C kopieren geht jetzt auch in omp, Claude und anderen Vollbild-Programmen – ⌥-Klick geht an das Programm" },
+    ],
+  },
+  {
     build: 9,
     version: "0.32.5",
     date: "02.11.2026",

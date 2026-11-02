@@ -130,5 +130,8 @@ export default {
   "Verbindung beendet.": "Connection ended.",
   "⌘-Klick öffnet Links": "⌘-click opens links",
   "Strg-Klick öffnet Links": "Ctrl-click opens links",
-  "⌥ gedrückt halten, um in Vollbild-Programmen Text zu markieren": "Hold ⌥ to select text in full-screen programs",
+  "Ziehen markiert, ⌘C kopiert · ⌥-Klick geht an das Programm im Terminal":
+    "Drag selects, ⌘C copies · ⌥-click goes to the program in the terminal",
+  "Ziehen markiert, Strg+C kopiert · ⇧-Klick geht an das Programm im Terminal":
+    "Drag selects, Ctrl+C copies · ⇧-click goes to the program in the terminal",
 };

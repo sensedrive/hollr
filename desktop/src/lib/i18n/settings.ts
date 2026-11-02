@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Terminal: Text markieren und mit ⌘C kopieren geht jetzt auch in omp, Claude und anderen Vollbild-Programmen – ⌥-Klick geht an das Programm":
+    "Terminal: selecting text and copying with ⌘C now also works in omp, Claude and other full-screen programs – ⌥-click goes to the program",
   "Tabs umbenennen: Doppelklick auf einen Tab (oder Rechtsklick › Umbenennen) – der Name gilt auch in herdr":
     "Rename tabs: double-click a tab (or right-click › Rename) – the name applies in herdr too",
   "Seitenleiste breiter oder schmaler ziehen – am rechten Rand; Doppelklick setzt sie zurück":

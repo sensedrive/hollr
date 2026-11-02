@@ -91,8 +91,11 @@
         lineHeight: 1.1,
         scrollback: 3000,
         cursorBlink: false,
-        // Option+drag selects even when the TUI takes the mouse; Option stays for typing @ [ ] { } on a Mac
+        // full-screen programs (omp, Claude …) take the mouse: a plain drag still selects text (see
+        // forceSelect below), ⌥-click goes to the program; ⌥ stays for typing @ [ ] { } on a Mac
         macOptionClickForcesSelection: true,
+        // ⌥-click would otherwise move the prompt cursor with arrow keys
+        altClickMovesCursor: false,
         theme: { background: "#0f1216", foreground: "#d7dae0", cursor: "#7aa2f7", selectionBackground: "#3d59a1" },
         // OSC 8 hyperlinks
         linkHandler: {
@@ -127,6 +130,14 @@
         if (!mac && e.ctrlKey && key === "v") return false;
         return true;
       });
+      // xterm selects only with the "force selection" key (⌥ on a Mac, ⇧ elsewhere) while the program
+      // takes the mouse. Swapped here: a plain left drag/click selects, with that key it goes to the program.
+      const forceKey = mac ? "altKey" : "shiftKey";
+      const forceSelect = (e: MouseEvent) => {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || !x.modes.mouseTrackingMode || x.modes.mouseTrackingMode === "none") return;
+        Object.defineProperty(e, forceKey, { value: !e[forceKey] });
+      };
+      el.addEventListener("mousedown", forceSelect, { capture: true });
       const input = x.onData((data) => s.type(data));
       const focusIn = () => (focused = true);
       const focusOut = () => (focused = false);
@@ -150,6 +161,7 @@
       return () => {
         cancelAnimationFrame(frame);
         ro.disconnect();
+        el.removeEventListener("mousedown", forceSelect, { capture: true });
         input.dispose();
         x.textarea?.removeEventListener("focus", focusIn);
         x.textarea?.removeEventListener("blur", focusOut);
@@ -186,7 +198,7 @@
       <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => (settings.terminalMode = "shell")}>{t("Eigene Shell")}</button>
     </div>
     <span class="grow">{focused ? t("Tippen geht direkt ans Terminal – Esc, Pfeile und Ctrl-Tasten inklusive") : t("Ins Terminal klicken, um direkt zu tippen")}</span>
-    <span class="hint" title={t("⌥ gedrückt halten, um in Vollbild-Programmen Text zu markieren")}>{mac ? t("⌘-Klick öffnet Links") : t("Strg-Klick öffnet Links")}</span>
+    <span class="hint" title={mac ? t("Ziehen markiert, ⌘C kopiert · ⌥-Klick geht an das Programm im Terminal") : t("Ziehen markiert, Strg+C kopiert · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links") : t("Strg-Klick öffnet Links")}</span>
   </div>
   <div class="screen">
     <div class="xterm-host" bind:this={host}></div>
