@@ -20,6 +20,8 @@ export interface Check {
   ok: boolean;
   detail: string;
   fix?: string;
+  /** one-click fix: "tool:<name>" installs, "watch" restarts the watcher, "push" sets up push */
+  action?: string;
 }
 
 export interface ServerInfo {
@@ -63,6 +65,26 @@ export async function tools(server: string, opts: { run?: string; check?: boolea
   } else if (opts.check) body.op = "check";
   return (await gate<{ tools: ServerTool[] }>(server, "tools", body)).tools;
 }
+
+/** `tools {op:"restart-watch"}` – restarts the server's agent watcher. */
+export const restartWatch = async (server: string) =>
+  (await gate<{ ok?: boolean }>(server, "tools", { op: "restart-watch" })).ok === true;
+
+/** `dirs {path}` – subfolders of a path in the server's home directory (server/src/dirs.ts). */
+export interface DirEntry {
+  name: string;
+  path: string;
+  repo: boolean;
+  branch?: string;
+}
+export interface DirListing {
+  path: string;
+  parent?: string | null;
+  repo: boolean;
+  dirs: DirEntry[];
+  places: string[];
+}
+export const dirs = (server: string, path: string) => gate<DirListing>(server, "dirs", { path });
 
 /** `hello` – Hollr version and host name of the server. */
 export const hello = (server: string) => gate<{ hollr: string; host: string }>(server, "hello");

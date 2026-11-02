@@ -3,6 +3,7 @@
   import * as api from "$lib/api";
   import { statusLabel, t } from "$lib/i18n";
   import type { PaneRef } from "$lib/store.svelte";
+  import { identityColor } from "$lib/dashboard";
   import { agentName, cleanScreen, refTitle, statusColor } from "./util";
 
   let { ref, onOpen, onMenu, onHide, onEnd }: {
@@ -46,7 +47,7 @@
       <span class="chip"><span class="dot" style="background:{statusColor(ref.pane.status)}"></span>{agentName(ref.pane)}
         {#if ref.pane.live}<span class="wave">〰</span>{/if}</span>
     </div>
-    <div class="name ellipsis">{title}</div>
+    <div class="name ellipsis" style:--p={identityColor(ref.workspace.label)}>{title}</div>
     <div class="meta ellipsis" style="color:{statusColor(ref.pane.status)}">{title === ref.workspace.label ? status : `${ref.workspace.label} · ${status}`}</div>
   </button>
   <div class="actions">
@@ -74,6 +75,8 @@
   .dot { width: 7px; height: 7px; border-radius: 50%; }
   .wave { color: var(--green); }
   .name { font-weight: 600; padding: 0 2px; }
+  .name::before { content: ""; display: inline-block; width: 4px; height: 14px; border-radius: 2px; background: var(--p);
+    margin-right: 7px; vertical-align: -2px; }
   .meta { font-size: 12px; padding: 0 2px; margin-top: -4px; }
   .actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
   .card-wrap:hover .actions, .actions:focus-within { opacity: 1; }

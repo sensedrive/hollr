@@ -13,6 +13,7 @@
   import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
   import { draftKey } from "../drafts";
   import { followTimeline } from "../follow";
+  import { sessionTerms } from "../dictationText";
   import {
     cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, phaseDone, phaseName,
     shortPath, todoColor, urlPort, viaTunnel, workingLabel, type HistoryEvent,
@@ -26,8 +27,12 @@
   import GitPanel from "./GitPanel.svelte";
   import Modal from "./Modal.svelte";
 
-  let { server, pane, title, onClosed }: {
+  let { server, pane, title, onClosed, open, url }: {
     server: string; pane: Pane; title: string;
+    /** show this right away (from the dashboard's quick actions) */
+    open?: "terminal" | "git" | "browser";
+    /** address for open = "browser" */
+    url?: string;
     /** the pane was closed; gets its "serverId|pane" */
     onClosed: (id: string) => void;
   } = $props();
@@ -168,12 +173,12 @@
 
   // ------------------------------------------------------------ view state
 
-  let mode = $state<"chat" | "terminal">(untrack(() => pane.agent) ? "chat" : "terminal");
+  let mode = $state<"chat" | "terminal">(untrack(() => pane.agent && open !== "terminal") ? "chat" : "terminal");
   let zen = $state(false);
-  let panel = $state<"" | "git" | "browser" | "info">("");
+  let panel = $state<"" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
   /** browser stays mounted (tunnels open) until its ✕, even while another panel tab shows */
-  let browserOpen = $state(false);
-  let browserRequest = $state<{ url: string } | null>(null);
+  let browserOpen = $state(untrack(() => open === "browser"));
+  let browserRequest = $state<{ url: string } | null>(untrack(() => (open === "browser" && url ? { url } : null)));
   let menu = $state(false);
   let showModels = $state(false);
   let showCodex = $state(false);
@@ -260,7 +265,6 @@
       await api.prompt(server, pane.pane, msg);
       actionError = "";
       setTimeout(tick, 500);
-      if (mode === "terminal") term?.refresh();
       return true;
     } catch (e) {
       pending = pending.filter((p) => p !== msg);
@@ -381,7 +385,7 @@
       else if (c === "KeyT" && pane.agent) mode = mode === "chat" ? "terminal" : "chat";
       else return;
     } else if (c === "KeyK") {
-      if (mode === "terminal") (document.querySelector(".agent .screen") as HTMLElement | null)?.focus();
+      if (mode === "terminal") term?.focus();
       else composer?.focus();
     } else if (c === "Period") sendKeys(["esc"]);
     else return;
@@ -672,7 +676,7 @@
         {/if}
       {:else}
         <div class="termwrap">
-          <TerminalView bind:this={term} {server} pane={pane.pane} onError={(m) => (actionError = m)} />
+          <TerminalView bind:this={term} {server} pane={pane.pane} {onLink} />
           {#if error}<div class="warnline">⚠ {error}</div>{/if}
         </div>
       {/if}
@@ -683,7 +687,8 @@
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
           bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
-          {server} {ws} top={liveStrip} trailing={liveButton} />
+          {server} {ws} top={liveStrip} trailing={liveButton} dictationKey={key} micBlocked={!!livePhase}
+          vocabulary={() => sessionTerms([title, pane.cwd.split("/").pop() ?? "", timeline?.title ?? ""], timeline?.items ?? [])} />
         {#if !zen}{@render statusLine()}{/if}
       </div>
 

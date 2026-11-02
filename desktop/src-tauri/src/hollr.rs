@@ -307,7 +307,12 @@ impl Hollr {
         let json = URL_SAFE_NO_PAD
             .decode(c.trim_end_matches('='))
             .context("Der Kopplungscode ist beschädigt.")?;
-        let p: PairingPayload = serde_json::from_slice(&json).context("Der Kopplungscode ist beschädigt.")?;
+        self.pair_payload(&json, device_name).await
+    }
+
+    /// The pairing payload (JSON) from a link or a one-time code → enrolled, saved server.
+    pub(crate) async fn pair_payload(&self, json: &[u8], device_name: &str) -> Result<Server> {
+        let p: PairingPayload = serde_json::from_slice(json).context("Der Kopplungscode ist beschädigt.")?;
         if p.v != 1 || p.a.is_empty() {
             bail!("Der Kopplungscode ist beschädigt.");
         }

@@ -25,10 +25,13 @@ export type Route =
   | { view: "agents" }
   | { view: "spaces" }
   | { view: "space"; server: string; ws: string }
-  | { view: "agent"; server: string; pane: string }
-  | { view: "settings"; page?: "design" | "servers" | "notes" | "about" }
+  /** `open`: show the terminal, or the git / browser side panel right away (`url` for the browser) */
+  | { view: "agent"; server: string; pane: string; open?: AgentOpen; url?: string }
+  | { view: "settings"; page?: "design" | "servers" | "notes" | "about" | "dictation" }
   | { view: "serverinfo"; server: string }
   | { view: "tools"; server: string };
+
+export type AgentOpen = "terminal" | "git" | "browser";
 
 export const nav = $state<{ route: Route; history: Route[] }>({ route: { view: "dashboard" }, history: [] });
 

@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Hollr sends your voice to omp /live on your server.</string>
+  <string>Hollr uses the microphone for dictation on this computer and to send your voice to omp /live on your server.</string>
 </dict>
 </plist>

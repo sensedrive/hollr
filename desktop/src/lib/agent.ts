@@ -141,42 +141,6 @@ export const cleanScreen = (s: string) =>
     .filter((l) => l.trim() && !/^[─━═-]+$/.test(l.trim()))
     .join("\n");
 
-/** Screen for the terminal view: layout kept, only undrawable glyphs blanked. */
-export const terminalScreen = (s: string) =>
-  stripAnsi(s)
-    .split("\n")
-    .map((l) => l.replace(PUA, " ").trimEnd())
-    .join("\n");
-
-/**
- * Maps a keydown to the key name `hollr gate keys` hands to `herdr … send-keys`.
- * Returns undefined for keys that should stay with the app (Cmd shortcuts, lone modifiers).
- */
-export function herdrKey(e: KeyboardEvent): string | undefined {
-  if (e.metaKey || e.isComposing) return undefined;
-  const named: Record<string, string> = {
-    Enter: "enter", Escape: "esc", Tab: "tab", Backspace: "backspace", Delete: "delete",
-    ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
-    Home: "home", End: "end", PageUp: "pageup", PageDown: "pagedown", Insert: "insert", " ": "space",
-  };
-  let k = named[e.key];
-  if (!k && /^F([1-9]|1[0-2])$/.test(e.key)) k = e.key.toLowerCase();
-  if (!k && e.key.length === 1) {
-    if (e.ctrlKey || e.altKey) {
-      // Ctrl/Alt combos use the base key (Alt+n on a Mac keyboard produces "~" otherwise)
-      const base = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : e.code.startsWith("Digit") ? e.code.slice(5) : e.key.toLowerCase();
-      k = base;
-    } else return e.key;
-  }
-  if (!k) return undefined;
-  const mods = [e.ctrlKey && "ctrl", e.altKey && "alt", e.shiftKey && k.length > 1 && "shift"].filter(Boolean);
-  return [...mods, k].join("+");
-}
-
-/** Text → key names (paste / typing into the terminal). */
-export const textKeys = (text: string) =>
-  [...text.replace(/\r\n?/g, "\n")].map((c) => (c === " " ? "space" : c === "\n" ? "enter" : c === "\t" ? "tab" : c)).filter((c) => c.trim());
-
 // ------------------------------------------------------------ links / browser
 
 /** Addresses only the server can reach (opened through the SSH tunnel). */

@@ -5,6 +5,7 @@
   import { go, type Route } from "$lib/store.svelte";
   import About from "./settings/About.svelte";
   import Design from "./settings/Design.svelte";
+  import Dictation from "./settings/Dictation.svelte";
   import General from "./settings/General.svelte";
   import Notes from "./settings/Notes.svelte";
   import Servers from "./settings/Servers.svelte";
@@ -15,6 +16,7 @@
   const PAGES: { page: Page; label: string; icon: string }[] = [
     { page: undefined, label: "Allgemein", icon: "⚙" },
     { page: "design", label: "Design", icon: "◐" },
+    { page: "dictation", label: "Diktat", icon: "🎙" },
     { page: "servers", label: "Server & Geräte", icon: "▤" },
     { page: "notes", label: "Neuigkeiten", icon: "✦" },
     { page: "about", label: "Über", icon: "ⓘ" },
@@ -37,6 +39,8 @@
       <Design />
     {:else if page === "servers"}
       <Servers />
+    {:else if page === "dictation"}
+      <Dictation />
     {:else if page === "notes"}
       <Notes />
     {:else if page === "about"}

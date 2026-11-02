@@ -3,6 +3,10 @@ mod feed;
 mod follow;
 mod live;
 mod tunnel;
+mod pairing_code;
+pub mod applock;
+pub mod term;
+pub mod dictation;
 
 use hollr::{Hollr, Server};
 use tauri::Manager;
@@ -21,6 +25,15 @@ fn servers(state: tauri::State<'_, Hollr>) -> Vec<Server> {
 #[tauri::command]
 async fn pair(state: tauri::State<'_, Hollr>, link: String, device_name: String) -> R<Server> {
     state.pair(&link, &device_name).await.map_err(err)
+}
+
+/// Pairing by one-time code; code errors come back as `otp:<kind>` keys the UI words.
+#[tauri::command]
+async fn pair_code(state: tauri::State<'_, Hollr>, code: String, device_name: String) -> R<Server> {
+    state.pair_code(&code, &device_name).await.map_err(|e| match e.downcast_ref::<pairing_code::CodeError>() {
+        Some(c) => c.key(),
+        None => err(e),
+    })
 }
 
 #[tauri::command]
@@ -113,21 +126,66 @@ async fn follow_stop(follows: tauri::State<'_, follow::Follows>, id: u64) -> R<(
     Ok(())
 }
 
+/// A live terminal on a pane (`hollr gate attach` / `shell`) as `hollr-term` events; returns the stream id.
+#[tauri::command]
+async fn term_start(app: tauri::AppHandle, terms: tauri::State<'_, term::Terms>, server: String, pane: String, mode: String, cols: u16, rows: u16) -> R<u64> {
+    Ok(terms.start(app, server, term::command(&mode, &pane, cols, rows)).await)
+}
+
+#[tauri::command]
+async fn term_write(terms: tauri::State<'_, term::Terms>, id: u64, data: String) -> R<()> {
+    terms.write(id, data).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn term_resize(terms: tauri::State<'_, term::Terms>, id: u64, cols: u16, rows: u16) -> R<()> {
+    terms.resize(id, cols, rows).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn term_stop(terms: tauri::State<'_, term::Terms>, id: u64) -> R<()> {
+    terms.stop(id).await;
+    Ok(())
+}
+
+/// App lock (Settings → Sicherheit): can this computer ask for Touch ID / its password?
+#[tauri::command]
+async fn applock_available() -> applock::Support {
+    tokio::task::spawn_blocking(applock::support).await.unwrap_or(applock::Support { available: false, biometry: "none" })
+}
+
+/// Shows the system prompt; true once the owner confirmed (cancel / failure → false).
+#[tauri::command]
+async fn applock_authenticate(reason: String) -> bool {
+    tokio::task::spawn_blocking(move || applock::authenticate(&reason)).await.unwrap_or(false)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // a reloaded webview leaves its terminals behind: hang them up
+        .on_page_load(|webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn(async move { app.state::<term::Terms>().stop_all().await });
+            }
+        })
         .setup(|app| {
             let dir = app.path().app_data_dir().expect("app data dir");
+            app.manage(dictation::Dictation::new(dir.join("whisper")));
             app.manage(Hollr::new(dir));
             app.manage(Live::default());
             app.manage(feed::Feeds::default());
             app.manage(follow::Follows::default());
             app.manage(tunnel::Tunnels::default());
+            app.manage(term::Terms::default());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close])
+        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

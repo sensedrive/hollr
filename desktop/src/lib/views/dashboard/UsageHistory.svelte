@@ -149,12 +149,15 @@
   <div class="section">{account}</div>
   <div class="card chart">
     <b>{t("Auslastung")}</b>
+    <div class="plot">
+    {#each [1, 0.5, 0] as g}<span class="y" style:top="{(120 - g * 120) / 1.3}%">{g * 100} %</span>{/each}
     <svg viewBox="0 0 {W} 130" preserveAspectRatio="none">
       {#each [0, 0.5, 1] as g}<line x1="0" x2={W} y1={120 - g * 120} y2={120 - g * 120} class="grid" />{/each}
       {#each windows as w, i}
         <path d={stepPath(series.get(w) ?? [], 120)} fill="none" stroke={COLORS[i % COLORS.length]} stroke-width="2" vector-effect="non-scaling-stroke" />
       {/each}
     </svg>
+    </div>
     <div class="legend">
       {#each windows as w, i}<span><i style="background:{COLORS[i % COLORS.length]}"></i>{w}</span>{/each}
       <span class="dim">0–100 %</span>
@@ -162,7 +165,7 @@
     <b>{t("Verbrauch pro Tag")}</b>
     <div class="dim small">{t("Prozentpunkte des längsten Limits (z. B. 7 Tage), die an dem Tag dazukamen")}{use.main ? ` · ${use.main}` : ""}</div>
     {#if use.per.size}
-      <div class="bars">
+      <div class="bars axis" data-max="{Math.round(maxUse * 100)} %">
         {#each dayList as d}
           {@const v = use.per.get(d) ?? 0}
           <div class="col" title="{label(d)}: {Math.round(v * 100)} %"><div class="fill" style="height:{(v / maxUse) * 100}%"></div><span>{days <= 7 ? label(d) : ""}</span></div>
@@ -175,7 +178,7 @@
 {#if machines.size}
   <div class="section">{t("Agent-Zeit pro Maschine")}</div>
   <div class="card chart">
-    <div class="bars">
+    <div class="bars axis" data-max={hours(maxMachine)}>
       {#each slots as d}
         {@const row = machines.get(d)}
         <div class="col" title={row ? [...row].map(([m, s]) => `${m}: ${hours(s)}`).join("\n") : ""}>
@@ -202,7 +205,12 @@
   .seg button.on { background: var(--card); color: var(--fg); box-shadow: 0 0 0 1px var(--border); }
   .section { margin: 6px 0 -4px; }
   .chart { display: grid; gap: 8px; }
-  svg { width: 100%; height: 130px; }
+  svg { width: 100%; height: 130px; display: block; }
+  .plot { position: relative; padding-left: 40px; }
+  .y { position: absolute; left: 0; transform: translateY(-50%); font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .axis { position: relative; padding-left: 40px; }
+  .axis::before { content: attr(data-max); position: absolute; left: 0; top: 0; font-size: 10px; color: var(--dim); }
+  .axis::after { content: ""; position: absolute; left: 40px; right: 0; top: 0; border-top: 1px dashed var(--border); }
   .grid { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); }
   .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }

@@ -1,10 +1,12 @@
 <script lang="ts">
-  // Settings → general: zoom, app language, notifications, shells, prompt snippets, shortcuts to design / servers / notes.
+  // Settings → general: zoom, app language, app lock, notifications, shells, prompt snippets, shortcuts to design / servers / notes.
   import { onMount } from "svelte";
+  import { appLock, biometryName, loadSupport, setEnabled } from "$lib/applock.svelte";
   import { t } from "$lib/i18n";
   import { hasUnseen } from "$lib/releaseNotes";
   import { settings } from "$lib/settings.svelte";
   import { app, go } from "$lib/store.svelte";
+  import { openTour } from "$lib/tips.svelte";
   import Snippets from "./Snippets.svelte";
   import { checkPermission, ensurePermission, KINDS, notify, notifyKinds, permission } from "./notify.svelte";
 
@@ -25,6 +27,7 @@
   let testResult = $state("");
   onMount(() => {
     checkPermission();
+    loadSupport();
   });
 
   async function setNotify(on: boolean) {
@@ -76,6 +79,19 @@
   </div>
   <p class="foot">{t("Deutsch oder Englisch – unabhängig von der Systemsprache. Der Server antwortet in derselben Sprache.")}</p>
 
+  {#if appLock.support?.available}
+    <div class="section">{t("Sicherheit")}</div>
+    <div class="rows">
+      <label class="row">
+        <span class="grow">{t("Mit {name} sperren", { name: biometryName() })}</span>
+        <!-- switches only after Touch ID / password confirmed it (also when turning it off), like iOS -->
+        <input type="checkbox" class="toggle" checked={settings.appLock} disabled={appLock.authenticating}
+          onchange={(e) => { const on = e.currentTarget.checked; e.currentTarget.checked = settings.appLock; setEnabled(on); }} />
+      </label>
+    </div>
+    <p class="foot">{t("Fragt beim Öffnen und nach mehr als 30 Sekunden im Hintergrund.")}</p>
+  {/if}
+
   <div class="section">{t("Mitteilungen")}</div>
   <div class="rows">
     <label class="row">
@@ -120,6 +136,9 @@
       <span class="grow">{t("Neuigkeiten")}</span>
       {#if hasUnseen()}<span class="badge">{t("Neu")}</span>{/if}
       <span class="chev">›</span>
+    </button>
+    <button class="row" onclick={() => openTour()}>
+      <span class="grow">{t("Tipps & Tricks")}</span><span class="chev">›</span>
     </button>
     <button class="row" onclick={() => go({ view: "settings", page: "about" })}>
       <span class="grow">{t("Über")}</span><span class="chev">›</span>

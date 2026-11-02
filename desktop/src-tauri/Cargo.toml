@@ -1,6 +1,6 @@
 [package]
 name = "hollr-desktop"
-version = "0.31.1"
+version = "0.32.0"
 description = "Hollr desktop client"
 authors = ["Hollr contributors"]
 license = "MIT"
@@ -32,6 +32,25 @@ anyhow = "1.0.104"
 getrandom = "0.4.3"
 cpal = "0.18.2"
 tauri-plugin-notification = "2"
+# local dictation (dictation.rs): whisper.cpp + model downloads from Hugging Face
+whisper-rs = "0.16"
+ureq = "3"
+# pairing by one-time code (pairing_code.rs); same versions russh already pulls in
+hmac = "0.13.0"
+pbkdf2 = { version = "0.13.0", default-features = false, features = ["hmac"] }
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.16", features = ["metal"] }
+# app lock (applock.rs): Touch ID / device password; same objc2 versions tauri already pulls in
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError"] }
+objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "block2", "LAContext", "LABiometryType"] }
+
+[dev-dependencies]
+# examples/dictate.rs reads WAV files
+hound = "3"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

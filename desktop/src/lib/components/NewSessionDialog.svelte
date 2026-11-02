@@ -5,6 +5,7 @@
   import type { Server, Workspace } from "../api";
   import { t } from "../i18n";
   import { dialogMemory, dialogs, go } from "../store.svelte";
+  import FolderPicker from "./FolderPicker.svelte";
   import Modal from "./Modal.svelte";
   import ModelDialog from "./ModelDialog.svelte";
 
@@ -40,6 +41,7 @@
   let model = $state<string | undefined>();
   let level = $state<string | undefined>();
   let picking = $state(false);
+  let browsing = $state(false);
   let busy = $state(false);
   let error = $state("");
   let installing = $state<string | null>(null);
@@ -124,7 +126,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (picking) return;
+    if (picking || browsing) return;
     if (e.key === "Escape") { e.preventDefault(); onClose(); }
     else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); }
   }
@@ -193,9 +195,12 @@
     </select>
   </label>
   {#if workspace === NEW}
-    <!-- svelte-ignore a11y_autofocus -->
-    <input class="mono" placeholder={t("Ordner auf dem Server, z. B. ~/projects/my-app")} bind:value={folder} autofocus
-      autocomplete="off" spellcheck="false" onkeydown={(e) => e.key === "Enter" && create()} />
+    <div class="pathrow">
+      <!-- svelte-ignore a11y_autofocus -->
+      <input class="mono grow" placeholder={t("Ordner auf dem Server, z. B. ~/projects/my-app")} bind:value={folder} autofocus
+        autocomplete="off" spellcheck="false" onkeydown={(e) => e.key === "Enter" && create()} />
+      <button class="btn" disabled={!srv} onclick={() => (browsing = true)}>{t("Durchsuchen …")}</button>
+    </div>
   {/if}
   <input placeholder={t("Name (optional)")} bind:value={label} onkeydown={(e) => e.key === "Enter" && create()} />
   <div class="dim small hint">{footer}</div>
@@ -213,6 +218,10 @@
   <ModelDialog {server} {kind} model={model} level={level} instant pickLabel={t("Übernehmen")} onClose={() => (picking = false)}
     onPick={(m, l) => { model = m; level = l; picking = false; }}
     onPickDefault={(l) => { model = undefined; level = l; picking = false; }} />
+{/if}
+
+{#if browsing}
+  <FolderPicker {server} start={folder.trim() || "~"} allowNew={false} onPick={(p) => (folder = p)} onClose={() => (browsing = false)} />
 {/if}
 
 <style>
@@ -237,6 +246,7 @@
   .modelbtn:hover, .modelbtn:focus-visible { border-color: var(--accent); }
   .val { text-align: right; }
   .hint { margin-top: -6px; }
+  .pathrow { display: flex; gap: 8px; }
   .buttons { display: flex; align-items: center; gap: 8px; }
   .link { background: none; border-color: transparent; color: var(--muted); padding-left: 0; }
   .link:hover { color: var(--accent); border-color: transparent; }

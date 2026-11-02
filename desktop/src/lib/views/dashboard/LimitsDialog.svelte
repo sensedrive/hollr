@@ -11,6 +11,7 @@
   let { onClose }: { onClose: () => void } = $props();
   let busy = $state(false);
   let history = $state(false);
+  let updated = $state<Date>();
 
   // several servers report the same accounts: one row per limit (the highest value wins)
   const limits = $derived.by(() => {
@@ -31,7 +32,7 @@
   );
   const short = (l: UsageLimit) => l.label.replace("Claude ", "");
 
-  async function reload() { busy = true; await refreshUsage(true); busy = false; }
+  async function reload() { busy = true; await refreshUsage(true); updated = new Date(); busy = false; }
   // fresh numbers every time the dialog opens
   onMount(() => { reload(); });
 </script>
@@ -68,6 +69,7 @@
   {/each}
   {/if}
   <div class="buttons">
+    {#if updated}<span class="small muted stand">{t("Stand {time}", { time: updated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}</span>{/if}
     <button class="btn" disabled={busy} onclick={reload}>{busy ? "…" : t("Aktualisieren")}</button>
     <button class="btn primary" onclick={onClose}>{t("Fertig")}</button>
   </div>
@@ -81,7 +83,8 @@
   .line { display: flex; align-items: baseline; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
   .bar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
   .bar div { height: 100%; border-radius: 99px; }
-  .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+  .buttons { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+  .stand { margin-right: auto; }
   .tab { align-self: start; display: inline-flex; gap: 8px; align-items: center; }
   .beta { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 99px; color: var(--accent);
     background: color-mix(in srgb, var(--accent) 20%, transparent); }

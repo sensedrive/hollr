@@ -12,6 +12,8 @@ export interface InboxDetail {
   turn: string;
   question?: string;
   options?: string[];
+  /** index of omp's recommended option */
+  recommended?: number;
   /** last answer or error, plain text */
   text?: string;
 }
@@ -56,7 +58,10 @@ export function fromTimeline(status: string, tl: Pick<Timeline, "items">): Inbox
   if (ask?.k === "ask") {
     // several questions (or multi-select) need the chat: no one-tap options here
     const oneTap = !ask.questions && !ask.multi;
-    return { kind: "ask", turn: ask.id, question: plain(ask.question), options: oneTap ? ask.options : [] };
+    return {
+      kind: "ask", turn: ask.id, question: plain(ask.question), options: oneTap ? ask.options : [],
+      recommended: oneTap ? ask.recommended : undefined,
+    };
   }
   // only look at the current turn (after the last user message)
   const start = items.findLastIndex((i) => i.k === "user") + 1;

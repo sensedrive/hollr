@@ -17,6 +17,10 @@ export interface Settings {
   showShells: boolean;
   /** last build the "Neuigkeiten" were seen for */
   seenNotes: number;
+  /** app lock: Touch ID / password on start and after more than 30 s away (iOS "security.faceID") */
+  appLock: boolean;
+  /** terminal panel: the session's own TUI ("pane") or an own shell in its folder (iOS "terminal.mode") */
+  terminalMode: "pane" | "shell";
 }
 
 const defaults: Settings = {
@@ -29,6 +33,8 @@ const defaults: Settings = {
   notify: true,
   showShells: false,
   seenNotes: 0,
+  appLock: false,
+  terminalMode: "pane",
 };
 
 function load(): Settings {

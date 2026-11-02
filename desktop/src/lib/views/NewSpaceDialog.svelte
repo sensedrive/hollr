@@ -1,5 +1,6 @@
 <script lang="ts">
   // Create a herdr space: a git worktree (new branch) of a repo space, or a folder.
+  import FolderPicker from "$lib/components/FolderPicker.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { t } from "$lib/i18n";
   import { app, dialogMemory, go, refresh, refreshSpaces } from "$lib/store.svelte";
@@ -24,6 +25,7 @@
   let agent = $state("omp");
   let busy = $state(false);
   let error = $state("");
+  let browsing = $state(false);
 
   const loaded = $derived(app.spaces[server] !== undefined);
   const repos = $derived(((app.spaces[server] ?? []) as FullSpace[]).filter((s) => !s.isWorktree && s.git));
@@ -61,6 +63,7 @@
   const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+";
 
   function onKey(e: KeyboardEvent) {
+    if (browsing) return;
     if (e.key === "Escape") { e.preventDefault(); onClose(); }
     else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); create(); }
   }
@@ -95,8 +98,11 @@
     <div class="small muted">{t("herdr legt einen eigenen Arbeitsordner mit neuem Branch an – parallel zu main, ohne dass sich Agents in die Quere kommen.")}</div>
   {:else}
     <div class="section">{t("Ordner")}</div>
-    <input class="mono" placeholder={t("Ordner auf dem Server")} bind:value={folder} autocomplete="off" spellcheck="false"
-      onkeydown={(e) => e.key === "Enter" && create()} />
+    <div class="pathrow">
+      <input class="mono grow" placeholder={t("Ordner auf dem Server")} bind:value={folder} autocomplete="off" spellcheck="false"
+        onkeydown={(e) => e.key === "Enter" && create()} />
+      <button class="btn" disabled={!server} onclick={() => (browsing = true)}>{t("Durchsuchen …")}</button>
+    </div>
     <div class="small muted">{t("Wird angelegt, falls er noch nicht existiert.")}</div>
   {/if}
 
@@ -119,6 +125,10 @@
   </div>
 </Modal>
 
+{#if browsing}
+  <FolderPicker {server} start={folder.trim() || "~"} onPick={(p) => (folder = p)} onClose={() => (browsing = false)} />
+{/if}
+
 <style>
   .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 2px; }
   .seg button { all: unset; cursor: pointer; text-align: center; padding: 5px 10px; border-radius: 7px; color: var(--muted); }
@@ -128,5 +138,6 @@
   .section { margin: 4px 0 -6px; }
   .field { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; }
   .field > span { color: var(--muted); }
+  .pathrow { display: flex; gap: 8px; }
   .buttons { display: flex; align-items: center; gap: 8px; }
 </style>

@@ -3,6 +3,7 @@
   import { onDestroy } from "svelte";
   import { t } from "$lib/i18n";
   import { app, back, go, serverById } from "$lib/store.svelte";
+  import SetupChecklist from "$lib/components/SetupChecklist.svelte";
   import * as sapi from "$lib/serverapi";
   import type { ProcessInfo, ServerInfo, ServerTool } from "$lib/serverapi";
 
@@ -18,7 +19,6 @@
   let sortKey = $state<"cpu" | "rssMb" | "name" | "pid" | "user">("cpu");
   let sortDesc = $state(true);
   let expanded = $state<Record<number, boolean>>({});
-  let copied = $state("");
 
   async function load() {
     const s = server;
@@ -64,8 +64,6 @@
     gen++;
     clearTimeout(timer);
   });
-
-  const failed = $derived(info?.checks.filter((c) => !c.ok).length ?? 0);
 
   const procs = $derived.by(() => {
     if (!info) return [] as ProcessInfo[];
@@ -118,13 +116,6 @@
       out.push({ title: d.mount, value: d.used / Math.max(d.total, 1), label: `${sapi.bytes(d.used)} / ${sapi.bytes(d.total)}` });
     return out;
   });
-
-  async function copyFix(fix: string) {
-    if (await sapi.copy(fix)) {
-      copied = fix;
-      setTimeout(() => copied === fix && (copied = ""), 1800);
-    }
-  }
 </script>
 
 <div class="page">
@@ -184,35 +175,16 @@
     {/if}
   </div>
 
-  <div class="section">
-    {#if info}
-      {failed === 0 ? t("Einrichtung · alles korrekt") : t("Einrichtung · {n} Problem(e)", { n: failed })}
-    {:else}
-      {t("Einrichtung")}
-    {/if}
-  </div>
-  <div class="rows">
-    {#if info}
-      {#each info.checks as c (c.name)}
-        <div class="row check">
-          <span class="ico" class:ok={c.ok} class:bad={!c.ok}>{c.ok ? "✓" : "✕"}</span>
-          <div class="grow">
-            <div>{c.name}</div>
-            <div class="small muted">{c.detail}</div>
-            {#if !c.ok && c.fix}
-              <button class="fix mono" title={t("Befehl kopieren")} onclick={() => copyFix(c.fix!)}>
-                <span class="ellipsis">{c.fix}</span><span>{copied === c.fix ? "✓" : "⧉"}</span>
-              </button>
-            {/if}
-          </div>
-        </div>
-      {/each}
-    {:else}
+  {#if info}
+    <SetupChecklist {server} checks={info.checks} reload={load} />
+  {:else}
+    <div class="section">{t("Einrichtung")}</div>
+    <div class="rows">
       {#each Array(5) as _, i (i)}
         <div class="row"><div class="skeleton" style="height: 16px; width: {40 + ((i * 13) % 40)}%"></div></div>
       {/each}
-    {/if}
-  </div>
+    </div>
+  {/if}
 
   <div class="section">{t("Prozesse · nach CPU")}</div>
   <div class="procbar">
@@ -264,13 +236,6 @@
   .mhead { display: flex; justify-content: space-between; gap: 10px; }
   .track { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 8%, transparent); overflow: hidden; }
   .fill { height: 100%; border-radius: 99px; transition: width .3s; }
-  .check { align-items: flex-start; }
-  .ico { width: 18px; text-align: center; font-weight: 700; }
-  .ico.ok { color: var(--green); }
-  .ico.bad { color: var(--red); }
-  .fix { all: unset; cursor: pointer; display: flex; gap: 8px; max-width: 100%; margin-top: 4px; font-size: 12px; color: var(--accent);
-    background: color-mix(in srgb, var(--fg) 6%, transparent); border-radius: 8px; padding: 4px 8px; box-sizing: border-box; }
-  .fix:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
   .procbar { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
   .seg { display: inline-flex; background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 2px; flex: none; }
   .seg button { all: unset; cursor: pointer; padding: 3px 12px; border-radius: 6px; font-size: 12px; color: var(--muted); }

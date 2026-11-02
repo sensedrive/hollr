@@ -3,19 +3,24 @@
   // ↑ in an empty field brings back the last message. ">_" sends single keys to the pane.
   // Above the text: prompt snippets (chips), "@" completes file names of the space, 📎 / paste / drop
   // uploads files and puts their server path into the text (ComposerAssist.swift, Attachments.swift).
+  // 🎙 dictates locally (Whisper on this computer) into the text at the cursor – click starts and stops,
+  // holding it dictates until released (Composer.swift micButton).
   import type { Snippet } from "svelte";
-  import { tick } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import { t } from "../i18n";
   import { pushRecall } from "../drafts";
   import { applyMention, insertAt, mentionAt } from "../assist";
   import { attach } from "../attach";
   import { files as findFiles } from "../git";
   import { snippets } from "../snippets.svelte";
+  import { drafts } from "../store.svelte";
+  import { dictation as dictationSettings, dictator, prewarm } from "../dictation.svelte";
+  import { voiceSend } from "../dictationText";
   import Icon from "./git/Icon.svelte";
 
   let {
     placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, value = $bindable(""),
-    sent = $bindable([]), server, ws,
+    sent = $bindable([]), server, ws, dictationKey, micBlocked = false, vocabulary,
   }: {
     placeholder: string;
     keysTitle: string;
@@ -35,6 +40,12 @@
     server?: string;
     /** workspace id (pane id before ":") */
     ws?: string;
+    /** the chat's draft key – turns the dictation mic on (the text lands in this draft) */
+    dictationKey?: string;
+    /** the microphone is in use elsewhere (omp /live) */
+    micBlocked?: boolean;
+    /** words of the open session for recognition (folder, tickets, files …) */
+    vocabulary?: () => string[];
   } = $props();
 
   const KEYS: [string, string][] = $derived([
@@ -232,6 +243,104 @@
     menu = false;
     onKeys([k]);
   }
+
+  // ------------------------------------------------------------ dictation
+
+  const ownsIt = $derived(!!dictationKey && dictator.owner === dictationKey);
+  const recordingHere = $derived(ownsIt && dictator.state === "recording");
+  const startingHere = $derived(ownsIt && dictator.state === "preparing");
+  const dictating = $derived(ownsIt && (dictator.state === "recording" || dictator.state === "transcribing"));
+  /** another chat's dictation or a transcription in progress blocks the mic here */
+  const micEnabled = $derived(!!dictationKey && !micBlocked && !disabled && (recordingHere || startingHere || !dictator.isBusy));
+  const dictationNote = $derived(
+    !!dictationKey && dictator.noticeFor === dictationKey && !dictator.isBusy
+      ? dictator.state === "failed" ? dictator.error : dictator.notice
+      : "",
+  );
+  /** the text around the cursor while dictating – the dictation goes in between */
+  let split = $state<{ before: string; after: string } | null>(null);
+  const spoken = $derived(
+    dictator.state === "transcribing" && !dictator.text ? t("transkribiere …")
+      : dictator.state === "recording" && !dictator.text ? t("hört zu …") : dictator.text,
+  );
+  /** caret when the field lost focus (the mic button needs it afterwards) */
+  let lastCaret: number | null = null;
+  let pressStarted: number | null = null;
+  let holding = false;
+  let alive = true;
+
+  $effect(() => {
+    const k = dictationKey;
+    if (!k) return;
+    untrack(() => {
+      dictator.composerAppeared(k);
+      prewarm();
+    });
+    return () => dictator.composerDisappeared(k);
+  });
+  // omp /live takes over the microphone: what was dictated so far goes into the text
+  $effect(() => {
+    if (micBlocked && recordingHere) untrack(() => dictator.finish());
+  });
+  onDestroy(() => (alive = false));
+
+  const trimSpaces = (s: string) => s.replace(/^[ \t]+|[ \t]+$/g, "");
+
+  function startDictation() {
+    const key = dictationKey;
+    if (!key || !micEnabled || dictator.isBusy) return;
+    const caret = area && document.activeElement === area ? area.selectionStart : (lastCaret ?? value.length);
+    const at = Math.min(Math.max(caret, 0), value.length);
+    const before = trimSpaces(value.slice(0, at));
+    const after = trimSpaces(value.slice(at));
+    split = { before, after };
+    closeMention();
+    area?.blur();
+    dictator.start(key, vocabulary?.() ?? [], (result) => insertDictation(key, before, after, result));
+  }
+
+  /** Puts the dictated text at the cursor; "… senden" (or auto-send) sends it. When this composer
+   *  shows another chat by now (or is gone), the text goes into the dictating chat's draft. */
+  async function insertDictation(key: string, before: string, after: string, result: string) {
+    split = null;
+    let said = result;
+    let sendNow = dictationSettings.autoSend;
+    if (dictationSettings.voiceSend) {
+      const v = voiceSend(said);
+      if (v.send) [said, sendNow] = [v.text, true];
+    }
+    if (!said) return;
+    const head = [before, said].filter(Boolean).join(" ");
+    const text = [head, after].filter(Boolean).join(" ");
+    if (!alive || dictationKey !== key) return drafts.setText(key, text);
+    await edit({ text, caret: head.length });
+    if (sendNow) send();
+  }
+
+  // click = start/stop, hold = talk while holding (released after ≥ 0.3 s ends it)
+  function micDown(e: PointerEvent) {
+    if (e.button !== 0 || pressStarted !== null || !micEnabled) return;
+    e.preventDefault(); // keeps the caret in the text field
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    pressStarted = performance.now();
+    holding = !recordingHere && !startingHere && !dictator.isBusy;
+    if (holding) startDictation();
+  }
+  function micUp() {
+    if (pressStarted === null) return;
+    const held = performance.now() - pressStarted;
+    pressStarted = null;
+    if (holding) {
+      holding = false;
+      if (held >= 300) dictator.finish(); // short click: keeps recording until the next click
+    } else if (recordingHere || startingHere) dictator.finish();
+  }
+  /** keyboard (Space / Enter on the focused button) */
+  function micClick(e: MouseEvent) {
+    if (e.detail !== 0) return;
+    if (recordingHere || startingHere) dictator.finish();
+    else startDictation();
+  }
 </script>
 
 <svelte:window onclick={() => (menu = false)} />
@@ -258,12 +367,24 @@
       {/each}
     </div>
   {/if}
-  <textarea bind:this={area} bind:value rows="1" {placeholder} {disabled} spellcheck="false" onkeydown={onKey}
+  {#if dictating && split}
+    <div class="dictation" aria-live="polite">
+      {#if split.before}<span>{split.before} </span>{/if}<span class="spoken">{spoken}</span>{#if split.after}<span> {split.after}</span>{/if}
+    </div>
+  {/if}
+  <textarea bind:this={area} bind:value rows="1" {placeholder} {disabled} spellcheck="false" onkeydown={onKey} class:gone={dictating && !!split}
     oninput={checkMention} onkeyup={(e) => !["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(e.key) && checkMention()}
-    onclick={checkMention} onfocus={() => (focused = true)} onblur={() => { focused = false; closeMention(); }}
+    onclick={checkMention} onfocus={() => (focused = true)} onblur={() => { focused = false; lastCaret = area?.selectionStart ?? null; closeMention(); }}
     onpaste={onPaste}></textarea>
   {#if uploadError}
     <div class="uperr"><span class="grow">⚠ {uploadError}</span><button class="link" aria-label={t("Schließen")} onclick={() => (uploadError = "")}>✕</button></div>
+  {/if}
+  {#if dictationNote}
+    {@const failed = dictator.state === "failed"}
+    <div class="dnote" class:uperr={failed}>
+      <span class="grow">{failed ? "⚠ " : ""}{dictationNote}</span>
+      <button class="link" aria-label={t("Schließen")} onclick={() => (dictator.noticeFor = null)}>✕</button>
+    </div>
   {/if}
   <div class="actions">
     <div class="keys">
@@ -295,6 +416,25 @@
       </div>
     </div>
     <div class="right">
+      {#if dictationKey}
+        {#if recordingHere}
+          <button class="micx" title={t("Diktat verwerfen")} aria-label={t("Diktat verwerfen")} onclick={() => dictator.cancel()}>✕</button>
+        {/if}
+        <button class="mic" class:rec={recordingHere} disabled={!micEnabled} style:--lvl={recordingHere ? Math.min(dictator.level * 8, 0.25) : 0}
+          title={recordingHere ? t("Diktat beenden") : t("Diktieren – klicken startet und beendet, gedrückt halten diktiert bis zum Loslassen")}
+          aria-label={recordingHere ? t("Diktat beenden") : t("Diktieren")}
+          onpointerdown={micDown} onpointerup={micUp} onpointercancel={micUp} onclick={micClick}>
+          {#if recordingHere}
+            <span class="stopsq"></span>
+          {:else if startingHere || (ownsIt && dictator.state === "transcribing")}
+            <span class="spin"></span>
+          {:else}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+              <rect x="5.75" y="1.75" width="4.5" height="8" rx="2.25" /><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2" />
+            </svg>
+          {/if}
+        </button>
+      {/if}
       {#if trailing}{@render trailing()}{/if}
       <button class="send" class:on={!!trimmed} disabled={!trimmed || disabled} title={`${t("Senden")} (⏎)`} aria-label={t("Senden")} onclick={send}>↑</button>
     </div>
@@ -358,4 +498,18 @@
     background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--muted); }
   .send.on { cursor: pointer; background: var(--accent); color: #fff; }
   .send.on:hover { filter: brightness(1.1); }
+  .dictation { font-family: var(--mono); font-size: 13.5px; line-height: 1.5; min-height: 21px; max-height: 220px; overflow-y: auto;
+    white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+  .dictation .spoken { color: var(--fg); }
+  textarea.gone { display: none; }
+  .dnote { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .dnote.uperr { color: var(--red); }
+  .mic { all: unset; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--muted);
+    transition: transform 0.1s ease-out, background 0.15s; transform: scale(calc(1 + var(--lvl, 0))); touch-action: none; }
+  .mic:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); }
+  .mic:disabled { cursor: default; opacity: 0.35; }
+  .mic.rec, .mic.rec:hover { background: var(--red); color: #fff; }
+  .stopsq { width: 11px; height: 11px; border-radius: 2px; background: #fff; }
+  .micx { all: unset; cursor: pointer; color: var(--muted); padding: 0 4px; font-size: 13px; }
+  .micx:hover { color: var(--fg); }
 </style>

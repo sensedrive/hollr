@@ -125,6 +125,8 @@ export interface ModelList {
 
 export const servers = () => invoke<Server[]>("servers");
 export const pair = (link: string, deviceName: string) => invoke<Server>("pair", { link, deviceName });
+/** Pairing by one-time code; code errors reject with `otp:<kind>` (`otp:unreachable:<ip>`). */
+export const pairCode = (code: string, deviceName: string) => invoke<Server>("pair_code", { code, deviceName });
 export const removeServer = (id: string) => invoke<void>("remove_server", { id });
 
 export async function gate<T>(server: string, command: string, body?: unknown, long = false): Promise<T> {
@@ -140,8 +142,8 @@ export async function gate<T>(server: string, command: string, body?: unknown, l
 
 export const tree = (s: string) => gate<{ workspaces: Workspace[] }>(s, "tree").then((r) => r.workspaces);
 /** null = unchanged since `etag` (the server then only answers {"same":true}). */
-export const timeline = (s: string, pane: string, etag?: string) =>
-  gate<Timeline & { same?: boolean }>(s, `timeline ${pane} 150${etag ? ` ${etag}` : ""}`).then((t) =>
+export const timeline = (s: string, pane: string, etag?: string, limit = 150) =>
+  gate<Timeline & { same?: boolean }>(s, `timeline ${pane} ${limit}${etag ? ` ${etag}` : ""}`).then((t) =>
     t.same ? null : t,
   );
 export const screen = (s: string, pane: string, lines = 80) =>

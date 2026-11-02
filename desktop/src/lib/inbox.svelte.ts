@@ -122,6 +122,10 @@ async function act(e: InboxEntry & { ref: PaneRef }, send: () => Promise<unknown
 export const answer = (e: InboxEntry & { ref: PaneRef }, index: number) =>
   act(e, () => api.answer(e.ref.server.id, e.ref.pane.pane, e.turn, [{ options: [index] }]));
 
+/** Several questions or multi-select (AskCard): one pick per question. */
+export const answerPicks = (e: InboxEntry & { ref: PaneRef }, ask: string, picks: api.AskPick[]) =>
+  act(e, () => api.answer(e.ref.server.id, e.ref.pane.pane, ask, picks));
+
 /** Sends a message like the composer does. */
 export const reply = (e: InboxEntry & { ref: PaneRef }, text: string) =>
   act(e, () => api.prompt(e.ref.server.id, e.ref.pane.pane, text));

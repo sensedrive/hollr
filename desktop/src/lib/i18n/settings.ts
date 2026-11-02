@@ -84,6 +84,21 @@ export default {
   Fertig: "Done",
   "Nochmal versuchen": "Try again",
   "Noch kein Hollr auf dem Server?": "No Hollr on the server yet?",
+  Methode: "Method",
+  Kopplungscode: "Pairing code",
+  "Auf dem Server `hollr pair` ausführen – der Code steht unter dem QR-Code, gilt 10 Minuten und nur einmal. Von unterwegs: am Server „Tailscale / Fernzugriff“ wählen und Tailscale auf diesem Computer verbinden.":
+    "Run `hollr pair` on the server – the code is shown below the QR code, valid for 10 minutes and only once. From elsewhere: choose “Tailscale / remote access” on the server and connect Tailscale on this computer.",
+  "Der Code hat 16 Zeichen, z. B. K7Q2-M9XA-3PLD-W8RT.": "The code has 16 characters, e.g. K7Q2-M9XA-3PLD-W8RT.",
+  "Der Code stimmt nicht. Bitte genau so eingeben, wie er am Server steht.": "The code is wrong. Please enter it exactly as shown on the server.",
+  "Zu viele falsche Versuche – der Code ist gesperrt. Am Server einen neuen erzeugen („n“ + Enter).":
+    "Too many wrong attempts – the code is locked. Create a new one on the server (“n” + Enter).",
+  "Der Code ist abgelaufen oder wurde schon benutzt. Am Server einen neuen erzeugen: hollr pair":
+    "The code has expired or was already used. Create a new one on the server: hollr pair",
+  "Der Server ({ip}) ist nicht erreichbar. Ist Tailscale auf diesem Computer verbunden und läuft „hollr pair“ am Server noch?":
+    "The server ({ip}) can't be reached. Is Tailscale connected on this computer, and is “hollr pair” still running on the server?",
+  "Der Server ({ip}) ist nicht erreichbar. Gleiches Netzwerk? Läuft „hollr pair“ am Server noch?":
+    "The server ({ip}) can't be reached. Same network? Is “hollr pair” still running on the server?",
+  "Die Antwort des Servers passt nicht zum Code.": "The server's answer doesn't match the code.",
 
   // server info
   Auslastung: "Load",
@@ -146,6 +161,20 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Neue Übersicht: „Braucht dich“ nach Dringlichkeit mit der konkreten Frage, „Woran ich arbeite“ nach Projekt – antworten, Chat, Terminal, Git und Browser direkt von dort, mit Tastenkürzeln (?)":
+    "New overview: “Needs you” by urgency with the actual question, “What I’m working on” by project – answer, chat, terminal, Git and browser right from there, with shortcuts (?)",
+  "Echtes Terminal: die Oberfläche der Session live, eigene Shell im Ordner der Session, Links mit ⌘-Klick, verbindet sich selbst neu":
+    "Real terminal: the session’s interface live, your own shell in the session’s folder, links with ⌘-click, reconnects by itself",
+  "Diktat auf dem Gerät mit Whisper – mit deinem Fachvokabular, Modelle unter Einstellungen › Diktat":
+    "On-device dictation with Whisper – with your technical vocabulary, models under Settings › Dictation",
+  "Ordner auf dem Server durchsuchen beim Anlegen von Sitzungen und Spaces":
+    "Browse server folders when creating sessions and spaces",
+  "Koppeln per Einmalcode – ideal von unterwegs über Tailscale": "Pair with a one-time code – ideal on the go via Tailscale",
+  "Server-Info: Einrichtungs-Checkliste mit Installieren und Neu starten":
+    "Server info: setup checklist with install and restart",
+  "App-Sperre mit Touch ID oder Passwort": "App lock with Touch ID or password",
+  "Tipps & Tricks beim ersten Start – jederzeit unter Einstellungen › Allgemein":
+    "Tips & tricks on first start – any time under Settings › General",
   "Designs: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub und mehr – hell, dunkel oder automatisch":
     "Themes: Dracula, Nord, Solarized, Gruvbox, Catppuccin, GitHub and more – light, dark or automatic",
   "Server-Info: Auslastung, Prozesse und ob der Server korrekt eingerichtet ist":
@@ -175,4 +204,57 @@ export default {
   "Hinzufügen": "Add",
   "Erscheinen als Chips über dem Eingabefeld; ein Klick fügt den Text an der Schreibmarke ein.": "Shown as chips above the input field; a click inserts the text at the cursor.",
   "Standard wiederherstellen": "Restore defaults",
+  // folder picker
+  "Ordner wählen": "Choose folder",
+  "Übergeordneter Ordner": "Parent folder",
+  "Ordner filtern": "Filter folders",
+  "Projekt-Orte": "Project locations",
+  "Nichts gefunden.": "Nothing found.",
+  "Keine Unterordner.": "No subfolders.",
+  "Wählen": "Choose",
+  "Klick öffnet den Ordner, „Wählen“ übernimmt ihn direkt. Git-Repos sind markiert.": "Click opens the folder, “Choose” picks it right away. Git repos are marked.",
+  "Neuer Unterordner": "New subfolder",
+  "Wird beim Anlegen des Space erstellt.": "Created together with the space.",
+  "Diesen wählen": "Choose this one",
+  "Durchsuchen …": "Browse …",
+  // setup checklist
+  "Installation läuft – in einer Minute neu prüfen.": "Installing – check again in a minute.",
+  "Wächter läuft wieder.": "Watcher is running again.",
+  "Neustart hat nicht geklappt.": "Restart failed.",
+  "Einrichtung · {ok}/{n} bereit": "Setup · {ok}/{n} ready",
+  "Alles eingerichtet": "All set up",
+  "Neu starten": "Restart",
+  "Push richtest du in der Hollr-App auf dem iPhone ein: Server › Einrichtung › „Push einrichten“.": "Set up push in the Hollr app on your iPhone: Server › Setup › “Set up push”.",
+  // tips tour
+  "Neu und praktisch": "New and handy",
+  "Los geht’s": "Let’s go",
+  "Weiter": "Next",
+  "Tipps & Tricks": "Tips & tricks",
+  "Oben auf der Startseite: Fragen von omp mit einem Klick beantworten, wartenden oder fertigen Agents direkt antworten.": "At the top of the home screen: answer omp's questions with a click, reply directly to waiting or finished agents.",
+  "Wartet ein Agent auf dich oder ist fertig, meldet sich Hollr mit einer Mitteilung – ein Klick öffnet den Chat. Abschaltbar unter Einstellungen › Allgemein.": "When an agent waits for you or is done, Hollr sends a notification – a click opens the chat. Turn off under Settings › General.",
+  "Im Chat: {mod}K Eingabe, {mod}⇧G Git & Dateien, {mod}⇧B Browser, {mod}⇧I Info, {mod}⇧M Modell, {mod}. bricht ab.": "In a chat: {mod}K input, {mod}⇧G Git & files, {mod}⇧B browser, {mod}⇧I info, {mod}⇧M model, {mod}. interrupts.",
+  "{mod}⇧T wechselt zwischen Chat und dem Terminal der Session – derselbe Bildschirm wie am Rechner.": "{mod}⇧T switches between the chat and the session's terminal – the same screen as on the computer.",
+  "Bausteine und @": "Snippets and @",
+  "Über dem Eingabefeld stehen deine Prompt-Bausteine. „@“ schlägt Dateien aus dem Repo vor.": "Your prompt snippets sit above the input field. “@” suggests files from the repo.",
+  "Anhänge": "Attachments",
+  "Büroklammer, Einfügen oder einfach ins Eingabefeld ziehen: Bilder und Dateien gehen mit an den Agent.": "Paper clip, paste or just drag into the input field: images and files go along to the agent.",
+  "Änderungen prüfen": "Review changes",
+  "Git & Dateien › Änderungen: Dateien stagen, verwerfen oder kommentieren. Unten: Commit, Push, PR.": "Git & files › Changes: stage, discard or comment on files. At the bottom: commit, push, PR.",
+  "Ordner durchsuchen": "Browse folders",
+  "Neue Sitzung oder neuer Space: „Durchsuchen …“ zeigt die Ordner des Servers, Git-Repos sind markiert. Tippen geht weiterhin.": "New session or new space: “Browse …” shows the server's folders, git repos marked. Typing still works.",
+  "Einrichtung prüfen": "Check setup",
+  "Server-Info: was auf dem Server noch fehlt, mit „Installieren“, „Neu starten“ oder einem Befehl zum Kopieren.": "Server info: what's still missing on the server, with “Install”, “Restart” or a command to copy.",
+  "{mod}⇧F: nur Verlauf und Eingabe – dein Entwurf bleibt beim Umschalten erhalten.": "{mod}⇧F: only history and input – your draft survives switching.",
+  "Unterwegs auf dem iPhone": "On the go with iPhone",
+  "Widgets, Siri, Live-Aktivität und Antworten aus der Mitteilung gibt es in der iPhone-App – mit denselben Servern.": "Widgets, Siri, Live Activity and replying from notifications live in the iPhone app – with the same servers.",
+  // app lock (Touch ID / password); the reasons finish macOS' "„Hollr“ versucht, …" / "Hollr is trying to …"
+  Sicherheit: "Security",
+  "Mit {name} sperren": "Lock with {name}",
+  "Mit {name} entsperren": "Unlock with {name}",
+  "Fragt beim Öffnen und nach mehr als 30 Sekunden im Hintergrund.": "Asks when opening and after more than 30 seconds in the background.",
+  "Hollr ist gesperrt": "Hollr is locked",
+  Passwort: "Password",
+  "Hollr zu entsperren": "unlock Hollr",
+  "die Sperre einzuschalten": "turn on the lock",
+  "die Sperre auszuschalten": "turn off the lock",
 };

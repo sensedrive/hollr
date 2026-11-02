@@ -12,6 +12,21 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 5,
+    version: "0.32",
+    date: "02.11.2026",
+    items: [
+      { icon: "☰", text: "Neue Übersicht: „Braucht dich“ nach Dringlichkeit mit der konkreten Frage, „Woran ich arbeite“ nach Projekt – antworten, Chat, Terminal, Git und Browser direkt von dort, mit Tastenkürzeln (?)" },
+      { icon: ">_", text: "Echtes Terminal: die Oberfläche der Session live, eigene Shell im Ordner der Session, Links mit ⌘-Klick, verbindet sich selbst neu" },
+      { icon: "🎙", text: "Diktat auf dem Gerät mit Whisper – mit deinem Fachvokabular, Modelle unter Einstellungen › Diktat" },
+      { icon: "▢", text: "Ordner auf dem Server durchsuchen beim Anlegen von Sitzungen und Spaces" },
+      { icon: "⌗", text: "Koppeln per Einmalcode – ideal von unterwegs über Tailscale" },
+      { icon: "☑", text: "Server-Info: Einrichtungs-Checkliste mit Installieren und Neu starten" },
+      { icon: "🔒", text: "App-Sperre mit Touch ID oder Passwort" },
+      { icon: "✦", text: "Tipps & Tricks beim ersten Start – jederzeit unter Einstellungen › Allgemein" },
+    ],
+  },
+  {
     build: 4,
     version: "0.16",
     date: "14.10.2026",

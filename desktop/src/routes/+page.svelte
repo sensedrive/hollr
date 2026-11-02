@@ -21,6 +21,9 @@
   import Tools from "$lib/views/Tools.svelte";
   import NewSpaceDialog from "$lib/views/NewSpaceDialog.svelte";
   import Notifier from "$lib/views/Notifier.svelte";
+  import AppLock from "$lib/components/AppLock.svelte";
+  import TipsTour from "$lib/components/TipsTour.svelte";
+  import { pendingTips, tour } from "$lib/tips.svelte";
   import { inboxEntries, trackInbox } from "$lib/inbox.svelte";
 
   // ---- theme (fixed palette or following the system)
@@ -71,6 +74,7 @@
     const onScheme = () => (systemDark = mq.matches);
     mq.addEventListener("change", onScheme);
     loadServers().then(() => refreshSpaces());
+    tour.tips = pendingTips();
     let unlisten = () => {};
     listenFeeds().then((off) => (unlisten = off)).catch(() => {});
     const timer = setInterval(poll, 5000);
@@ -162,7 +166,7 @@
       {#if current}
         {#key `${nav.route.server}|${nav.route.pane}`}
           <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
-            {onClosed} />
+            open={nav.route.open} url={nav.route.url} {onClosed} />
         {/key}
       {:else}
         <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>
@@ -196,6 +200,11 @@
 {#if dialogs.newSpace}
   <NewSpaceDialog preset={dialogs.newSpace} onClose={() => (dialogs.newSpace = null)} />
 {/if}
+{#if tour.tips}
+  <TipsTour tips={tour.tips} onClose={() => (tour.tips = null)} />
+{/if}
+<!-- last: covers everything above while locked -->
+<AppLock />
 
 <style>
   main { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }

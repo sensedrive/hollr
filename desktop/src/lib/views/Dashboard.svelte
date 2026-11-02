@@ -1,53 +1,97 @@
 <script lang="ts">
-  // Übersicht: "Braucht dich" (agents waiting for you), the sessions you opened in Hollr (grouped by machine,
-  // live previews), usage limits and the paired servers.
+  // Übersicht (DashboardView.swift, laid out for a wide window): usage limits, "Braucht dich" ordered by urgency
+  // with everything answerable in place, "Woran ich arbeite" grouped by project, the sessions you opened in Hollr
+  // (grouped by machine, live previews) and the paired servers. j/k + ↩ and single keys switch fast.
   import { onMount } from "svelte";
   import * as api from "$lib/api";
   import type { Server } from "$lib/api";
+  import { byUrgency, isLong, mainCaps, pooled, projectOf, portsIn, type FocusKind } from "$lib/dashboard";
   import { t } from "$lib/i18n";
   import {
-    app, dialogs, findPane, go, loadServers, mySessions, refresh, type PaneRef,
+    allPanes, app, dialogs, findPane, go, loadServers, mySessions, refresh, type AgentOpen, type PaneRef,
   } from "$lib/store.svelte";
+  import { answer, dismiss, fetchInbox, inboxEntries, type InboxEntry } from "$lib/inbox.svelte";
   import SessionCard from "./dashboard/SessionCard.svelte";
   import ContextMenu from "./dashboard/ContextMenu.svelte";
   import ConfirmDialog from "./dashboard/ConfirmDialog.svelte";
   import LimitsDialog from "./dashboard/LimitsDialog.svelte";
+  import BrowserDialog from "./dashboard/BrowserDialog.svelte";
+  import FocusCard from "./dashboard/FocusCard.svelte";
+  import ProjectCard from "./dashboard/ProjectCard.svelte";
   import { providerName, refreshUsage, usage, usedColor } from "./dashboard/usage.svelte";
-  import InboxCard from "./dashboard/InboxCard.svelte";
-  import { arrowNav, refTitle, type MenuItem } from "./dashboard/util";
-  import { answer, fetchInbox, inboxEntries } from "$lib/inbox.svelte";
+  import { fetchContexts, fetchPorts, sessionCtx, type WorkRow } from "./dashboard/context.svelte";
+  import { arrowNav, refTitle, statusRank, type MenuItem } from "./dashboard/util";
+
+  let now = $state(Date.now());
 
   onMount(() => {
     const timer = setInterval(() => refreshUsage(), 120_000);
-    // inbox details: only while the dashboard shows (each pane at most every 5 s, see inbox.svelte.ts)
-    fetchInbox();
-    const inboxTimer = setInterval(() => fetchInbox(), 2500);
+    // inbox details and session context: only while the dashboard shows (each pane throttled on its own)
+    const tick = () => {
+      now = Date.now();
+      fetchInbox();
+      fetchContexts([...new Set([...focus.map((f) => f.ref), ...workRefs])]);
+      fetchPorts(app.servers.map((s) => s.id));
+    };
+    tick();
+    const fast = setInterval(tick, 2500);
     return () => {
       clearInterval(timer);
-      clearInterval(inboxTimer);
+      clearInterval(fast);
     };
   });
 
-  const entries = $derived(inboxEntries());
-
-  /** 1–4 answer the first open question (only when nothing else has the keyboard) */
-  function onKey(e: KeyboardEvent) {
-    if (e.metaKey || e.ctrlKey || e.altKey || menu || ending || removing || showLimits) return;
-    const el = e.target as HTMLElement | null;
-    if (el?.matches?.("input, textarea, select") || el?.isContentEditable || document.querySelector("dialog[open], .modal")) return;
-    const n = Number(e.key);
-    if (!Number.isInteger(n) || n < 1 || n > 4) return;
-    const ask = entries.find((x) => x.kind === "ask");
-    if (!ask || n > (ask.options?.length ?? 0)) return;
-    e.preventDefault();
-    answer(ask, n - 1);
-  }
   // load as soon as the paired servers are known (on app start they come in after mount)
   $effect(() => {
     if (app.servers.length) refreshUsage();
   });
 
+  const entries = $derived(inboxEntries());
   const anyLoaded = $derived(app.servers.some((s) => app.loaded[s.id]));
+  const several = $derived(app.servers.length > 1);
+
+  // ------------------------------------------------------------ "Braucht dich" (by urgency)
+
+  interface Focus { kind: FocusKind; since: number; ref: PaneRef; entry?: InboxEntry & { ref: PaneRef } }
+
+  const focus = $derived.by((): Focus[] => {
+    const items: Focus[] = entries.map((e) => ({ kind: e.kind, since: e.since, ref: e.ref, entry: e }));
+    const listed = new Set(entries.map((e) => e.id));
+    for (const r of allPanes()) {
+      const ctx = sessionCtx.byId[r.id];
+      if (r.pane.agent && r.pane.status === "working" && !listed.has(r.id) && isLong(ctx, now))
+        items.push({ kind: "long", since: ctx!.turnStartedAt!, ref: r });
+    }
+    return items.sort(byUrgency);
+  });
+
+  // ------------------------------------------------------------ "Woran ich arbeite" (by project)
+
+  const mineSet = $derived(new Set(mySessions.ids));
+  /** what's going on: sessions you opened here plus every agent that works, waits or just finished */
+  const workRefs = $derived(
+    allPanes().filter((r) => mineSet.has(r.id) || (!!r.pane.agent && ["working", "blocked", "done"].includes(r.pane.status))),
+  );
+  const rowOf = (r: PaneRef): WorkRow => {
+    const ctx = sessionCtx.byId[r.id];
+    const project = projectOf(r.server.id, r.workspace, r.pane.cwd, app.spaces[r.server.id], ctx);
+    return { ref: r, project, ctx, changed: sessionCtx.changed[r.id], ports: portsIn(project.root, sessionCtx.ports[r.server.id]) };
+  };
+  const projects = $derived.by(() => {
+    const byKey = new Map<string, WorkRow[]>();
+    for (const r of workRefs) {
+      const row = rowOf(r);
+      byKey.set(row.project.key, [...(byKey.get(row.project.key) ?? []), row]);
+    }
+    const order = (w: WorkRow) => statusRank(w.ref);
+    return [...byKey.values()]
+      .map((rows) => rows.sort((a, b) => order(a) - order(b) || (b.changed ?? 0) - (a.changed ?? 0)))
+      .sort((a, b) => order(a[0]!) - order(b[0]!) || (b[0]!.changed ?? 0) - (a[0]!.changed ?? 0));
+  });
+  const workCount = $derived(projects.reduce((n, p) => n + p.length, 0));
+
+  // ------------------------------------------------------------ my sessions by machine (live previews)
+
   const mine = $derived(
     mySessions.ids
       .map((id) => {
@@ -60,30 +104,36 @@
     app.servers.map((server) => ({ server, refs: mine.filter((r) => r.server.id === server.id) })).filter((g) => g.refs.length),
   );
 
-  // one quiet line: "Claude 5h 2% 7d 64%  ChatGPT 5h 1% 7d 5%" (pooled over all accounts)
-  const caps = $derived(
-    app.servers
-      .flatMap((s) => usage.capacity[s.id] ?? [])
-      .filter((c) => (!c.meter || c.meter === "chat") && ["anthropic", "openai-codex"].includes(c.provider)),
-  );
-  const capGroups = $derived(
-    [...new Set(caps.map((c) => c.provider))].sort().map((p) => ({ provider: p, rows: caps.filter((c) => c.provider === p) })),
-  );
+  // ------------------------------------------------------------ limits: "Claude 5h 2% 7d 64%  ChatGPT …" (pooled)
+
+  const capGroups = $derived.by(() => {
+    const caps = pooled(mainCaps(app.servers.flatMap((s) => usage.capacity[s.id] ?? [])));
+    return [...new Set(caps.map((c) => c.provider))].map((p) => ({ provider: p, rows: caps.filter((c) => c.provider === p) }));
+  });
+
+  // ------------------------------------------------------------ actions
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   let ending = $state<PaneRef | null>(null);
   let removing = $state<Server | null>(null);
   let showLimits = $state(false);
+  let showBrowser = $state(false);
+  let showKeys = $state(false);
   let reloading = $state(false);
 
-  const open = (r: PaneRef) => go({ view: "agent", server: r.server.id, pane: r.pane.pane });
+  const open = (r: PaneRef, how?: AgentOpen, url?: string) =>
+    go({ view: "agent", server: r.server.id, pane: r.pane.pane, ...(how ? { open: how } : {}), ...(url ? { url } : {}) });
 
   function cardMenu(e: MouseEvent, r: PaneRef) {
+    const row = rowOf(r);
     menu = {
       x: e.clientX, y: e.clientY,
       items: [
-        { label: t("Öffnen"), icon: "↗", action: () => open(r) },
-        { label: t("Aus der Übersicht nehmen"), icon: "◌", action: () => mySessions.remove(r.id) },
+        { label: t("Chat öffnen"), icon: "↗", action: () => open(r) },
+        { label: t("Terminal öffnen"), icon: ">_", action: () => open(r, "terminal") },
+        { label: t("Git & Dateien"), icon: "⑂", action: () => open(r, "git") },
+        ...row.ports.map((p) => ({ label: t("Im Browser öffnen") + ` :${p.port}`, icon: "◍", action: () => open(r, "browser", `http://localhost:${p.port}`) })),
+        ...(mineSet.has(r.id) ? [{ label: t("Aus der Übersicht nehmen"), icon: "◌", action: () => mySessions.remove(r.id) }] : []),
         { label: t("Sitzung beenden"), icon: "✕", danger: true, action: () => (ending = r) },
       ],
     };
@@ -121,16 +171,100 @@
   }
 
   const address = (s: Server) => `${s.user}@${s.addresses[0] ?? "?"}`;
+
+  // ------------------------------------------------------------ keyboard: j/k ↩ 1–9 r t g b e x ?
+
+  /** "f:<id>" (Braucht dich) or "w:<id>" (Woran ich arbeite) */
+  let sel = $state<string | null>(null);
+  const cards: Record<string, FocusCard | undefined> = $state({});
+  const navKeys = $derived([...focus.map((f) => `f:${f.ref.id}`), ...projects.flat().map((w) => `w:${w.ref.id}`)]);
+  const selRef = $derived.by(() => {
+    if (!sel) return undefined;
+    const id = sel.slice(2);
+    return sel.startsWith("f:") ? focus.find((f) => f.ref.id === id)?.ref : workRefs.find((r) => r.id === id);
+  });
+  const selFocus = $derived(sel?.startsWith("f:") ? focus.find((f) => `f:${f.ref.id}` === sel) : undefined);
+
+  function select(key: string, move = true) {
+    sel = key;
+    if (!move) return;
+    const el = document.querySelector<HTMLElement>(`[data-fid="${CSS.escape(key)}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+    (el?.matches("[tabindex]") ? el : el?.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (e.metaKey || e.ctrlKey || e.altKey || menu || ending || removing || showLimits || showBrowser) return;
+    const el = e.target as HTMLElement | null;
+    if (el?.matches?.("input, textarea, select") || el?.isContentEditable || document.querySelector("dialog[open], .modal")) return;
+    const k = e.key;
+    if (k === "?") return void ((showKeys = !showKeys), e.preventDefault());
+    if (k === "j" || k === "k") {
+      if (!navKeys.length) return;
+      e.preventDefault();
+      const i = sel ? navKeys.indexOf(sel) : -1;
+      const next = i === -1 ? (k === "j" ? 0 : navKeys.length - 1) : Math.min(navKeys.length - 1, Math.max(0, i + (k === "j" ? 1 : -1)));
+      return select(navKeys[next]!);
+    }
+    if (k === "Escape" && sel) return void ((sel = null), (document.activeElement as HTMLElement | null)?.blur());
+    const n = Number(k);
+    if (Number.isInteger(n) && n >= 1 && n <= 9) {
+      // the selected question, else the first open one
+      const ask = selFocus?.entry?.kind === "ask" ? selFocus.entry : focus.find((f) => f.entry?.kind === "ask")?.entry;
+      if (!ask || n > (ask.options?.length ?? 0)) return;
+      e.preventDefault();
+      return void answer(ask, n - 1);
+    }
+    const r = selRef;
+    if (!r) return;
+    // a focused button handles ↩ itself
+    if (k === "Enter" && !el?.matches?.("button, a")) return void (e.preventDefault(), open(r));
+    const row = rowOf(r);
+    const actions: Record<string, () => void> = {
+      t: () => open(r, "terminal"),
+      g: () => open(r, "git"),
+      b: () => open(r, "browser", row.ports[0] ? `http://localhost:${row.ports[0].port}` : undefined),
+      r: () => (sel?.startsWith("f:") ? cards[r.id]?.focusReply() : open(r)),
+      e: () => selFocus?.entry && dismiss(selFocus.entry),
+      x: () => (ending = r),
+    };
+    const action = actions[k];
+    if (action) {
+      e.preventDefault();
+      action();
+    }
+  }
+
+  const KEYS: [string, string][] = [
+    ["j / k", "Nächster / vorheriger Eintrag"],
+    ["↩", "Chat öffnen"],
+    ["1 – 9", "Option der Frage wählen"],
+    ["r", "Antworten"],
+    ["t", "Terminal öffnen"],
+    ["g", "Git & Dateien"],
+    ["b", "Browser (Port des Projekts)"],
+    ["e", "Als gesehen markieren"],
+    ["x", "Sitzung beenden"],
+    ["esc", "Auswahl aufheben"],
+  ];
 </script>
 
 <svelte:window onkeydown={onKey} />
 
-<div class="page">
+<div class="page dash">
   <div class="page-head">
     <h1>{t("Übersicht")}</h1>
+    <button class="btn" class:on={showKeys} onclick={() => (showKeys = !showKeys)} title="{t('Tastenkürzel')} (?)">?</button>
     <button class="btn" disabled={reloading} onclick={reload} title={t("Aktualisieren")}>{reloading ? "…" : "↻"}</button>
+    <button class="btn" disabled={!app.servers.length} onclick={() => (showBrowser = true)} title={t("Browser")}>{t("Browser")}</button>
     <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>
   </div>
+
+  {#if showKeys}
+    <div class="keys card">
+      {#each KEYS as [key, what]}<span><kbd>{key}</kbd> {t(what)}</span>{/each}
+    </div>
+  {/if}
 
   {#if capGroups.length}
     <button class="limits" onclick={() => (showLimits = true)} title={t("Nutzungslimits")}>
@@ -143,17 +277,59 @@
     </button>
   {/if}
 
-  <!-- needs you -->
-  {#if entries.length}
-    <div class="section">{t("Braucht dich")} ({entries.length})</div>
-    <div class="inbox">
-      {#each entries as e (e.id)}
-        <InboxCard entry={e} onOpen={() => open(e.ref)} />
-      {/each}
-    </div>
-  {/if}
+  <div class="cols">
+    <!-- needs you, most urgent first -->
+    <section class="needs">
+      <div class="section head">
+        <span class="sdot warn" class:quiet={!focus.length}></span><span class="grow">{t("Braucht dich")}</span>
+        {#if focus.length}<span class="dim">{focus.length}</span>{/if}
+      </div>
+      {#if focus.length}
+        <div class="stack">
+          {#each focus as f (f.ref.id)}
+            {@const row = rowOf(f.ref)}
+            <FocusCard bind:this={cards[f.ref.id]} kind={f.kind} since={f.since} ref={f.ref} entry={f.entry} ctx={row.ctx}
+              project={row.project} ports={row.ports} selected={sel === `f:${f.ref.id}`}
+              onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)} onEnd={() => (ending = f.ref)} />
+          {/each}
+        </div>
+      {:else}
+        <div class="quiet card">
+          <span class="ok">✓</span>
+          <span>{anyLoaded ? t("Nichts wartet auf dich.") : t("Lädt …")}
+            {#if anyLoaded}<span class="muted small">{t("Fragen, fertige und lange laufende Agents erscheinen hier.")}</span>{/if}</span>
+        </div>
+      {/if}
+    </section>
 
-  <!-- sessions -->
+    <!-- what you're working on, by project -->
+    <section class="working">
+      <div class="section head">
+        <span class="grow">{t("Woran ich arbeite")}</span>{#if workCount}<span class="dim">{workCount}</span>{/if}
+      </div>
+      {#if projects.length}
+        <div class="stack" use:arrowNav>
+          {#each projects as rows (rows[0]!.project.key)}
+            <ProjectCard name={rows[0]!.project.name} server={several ? rows[0]!.ref.server.label : undefined} {rows}
+              selectedId={sel?.startsWith("w:") ? sel.slice(2) : undefined}
+              onOpen={open} onSelect={(r) => select(`w:${r.id}`, false)} onMenu={cardMenu} />
+          {/each}
+        </div>
+      {:else if !anyLoaded && app.servers.length}
+        <div class="skeleton" style="height:120px; border-radius:16px"></div>
+      {:else}
+        <div class="empty card">
+          <div class="muted">{t("Gerade arbeitet kein Agent. Starte eine Sitzung oder öffne eine aus „Alle Agents“.")}</div>
+          <div class="row-buttons">
+            <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>
+            <button class="btn" onclick={() => go({ view: "agents" })}>{t("Alle Agents")}</button>
+          </div>
+        </div>
+      {/if}
+    </section>
+  </div>
+
+  <!-- sessions you opened in Hollr, by machine -->
   {#if !mine.length && !anyLoaded && mySessions.ids.length}
     <div class="skeleton" style="width:120px; height:12px; margin: 22px 0 14px"></div>
     <div class="grid">
@@ -226,12 +402,25 @@
 {#if showLimits}
   <LimitsDialog onClose={() => (showLimits = false)} />
 {/if}
+{#if showBrowser}
+  <BrowserDialog onClose={() => (showBrowser = false)} />
+{/if}
 
 <style>
+  .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0 26px; align-items: start; }
+  @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .stack { display: grid; gap: 12px; }
+  .quiet { display: flex; align-items: flex-start; gap: 12px; padding: 16px; }
+  .quiet > span:last-child { display: grid; gap: 2px; }
+  .ok { color: var(--green); font-weight: 700; }
+  .keys { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  kbd { font: 600 11px var(--mono); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--raised); color: var(--fg); }
+  .btn.on { border-color: var(--accent); color: var(--accent); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px 16px; }
-  .inbox { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px; }
   .head { display: flex; align-items: center; gap: 8px; }
   .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+  .sdot.warn { background: var(--orange); }
+  .sdot.quiet { background: var(--dim); }
   .sdot.big { width: 9px; height: 9px; }
   .sdot.bad { background: var(--orange); }
   .sdot.unknown { background: var(--dim); }

@@ -119,4 +119,16 @@ export default {
   "Datei anhängen": "Attach file",
   "Lädt hoch …": "Uploading …",
   "{name} ist zu groß (höchstens 20 MB).": "{name} is too large (20 MB at most).",
+  // terminal (xterm): session / own shell, reconnect, links
+  Session: "Session",
+  "Eigene Shell": "Own shell",
+  "Verbinde neu …": "Reconnecting …",
+  "Neu verbinden": "Reconnect",
+  "Shell beendet.": "Shell ended.",
+  "Die Session gibt es nicht mehr.": "The session no longer exists.",
+  "Die Sitzung wurde geschlossen.": "The session was closed.",
+  "Verbindung beendet.": "Connection ended.",
+  "⌘-Klick öffnet Links": "⌘-click opens links",
+  "Strg-Klick öffnet Links": "Ctrl-click opens links",
+  "⌥ gedrückt halten, um in Vollbild-Programmen Text zu markieren": "Hold ⌥ to select text in full-screen programs",
 };
