@@ -10,6 +10,7 @@
     app, back, dialogs, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName, type Route,
   } from "$lib/store.svelte";
   import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
+  import WorkspaceTabs from "$lib/components/WorkspaceTabs.svelte";
   import AgentView from "$lib/components/AgentView.svelte";
   import PairDialog from "$lib/components/PairDialog.svelte";
   import NewSessionDialog from "$lib/components/NewSessionDialog.svelte";
@@ -138,10 +139,13 @@
   <section class="main">
     {#if nav.route.view === "agent"}
       {#if current}
-        {#key `${nav.route.server}|${nav.route.pane}`}
-          <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
-            open={nav.route.open} url={nav.route.url} {onClosed} />
-        {/key}
+        <div class="agentwrap">
+          <WorkspaceTabs {current} />
+          {#key `${nav.route.server}|${nav.route.pane}`}
+            <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
+              open={nav.route.open} url={nav.route.url} {onClosed} />
+          {/key}
+        </div>
       {:else}
         <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>
       {/if}
@@ -196,5 +200,6 @@
   .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
   .main { min-width: 0; min-height: 0; overflow: hidden; }
+  .agentwrap { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
   .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>

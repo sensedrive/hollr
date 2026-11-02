@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Tabs wie in herdr: über jeder Session alle Tabs ihres Space mit Status – ein Klick wechselt, ＋ startet eine neue Sitzung im selben Space":
+    "Tabs like in herdr: above every session all tabs of its space with their status – one click switches, ＋ starts a new session in the same space",
   "Seitenleiste wie herdr: alle Server mit ihren Spaces, Branch darunter, Worktrees eingerückt und einklappbar – ein Klick springt in die Session, die dich am meisten braucht":
     "Sidebar like herdr: every server with its spaces, branch below, worktrees indented and foldable – a click jumps into the session that needs you most",
   "Spaces mit ✕ oder Rechtsklick aus der Seitenleiste nehmen – sie kommen von selbst zurück, sobald sie dich brauchen":

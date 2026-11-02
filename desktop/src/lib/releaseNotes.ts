@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 7,
+    version: "0.32.3",
+    date: "02.11.2026",
+    items: [
+      { icon: "▭", text: "Tabs wie in herdr: über jeder Session alle Tabs ihres Space mit Status – ein Klick wechselt, ＋ startet eine neue Sitzung im selben Space" },
+    ],
+  },
+  {
     build: 6,
     version: "0.32.2",
     date: "02.11.2026",
