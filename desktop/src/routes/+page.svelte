@@ -3,12 +3,13 @@
   import "../app.css";
   import { onMount, untrack } from "svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
-  import { statusLabel, t } from "$lib/i18n";
+  import { t } from "$lib/i18n";
   import { settings } from "$lib/settings.svelte";
   import * as theme from "$lib/theme";
   import {
     app, back, dialogs, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName, type Route,
   } from "$lib/store.svelte";
+  import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
   import AgentView from "$lib/components/AgentView.svelte";
   import PairDialog from "$lib/components/PairDialog.svelte";
   import NewSessionDialog from "$lib/components/NewSessionDialog.svelte";
@@ -100,16 +101,6 @@
   const isActive = (r: Route) =>
     nav.route.view === r.view || (r.view === "spaces" && nav.route.view === "space");
 
-  // sidebar: my sessions grouped by server
-  const mine = $derived(
-    app.servers.map((s) => ({
-      server: s,
-      refs: mySessions.ids
-        .filter((id) => id.startsWith(`${s.id}|`))
-        .map((id) => findPane(s.id, id.slice(s.id.length + 1)))
-        .filter((r) => !!r),
-    })),
-  );
   const current = $derived(nav.route.view === "agent" ? findPane(nav.route.server, nav.route.pane) : undefined);
   const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+";
 </script>
@@ -135,26 +126,9 @@
       {/each}
     </nav>
     <div class="list">
-      {#each mine as group (group.server.id)}
-        {#if group.refs.length}
-          <div class="group"><span class="dot" class:bad={!!app.errors[group.server.id]}></span>{group.server.label}</div>
-          {#each group.refs as r (r.id)}
-            <button class="session" class:sel={nav.route.view === "agent" && nav.route.server === r.server.id && nav.route.pane === r.pane.pane}
-              onclick={() => go({ view: "agent", server: r.server.id, pane: r.pane.pane })}>
-              <span class="dot {r.pane.status}"></span>
-              <span class="name">{tabName(r.tab.label, r.workspace.label)}</span>
-              <span class="kind">{r.pane.agent ?? t("Terminal")} · {statusLabel(r.pane.status)}</span>
-            </button>
-          {/each}
-        {/if}
-      {/each}
+      <SpacesSidebar />
     </div>
     <div class="bottom">
-      {#each app.servers as s (s.id)}
-        <button class="srv" title={app.errors[s.id] ?? s.label} onclick={() => go({ view: "serverinfo", server: s.id })}>
-          <span class="dot" class:bad={!!app.errors[s.id]}></span>{s.label}
-        </button>
-      {/each}
       <button class="nav" class:active={nav.route.view === "settings"} onclick={() => go({ view: "settings" })} title={`${mod},`}>
         <span class="ico">⚙</span>{t("Einstellungen")}
       </button>
@@ -207,7 +181,7 @@
 <AppLock />
 
 <style>
-  main { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+  main { display: grid; grid-template-columns: 270px 1fr; height: 100vh; }
   aside { background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
   .brand { display: flex; justify-content: space-between; align-items: center; padding: 14px 14px 8px; font-size: 16px; }
   .icon { all: unset; cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); font-size: 16px; }
@@ -220,21 +194,7 @@
     font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--orange); }
   .ico { width: 16px; text-align: center; font-size: 13px; }
   .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
-  .group { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 8px 4px; }
-  .session { all: unset; cursor: pointer; display: grid; grid-template-columns: 10px 1fr; column-gap: 8px; padding: 5px 8px; border-radius: 8px; width: calc(100% - 16px); }
-  .session:hover { background: var(--card); }
-  .session.sel { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-  .session .dot { grid-row: span 2; align-self: center; }
-  .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .kind { font-size: 11px; color: var(--dim); }
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
-  .srv { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 12px; color: var(--muted); border-radius: 8px; }
-  .srv:hover { background: var(--card); color: var(--fg); }
-  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
-  .dot.bad { background: var(--orange); }
-  .dot.unknown { background: var(--dim); }
-  .dot.working { background: var(--purple); }
-  .dot.blocked { background: var(--orange); }
   .main { min-width: 0; min-height: 0; overflow: hidden; }
   .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>

@@ -14,7 +14,7 @@
   import AskCard from "$lib/components/AskCard.svelte";
   import { agentName, refTitle, relTime } from "./util";
 
-  let { kind, since, ref, entry, ctx, project, ports, selected, onOpen, onEnd, onSelect }: {
+  let { kind, since, ref, entry, ctx, project, ports, selected, onOpen, onEnd, onSelect, onHide }: {
     kind: FocusKind;
     since: number;
     ref: PaneRef;
@@ -27,6 +27,8 @@
     onOpen: (open?: AgentOpen, url?: string) => void;
     onEnd: () => void;
     onSelect: () => void;
+    /** a long-running turn: take it out of the list (the session keeps running) */
+    onHide: () => void;
   } = $props();
 
   let input = $state<HTMLTextAreaElement>();
@@ -108,6 +110,8 @@
     {#if kind !== "long"}<span class="dim small" title={new Date(since).toLocaleString()}>{relTime(since)}</span>{/if}
     {#if entry}
       <button class="x" title="{t('Als gesehen markieren')} (E)" aria-label={t("Als gesehen markieren")} onclick={() => dismiss(entry)}>✓</button>
+    {:else if kind === "long"}
+      <button class="x" title="{t('Aus der Liste nehmen')} (E)" aria-label={t("Aus der Liste nehmen")} onclick={onHide}>✓</button>
     {/if}
   </div>
 

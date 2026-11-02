@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 6,
+    version: "0.32.2",
+    date: "02.11.2026",
+    items: [
+      { icon: "├", text: "Seitenleiste wie herdr: alle Server mit ihren Spaces, Branch darunter, Worktrees eingerückt und einklappbar – ein Klick springt in die Session, die dich am meisten braucht" },
+      { icon: "◌", text: "Spaces mit ✕ oder Rechtsklick aus der Seitenleiste nehmen – sie kommen von selbst zurück, sobald sie dich brauchen" },
+      { icon: "✓", text: "Übersicht: lange laufende Agents lassen sich mit ✓ aus „Braucht dich“ nehmen, bis zur nächsten Runde" },
+    ],
+  },
+  {
     build: 5,
     version: "0.32",
     date: "02.11.2026",

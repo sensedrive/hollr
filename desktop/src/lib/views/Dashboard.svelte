@@ -6,6 +6,7 @@
   import * as api from "$lib/api";
   import type { Server } from "$lib/api";
   import { byUrgency, isLong, mainCaps, pooled, projectOf, portsIn, type FocusKind } from "$lib/dashboard";
+  import { hiddenLong, hideLong } from "./dashboard/hiddenLong.svelte";
   import { t } from "$lib/i18n";
   import {
     allPanes, app, dialogs, findPane, go, loadServers, mySessions, refresh, type AgentOpen, type PaneRef,
@@ -59,7 +60,7 @@
     const listed = new Set(entries.map((e) => e.id));
     for (const r of allPanes()) {
       const ctx = sessionCtx.byId[r.id];
-      if (r.pane.agent && r.pane.status === "working" && !listed.has(r.id) && isLong(ctx, now))
+      if (r.pane.agent && r.pane.status === "working" && !listed.has(r.id) && isLong(ctx, now) && hiddenLong[r.id] !== ctx!.turnStartedAt)
         items.push({ kind: "long", since: ctx!.turnStartedAt!, ref: r });
     }
     return items.sort(byUrgency);
@@ -225,7 +226,7 @@
       g: () => open(r, "git"),
       b: () => open(r, "browser", row.ports[0] ? `http://localhost:${row.ports[0].port}` : undefined),
       r: () => (sel?.startsWith("f:") ? cards[r.id]?.focusReply() : open(r)),
-      e: () => selFocus?.entry && dismiss(selFocus.entry),
+      e: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" && hideLong(selFocus.ref.id, selFocus.since)),
       x: () => (ending = r),
     };
     const action = actions[k];
@@ -290,7 +291,8 @@
             {@const row = rowOf(f.ref)}
             <FocusCard bind:this={cards[f.ref.id]} kind={f.kind} since={f.since} ref={f.ref} entry={f.entry} ctx={row.ctx}
               project={row.project} ports={row.ports} selected={sel === `f:${f.ref.id}`}
-              onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)} onEnd={() => (ending = f.ref)} />
+              onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)} onEnd={() => (ending = f.ref)}
+              onHide={() => hideLong(f.ref.id, f.since)} />
           {/each}
         </div>
       {:else}
