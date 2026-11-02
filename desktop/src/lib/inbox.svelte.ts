@@ -13,6 +13,8 @@ export const inbox = $state({
   /** "serverId|pane" → when it was first seen waiting/finished */
   since: {} as Record<string, number | undefined>,
   dismissed: {} as Record<string, boolean | undefined>,
+  /** "serverId|pane" → last time that session was open in front of the user (see markSeen) */
+  seen: {} as Record<string, number | undefined>,
   answered: {} as Record<string, number | undefined>,
   /** a failed answer, per entry key */
   errors: {} as Record<string, string | undefined>,
@@ -98,6 +100,11 @@ async function load(r: PaneRef, now: number) {
 
 /** Hide until the next event of that pane. */
 export const dismiss = (e: InboxEntry) => (inbox.dismissed[e.key] = true);
+
+/** The user has this session open right now: its result (done / error) up to now counts as seen. */
+export function markSeen(id: string, now = Date.now()) {
+  inbox.seen[id] = now;
+}
 
 /** Optimistically hide, then refresh that pane soon (it comes back if the agent still waits). */
 async function act(e: InboxEntry & { ref: PaneRef }, send: () => Promise<unknown>): Promise<boolean> {

@@ -26,7 +26,7 @@
   import AppLock from "$lib/components/AppLock.svelte";
   import TipsTour from "$lib/components/TipsTour.svelte";
   import { pendingTips, tour } from "$lib/tips.svelte";
-  import { inboxEntries, trackInbox } from "$lib/inbox.svelte";
+  import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
 
   // ---- theme (fixed palette or following the system)
   let systemDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
@@ -93,6 +93,16 @@
     untrack(() => trackInbox());
   });
   const needsYou = $derived(inboxEntries().length);
+
+  // the session in front of the user: its result counts as seen ("Braucht dich" drops it). Re-run on every
+  // tree refresh and inbox tick, so a result that comes in while it's open is seen too.
+  $effect(() => {
+    const r = nav.route;
+    void inbox.now;
+    if (r.view !== "agent") return;
+    void app.trees[r.server];
+    if (document.visibilityState === "visible") untrack(() => markSeen(`${r.server}|${r.pane}`));
+  });
 
   const NAV: { route: Route; label: string; icon: string; key: string }[] = [
     { route: { view: "dashboard" }, label: "Übersicht", icon: "▦", key: "1" },

@@ -122,6 +122,15 @@ describe("buildEntries", () => {
     expect(buildEntries(panes, s, NOW + 1000)).toEqual([]);
     expect(buildEntries(panes, s, NOW + ANSWERED_MS).length).toBe(1);
   });
+
+  test("opening a session sees its result up to then, never an open question", () => {
+    const s = { ...empty, since: { done: NOW - 5000, err: NOW - 5000, q: NOW - 5000 }, details: { err: { kind: "error" as const, turn: "e" }, q: ask } };
+    const panes = [{ id: "done", status: "done" }, { id: "err", status: "done" }, { id: "q", status: "blocked" }];
+    const seen = { done: NOW, err: NOW, q: NOW };
+    expect(buildEntries(panes, { ...s, seen }, NOW).map((e) => e.id)).toEqual(["q"]);
+    // the next result after that look shows again
+    expect(buildEntries(panes, { ...s, seen, since: { ...s.since, done: NOW + 1000 } }, NOW + 1000).map((e) => e.id)).toEqual(["q", "done"]);
+  });
 });
 
 describe("helpers", () => {

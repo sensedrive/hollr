@@ -26,7 +26,10 @@ export default {
   "Auf dem Server bleibt der Schlüssel bis `hollr revoke {id}`.": "The key stays on the server until `hollr revoke {id}`.",
   "Umbenennen …": "Rename …",
   "Tab umbenennen": "Rename tab",
-  "Doppelklick: umbenennen": "double-click: rename",
+  "Doppelklick: umbenennen · Mittelklick: schließen": "double-click: rename · middle click: close",
+  "„{name}“ schließen?": "Close “{name}”?",
+  "Die Session wird in herdr beendet – {agent} hört dabei auf zu arbeiten.":
+    "The session ends in herdr – {agent} stops working.",
   "{n} ausgeblendet – alle zeigen": "{n} hidden – show all",
   "Worktrees einklappen": "Collapse worktrees",
   "Worktrees zeigen": "Show worktrees",

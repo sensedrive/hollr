@@ -96,6 +96,8 @@ export function buildEntries(
     since: Record<string, number | undefined>;
     dismissed: Record<string, boolean | undefined>;
     answered: Record<string, number | undefined>;
+    /** pane → last time the user had that session open: a "done" / error from before is seen */
+    seen?: Record<string, number | undefined>;
   },
   now: number,
 ): InboxEntry[] {
@@ -109,6 +111,9 @@ export function buildEntries(
     const detail: InboxDetail = fits ? fetched : { kind: p.status === "blocked" ? "waiting" : "done", turn: `@${since}` };
     const key = `${p.id}#${detail.turn}`;
     if (s.dismissed[key]) continue;
+    // a question still waits for an answer however long it was looked at; a result is seen once opened
+    const seenAt = s.seen?.[p.id];
+    if ((detail.kind === "done" || detail.kind === "error") && seenAt !== undefined && seenAt >= since) continue;
     const answered = s.answered[key];
     if (answered && now - answered < ANSWERED_MS) continue;
     out.push({ ...detail, id: p.id, key, since });

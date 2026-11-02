@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 14,
+    version: "0.32.10",
+    date: "02.11.2026",
+    items: [
+      { icon: "✕", text: "Tabs schließen: ✕ am Tab, Mittelklick oder Rechtsklick › Schließen – Sessions mit Agent nach Rückfrage" },
+      { icon: "✓", text: "„Braucht dich“: eine fertige Session gilt als gesehen, sobald du sie öffnest – Fragen bleiben, bis sie beantwortet sind" },
+    ],
+  },
+  {
     build: 13,
     version: "0.32.9",
     date: "02.11.2026",

@@ -1,11 +1,12 @@
 <script lang="ts">
   // herdr's tab bar for the open session's workspace: every tab (and every pane of a split tab) with its
   // number, name and status – one click switches, double-click (or right-click › Umbenennen) renames the
-  // tab in herdr, ＋ starts a new session in the same space.
+  // tab in herdr, ✕ / middle click closes it (agents after asking), ＋ starts a new session in the same space.
   import { tick } from "svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
-  import { dialogs, go, refresh, type PaneRef } from "$lib/store.svelte";
+  import { dialogs, go, mySessions, refresh, type PaneRef } from "$lib/store.svelte";
+  import ConfirmDialog from "$lib/views/dashboard/ConfirmDialog.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import type { MenuItem } from "$lib/views/dashboard/util";
 
@@ -70,8 +71,33 @@
         { label: t("Öffnen"), icon: "↗", action: () => go({ view: "agent", server, pane: pane.pane }) },
         { label: t("Umbenennen …"), icon: "✎", action: () => startRename(tab) },
         { label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: ws.id }) },
+        { label: t("Schließen"), icon: "✕", danger: true, action: () => askClose(tab, pane) },
       ],
     };
+  }
+
+  // ---- close: a plain terminal right away, an agent session after asking (its work in herdr ends)
+  let closing = $state<{ tab: Tab; pane: Pane } | null>(null);
+  function askClose(tab: Tab, pane: Pane) {
+    if (pane.agent) closing = { tab, pane };
+    else void close(pane);
+  }
+  async function close(pane: Pane) {
+    // leaving the closed session: the tab next to it, else the space
+    if (pane.pane === current.pane.pane) {
+      const all = ws.tabs.flatMap((tb) => tb.panes);
+      const i = all.findIndex((p) => p.pane === pane.pane);
+      const next = all[i + 1] ?? all[i - 1];
+      go(next ? { view: "agent", server, pane: next.pane } : { view: "space", server, ws: ws.id });
+    }
+    try {
+      await api.closePane(server, pane.pane);
+      mySessions.remove(`${server}|${pane.pane}`);
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+    closing = null;
+    await refresh(server);
   }
 </script>
 
@@ -88,14 +114,18 @@
               aria-label={t("Tab umbenennen")} onkeydown={(e) => onKey(e, tab)} onblur={() => commit(tab)} />
           </div>
         {:else}
-          <button class="tab" class:on class:split={i > 0} role="tab" aria-selected={on}
-            title="{pane.title || nameOf(tab, pane)} · {t('Doppelklick: umbenennen')}"
-            onclick={() => go({ view: "agent", server, pane: pane.pane })}
-            ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
-            <span class="num">{i === 0 ? tab.number : "┊"}</span>
-            <span class="dot {pane.status}"></span>
-            <span class="name ellipsis">{nameOf(tab, pane)}</span>
-          </button>
+          <div class="tabwrap" class:on>
+            <button class="tab" class:on class:split={i > 0} role="tab" aria-selected={on}
+              title="{pane.title || nameOf(tab, pane)} · {t('Doppelklick: umbenennen · Mittelklick: schließen')}"
+              onclick={() => go({ view: "agent", server, pane: pane.pane })}
+              onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
+              ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
+              <span class="num">{i === 0 ? tab.number : "┊"}</span>
+              <span class="dot {pane.status}"></span>
+              <span class="name ellipsis">{nameOf(tab, pane)}</span>
+            </button>
+            <button class="x" title={t("Schließen")} aria-label={t("Schließen")} onclick={() => askClose(tab, pane)}>✕</button>
+          </div>
         {/if}
       {/each}
     {/each}
@@ -108,6 +138,12 @@
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
 {/if}
+{#if closing}
+  {@const c = closing}
+  <ConfirmDialog title={t("„{name}“ schließen?", { name: nameOf(c.tab, c.pane) })}
+    message={t("Die Session wird in herdr beendet – {agent} hört dabei auf zu arbeiten.", { agent: c.pane.agent ?? "" })}
+    confirmLabel={t("Schließen")} onConfirm={() => close(c.pane)} onClose={() => (closing = null)} />
+{/if}
 
 <style>
   .tabs { display: flex; align-items: stretch; gap: 2px; padding: 5px 10px 0; border-bottom: 1px solid var(--border);
@@ -116,12 +152,17 @@
   .ws:hover { color: var(--fg); }
   .strip { display: flex; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
   .strip::-webkit-scrollbar { display: none; }
-  .tab { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 5px 12px 6px; max-width: 220px;
+  .tabwrap { position: relative; display: flex; flex: none; }
+  .tab { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 5px 26px 6px 12px; max-width: 220px;
     border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; color: var(--muted); flex: none; }
   .tab:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
   .tab.on { color: var(--fg); background: var(--bg); border-color: var(--border); margin-bottom: -1px; }
   .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .tab.split { padding-left: 8px; }
+  .x { all: unset; cursor: pointer; position: absolute; right: 6px; top: 50%; translate: 0 -45%; width: 16px; height: 16px;
+    display: grid; place-items: center; border-radius: 4px; font-size: 9px; color: var(--muted); opacity: 0; }
+  .tabwrap:hover .x, .tabwrap.on .x, .x:focus-visible { opacity: 1; }
+  .x:hover { background: var(--border); color: var(--fg); }
   .tab.edit { cursor: text; padding-top: 3px; padding-bottom: 4px; }
   .tab.edit input { all: unset; width: 160px; padding: 2px 6px; border-radius: 5px; color: var(--fg); font: inherit;
     background: var(--card); box-shadow: 0 0 0 1px var(--accent); }
