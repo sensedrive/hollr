@@ -60,3 +60,8 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# build scripts and proc macros: stripped dylibs fail to load with newer Xcode toolchains
+# ("mis-aligned LINKEDIT string pool"); only the shipped binary needs stripping
+[profile.release.build-override]
+strip = false
