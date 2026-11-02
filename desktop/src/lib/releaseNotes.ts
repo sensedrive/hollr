@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 12,
+    version: "0.32.8",
+    date: "02.11.2026",
+    items: [
+      { icon: "⇄", text: "Jede Session merkt sich Chat oder Terminal – beim Wechsel der Tabs und nach einem Neustart" },
+    ],
+  },
+  {
     build: 11,
     version: "0.32.7",
     date: "02.11.2026",

@@ -26,6 +26,7 @@
   import ModelDialog from "./ModelDialog.svelte";
   import GitPanel from "./GitPanel.svelte";
   import Modal from "./Modal.svelte";
+  import { rememberViewMode, viewModeOf, type ViewMode } from "../viewModes";
 
   let { server, pane, title, onClosed, open, url }: {
     server: string; pane: Pane; title: string;
@@ -173,7 +174,13 @@
 
   // ------------------------------------------------------------ view state
 
-  let mode = $state<"chat" | "terminal">(untrack(() => pane.agent && open !== "terminal") ? "chat" : "terminal");
+  // chat or terminal as last left in this session (a dashboard "Terminal" click wins)
+  let mode = $state<ViewMode>(
+    untrack(() => (!pane.agent || open === "terminal" ? "terminal" : (viewModeOf(`${server}|${pane.pane}`) ?? "chat"))),
+  );
+  $effect(() => {
+    if (pane.agent) rememberViewMode(`${server}|${pane.pane}`, mode);
+  });
   let zen = $state(false);
   let panel = $state<"" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
   /** browser stays mounted (tunnels open) until its ✕, even while another panel tab shows */
