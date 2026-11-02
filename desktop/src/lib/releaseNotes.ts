@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 8,
+    version: "0.32.4",
+    date: "02.11.2026",
+    items: [
+      { icon: "↔", text: "Seitenleiste breiter oder schmaler ziehen – am rechten Rand; Doppelklick setzt sie zurück" },
+      { icon: "◉", text: "Klick auf eine Mitteilung holt Hollr nach vorn und öffnet genau diese Session" },
+    ],
+  },
+  {
     build: 7,
     version: "0.32.3",
     date: "02.11.2026",

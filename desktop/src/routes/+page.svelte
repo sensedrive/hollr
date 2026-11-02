@@ -104,13 +104,38 @@
 
   const current = $derived(nav.route.view === "agent" ? findPane(nav.route.server, nav.route.pane) : undefined);
   const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+";
+
+  // ---- sidebar width: drag its right edge (double-click resets), remembered per computer
+  const SW = "hollr.sidebarWidth";
+  const SIDE_DEFAULT = 270;
+  let sideWidth = $state(Number(localStorage.getItem(SW)) || SIDE_DEFAULT);
+  const clampSide = (w: number) => Math.round(Math.min(Math.max(w, 200), Math.min(640, window.innerWidth * 0.5)));
+  const saveSide = () => {
+    try {
+      localStorage.setItem(SW, String(sideWidth));
+    } catch {}
+  };
+  function startSideResize(e: PointerEvent) {
+    const startX = e.clientX;
+    const start = sideWidth;
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => (sideWidth = clampSide(start + ev.clientX - startX));
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      saveSide();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  }
 </script>
 
 <!-- files dropped next to the composer must not replace the app with the file (drop target: Composer) -->
 <svelte:window onkeydown={onKey} ondragover={(e) => e.dataTransfer?.types.includes("Files") && e.preventDefault()}
   ondrop={(e) => e.dataTransfer?.types.includes("Files") && e.preventDefault()} />
 
-<main>
+<main style:grid-template-columns="{sideWidth}px 1fr">
   <aside>
     <div class="brand"><b>Hollr</b>
       <button class="icon" title={`${t("Neue Sitzung")} (${mod}N)`} disabled={!app.servers.length}
@@ -134,6 +159,9 @@
         <span class="ico">⚙</span>{t("Einstellungen")}
       </button>
     </div>
+    <div class="sidegrip" role="separator" aria-orientation="vertical" aria-label={t("Seitenleiste breiter / schmaler")}
+      title={t("Ziehen: Breite ändern · Doppelklick: zurücksetzen")} onpointerdown={startSideResize}
+      ondblclick={() => { sideWidth = SIDE_DEFAULT; saveSide(); }}></div>
   </aside>
 
   <section class="main">
@@ -186,7 +214,9 @@
 
 <style>
   main { display: grid; grid-template-columns: 270px 1fr; height: 100vh; }
-  aside { background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  aside { position: relative; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .sidegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 5; }
+  .sidegrip:hover, .sidegrip:active { background: color-mix(in srgb, var(--accent) 60%, transparent); }
   .brand { display: flex; justify-content: space-between; align-items: center; padding: 14px 14px 8px; font-size: 16px; }
   .icon { all: unset; cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); font-size: 16px; }
   .icon:hover { background: var(--card); color: var(--fg); }

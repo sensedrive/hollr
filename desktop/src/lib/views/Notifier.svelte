@@ -2,12 +2,12 @@
   // Desktop notifications (agent waits / finishes / fails). Mounted once by the shell, renders nothing.
   // Mirrors server/src/watch.ts (diffStates) and the texts of server/src/push.ts: "waiting" fires at once,
   // "done" only after ≥ 5 s of work and when idle holds for ~3.5 s. Watches app.trees (refreshed every 5 s).
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
   import { settings } from "$lib/settings.svelte";
-  import { allPanes, app, nav, tabName } from "$lib/store.svelte";
-  import { notify, notifyKinds, type NoticeKind } from "./settings/notify.svelte";
+  import { allPanes, app, go, nav, tabName } from "$lib/store.svelte";
+  import { notify, notifyKinds, onNoticeClick, type NoticeKind } from "./settings/notify.svelte";
 
   interface Seen {
     status: string;
@@ -119,7 +119,7 @@
           : t("{agent} ist fertig · {time}", { agent, time: duration(e.workedMs) });
     const title = tabName(ref.tab.label, ref.workspace.label);
     const where = app.servers.length > 1 ? ` · ${ref.server.label}` : "";
-    await notify(`${title}${where}`, `${subtitle}\n${info.body}`);
+    await notify(`${title}${where}`, `${subtitle}\n${info.body}`, { server: ref.server.id, pane: ref.pane.pane });
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -141,5 +141,16 @@
     timer = setTimeout(poll, 300);
   });
 
-  onDestroy(() => clearTimeout(timer));
+  // a click on a notification opens its session (the window comes to the front first)
+  let offClick = () => {};
+  onMount(() => {
+    onNoticeClick(({ server, pane }) => go({ view: "agent", server, pane }))
+      .then((off) => (offClick = off))
+      .catch(() => {});
+  });
+
+  onDestroy(() => {
+    clearTimeout(timer);
+    offClick();
+  });
 </script>
