@@ -173,6 +173,8 @@ export const kinds = (s: string) => gate<{ kinds: string[] }>(s, "kinds").then((
 export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
 export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
+/** herdr tab name (`rename <tab id>`, server 0.32.5+) */
+export const renameTab = (s: string, tab: string, label: string) => gate(s, `rename ${tab}`, { label });
 export const models = (s: string, kind: string) => gate<ModelList>(s, `models ${kind}`);
 /** A file for the agent (base64): lands outside the repo on the server, gives back its absolute path. */
 export const upload = (s: string, name: string, data: string) =>

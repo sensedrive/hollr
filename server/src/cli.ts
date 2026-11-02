@@ -95,7 +95,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.32.4";
+export const VERSION = "0.32.5";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -487,10 +487,26 @@ async function gate(): Promise<number> {
       await herdr.sendKeys(pane, rest.slice(0, 10));
       json({ ok: true });
       return 0;
+    case "rename": {
+      // a herdr tab gets a name: rename <tab id>, {"label":"…"} on stdin
+      const { label = "" } = JSON.parse((await readStdinLine()) || "{}") as { label?: string };
+      const name = label.replace(/\s+/g, " ").trim().slice(0, 80);
+      if (!name) {
+        json({ error: "empty_label" });
+        return 2;
+      }
+      try {
+        await execHerdr(["tab", "rename", pane, name]);
+        json({ ok: true });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>...",
+        hint: "hello | events | tree | kinds | new | close <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>...",
       });
       return 2;
   }

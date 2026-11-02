@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Tabs umbenennen: Doppelklick auf einen Tab (oder Rechtsklick › Umbenennen) – der Name gilt auch in herdr":
+    "Rename tabs: double-click a tab (or right-click › Rename) – the name applies in herdr too",
   "Seitenleiste breiter oder schmaler ziehen – am rechten Rand; Doppelklick setzt sie zurück":
     "Drag the sidebar wider or narrower – at its right edge; double-click resets it",
   "Klick auf eine Mitteilung holt Hollr nach vorn und öffnet genau diese Session":

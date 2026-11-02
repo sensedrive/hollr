@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 9,
+    version: "0.32.5",
+    date: "02.11.2026",
+    items: [
+      { icon: "✎", text: "Tabs umbenennen: Doppelklick auf einen Tab (oder Rechtsklick › Umbenennen) – der Name gilt auch in herdr" },
+    ],
+  },
+  {
     build: 8,
     version: "0.32.4",
     date: "02.11.2026",
