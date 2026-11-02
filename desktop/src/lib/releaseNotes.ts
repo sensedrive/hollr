@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 11,
+    version: "0.32.7",
+    date: "02.11.2026",
+    items: [
+      { icon: "⧉", text: "Terminal wie Ghostty: markieren kopiert sofort, „Auswahl kopiert“ bestätigt es – ohne Füll-Leerzeichen und Rand der Oberfläche" },
+    ],
+  },
+  {
     build: 10,
     version: "0.32.6",
     date: "02.11.2026",

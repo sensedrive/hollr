@@ -7,6 +7,7 @@
   import { Terminal, type IBufferCell, type ILink } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
   import "@xterm/xterm/css/xterm.css";
+  import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { findLinks, keySequence, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
@@ -38,6 +39,36 @@
       case "unsupported": return t("Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren.");
       case "error": return end.error || t("Verbindung beendet.");
     }
+  }
+
+  /** The selection as plain text: without the blanks a TUI pads its lines with, its left margin (the indent all
+   *  following lines share – the first one starts where the drag did) and trailing empty lines. */
+  function selectionText(x: Terminal): string {
+    const lines = x.getSelection().split("\n").map((l) => l.replace(/\s+$/, ""));
+    const rest = lines.slice(1).filter(Boolean);
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)![0].length)) : 0;
+    return lines
+      .map((l, i) => (i === 0 ? l.trimStart() : l.slice(indent)))
+      .join("\n")
+      .replace(/\n+$/, "");
+  }
+
+  // the dev bridge (normal browser) has no native clipboard plugin behind it
+  const viaBridge = new URLSearchParams(location.search).has("bridge");
+  let copied = $state(0);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  async function copySelection(x: Terminal) {
+    const text = selectionText(x);
+    if (!text) return;
+    try {
+      if (viaBridge) await navigator.clipboard.writeText(text);
+      else await writeText(text);
+    } catch {
+      return;
+    }
+    copied++;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied = 0), 1400);
   }
 
   /** Links in the (wrapped) line at buffer row `y` (1-based), mapped back to their cells. */
@@ -121,7 +152,7 @@
         const key = e.key.toLowerCase();
         const copy = mac ? e.metaKey && key === "c" : e.ctrlKey && key === "c" && x.hasSelection();
         if (copy) {
-          if (x.hasSelection()) navigator.clipboard.writeText(x.getSelection()).catch(() => {});
+          copySelection(x);
           return false;
         }
         // Cmd shortcuts stay with the app (Cmd+V arrives as a paste, which xterm types in)
@@ -138,6 +169,11 @@
         Object.defineProperty(e, forceKey, { value: !e[forceKey] });
       };
       el.addEventListener("mousedown", forceSelect, { capture: true });
+      // like Ghostty: letting go of a selection copies it
+      const copyOnSelect = (e: MouseEvent) => {
+        if (e.button === 0) setTimeout(() => x.hasSelection() && copySelection(x), 0);
+      };
+      el.addEventListener("mouseup", copyOnSelect);
       const input = x.onData((data) => s.type(data));
       const focusIn = () => (focused = true);
       const focusOut = () => (focused = false);
@@ -162,6 +198,8 @@
         cancelAnimationFrame(frame);
         ro.disconnect();
         el.removeEventListener("mousedown", forceSelect, { capture: true });
+        el.removeEventListener("mouseup", copyOnSelect);
+        clearTimeout(copiedTimer);
         input.dispose();
         x.textarea?.removeEventListener("focus", focusIn);
         x.textarea?.removeEventListener("blur", focusOut);
@@ -198,10 +236,13 @@
       <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => (settings.terminalMode = "shell")}>{t("Eigene Shell")}</button>
     </div>
     <span class="grow">{focused ? t("Tippen geht direkt ans Terminal – Esc, Pfeile und Ctrl-Tasten inklusive") : t("Ins Terminal klicken, um direkt zu tippen")}</span>
-    <span class="hint" title={mac ? t("Ziehen markiert, ⌘C kopiert · ⌥-Klick geht an das Programm im Terminal") : t("Ziehen markiert, Strg+C kopiert · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links") : t("Strg-Klick öffnet Links")}</span>
+    <span class="hint" title={mac ? t("Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal") : t("Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links") : t("Strg-Klick öffnet Links")}</span>
   </div>
   <div class="screen">
     <div class="xterm-host" bind:this={host}></div>
+    {#if copied}
+      {#key copied}<div class="toast" role="status">✓ {t("Auswahl kopiert")}</div>{/key}
+    {/if}
     {#if phase.kind === "connecting"}
       <div class="center"><span class="spin"></span>{t("Verbinde …")}</div>
     {:else if phase.kind === "reconnecting"}
@@ -242,4 +283,9 @@
   .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #fff;
     animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; color: #fff; background: rgba(40, 44, 52, 0.85); backdrop-filter: blur(8px); pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); animation: toast 1.4s ease forwards; }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 6px); } 12%, 75% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; } }
 </style>

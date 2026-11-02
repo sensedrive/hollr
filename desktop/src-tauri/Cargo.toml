@@ -1,6 +1,6 @@
 [package]
 name = "hollr-desktop"
-version = "0.32.6"
+version = "0.32.7"
 description = "Hollr desktop client"
 authors = ["Hollr contributors"]
 license = "MIT"
@@ -39,6 +39,7 @@ ureq = "3"
 hmac = "0.13.0"
 pbkdf2 = { version = "0.13.0", default-features = false, features = ["hmac"] }
 aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc"] }
+tauri-plugin-clipboard-manager = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16", features = ["metal"] }

@@ -130,8 +130,9 @@ export default {
   "Verbindung beendet.": "Connection ended.",
   "⌘-Klick öffnet Links": "⌘-click opens links",
   "Strg-Klick öffnet Links": "Ctrl-click opens links",
-  "Ziehen markiert, ⌘C kopiert · ⌥-Klick geht an das Programm im Terminal":
-    "Drag selects, ⌘C copies · ⌥-click goes to the program in the terminal",
-  "Ziehen markiert, Strg+C kopiert · ⇧-Klick geht an das Programm im Terminal":
-    "Drag selects, Ctrl+C copies · ⇧-click goes to the program in the terminal",
+  "Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal":
+    "Selecting copies right away · ⌥-click goes to the program in the terminal",
+  "Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal":
+    "Selecting copies right away · ⇧-click goes to the program in the terminal",
+  "Auswahl kopiert": "Selection copied",
 };

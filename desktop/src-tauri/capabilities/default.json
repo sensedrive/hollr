@@ -12,6 +12,7 @@
     "notification:default",
     "core:window:allow-set-focus",
     "core:window:allow-unminimize",
-    "core:window:allow-show"
+    "core:window:allow-show",
+    "clipboard-manager:allow-write-text"
   ]
 }
