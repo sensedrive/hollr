@@ -1,3 +1,10 @@
+/* Nerd Fonts symbols (MIT, static/fonts/SymbolsNerdFont-LICENSE.txt) – used only for private-use code points */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("/fonts/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  font-display: swap;
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD, U+23FB-23FE, U+2B58, U+2665, U+26A1;
+}
 :root {
   --bg: #0b0c0f;
   --side: #121318;
@@ -16,7 +23,8 @@
   --cyan: #5ed3c1;
   --pink: #f286c4;
   --blue: #5aa9f0;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* Symbols Nerd Font: only the private-use icons (powerline arrows, git branch …) shell prompts draw */
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Symbols Nerd Font Mono", monospace;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {

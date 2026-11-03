@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 18,
+    version: "0.33.2",
+    date: "03.11.2026",
+    items: [
+      { icon: "⏎", text: "Terminal: Shift+Enter macht in omp und Claude Code eine neue Zeile, statt abzuschicken" },
+      { icon: "⑂", text: "Terminal: Powerline- und Nerd-Font-Zeichen in Shell-Prompts (Pfeile, Branch-Symbol) werden richtig gezeichnet statt als Kästchen" },
+    ],
+  },
+  {
     build: 17,
     version: "0.33.1",
     date: "03.11.2026",

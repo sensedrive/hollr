@@ -157,6 +157,13 @@
       x.attachCustomKeyEventHandler((e) => {
         if (e.type !== "keydown") return true;
         const key = e.key.toLowerCase();
+        // Shift+Enter: a new line instead of sending – ESC+CR, the newline omp's and Claude Code's editors
+        // take from terminals without the kitty keyboard protocol (xterm.js sends a plain CR otherwise)
+        if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          e.preventDefault();
+          s.type("\x1b\r");
+          return false;
+        }
         const copy = mac ? e.metaKey && key === "c" : e.ctrlKey && key === "c" && x.hasSelection();
         if (copy) {
           copySelection(x);

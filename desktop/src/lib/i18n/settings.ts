@@ -161,6 +161,10 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Terminal: Shift+Enter macht in omp und Claude Code eine neue Zeile, statt abzuschicken":
+    "Terminal: Shift+Enter makes a new line in omp and Claude Code instead of sending",
+  "Terminal: Powerline- und Nerd-Font-Zeichen in Shell-Prompts (Pfeile, Branch-Symbol) werden richtig gezeichnet statt als Kästchen":
+    "Terminal: Powerline and Nerd Font characters in shell prompts (arrows, branch symbol) are drawn properly instead of as boxes",
   "Die Seitenleiste zeigt nur den Rechner, den du oben in den Server-Tabs gewählt hast – auch auf der Übersicht bleibt er gewählt":
     "The sidebar shows only the machine you picked in the server tabs at the top – it stays picked on the overview too",
   "Server-Tabs oben: zwischen deinen Rechnern wechseln – mit Verbindungspunkt, „Braucht dich“-Zähler und ⌘⌥1…9; ein Klick öffnet die zuletzt genutzte Session dort":
