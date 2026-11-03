@@ -283,6 +283,9 @@ export async function runLive(
       const state = await herdr.liveState(pane).catch(() => undefined);
       if (state && state !== ompState) {
         ompState = state;
+        // omp's own mute wins: unmuted in omp itself (Space in its terminal, or omp on its own) after the
+        // app's mute button, the mic would otherwise stay cut off here while omp shows "listening"
+        muted = state === "muted";
         send({ t: "omp", state });
       }
     }, 1000),

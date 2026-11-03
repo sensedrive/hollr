@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 15,
+    version: "0.32.11",
+    date: "03.11.2026",
+    items: [
+      { icon: "〰", text: "Live: nach dem Stummschalten hört omp wieder zu – auch wenn die Stummschaltung in omp selbst (Leertaste) aufgehoben wurde; bisher blieb das Mikrofon stumm, obwohl „hört zu“ angezeigt wurde" },
+    ],
+  },
+  {
     build: 14,
     version: "0.32.10",
     date: "02.11.2026",
