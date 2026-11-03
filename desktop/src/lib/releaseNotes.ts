@@ -12,6 +12,17 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 22,
+    version: "0.35.0",
+    date: "04.11.2026",
+    items: [
+      { icon: "🔊", text: "Vorlesen: Text im Chat oder Terminal markieren und „Vorlesen“ tippen (⌘⇧S) – mit Phonon 40m auf dem Gerät, bis dahin mit der macOS-Stimme; Einstellungen › Vorlesen" },
+      { icon: "⏳", text: "Warten auf Hintergrund-Jobs zeigt, worauf: Absicht, Jobs, Laufzeit – und wenn fertig, wie lange es gedauert hat" },
+      { icon: "▤", text: "Ruhigerer Statusblock über dem Eingabefeld: was der Agent gerade tut, die aktuelle Aufgabe mit Phase, Hintergrund-Jobs mit Absicht und Laufzeit" },
+      { icon: "$", text: "Bash-Karten zeigen den Ordner, wenn der Befehl außerhalb des Projekts lief; Grep-Bereiche lesbar statt mit Semikolons" },
+    ],
+  },
+  {
     build: 21,
     version: "0.34.0",
     date: "03.11.2026",

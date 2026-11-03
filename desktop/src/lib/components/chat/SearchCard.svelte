@@ -3,7 +3,7 @@
   // match marked, the others as a file list. Short lists start open, long ones show their head and fold the rest.
   import type { ToolCall } from "../../api";
   import { shortPath, toolIcon, toolTitle } from "../../agent";
-  import { markHits, underRoot, type Seg } from "../../chatTools";
+  import { markHits, searchScopes, underRoot, type Seg } from "../../chatTools";
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
 
@@ -26,7 +26,11 @@
   let open = $state<boolean | undefined>(undefined);
   const isOpen = $derived(open ?? rows.length <= SMALL);
   const shown = $derived(isOpen ? rows : rows.slice(0, PREVIEW));
-  const where = $derived(c.path ? ` · in ${rel(c.path)}` : "");
+  /** omp searches several paths at once ("a;b;c") – listed readably, each relative to the space */
+  const where = $derived.by(() => {
+    const scopes = searchScopes(c.path).map(rel).filter((s) => s !== ".");
+    return scopes.length ? ` · in ${scopes.join(", ")}` : "";
+  });
   const toggle = () => {
     if (rows.length > PREVIEW && !window.getSelection()?.toString()) open = !isOpen;
   };

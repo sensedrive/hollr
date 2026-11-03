@@ -8,12 +8,14 @@ export const STAMP_GAP_MS = 10 * 60_000;
 
 /**
  * Which items show their time in the chat: every user message, the first item of each reply and, in a long
- * turn, a text after a quiet gap – never every tool card.
+ * turn, a text after a quiet gap – never every tool card. A reply that starts in the same minute as the stamp
+ * above it (your message) stays without one: the same time twice in a row is only noise.
  */
 export function stampedIds(items: TimelineItem[], gapMs = STAMP_GAP_MS): Set<string> {
   const out = new Set<string>();
   let replyStart = true;
   let last = -Infinity;
+  const minute = (at: number) => Math.floor(at / 60_000);
   for (const i of items) {
     if (i.k === "user") {
       if (i.at !== undefined) {
@@ -25,8 +27,10 @@ export function stampedIds(items: TimelineItem[], gapMs = STAMP_GAP_MS): Set<str
     }
     if (i.k === "end" || i.k === "info" || i.at === undefined) continue;
     if (replyStart || (i.k === "text" && i.at - last >= gapMs)) {
-      out.add(i.id);
-      last = i.at;
+      if (minute(i.at) !== minute(last)) {
+        out.add(i.id);
+        last = i.at;
+      }
       replyStart = false;
     }
   }

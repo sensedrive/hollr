@@ -9,6 +9,7 @@
   import General from "./settings/General.svelte";
   import Notes from "./settings/Notes.svelte";
   import Servers from "./settings/Servers.svelte";
+  import Speech from "./settings/Speech.svelte";
 
   type Page = Extract<Route, { view: "settings" }>["page"];
   let { page }: { page?: Page } = $props();
@@ -17,6 +18,7 @@
     { page: undefined, label: "Allgemein", icon: "⚙" },
     { page: "design", label: "Design", icon: "◐" },
     { page: "dictation", label: "Diktat", icon: "🎙" },
+    { page: "speech", label: "Vorlesen", icon: "🔊" },
     { page: "servers", label: "Server & Geräte", icon: "▤" },
     { page: "notes", label: "Neuigkeiten", icon: "✦" },
     { page: "about", label: "Über", icon: "ⓘ" },
@@ -41,6 +43,8 @@
       <Servers />
     {:else if page === "dictation"}
       <Dictation />
+    {:else if page === "speech"}
+      <Speech />
     {:else if page === "notes"}
       <Notes />
     {:else if page === "about"}

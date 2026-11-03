@@ -185,7 +185,11 @@ describe("claude transcript", () => {
       bg: "bash_1",
       result: "im Hintergrund · bash_1",
     });
-    expect(call(items, "t_bout")).toMatchObject({ name: "wait", out: ["ready on :3000"] });
+    expect(call(items, "t_bout")).toMatchObject({
+      name: "wait",
+      out: ["ready on :3000"],
+      waited: [{ id: "bash_1", label: "Dev-Server starten", status: "running" }],
+    });
     expect(call(items, "t_task")).toMatchObject({
       name: "task",
       label: "Code prüfen",

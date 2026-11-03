@@ -73,6 +73,10 @@ export interface ToolCall {
   sub?: { answer?: string; calls?: number; agent?: string };
   /** the agent's own tool name when `name` is the canonical one (Claude "MultiEdit" → "edit") */
   tool?: string;
+  /** bash/eval: the working directory the call ran in, as the agent passed it (absolute or relative to the space) */
+  cwd?: string;
+  /** wait: the jobs its result reported – id, what the job did, final status ("completed", "running" on timeout …), run time */
+  waited?: { id: string; label: string; status: string; ms?: number }[];
 }
 
 /** one line of a diff hunk: " " context, "+" added, "-" removed; `o`/`n` = old/new line number */

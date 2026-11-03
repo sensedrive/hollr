@@ -19,8 +19,9 @@ describe("stampedIds", () => {
       { k: "user", id: "u2", text: "Danke", at: t0 + 40 * min },
       { k: "text", id: "x3", text: "Gern", at: t0 + 41 * min },
     ];
-    // x2: a text again after a long quiet stretch; g2 (tools) never on its own
-    expect([...stampedIds(items)]).toEqual(["u1", "th", "x2", "u2", "x3"]);
+    // th: same minute as u1 – its time would only repeat; x2: a text again after a long quiet stretch;
+    // g2 (tools) never on its own
+    expect([...stampedIds(items)]).toEqual(["u1", "x2", "u2", "x3"]);
   });
   test("without times nothing is stamped", () => {
     expect(stampedIds([{ k: "user", id: "u", text: "a" }, { k: "text", id: "t", text: "b" }]).size).toBe(0);

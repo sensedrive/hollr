@@ -161,6 +161,14 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Vorlesen: Text im Chat oder Terminal markieren und „Vorlesen“ tippen (⌘⇧S) – mit Phonon 40m auf dem Gerät, bis dahin mit der macOS-Stimme; Einstellungen › Vorlesen":
+    "Read aloud: select text in the chat or terminal and tap “Read aloud” (⌘⇧S) – with Phonon 40m on the device, until then with the macOS voice; Settings › Read aloud",
+  "Warten auf Hintergrund-Jobs zeigt, worauf: Absicht, Jobs, Laufzeit – und wenn fertig, wie lange es gedauert hat":
+    "Waiting on background jobs shows what for: intent, jobs, runtime – and when done, how long it took",
+  "Ruhigerer Statusblock über dem Eingabefeld: was der Agent gerade tut, die aktuelle Aufgabe mit Phase, Hintergrund-Jobs mit Absicht und Laufzeit":
+    "A calmer status block above the composer: what the agent does right now, the current task with its phase, background jobs with intent and runtime",
+  "Bash-Karten zeigen den Ordner, wenn der Befehl außerhalb des Projekts lief; Grep-Bereiche lesbar statt mit Semikolons":
+    "Bash cards show the folder when the command ran outside the project; grep scopes readable instead of semicolon-separated",
   "Claude Code im Chat: der ganze Verlauf statt nur des Bildschirms – Fragen, Freigaben und der Ordner-Check als Karten zum Antippen":
     "Claude Code in the chat: the whole conversation instead of just the screen – questions, permission prompts and the folder check as cards to tap",
   "Änderungen als echte Diffs mit Zeilennummern und Syntaxfarben; lange Diffs klappen ein":

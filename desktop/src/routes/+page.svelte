@@ -27,6 +27,7 @@
   import Notifier from "$lib/views/Notifier.svelte";
   import AppLock from "$lib/components/AppLock.svelte";
   import TipsTour from "$lib/components/TipsTour.svelte";
+  import ReadAloud from "$lib/components/ReadAloud.svelte";
   import { pendingTips, tour } from "$lib/tips.svelte";
   import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
 
@@ -221,6 +222,8 @@
 </main>
 
 <Notifier />
+<!-- read aloud: the button next to selected chat / terminal text, ⌘⇧S, the stop pill -->
+<ReadAloud />
 {#if dialogs.pair}
   <PairDialog onClose={() => (dialogs.pair = false)} onPaired={() => { dialogs.pair = false; loadServers(); }} />
 {/if}

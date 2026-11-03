@@ -41,6 +41,8 @@ export const RICH_CAPS = {
   subAnswer: 4000,
   outLines: 60,
   outLineChars: 240,
+  /** wait: jobs reported per wait result */
+  waited: 10,
 } as const;
 
 export interface ToolCall {
@@ -87,6 +89,12 @@ export interface ToolCall {
   sub?: { answer?: string; calls?: number; agent?: string };
   /** the agent's original tool name when `name` was mapped to a canonical one (Claude "MultiEdit" → "edit") */
   tool?: string;
+  /** bash/eval: the working directory argument when the call ran elsewhere than the session folder
+   *  (as the agent passed it – absolute or relative to the session folder), ≤300 chars */
+  cwd?: string;
+  /** wait: the jobs its result reported – id, what the job did (intent, else its label/command, ≤120 chars),
+   *  final status ("completed", "failed", "running" on timeout …), run time; at most 10 */
+  waited?: Array<{ id: string; label: string; status: string; ms?: number }>;
 }
 
 /** `at`: epoch ms of the log entry the item comes from (the user's prompt, the assistant message the
@@ -734,6 +742,9 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
               return d ? clip(d, b.name === "bash" ? 400 : 160) : undefined;
             })(),
             path: b.name === "grep" || b.name === "glob" ? str(args.path) : undefined,
+            ...((b.name === "bash" || b.name === "eval") && str(args.cwd)
+              ? { cwd: clip(str(args.cwd) ?? "", 300) }
+              : {}),
             status: "running",
           };
           calls.set(b.id, call);
@@ -827,8 +838,18 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
         writes.delete(m.toolCallId);
       }
       if (m.toolName === "wait") {
-        const waited = (details.jobs as Array<{ resultText?: string }> | undefined) ?? [];
+        const waited = (details.jobs as Array<Record<string, unknown>> | undefined) ?? [];
         for (const j of waited) if (typeof j.resultText === "string") noteTaskResults(j.resultText);
+        if (call && Array.isArray(waited)) {
+          const list = waited.flatMap((j) => {
+            const id = str(j.id) ?? str(j.jobId);
+            if (!id) return [];
+            const ms = typeof j.durationMs === "number" ? j.durationMs : undefined;
+            const label = clip(str(j.intent) ?? str(j.label) ?? id, 120);
+            return [{ id, label, status: str(j.status) ?? "unknown", ...(ms !== undefined ? { ms } : {}) }];
+          });
+          if (list.length) call.waited = list.slice(0, RICH_CAPS.waited);
+        }
       }
       // todo snapshot
       if (m.toolName === "todo" && !m.isError && Array.isArray(details.phases)) {

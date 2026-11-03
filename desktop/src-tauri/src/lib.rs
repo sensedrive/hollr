@@ -7,6 +7,7 @@ mod pairing_code;
 pub mod applock;
 pub mod term;
 pub mod dictation;
+pub mod speech;
 mod notice;
 
 use hollr::{Hollr, Server};
@@ -181,12 +182,14 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     app.state::<term::Terms>().stop_all().await;
                     app.state::<live::Lives>().stop_all().await;
+                    app.state::<speech::Speech>().stop();
                 });
             }
         })
         .setup(|app| {
             let dir = app.path().app_data_dir().expect("app data dir");
             app.manage(dictation::Dictation::new(dir.join("whisper")));
+            app.manage(speech::Speech::new(dir.join("speech")));
             app.manage(Hollr::new(dir));
             app.manage(live::Lives::default());
             app.manage(feed::Feeds::default());
@@ -196,7 +199,7 @@ pub fn run() {
             notice::init(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel])
+        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_token, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_voice_download, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

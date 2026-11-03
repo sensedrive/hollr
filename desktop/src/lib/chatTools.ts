@@ -1,7 +1,7 @@
 // Pure helpers behind the chat's tool cards (components/chat/*): which calls show, how they group,
 // diff rows, todo snapshots, grep hits. No DOM / Svelte / Tauri imports, so `bun test` covers them and
 // TimelineView can derive everything once per timeline instead of on every render.
-import type { DiffHunk, DiffLine, TimelineItem, TodoPhase, TodoTask, ToolCall } from "./api";
+import type { DiffHunk, DiffLine, Timeline, TimelineItem, TodoPhase, TodoTask, ToolCall } from "./api";
 
 // ------------------------------------------------------------ visible items & groups
 
@@ -77,7 +77,7 @@ export function chatView(all: TimelineItem[]): ChatView {
 }
 
 /** Which card renders a call. */
-export type CardKind = "bash" | "edit" | "search" | "task" | "links" | "compact" | "generic";
+export type CardKind = "bash" | "edit" | "search" | "task" | "links" | "wait" | "compact" | "generic";
 export function cardKind(c: ToolCall): CardKind {
   const n = c.name;
   if (n === "bash" || n === "eval") return "bash";
@@ -85,7 +85,8 @@ export function cardKind(c: ToolCall): CardKind {
   if (n === "grep" || n === "glob" || n === "find" || n === "ls") return "search";
   if (n === "task") return "task";
   if (n === "web_search" || n === "fetch") return "links";
-  if (n === "todo" || n === "wait" || n.startsWith("mcp__")) return "compact";
+  if (n === "wait") return "wait";
+  if (n === "todo" || n.startsWith("mcp__")) return "compact";
   return "generic";
 }
 
@@ -108,6 +109,36 @@ export function underRoot(p: string, root?: string): string | undefined {
   const q = canon(p);
   if (q === r) return ".";
   return q.startsWith(`${r}/`) ? q.slice(r.length + 1) : undefined;
+}
+
+/** A grep/glob scope: omp takes several paths separated by ";" – one entry each (commas stay: brace globs). */
+export const searchScopes = (path?: string): string[] =>
+  (path ?? "").split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
+
+/**
+ * Where a shell call ran, when that is not the space folder: relative to the space when under it, else `short(path)`
+ * (home as ~); a relative argument resolves against the space folder first (omp's `cwd: "../x"`). Undefined for the
+ * space folder itself (and without a cwd).
+ */
+export function cwdShown(cwd: string | undefined, root: string | undefined, short: (p: string) => string): string | undefined {
+  const c = cwd?.trim().replace(/(.)\/+$/, "$1");
+  if (!c || c === "." || c === "./") return undefined;
+  if (!c.startsWith("/") && !root) return c;
+  const abs = c.startsWith("/") ? c : resolvePath(`${root}/${c}`);
+  const r = underRoot(abs, root);
+  if (r === ".") return undefined;
+  return r ?? short(abs);
+}
+
+/** `/a/b/../c/./d` → `/a/c/d` (absolute paths only; ".." never climbs above "/"). */
+function resolvePath(p: string): string {
+  const out: string[] = [];
+  for (const part of p.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") out.pop();
+    else out.push(part);
+  }
+  return `/${out.join("/")}`;
 }
 
 // ------------------------------------------------------------ diffs
@@ -226,4 +257,91 @@ export function outTail(c: Pick<ToolCall, "out" | "outTotal">, open: boolean, n 
   const lines = open ? out : out.slice(-n);
   const total = Math.max(c.outTotal ?? out.length, out.length);
   return { lines, earlier: total - lines.length, more: out.length - lines.length, total };
+}
+
+/**
+ * A shell command as one short line for tight spots (HUD, chips): first line, `sh -c '…'` unwrapped, a leading
+ * `cd … &&` and env assignments dropped, cut at the first `&&` / `;` / `|` / redirect ("…" marks the cut).
+ */
+export function shortCommand(cmd: string, max = 72): string {
+  const lines = cmd.trim().split("\n");
+  let s = lines[0]?.trim() ?? "";
+  let cut = lines.length > 1;
+  const wrapped = /^(?:\S*\/)?(?:ba|z)?sh\s+-[a-z]*c\s+(['"])(.*)$/.exec(s);
+  if (wrapped) s = wrapped[2]!.replace(new RegExp(`${wrapped[1]}\\s*$`), "");
+  s = s.replace(/^cd\s+(?:'[^']*'|"[^"]*"|\S+)\s*(?:&&|;)\s*/, "");
+  s = s.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S*)\s+)+/, "");
+  const stop = /\s(?:&&|\|\||\||[0-9&]?>{1,2}|<)|;(?:\s|$)/.exec(s);
+  if (stop) {
+    s = s.slice(0, stop.index);
+    cut = true;
+  }
+  s = s.trim();
+  if (s.length > max) return `${s.slice(0, max - 1).trimEnd()}…`;
+  return cut ? `${s} …` : s;
+}
+
+// ------------------------------------------------------------ background jobs & waits
+
+/** The call that started each background job (its `bg` id) – a later start under the same id wins. */
+export function jobCalls(items: TimelineItem[]): Map<string, ToolCall> {
+  const out = new Map<string, ToolCall>();
+  for (const i of items) if (i.k === "tools") for (const c of i.calls) if (c.bg) out.set(c.bg, c);
+  return out;
+}
+
+/** A background job as the chat shows it: what it does (the starting call's intent), its command short and full. */
+export interface JobView {
+  id: string;
+  title: string;
+  /** short command, when the job is a shell command and it says more than the title */
+  command?: string;
+  /** full command (tooltip) */
+  full?: string;
+  startedAt?: number;
+}
+
+/** `id`/`label` of a job (running, or reported by a wait) with what its starting call tells about it. */
+export function jobView(job: { id: string; label?: string; startedAt?: number }, call?: ToolCall): JobView {
+  const intent = call?.label && call.label !== call.name ? call.label : undefined;
+  const shell = call?.name === "bash" || call?.name === "eval";
+  const full = shell ? call?.detail : undefined;
+  const label = job.label && job.label !== job.id ? job.label : undefined;
+  const title = intent ?? (label && !full ? label : undefined) ?? (full ? shortCommand(full) : (label ?? job.id));
+  const command = full ? shortCommand(full) : undefined;
+  return {
+    id: job.id,
+    title,
+    command: command && command !== title ? command : undefined,
+    full: full ?? label,
+    startedAt: job.startedAt,
+  };
+}
+
+/** The running jobs with their intents. */
+export const jobViews = (tl: Pick<Timeline, "jobs" | "items">, calls = jobCalls(tl.items)): JobView[] =>
+  tl.jobs.map((j) => jobView(j, calls.get(j.id)));
+
+/** How a wait's job ended: done, failed, or still running when the wait returned (timeout). */
+export function jobOutcome(status: string): "done" | "failed" | "running" {
+  const s = status.toLowerCase();
+  if (s === "running" || s === "pending" || s === "queued") return "running";
+  if (s === "completed" || s === "done" || s === "exited" || s === "ok" || s === "success") return "done";
+  return "failed";
+}
+
+const JOB_DONE = "Hintergrund-Job fertig: ";
+/**
+ * The server's "Hintergrund-Job fertig: <omp label>" info (the label is the clipped command) with the intents of the
+ * jobs it names, found by their command; undefined when it is no such info or names no known job.
+ */
+export function finishedJobs(text: string, calls: Map<string, ToolCall>): string[] | undefined {
+  if (!text.startsWith(JOB_DONE)) return undefined;
+  const names = text.slice(JOB_DONE.length);
+  const found = new Set<string>();
+  for (const c of calls.values()) {
+    const head = (c.detail ?? "").split("\n")[0]!.trim().slice(0, 60);
+    if (head.length >= 4 && names.includes(head) && c.label && c.label !== c.name) found.add(c.label);
+  }
+  return found.size ? [...found] : undefined;
 }

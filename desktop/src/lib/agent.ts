@@ -27,19 +27,22 @@ export const portLabel = (p: WebPort) => p.title ?? p.cwd?.split("/").filter(Boo
 
 // ------------------------------------------------------------ timeline (Model/Timeline.swift)
 
-/** The latest running tool call – what the agent does right now. */
-export function runningCall(tl: Timeline): ToolCall | undefined {
+/** The latest running tool call – what the agent does right now – and when its message arrived (≈ its start). */
+export function runningActivity(tl: Timeline): { call: ToolCall; at?: number } | undefined {
   for (let i = tl.items.length - 1; i >= 0; i--) {
     const item = tl.items[i];
     if (item?.k !== "tools") continue;
     const c = item.calls.findLast((c) => c.status === "running");
-    if (c) return c;
+    if (c) return { call: c, at: item.at };
   }
   return undefined;
 }
 
+/** Claude's background ids are hashes ("afd6f2ad03d5d4791") – shown only as a tooltip; omp's are short names. */
+export const hashId = (id: string) => /^[0-9a-f]{12,}$/i.test(id);
+
 /** What omp shows in its working row: the intent of the latest running tool call. */
-export const workingLabel = (tl: Timeline): string | undefined => runningCall(tl)?.label;
+export const workingLabel = (tl: Timeline): string | undefined => runningActivity(tl)?.call.label;
 
 /** The question the agent waits on (omp's ask, Claude's question / permission prompt). */
 export const pendingAsk = (tl: Timeline) =>

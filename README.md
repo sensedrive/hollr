@@ -92,7 +92,7 @@ for 10 minutes, once, and 5 wrong tries end it. `n` + Enter in `hollr pair` make
 |---|---|
 | **iPhone** | **Hollr** – `ios/`, SwiftUI, SSH via [Citadel](https://github.com/orlandos-nl/Citadel). Build with your own team (see below). |
 | **Mac** | **Hollr** – the same app via Mac Catalyst. DMGs for Apple Silicon and Intel on every [release](https://github.com/sensedrive/hollr/releases). |
-| **Mac + Linux** | **Hollr Desktop** – `desktop/`, Tauri (Rust + Svelte), same features as the native app: sessions, dashboard, spaces, git, live voice, server info and tools, themes, notifications and the localhost browser. Mac DMGs (Apple Silicon, Intel, macOS 12+) and Linux `.deb`, `.rpm`, AppImage (x64, arm64) on every release. On a Mac it installs as *Hollr Desktop* next to *Hollr*. |
+| **Mac + Linux** | **Hollr Desktop** – `desktop/`, Tauri (Rust + Svelte), same features as the native app: sessions, dashboard, spaces, git, live voice, server info and tools, themes, notifications and the localhost browser. Plus reading selected chat or terminal text aloud with Gradium's on-device Phonon voices (macOS system voice until a model is downloaded). Mac DMGs (Apple Silicon, Intel, macOS 12+) and Linux `.deb`, `.rpm`, AppImage (x64, arm64) on every release. On a Mac it installs as *Hollr Desktop* next to *Hollr*. |
 
 Release builds without a Developer ID are ad-hoc signed: on the Mac, open *Hollr* or *Hollr Desktop* the first time with right-click → Open
 (or *System Settings → Privacy & Security → Open Anyway*).

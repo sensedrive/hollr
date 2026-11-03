@@ -395,6 +395,47 @@ describe("rich tool data (omp)", () => {
     expect(c.outTotal).toBe(100);
   });
 
+  test("bash: the cwd argument when the call ran elsewhere; none without it", () => {
+    const t = calls([
+      call("b2", "bash", { command: "git diff", cwd: "../tendr-docs-photon-haertung", i: "Reviewing branch diff" }),
+      result("b2", "bash", { wallTimeMs: 40 }, "diff"),
+      call("b3", "bash", { command: "ls" }),
+      result("b3", "bash", {}, "a"),
+    ]);
+    expect(t[0]?.cwd).toBe("../tendr-docs-photon-haertung");
+    expect(t[1] && "cwd" in t[1]).toBe(false);
+  });
+
+  test("wait: the jobs its result reported (intent over label, status, run time)", () => {
+    const c = only([
+      call("w9", "wait", { i: "Waiting for watchr recheck" }),
+      result(
+        "w9",
+        "wait",
+        {
+          op: "wait",
+          jobs: [
+            {
+              id: "bg_1",
+              type: "bash",
+              status: "completed",
+              label: "for h in 64.226.80.62; do ssh root@$h 'systemctl start watchr-agent-updates.service; w...",
+              intent: "Running agent scan and rechecking watchr",
+              durationMs: 86465,
+              resultText: "public ports: 22/tcp",
+            },
+            { id: "bg_2", type: "bash", status: "running", label: "yarn test:e2e" },
+          ],
+        },
+        "## Completed (1)",
+      ),
+    ]);
+    expect(c.waited).toEqual([
+      { id: "bg_1", label: "Running agent scan and rechecking watchr", status: "completed", ms: 86465 },
+      { id: "bg_2", label: "yarn test:e2e", status: "running" },
+    ]);
+  });
+
   test("timeline says it comes from omp; calls without rich data stay as before", () => {
     const t = buildTimeline([call("x1", "lsp", { action: "hover" }), result("x1", "lsp", {}, "type")].join("\n"));
     expect(t.agent).toBe("omp");

@@ -46,19 +46,19 @@ fn json_frame(value: Value) -> Vec<u8> {
     frame(FRAME_JSON, value.to_string().as_bytes())
 }
 
-/// Linear resampler (good enough for speech).
-struct Resampler {
+/// Linear resampler (good enough for speech); also used by the read-aloud playback (speech.rs).
+pub(crate) struct Resampler {
     ratio: f64,
     pos: f64,
     last: f32,
 }
 
 impl Resampler {
-    fn new(from: f64, to: f64) -> Self {
+    pub(crate) fn new(from: f64, to: f64) -> Self {
         Self { ratio: from / to, pos: 0.0, last: 0.0 }
     }
     /// Interpolates over [last, input…] so chunk borders stay smooth.
-    fn push(&mut self, input: &[f32], out: &mut Vec<f32>) {
+    pub(crate) fn push(&mut self, input: &[f32], out: &mut Vec<f32>) {
         if input.is_empty() {
             return;
         }

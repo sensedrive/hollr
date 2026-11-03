@@ -812,7 +812,13 @@ export function parseClaudeLog(jsonl: string, maxItems = 150, now = Date.now()):
       case "BashOutput":
       case "TaskOutput": {
         const status = str(res?.status);
-        if (status && status !== "running") endJob(str(input.bash_id) ?? str(input.task_id));
+        const jobId = str(input.bash_id) ?? str(input.task_id);
+        if (jobId && status) {
+          // what the job does, from the call that started it – read before endJob forgets it
+          const job = jobs.get(jobOfCall.get(jobId) ?? jobId);
+          call.waited = [{ id: jobId, label: clip(job?.label ?? jobId, 120), status }];
+        }
+        if (status && status !== "running") endJob(jobId);
         const out = res
           ? [str(res.stdout), str(res.stderr)].filter((s) => s?.trim()).join("\n")
           : "";

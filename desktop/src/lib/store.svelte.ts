@@ -27,7 +27,7 @@ export type Route =
   | { view: "space"; server: string; ws: string }
   /** `open`: show the terminal, or the git / browser side panel right away (`url` for the browser) */
   | { view: "agent"; server: string; pane: string; open?: AgentOpen; url?: string }
-  | { view: "settings"; page?: "design" | "servers" | "notes" | "about" | "dictation" }
+  | { view: "settings"; page?: "design" | "servers" | "notes" | "about" | "dictation" | "speech" }
   | { view: "serverinfo"; server: string }
   | { view: "tools"; server: string };
 

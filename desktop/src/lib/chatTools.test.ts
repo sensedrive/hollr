@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { TimelineItem, TodoPhase, ToolCall } from "./api";
 import {
-  cardKind, chatView, diffRows, diffSlice, markHits, outTail, parseRange, phaseFolded, todoChanges, toolTip, underRoot,
+  cardKind, chatView, cwdShown, diffRows, diffSlice, finishedJobs, jobCalls, jobOutcome, jobView, jobViews, markHits, outTail,
+  parseRange, phaseFolded, searchScopes, shortCommand, todoChanges, toolTip, underRoot,
 } from "./chatTools";
 
 const call = (id: string, name: string, extra: Partial<ToolCall> = {}): ToolCall => ({ id, name, label: "", status: "ok", ...extra });
@@ -43,7 +44,7 @@ describe("chatView", () => {
 
 test("cardKind maps canonical names (Claude's mapped ones too)", () => {
   expect(["bash", "eval", "edit", "write", "grep", "ls", "task", "fetch", "wait", "mcp__x__y", "skill"].map((n) => cardKind(call("i", n))))
-    .toEqual(["bash", "bash", "edit", "edit", "search", "search", "task", "links", "compact", "compact", "generic"]);
+    .toEqual(["bash", "bash", "edit", "edit", "search", "search", "task", "links", "wait", "compact", "generic"]);
   expect(cardKind(call("i", "notebook", { diff: [] }))).toBe("edit");
 });
 
@@ -116,4 +117,72 @@ test("outTail: last 8 collapsed, everything sent when open", () => {
   const out = Array.from({ length: 12 }, (_, i) => `${i}`);
   expect(outTail({ out, outTotal: 30 }, false)).toEqual({ lines: out.slice(-8), earlier: 22, more: 4, total: 30 });
   expect(outTail({ out, outTotal: 30 }, true)).toEqual({ lines: out, earlier: 18, more: 0, total: 30 });
+});
+
+test("searchScopes: omp's ';'-separated paths one by one, brace globs intact", () => {
+  expect(searchScopes("apps/superadmin-app/src;packages/api-contracts/src;tests/browser")).toEqual([
+    "apps/superadmin-app/src", "packages/api-contracts/src", "tests/browser",
+  ]);
+  expect(searchScopes("src/{a,b}/*.ts")).toEqual(["src/{a,b}/*.ts"]);
+  expect(searchScopes(undefined)).toEqual([]);
+});
+
+test("cwdShown: hidden for the space folder, relative under it, relative arguments resolved, short outside", () => {
+  const short = (p: string) => p.replace(/^\/home\/[^/]+/, "~");
+  const root = "/home/u/projects/tendr";
+  expect(cwdShown(undefined, root, short)).toBeUndefined();
+  expect(cwdShown("/home/u/projects/tendr/", root, short)).toBeUndefined();
+  expect(cwdShown(".", root, short)).toBeUndefined();
+  expect(cwdShown("/home/u/projects/tendr/apps/web", root, short)).toBe("apps/web");
+  expect(cwdShown("../tendr-release/services/render", root, short)).toBe("~/projects/tendr-release/services/render");
+  expect(cwdShown("./apps/web", root, short)).toBe("apps/web");
+  expect(cwdShown("../x", undefined, short)).toBe("../x");
+  expect(cwdShown("/home/u/projects/tendr-release", root, short)).toBe("~/projects/tendr-release");
+});
+
+test("shortCommand: unwraps sh -c, drops cd and env, cuts at the first chain/pipe/redirect", () => {
+  expect(shortCommand("sh -c 'yarn test:e2e:stack:up && yarn test:e2e:stack:wait && CI=1 yarn turbo run build'")).toBe("yarn test:e2e:stack:up …");
+  expect(shortCommand("SANDCASTLE_AGENT=opus-5.5 SANDCASTLE_MAX_PARALLEL=3 yarn sandcastle > /tmp/s.log 2>&1; tail -5 /tmp/s.log")).toBe("yarn sandcastle …");
+  expect(shortCommand("cd ~/projects/x && git status")).toBe("git status");
+  expect(shortCommand("du -sh /a 2>/dev/null | sort -h")).toBe("du -sh /a …");
+  expect(shortCommand("ls -la")).toBe("ls -la");
+  expect(shortCommand("echo one\necho two")).toBe("echo one …");
+  expect(shortCommand("x".repeat(100), 20)).toBe(`${"x".repeat(19)}…`);
+});
+
+describe("jobs", () => {
+  const bash = call("c1", "bash", { label: "Reproducing t21", detail: "sh -c 'yarn test:e2e && yarn x'", bg: "bg_2" });
+  const task = call("c2", "task", { label: "Investigating blocker", bg: "T21ReleaseBlocker" });
+  const items: TimelineItem[] = [{ k: "tools", id: "g", calls: [bash, task, call("c3", "read")] }];
+
+  test("jobCalls / jobViews: the intent as title, the command short beside it, full in the tooltip", () => {
+    const calls = jobCalls(items);
+    expect([...calls.keys()]).toEqual(["bg_2", "T21ReleaseBlocker"]);
+    const views = jobViews({
+      items,
+      jobs: [
+        { id: "bg_2", type: "bash", label: "sh -c 'yarn test:e2e && yarn x'", startedAt: 1 },
+        { id: "T21ReleaseBlocker", type: "task", label: "T21ReleaseBlocker", startedAt: 2 },
+        { id: "bg_9", type: "bash", label: "make build", startedAt: 3 },
+      ],
+    }, calls);
+    expect(views).toEqual([
+      { id: "bg_2", title: "Reproducing t21", command: "yarn test:e2e …", full: "sh -c 'yarn test:e2e && yarn x'", startedAt: 1 },
+      { id: "T21ReleaseBlocker", title: "Investigating blocker", command: undefined, full: undefined, startedAt: 2 },
+      // no starting call in view (older than the timeline): the server's label
+      { id: "bg_9", title: "make build", command: undefined, full: "make build", startedAt: 3 },
+    ]);
+    expect(jobView({ id: "bg_3" }).title).toBe("bg_3");
+  });
+
+  test("jobOutcome: done / failed / still running", () => {
+    expect(["completed", "failed", "running", "cancelled"].map(jobOutcome)).toEqual(["done", "failed", "running", "failed"]);
+  });
+
+  test("finishedJobs: the server's info names jobs by command – their intents instead", () => {
+    const calls = jobCalls(items);
+    expect(finishedJobs("Hintergrund-Job fertig: sh -c 'yarn test:e2e && yarn x'", calls)).toEqual(["Reproducing t21"]);
+    expect(finishedJobs("Hintergrund-Job fertig: something else", calls)).toBeUndefined();
+    expect(finishedJobs("Kontext wurde zusammengefasst", calls)).toBeUndefined();
+  });
 });

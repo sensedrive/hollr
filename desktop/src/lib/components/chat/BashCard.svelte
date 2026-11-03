@@ -1,14 +1,31 @@
 <script lang="ts">
-  // bash / eval: the command, the last 8 output lines (click for everything the server sent), a footer with
-  // wall time and exit code; copy buttons for command and output. Clicking only toggles when nothing is selected.
+  // bash / eval: the command (with its folder like a prompt when it ran outside the space), the last 8 output lines
+  // (click for everything the server sent), a footer with wall time and exit code, or the background job while it
+  // runs; copy buttons for command and output. Clicking only toggles when nothing is selected.
   import type { ToolCall } from "../../api";
   import { duration, shortPath } from "../../agent";
-  import { outTail } from "../../chatTools";
+  import { cwdShown, outTail, type JobView } from "../../chatTools";
   import { t } from "../../i18n";
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
 
-  let { c, tip, copy }: { c: ToolCall; tip: string; copy: (s: string) => void } = $props();
+  let { c, root, tip, copy, job }: {
+    c: ToolCall;
+    root?: string;
+    tip: string;
+    copy: (s: string) => void;
+    /** the background job this call started, while it still runs */
+    job?: JobView;
+  } = $props();
+
+  const cwd = $derived(cwdShown(c.cwd, root, shortPath));
+  // a running background job shows its run time – tick only while there is one
+  let now = $state(Date.now());
+  $effect(() => {
+    if (!job) return;
+    const id = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(id);
+  });
 
   let open = $state(false);
   const tail = $derived(outTail(c, open));
@@ -24,7 +41,7 @@
   {#if c.name === "eval"}
     <div class="hrow"><Glyph status={c.status} ok="λ" color="var(--orange)" /> <b class="ellipsis">{c.detail ?? "Eval"}</b></div>
   {:else}
-    <div class="cmd sel" class:clamp3={!open}><span class="dim">{"$ "}</span>{c.detail ?? ""}</div>
+    <div class="cmd sel" class:clamp3={!open}>{#if cwd}<span class="cwd" title={c.cwd}>{cwd}</span>{" "}{/if}<span class="dim">{"$ "}</span>{c.detail ?? ""}</div>
   {/if}
   {#if tail.lines.length}
     <hr />
@@ -46,7 +63,9 @@
       {#if c.exit !== undefined}<span class="chip" class:bad={c.exit !== 0} class:good={c.exit === 0}>Exit {c.exit}</span>
       {:else if c.status === "error"}<span class="chip bad">{t("Fehler")}</span>{/if}
       {#if c.ms !== undefined}<span class="dim">{duration(c.ms)}</span>{/if}
-      {#if c.bg}<span class="dim">{t("im Hintergrund: {id}", { id: c.bg })}</span>{/if}
+      {#if c.bg && job}
+        <span class="braille acc"></span><span class="muted">{t("läuft im Hintergrund")}</span><span class="dim">{c.bg}{job.startedAt ? ` · ${duration(now - job.startedAt)}` : ""}</span>
+      {:else if c.bg}<span class="dim">{t("im Hintergrund: {id}", { id: c.bg })}</span>{/if}
       {#if open && c.path}<span class="dim ellipsis">in {shortPath(c.path)}</span>{/if}
     {/if}
     <span class="acts inline">
@@ -58,6 +77,8 @@
 
 <style>
   .cmd { white-space: pre-wrap; word-break: break-all; color: var(--fg); }
+  /* the folder like a shell prompt: there, but quieter than the command */
+  .cwd { color: color-mix(in srgb, var(--cyan) 70%, var(--dim)); }
   .frame.click:hover { border-color: color-mix(in srgb, var(--dim) 100%, transparent); }
   .frame:not(.click) pre { max-height: 60vh; overflow: auto; }
   .foot { gap: 10px; font-size: 11px; min-height: 20px; }

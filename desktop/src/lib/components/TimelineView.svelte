@@ -4,7 +4,7 @@
   import type { AskPick, Timeline } from "../api";
   import { lang, t } from "../i18n";
   import { thinkingProse } from "../agent";
-  import { chatView } from "../chatTools";
+  import { chatView, finishedJobs, jobCalls, jobViews } from "../chatTools";
   import { clock, fullTime, stampedIds } from "../msgTimes";
   import AskCard from "./AskCard.svelte";
   import Markdown from "./Markdown.svelte";
@@ -25,6 +25,9 @@
   /** visible items, tool calls grouped into pieces, todo history – derived once per timeline, not per render */
   const view = $derived(chatView(timeline.items));
   const items = $derived(view.items);
+  /** background jobs: the call that started each, the running ones with their intents (wait and bash cards) */
+  const starts = $derived(jobCalls(timeline.items));
+  const jobs = $derived(jobViews(timeline, starts));
   /** items that show their time (user messages, the start of each reply) */
   const stamped = $derived(stampedIds(items));
   let openThinking = $state<Record<string, boolean>>({});
@@ -61,7 +64,7 @@
       </div>
     {:else if item.k === "tools"}
       {@render stamp(item.at, item.id, true)}
-      <ToolCalls pieces={view.pieces.get(item.id) ?? []} todo={view.todo} {root} {onLink} />
+      <ToolCalls pieces={view.pieces.get(item.id) ?? []} todo={view.todo} {root} {jobs} jobCalls={starts} {onLink} />
     {:else if item.k === "ask"}
       <div class="msg" data-item={item.id}>
         {@render stamp(item.at, item.id)}
@@ -71,7 +74,9 @@
       {#if item.status === "aborted"}<div class="mono small warn">⏹ {t("Abgebrochen")}</div>
       {:else if item.status !== "done"}<div class="mono small err clamp8">Error: {item.error ?? t("unbekannt")}</div>{/if}
     {:else if item.k === "info"}
-      <div class="info">{item.text}</div>
+      {@const done = finishedJobs(item.text, starts)}
+      {#if done}<div class="info" title={item.text}><span class="ok">✓</span> {t("Hintergrund-Job fertig")} · {done.join(", ")}</div>
+      {:else}<div class="info">{item.text}</div>{/if}
     {/if}
   {/each}
 </div>
@@ -98,6 +103,7 @@
   .mono { font-family: var(--mono); }
   .clamp8 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; -webkit-line-clamp: 8; line-clamp: 8; }
   .err { color: var(--red); }
+  .ok { color: var(--green); }
   .warn { color: var(--yellow); }
   .dim { color: var(--dim); }
   .small { font-size: 12px; }

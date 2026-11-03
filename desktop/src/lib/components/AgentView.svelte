@@ -17,9 +17,10 @@
   import { followTimeline } from "../follow";
   import { sessionTerms } from "../dictationText";
   import {
-    cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, pendingAsk, phaseDone, phaseName,
-    runningCall, shortPath, todoColor, urlPort, viaTunnel, waitingSince, type HistoryEvent,
+    cleanScreen, cleanTitle, duration, hashId, history as loadHistory, hudVisible, isLoopback, openPhase, pendingAsk, phaseDone, phaseName,
+    runningActivity, shortPath, todoColor, toolTitle, urlPort, viaTunnel, waitingSince, type HistoryEvent,
   } from "../agent";
+  import { jobViews, shortCommand } from "../chatTools";
   import MsgActions from "./MsgActions.svelte";
   import TimelineView from "./TimelineView.svelte";
   import TerminalView from "./TerminalView.svelte";
@@ -219,9 +220,6 @@
     if (!after?.at) return undefined;
     return tl.turnStartedAt && tl.turnStartedAt > after.at ? tl.turnStartedAt : after.at;
   }
-
-  /** Claude's background ids are hashes ("afd6f2ad03d5d4791") – shown only as a tooltip; omp's are short names */
-  const hashId = (id: string) => /^[0-9a-f]{12,}$/i.test(id);
 
   // ------------------------------------------------------------ view state
 
@@ -497,6 +495,8 @@
   const keysTitle = $derived(isShell ? t("Tasten ans Terminal senden") : t("Tasten an {agent} senden", { agent: agentName }));
   const transcriptTitle = $derived(cleanTitle(timeline?.title) ?? pane.title);
   const phase = $derived(timeline ? openPhase(timeline) : undefined);
+  /** background jobs with what they do (their starting call's intent) – HUD and info panel */
+  const jobs = $derived(timeline ? jobViews(timeline) : []);
 </script>
 
 <svelte:window onkeydown={onKey} onclick={() => (menu = false)} />
@@ -531,59 +531,57 @@
 {/snippet}
 
 {#snippet hud(tl: Timeline)}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <!-- one aligned block: what happens now, the todo task, the background jobs – icon | text | time columns -->
+  {@const act = waitingForUser ? undefined : runningActivity(tl)}
+  {@const since = workingSince(tl)}
   <div class="hud mono">
+    {#if waitingForUser}
+      <span class="ic waitc">⚠</span>
+      <span class="htxt ellipsis waitc">{t("Wartet auf dich")}{ask?.header ? ` · ${ask.header}` : ""}</span>
+      <span class="meta">{waitStart ? duration(now - waitStart) : ""}</span>
+    {:else if tl.running}
+      {@const call = act?.call}
+      {@const waits = call?.name === "wait" || (!call && tl.waiting)}
+      {@const intent = call && call.label && call.label !== call.name ? call.label : undefined}
+      {@const line = call?.detail?.split("\n")[0]?.trim()}
+      {@const detail = waits
+        ? jobs.length ? t("wartet auf {jobs}", { jobs: jobs.length === 1 ? t("1 Job") : t("{n} Jobs", { n: jobs.length }) }) : ""
+        : line && line !== intent ? (call?.name === "bash" ? shortCommand(line) : shortPath(line)) : ""}
+      {@const start = act?.at ?? since}
+      <span class="ic braille acc"></span>
+      <span class="htxt ellipsis" title={[call?.detail, since ? t("Antwort läuft seit {d}", { d: duration(now - since) }) : ""].filter(Boolean).join("\n")}>
+        <span class="acc">{intent ?? (waits ? t("Wartet auf Hintergrund-Jobs") : call ? toolTitle(call.name) : tl.items.at(-1)?.k === "thinking" ? t("Denkt nach …") : t("Arbeitet …"))}</span>{#if detail}<span class="dim gap">{detail}</span>{/if}
+      </span>
+      <span class="meta">{start ? duration(now - start) : ""}</span>
+    {/if}
     {#if phase}
       {@const phases = tl.todo ?? []}
-      <div class="todo" onclick={() => (todoOpen = !todoOpen)} title={todoOpen ? t("TODO zuklappen") : t("Ganze TODO-Liste")}>
-        <div class="hrow">
-          <b class="acc">TODO</b>
-          {#if !todoOpen}<span class="acc ellipsis">{phaseName(phase, phases)}</span><span class="dim">· {phaseDone(phase)}/{phase.tasks.length}</span>{/if}
-          <span class="grow"></span><span class="dim">{todoOpen ? "▾" : "▴"}</span>
-        </div>
-        {#if todoOpen}
+      {@const current = phase.tasks.find((x) => x.status === "in_progress") ?? phase.tasks.find((x) => x.status !== "completed" && x.status !== "abandoned")}
+      <span class="ic" style:color={todoColor(current?.status ?? "pending")}>{current?.status === "in_progress" ? "◐" : "☐"}</span>
+      <span class="htxt ellipsis fgs" title={current?.content}>{current?.content ?? phaseName(phase, phases)}</span>
+      <button class="meta fold" class:open={todoOpen} onclick={() => (todoOpen = !todoOpen)} title={todoOpen ? t("TODO zuklappen") : t("Ganze TODO-Liste")}
+        aria-expanded={todoOpen}>{phaseName(phase, phases)} · {phaseDone(phase)}/{phase.tasks.length}<span class="chev">›</span></button>
+      {#if todoOpen}
+        <div class="list">
           {#each phases as ph (ph.name)}
             {@const active = ph.name === phase.name}
-            <div class="hrow"><span class="dim">├─</span><span class:acc={active} class:muted={!active} class:b={active}>{phaseName(ph, phases)}</span><span class="dim">· {phaseDone(ph)}/{ph.tasks.length}</span></div>
+            <div class="hrow"><span class:acc={active} class:muted={!active} class:b={active}>{phaseName(ph, phases)}</span><span class="dim">{phaseDone(ph)}/{ph.tasks.length}</span></div>
             {#if active}
               {#each ph.tasks as task}
-                <div class="hrow"><span class="dim">│ </span>{@render todoRow(task)}</div>
+                <div class="hrow pad">{@render todoRow(task)}</div>
               {/each}
             {/if}
           {/each}
-          <div class="dim">└─────</div>
-        {:else}
-          {#each phase.tasks.filter((x) => x.status === "in_progress").slice(0, 2) as task}
-            <div class="hrow pad">{@render todoRow(task)}</div>
-          {/each}
-        {/if}
-      </div>
+        </div>
+      {/if}
     {/if}
-    {#each tl.jobs as job (job.id)}
-      <div class="hrow"><span class="acc">⚙</span>{#if !hashId(job.id)}<span class="acc">{job.id}</span>{/if}<span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>
+    {#each jobs as job (job.id)}
+      <span class="ic job">⚙</span>
+      <span class="htxt ellipsis" title={[hashId(job.id) ? "" : job.id, job.title, job.full].filter(Boolean).join("\n")}>
+        {#if !hashId(job.id)}<span class="jid">{job.id}</span>{" "}{/if}<span>{job.title}</span>{#if job.command}<span class="dim gap">{job.command}</span>{/if}
+      </span>
+      <span class="meta">{job.startedAt ? duration(now - job.startedAt) : ""}</span>
     {/each}
-    {#if waitingForUser}
-      <div class="hrow">
-        <span class="waitc">⚠</span>
-        <span class="waitc ellipsis grow">{t("Wartet auf dich")}{ask?.header ? ` · ${ask.header}` : ""}</span>
-        {#if waitStart}<span class="dim">{duration(now - waitStart)}</span>{/if}
-      </div>
-    {:else if tl.running}
-      {@const call = tl.waiting ? undefined : runningCall(tl)}
-      {@const detail = call?.detail?.split("\n")[0]?.trim()}
-      <div class="hrow">
-        <span class="braille acc"></span>
-        {#if tl.waiting}
-          <span class="acc ellipsis grow">{t("wartet auf Hintergrund-Jobs")}</span>
-        {:else if call}
-          <span class="acc ellipsis doing">{call.label}</span>
-          <span class="dim ellipsis grow">{detail && detail !== call.label ? shortPath(detail) : ""}</span>
-        {:else}
-          <span class="acc ellipsis grow">{tl.items.at(-1)?.k === "thinking" ? t("Denkt nach …") : t("Arbeitet …")}</span>
-        {/if}
-        {#if workingSince(tl)}<span class="dim">{duration(now - (workingSince(tl) ?? now))}</span>{/if}
-      </div>
-    {/if}
   </div>
 {/snippet}
 
@@ -598,7 +596,7 @@
     <div class="status mono">
       {#if working}<span class="braille acc"></span>{:else if waitingForUser}<span class="waitc">⚠</span>{/if}
       {#if l.model}<button class="model" title={t("Modell wechseln")} onclick={openModels}>⬢ {l.model}</button>{/if}
-      {#if l.folder}<span class="fg">🗀 …{l.folder}</span>{/if}
+      {#if l.folder}<span class="fg" title={shortPath(pane.cwd)}>{l.folder}</span>{/if}
       {#if l.branch}<button class="branch" title={t("Git & Dateien")} onclick={() => togglePanel("git")}>⑂ {l.branch}{l.dirty ? ` *${l.dirty}` : ""}</button>{/if}
       {#if l.context}<span class="muted">◔ {l.context}</span>{/if}
       {#if l.cost}<span class="dim">${l.cost}</span>{/if}
@@ -930,15 +928,31 @@
   .bottom.float { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(880px, calc(100% - 32px)); padding: 0; }
   .hudwrap.glass { background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     border-radius: 12px; padding: 6px 10px; }
-  .hud { font-size: 12px; display: flex; flex-direction: column; gap: 3px; padding: 0 6px; }
-  .todo { cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+  /* icon | text | time: every row's text and time line up; rows are the grid's cells (no row wrappers) */
+  .hud { font-size: 12px; display: grid; grid-template-columns: 1.3em minmax(0, 1fr) auto; column-gap: 8px; row-gap: 4px;
+    align-items: baseline; padding: 7px 12px; border-radius: 12px; line-height: 1.45;
+    background: color-mix(in srgb, var(--raised) 55%, transparent); border: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+  .hudwrap.glass .hud { background: none; border: 0; padding: 0 2px; }
+  .hud .ic { text-align: center; }
+  .hud .meta { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .hud .job { color: var(--dim); }
+  .hud .jid { color: var(--cyan); }
+  .hud .htxt { color: var(--muted); }
+  .hud .fgs { color: color-mix(in srgb, var(--fg) 82%, transparent); }
+  /* what follows the main text (command, job count) – set apart by room, not by punctuation */
+  .hud .gap { margin-left: 1.5ch; }
+  /* the TODO's fold switch: a small pill with the phase, so it reads as a button and not as stray text */
+  .fold { all: unset; cursor: pointer; justify-self: end; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums;
+    padding: 0 4px 0 8px; margin: -1px -4px -1px 0; border-radius: 99px; border: 1px solid transparent; }
+  .fold:hover, .fold:focus-visible { color: var(--fg); border-color: var(--border); background: color-mix(in srgb, var(--fg) 5%, transparent); }
+  .fold .chev { display: inline-block; margin-left: 5px; transition: transform .12s; }
+  .fold.open .chev { transform: rotate(90deg); }
+  .list { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px; border-left: 1px solid var(--border); padding-left: 10px; }
   .hrow { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
   .pad { padding-left: 4px; }
   .b { font-weight: 700; }
   .strike { text-decoration: line-through; }
   .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  /* the running tool's intent keeps its room, its command/path gets the rest */
-  .doing { flex: 0 1 auto; max-width: 60%; }
   .waitc { color: var(--yellow); }
   .status { display: flex; align-items: center; gap: 14px; padding: 0 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
   .status button { all: unset; cursor: pointer; border-radius: 5px; padding: 1px 3px; margin: 0 -3px; }
@@ -1035,10 +1049,9 @@
   .muted { color: var(--muted); }
   .err { color: var(--red); }
 
-  /* omp's braille spinner (TimelineView & HUD) */
-  :global(.braille)::before { content: "⣾"; display: inline-block; animation: braille 0.72s steps(1) infinite; }
-  @keyframes -global-braille {
-    0% { content: "⣾"; } 12.5% { content: "⣽"; } 25% { content: "⣻"; } 37.5% { content: "⢿"; }
-    50% { content: "⡿"; } 62.5% { content: "⣟"; } 75% { content: "⣯"; } 87.5% { content: "⣷"; }
-  }
+  /* omp's braille spinner (chat cards, HUD, status line). A vertical strip of the eight frames scrolled in steps –
+     WebKit (the app's webview) doesn't animate `content`, so swapping the glyph in keyframes stood still there. */
+  :global(.braille) { display: inline-block; height: 1.25em; line-height: 1.25em; overflow: hidden; vertical-align: -0.3em; }
+  :global(.braille)::before { content: "⣾\A⣽\A⣻\A⢿\A⡿\A⣟\A⣯\A⣷"; display: block; white-space: pre; animation: braille 0.8s steps(8) infinite; }
+  @keyframes -global-braille { to { transform: translateY(-10em); } }
 </style>

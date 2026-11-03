@@ -3,7 +3,7 @@
   // every other call as its card (edit diff, bash output, grep hits, subagent answer, links …).
   import type { ToolCall } from "../../api";
   import { duration, shortPath, toolIcon, toolTitle } from "../../agent";
-  import { cardKind, parseRange, toolTip, underRoot, type Piece, type TodoMark } from "../../chatTools";
+  import { cardKind, parseRange, searchScopes, toolTip, underRoot, type JobView, type Piece, type TodoMark } from "../../chatTools";
   import { t } from "../../i18n";
   import "./tools.css";
   import BashCard from "./BashCard.svelte";
@@ -13,12 +13,17 @@
   import SearchCard from "./SearchCard.svelte";
   import TaskCard from "./TaskCard.svelte";
   import TodoCard from "./TodoCard.svelte";
+  import WaitCard from "./WaitCard.svelte";
 
-  let { pieces, todo, root, onLink }: {
+  let { pieces, todo, root, jobs, jobCalls, onLink }: {
     pieces: Piece[];
     todo: Map<string, TodoMark>;
     /** the space folder: paths under it show relative */
     root?: string;
+    /** the timeline's running background jobs */
+    jobs: JobView[];
+    /** job id → the call that started it */
+    jobCalls: Map<string, ToolCall>;
     onLink?: (url: string) => void;
   } = $props();
 
@@ -68,7 +73,7 @@
       {@const c = p.call}
       {@const k = cardKind(c)}
       {#if k === "bash"}
-        <BashCard {c} tip={tip(c)} {copy} />
+        <BashCard {c} {root} tip={tip(c)} {copy} job={c.bg ? jobs.find((j) => j.id === c.bg) : undefined} />
       {:else if k === "edit"}
         <EditCard {c} {root} tip={tip(c)} {copy} />
       {:else if k === "search"}
@@ -77,11 +82,13 @@
         <TaskCard {c} tip={tip(c)} {onLink} {copy} />
       {:else if k === "links"}
         <LinksCard {c} tip={tip(c)} {onLink} />
+      {:else if k === "wait"}
+        <WaitCard {c} tip={tip(c)} {jobs} calls={jobCalls} />
       {:else if k === "compact"}
         <div class="line" title={tip(c)}>
           <div class="hrow">
             <Glyph status={c.status} ok={toolIcon(c.name)} color="var(--muted)" />
-            <span class="clamp2 sel"><b>{toolTitle(c.name)}</b><span class="muted">{c.detail ? `: ${c.detail}` : ""}</span><span class="dim">{c.status !== "error" && c.result ? `  ${c.result}` : ""}{c.path ? ` · in ${rel(c.path)}` : ""}</span></span>
+            <span class="clamp2 sel"><b>{toolTitle(c.name)}</b><span class="muted">{c.detail ? `: ${c.detail}` : ""}</span><span class="dim">{c.status !== "error" && c.result ? `  ${c.result}` : ""}{c.path ? ` · in ${searchScopes(c.path).map(rel).join(", ")}` : ""}</span></span>
           </div>
           {#if c.status === "error" && c.result}<div class="err indent clamp3 sel">{c.result}</div>{/if}
         </div>

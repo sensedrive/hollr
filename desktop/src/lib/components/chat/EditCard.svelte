@@ -15,6 +15,8 @@
   const full = $derived(c.file ?? c.detail ?? "");
   const path = $derived(underRoot(full, root) ?? shortPath(full));
   const rows = $derived(diffRows(c.diff ?? []));
+  /** a write to a device, not a file (omp's `agent://x` message, `xd://` tool call): one quiet line, no file card */
+  const device = $derived(!rows.length && /^[a-z][a-z0-9+.-]*:\/\//i.test(full) && !full.startsWith("local://"));
   const digits = $derived(gutterDigits(rows));
   /** syntax per row: multi-file edits switch the language at each file row */
   const exts = $derived.by(() => {
@@ -32,13 +34,13 @@
     rows.map((r) => ("gap" in r ? "…" : "file" in r ? `--- ${r.file}` : `${r.t}${r.text}`)).join("\n");
 </script>
 
-<div class="frame soft {c.status}" class:flush={rows.length > 0} title={tip}>
+<div class={device ? "line" : `frame soft ${c.status}`} class:flush={rows.length > 0} title={tip}>
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_no_noninteractive_tabindex (role/tabindex only while there is a diff to fold) -->
   <div class="head hrow mid" class:click={rows.length > 0} class:bar={rows.length > 0} onclick={toggle}
     onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
     role={rows.length ? "button" : undefined} tabindex={rows.length ? 0 : undefined} aria-expanded={rows.length ? view.isOpen : undefined}>
-    {#if c.status === "ok" && path}<FileGlyph name={path} />{:else}<Glyph status={c.status} ok={toolIcon(c.name)} color="var(--orange)" />{/if}
-    <span class="grow clamp2 sel"><b>{toolTitle(c.name)}</b>{#if path}<span class="acc">{` ${path}`}</span>{/if}</span>
+    {#if c.status === "ok" && path && !device}<FileGlyph name={path} />{:else}<Glyph status={c.status} ok={device ? "→" : toolIcon(c.name)} color="var(--orange)" />{/if}
+    <span class="grow clamp2 sel"><b>{toolTitle(c.name)}</b>{#if path}<span class={device ? "muted" : "acc"}>{` ${path}`}</span>{/if}</span>
     {#if (c.add ?? 0) + (c.del ?? 0) > 0}
       <span class="nowrap pm">{#if c.add}<span class="ok">+{c.add}</span>{/if}{#if c.del}<span class="err">−{c.del}</span>{/if}</span>
     {/if}

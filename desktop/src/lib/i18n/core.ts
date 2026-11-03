@@ -39,7 +39,6 @@ export default {
   "Shells anzeigen": "Show shells",
   "Ask – {agent} wartet auf dich": "Ask – {agent} is waiting for you",
   "Lädt …": "Loading …",
-  "wartet auf Hintergrund-Jobs": "waiting for background jobs",
   "Modell suchen": "Search models",
   // live marker on the server tab, session tab and space (LiveMark)
   "Live verbindet …": "Live connecting …",

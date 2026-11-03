@@ -1,6 +1,6 @@
 [package]
 name = "hollr-desktop"
-version = "0.34.0"
+version = "0.35.0"
 description = "Hollr desktop client"
 authors = ["Hollr contributors"]
 license = "MIT"
@@ -40,6 +40,9 @@ hmac = "0.13.0"
 pbkdf2 = { version = "0.13.0", default-features = false, features = ["hmac"] }
 aes-gcm = { version = "0.11.1", default-features = false, features = ["aes", "alloc"] }
 tauri-plugin-clipboard-manager = "2"
+# read aloud (speech.rs): Phonon on-device TTS on the CPU; `hf` reads the checkpoints' tokenizer.json
+# (downloads go through ureq above, with progress, cancel and the Hugging Face token)
+ptts = { version = "0.6.0", default-features = false, features = ["hf"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16", features = ["metal"] }
@@ -67,3 +70,18 @@ strip = true
 # ("mis-aligned LINKEDIT string pool"); only the shipped binary needs stripping
 [profile.release.build-override]
 strip = false
+
+# Phonon (speech.rs) unoptimized is slower than realtime, so `tauri dev` would stutter while reading aloud:
+# its tensor crates are optimized in dev builds too (the rest stays fast to compile)
+[profile.dev.package.ptts]
+opt-level = 3
+[profile.dev.package.xn]
+opt-level = 3
+[profile.dev.package.xn-gemm]
+opt-level = 3
+[profile.dev.package.xn-gemm-common]
+opt-level = 3
+[profile.dev.package.xn-gemm-f32]
+opt-level = 3
+[profile.dev.package.pulp]
+opt-level = 3

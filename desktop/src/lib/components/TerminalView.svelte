@@ -13,6 +13,7 @@
   import { findLinks, keySequence, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
   import { rememberViewPrefs, viewPrefsOf } from "../viewPrefs";
   import { cleanSelection, ScrollSelection } from "../scrollSelection";
+  import { offerSelection, withdrawSelection } from "../speech.svelte";
 
   let { server, pane, onLink }: {
     server: string; pane: string; onLink?: (href: string) => void;
@@ -179,11 +180,18 @@
         window.addEventListener("mouseup", dragEnd, true);
       };
       el.addEventListener("mousedown", forceSelect, { capture: true });
-      // like Ghostty: letting go of a selection copies it
+      // like Ghostty: letting go of a selection copies it – and offers it for reading aloud (ReadAloud.svelte)
       const copyOnSelect = (e: MouseEvent) => {
-        if (e.button === 0) setTimeout(() => x.hasSelection() && copyText(cleanSelection(x.getSelection())), 0);
+        if (e.button !== 0) return;
+        setTimeout(() => {
+          if (!x.hasSelection()) return;
+          const text = cleanSelection(x.getSelection());
+          void copyText(text);
+          offerSelection({ text, source: "terminal", x: e.clientX, y: e.clientY });
+        }, 0);
       };
       el.addEventListener("mouseup", copyOnSelect);
+      const selectionGone = x.onSelectionChange(() => x.hasSelection() || withdrawSelection("terminal"));
 
       // Selecting past the top/bottom edge: herdr's attach has no scrollback in xterm, so Hollr takes the
       // drag over from xterm, scrolls the pane with the mouse wheel and collects the text (scrollSelection.ts).
@@ -247,7 +255,9 @@
         highlight(d, d.sel);
         // copied here in full – copyOnSelect would take only the part on screen
         e.stopPropagation();
-        void copyText(cleanSelection(d.sel.text(d.sel.point(d.at.row, d.at.col, x.rows))));
+        const text = cleanSelection(d.sel.text(d.sel.point(d.at.row, d.at.col, x.rows)));
+        void copyText(text);
+        offerSelection({ text, source: "terminal", x: e.clientX, y: e.clientY });
       }
       function stopDrag() {
         clearInterval(drag?.timer);
@@ -282,6 +292,8 @@
         el.removeEventListener("mouseup", copyOnSelect);
         stopDrag();
         parsed.dispose();
+        selectionGone.dispose();
+        withdrawSelection("terminal");
         clearTimeout(copiedTimer);
         input.dispose();
         x.textarea?.removeEventListener("focus", focusIn);
