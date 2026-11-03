@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 17,
+    version: "0.33.1",
+    date: "03.11.2026",
+    items: [
+      { icon: "▤", text: "Die Seitenleiste zeigt nur den Rechner, den du oben in den Server-Tabs gewählt hast – auch auf der Übersicht bleibt er gewählt" },
+    ],
+  },
+  {
     build: 16,
     version: "0.33.0",
     date: "03.11.2026",

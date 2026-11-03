@@ -11,6 +11,7 @@
   import { groupSpaces, type FullSpace } from "$lib/views/spaces/spaces";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
+  import { currentServer } from "$lib/currentServer.svelte";
 
   const FOLDED = "hollr.sidebar.folded";
   const loadSet = (key: string) => {
@@ -53,8 +54,9 @@
     return sp.status ?? "unknown";
   }
 
+  // only the current remote (the server tabs above switch it)
   const sections = $derived(
-    app.servers.map((s) => {
+    app.servers.filter((s) => s.id === currentServer()).map((s) => {
       const spaces = (app.spaces[s.id] ?? []) as FullSpace[];
       // hidden ones (also off the dashboard) stay away until they need you
       const visible = spaces.filter((sp) => !hiddenSpaces.has(s.id, sp.id) || statusOf(s.id, sp) === "blocked");
@@ -98,7 +100,7 @@
   }
 
   const hiddenCount = $derived(
-    app.servers.reduce((n, s) => n + ((app.spaces[s.id] ?? []) as FullSpace[]).filter((sp) => hiddenSpaces.has(s.id, sp.id)).length, 0),
+    ((app.spaces[currentServer()] ?? []) as FullSpace[]).filter((sp) => hiddenSpaces.has(currentServer(), sp.id)).length,
   );
 </script>
 
@@ -142,7 +144,7 @@
     {/each}
   {/each}
   {#if hiddenCount}
-    <button class="restore" onclick={() => hiddenSpaces.showAll()}>
+    <button class="restore" onclick={() => hiddenSpaces.showAll(currentServer())}>
       {t("{n} ausgeblendet – alle zeigen", { n: hiddenCount })}
     </button>
   {/if}

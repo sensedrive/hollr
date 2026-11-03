@@ -18,8 +18,9 @@ class HiddenSpaces {
   hide(server: string, ws: string) {
     this.set(new Set(this.ids).add(`${server}|${ws}`));
   }
-  showAll() {
-    this.set(new Set());
+  /** shows a server's hidden spaces again */
+  showAll(server: string) {
+    this.set(new Set([...this.ids].filter((id) => !id.startsWith(`${server}|`))));
   }
   private set(ids: Set<string>) {
     this.ids = ids;

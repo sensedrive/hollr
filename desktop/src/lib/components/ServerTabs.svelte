@@ -12,6 +12,7 @@
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import type { MenuItem } from "$lib/views/dashboard/util";
   import LiveMark from "./LiveMark.svelte";
+  import { currentServer } from "$lib/currentServer.svelte";
   import { sortable } from "$lib/sortable";
   import { moveBefore, ordered } from "$lib/tabOrder";
   import { tabOrders } from "$lib/tabOrders.svelte";
@@ -26,10 +27,8 @@
     if (r.view === "agent") untrack(() => rememberSession(r.server, r.pane));
   });
 
-  const active = $derived.by(() => {
-    const r = nav.route;
-    return r.view === "agent" || r.view === "space" || r.view === "serverinfo" || r.view === "tools" ? r.server : "";
-  });
+  // also on the overview / settings: the remote whose spaces the sidebar shows
+  const active = $derived(currentServer());
 
   const counts = $derived.by(() => {
     const c: Record<string, number> = {};
@@ -41,8 +40,6 @@
     const panes = allPanes(id).map((r) => ({ pane: r.pane.pane, status: r.pane.status }));
     const pane = serverTarget(lastSessionOf(id), panes, !!app.loaded[id]);
     go(pane ? { view: "agent", server: id, pane } : { view: "serverinfo", server: id });
-    // the sidebar lists every server: bring this one's spaces into view
-    document.querySelector(`[data-server="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   function onKey(e: KeyboardEvent) {
