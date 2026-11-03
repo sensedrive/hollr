@@ -35,6 +35,7 @@ export default {
   "Worktrees zeigen": "Show worktrees",
   "Aus der Liste nehmen": "Remove from list",
   "Aus der Übersicht nehmen": "Remove from overview",
+  "Space aus der Liste nehmen": "Remove space from list",
   "Basis (leer = aktueller Branch)": "Base (empty = current branch)",
   Branch: "Branch",
   "Chat schließen?": "Close chat?",

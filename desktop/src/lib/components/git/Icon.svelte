@@ -19,6 +19,8 @@
     wrap: "M2.5 4h11M2.5 8h9a2 2 0 0 1 0 4H8.5M10 10.5 8.5 12 10 13.5M2.5 12h3.5",
     split: "M2.5 3h11v10h-11zM8 3v10",
     unified: "M2.5 3h11v10h-11zM2.5 8h11",
+    panelLeft: "M2.5 3h11v10h-11zM6 3v10M3.75 5.5h1M3.75 7.5h1",
+    panelTop: "M2.5 3h11v10h-11zM2.5 6.5h11M4.5 4.75h3",
     plus: "M8 3.5v9M3.5 8h9",
     minus: "M3.5 8h9",
     expand: "M8 2.5v11M5.5 5 8 2.5 10.5 5M5.5 11 8 13.5 10.5 11",

@@ -55,18 +55,20 @@ export interface ToolCall {
   path?: string;
 }
 
+/** `at`: epoch ms of the session-log entry the item comes from (older servers send it on user items only). */
 export type TimelineItem =
-  | { k: "user"; id: string; text: string; source?: string }
-  | { k: "thinking"; id: string; text: string }
-  | { k: "text"; id: string; text: string }
-  | { k: "tools"; id: string; calls: ToolCall[] }
+  | { k: "user"; id: string; text: string; source?: string; at?: number }
+  | { k: "thinking"; id: string; text: string; at?: number }
+  | { k: "text"; id: string; text: string; at?: number }
+  | { k: "tools"; id: string; calls: ToolCall[]; at?: number }
   | ({
       k: "ask"; id: string; answer?: string; pending?: boolean;
       /** every question when omp asks several at once (the question fields here are the first one) */
       questions?: AskQuestion[];
+      at?: number;
     } & AskQuestion)
-  | { k: "end"; id: string; ms: number; status: string; error?: string }
-  | { k: "info"; id: string; text: string };
+  | { k: "end"; id: string; ms: number; status: string; error?: string; at?: number }
+  | { k: "info"; id: string; text: string; at?: number };
 
 /** One of omp's questions: short title, a line per option, the recommended option's index, multi-select. */
 export interface AskQuestion {

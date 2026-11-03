@@ -138,7 +138,7 @@
       </div>
     </div>
     {#if showGit}
-      <div class="git"><GitPanel {server} ws={space.id} /></div>
+      <div class="git"><GitPanel {server} ws={space.id} place="dialog" /></div>
     {/if}
   </div>
 </div>

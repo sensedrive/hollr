@@ -183,7 +183,7 @@ impl Hollr {
     }
 
     /// Like `invalidate`, but only if the pool still holds this (stale) handle – not a fresh reconnect.
-    async fn drop_stale(&self, server_id: &str, stale: &Arc<Handle<Pinned>>) {
+    pub async fn drop_stale(&self, server_id: &str, stale: &Arc<Handle<Pinned>>) {
         let slot = self.pool.lock().unwrap().get(server_id).cloned();
         if let Some(slot) = slot {
             let mut h = slot.lock().await;

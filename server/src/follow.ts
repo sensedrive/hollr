@@ -9,7 +9,6 @@
 import { createHash } from "node:crypto";
 import { type FSWatcher, watch } from "node:fs";
 import { execHerdr, type Herdr } from "./herdr";
-import { findSessionFile } from "./sessionlog";
 import { readTimeline, type Timeline, type TimelineItem } from "./timeline";
 
 type Snapshot = Record<string, unknown> & { items: TimelineItem[] };
@@ -65,7 +64,7 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
     } catch {
       return undefined;
     }
-    const f = agent.sessionFile ?? findSessionFile(agent.cwd, 0);
+    const f = agent.sessionFile;
     if (f !== file) {
       cached = undefined;
       watcher?.close();

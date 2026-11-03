@@ -12,6 +12,24 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 16,
+    version: "0.33.0",
+    date: "03.11.2026",
+    items: [
+      { icon: "▭", text: "Server-Tabs oben: zwischen deinen Rechnern wechseln – mit Verbindungspunkt, „Braucht dich“-Zähler und ⌘⌥1…9; ein Klick öffnet die zuletzt genutzte Session dort" },
+      { icon: "⇄", text: "Tabs per Drag & Drop umsortieren – Server-Tabs und Session-Tabs (die Reihenfolge gilt in Hollr)" },
+      { icon: "❒", text: "Der Space ist jetzt der erste Tab – die Tab-Leiste bleibt auch in der Space-Ansicht stehen" },
+      { icon: "〰", text: "Live läuft weiter, wenn du Tab oder Session wechselst – die Live-Pille in der Seitenleiste zeigt Zustand, Mikro und Auflegen; Tabs, Server und Seitenleiste markieren, wo gesprochen wird" },
+      { icon: "⚠", text: "Live merkt eine abgerissene Verbindung („Verbindung verloren“, neu verbinden) und folgt dem Wechsel von Mikrofon und Lautsprecher (AirPods, Bildschirm)" },
+      { icon: "🎧", text: "Neue Einstellung „Kopfhörer: Mikrofon immer an“ – du kannst omp dann jederzeit unterbrechen" },
+      { icon: "🕑", text: "Uhrzeiten im Chat und eine Zeitleiste über dem Terminal: wann du was geschrieben hast und wann omp geantwortet hat" },
+      { icon: ">_", text: "Terminal-Modus ohne doppelte TODO-Liste und Statuszeile; „Session / Eigene Shell“ und Zen-Modus merkt sich jede Session" },
+      { icon: "⇔", text: "Space-Ansicht frei anordnen: Spalten ziehen, einklappen (⌘\\), Liste und Detail nebeneinander oder untereinander" },
+      { icon: "◌", text: "Aus der Seitenleiste genommene Spaces verschwinden auch aus der Übersicht – bis sie dich brauchen" },
+      { icon: "✓", text: "Eine neue omp-Session zeigt nicht mehr den Chat einer anderen Session im selben Ordner (braucht hollr 0.33 auf dem Server)" },
+    ],
+  },
+  {
     build: 15,
     version: "0.32.11",
     date: "03.11.2026",

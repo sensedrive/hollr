@@ -19,8 +19,11 @@ export interface Settings {
   seenNotes: number;
   /** app lock: Touch ID / password on start and after more than 30 s away (iOS "security.faceID") */
   appLock: boolean;
-  /** terminal panel: the session's own TUI ("pane") or an own shell in its folder (iOS "terminal.mode") */
+  /** terminal panel: the session's own TUI ("pane") or an own shell in its folder (iOS "terminal.mode") – the last
+   *  choice made, for sessions that have none of their own yet (viewPrefs) */
   terminalMode: "pane" | "shell";
+  /** omp /live with headphones: no echo gate, the mic stays open while omp speaks */
+  liveHeadphones: boolean;
 }
 
 const defaults: Settings = {
@@ -35,6 +38,7 @@ const defaults: Settings = {
   seenNotes: 0,
   appLock: false,
   terminalMode: "pane",
+  liveHeadphones: false,
 };
 
 function load(): Settings {

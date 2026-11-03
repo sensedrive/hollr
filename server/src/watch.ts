@@ -11,7 +11,6 @@ import { log } from "./log";
 import { hostKeyFingerprint } from "./pairing";
 import { describeProgress, planActivity, START_AFTER_MS, type Track, UPDATE_EVERY_MS } from "./activity";
 import { type Notice, pushConfig, pushDevices, sendActivity, sendNotice } from "./push";
-import { findSessionFile } from "./sessionlog";
 import { usageLimits } from "./spaces";
 import { readTimeline } from "./timeline";
 import { prune, UsageRecorder } from "./usagehistory";
@@ -103,8 +102,7 @@ async function describe(
 ): Promise<{ body: string; error?: boolean; fallback?: boolean; options?: string[]; ask?: string }> {
   try {
     const agent = await herdr.agent(pane);
-    const file =
-      agent.sessionFile ?? (agent.kind === "omp" ? findSessionFile(agent.cwd, 0) : undefined);
+    const file = agent.sessionFile;
     if (file) {
       const tl = await readTimeline(file, 30);
       const items = [...tl.items].reverse();
@@ -313,7 +311,7 @@ async function stepActivities(
 async function progressOf(herdr: Herdr, pane: string, agentName: string) {
   try {
     const agent = await herdr.agent(pane);
-    const file = agent.sessionFile ?? (agent.kind === "omp" ? findSessionFile(agent.cwd, 0) : undefined);
+    const file = agent.sessionFile;
     if (file) {
       const tl = await readTimeline(file, 40);
       const end = [...tl.items].reverse().find((i) => i.k === "end");

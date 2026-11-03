@@ -11,6 +11,8 @@
   } from "$lib/store.svelte";
   import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
   import WorkspaceTabs from "$lib/components/WorkspaceTabs.svelte";
+  import ServerTabs from "$lib/components/ServerTabs.svelte";
+  import LivePill from "$lib/components/LivePill.svelte";
   import AgentView from "$lib/components/AgentView.svelte";
   import PairDialog from "$lib/components/PairDialog.svelte";
   import NewSessionDialog from "$lib/components/NewSessionDialog.svelte";
@@ -44,7 +46,8 @@
 
   function onKey(e: KeyboardEvent) {
     const mod = e.metaKey || e.ctrlKey;
-    if (!mod) return;
+    // ⌘⌥1…9 switch servers (ServerTabs)
+    if (!mod || e.altKey) return;
     const k = e.key;
     if (k === "=" || k === "+") zoomBy(0.1);
     else if (k === "-") zoomBy(-0.1);
@@ -113,6 +116,11 @@
     nav.route.view === r.view || (r.view === "spaces" && nav.route.view === "space");
 
   const current = $derived(nav.route.view === "agent" ? findPane(nav.route.server, nav.route.pane) : undefined);
+  /** the space view's herdr workspace, for its tab bar (none while the tree loads or nothing runs there) */
+  const spaceWs = $derived.by(() => {
+    const r = nav.route;
+    return r.view === "space" ? app.trees[r.server]?.find((w) => w.id === r.ws) : undefined;
+  });
   const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+";
 
   // ---- sidebar width: drag its right edge (double-click resets), remembered per computer
@@ -165,6 +173,7 @@
       <SpacesSidebar />
     </div>
     <div class="bottom">
+      <LivePill />
       <button class="nav" class:active={nav.route.view === "settings"} onclick={() => go({ view: "settings" })} title={`${mod},`}>
         <span class="ico">⚙</span>{t("Einstellungen")}
       </button>
@@ -175,33 +184,39 @@
   </aside>
 
   <section class="main">
-    {#if nav.route.view === "agent"}
-      {#if current}
+    <ServerTabs />
+    <div class="view">
+      {#if nav.route.view === "agent"}
+        {#if current}
+          <div class="agentwrap">
+            <WorkspaceTabs server={current.server.id} workspace={current.workspace} active={current.pane.pane} />
+            {#key `${nav.route.server}|${nav.route.pane}`}
+              <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
+                open={nav.route.open} url={nav.route.url} {onClosed} />
+            {/key}
+          </div>
+        {:else}
+          <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>
+        {/if}
+      {:else if nav.route.view === "agents"}
+        <Agents />
+      {:else if nav.route.view === "spaces"}
+        <Spaces />
+      {:else if nav.route.view === "space"}
         <div class="agentwrap">
-          <WorkspaceTabs {current} />
-          {#key `${nav.route.server}|${nav.route.pane}`}
-            <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
-              open={nav.route.open} url={nav.route.url} {onClosed} />
-          {/key}
+          <div>{#if spaceWs}<WorkspaceTabs server={nav.route.server} workspace={spaceWs} />{/if}</div>
+          <SpaceDetail server={nav.route.server} ws={nav.route.ws} />
         </div>
+      {:else if nav.route.view === "settings"}
+        <Settings page={nav.route.page} />
+      {:else if nav.route.view === "serverinfo"}
+        <ServerInfo server={nav.route.server} />
+      {:else if nav.route.view === "tools"}
+        <Tools server={nav.route.server} />
       {:else}
-        <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>
+        <Dashboard />
       {/if}
-    {:else if nav.route.view === "agents"}
-      <Agents />
-    {:else if nav.route.view === "spaces"}
-      <Spaces />
-    {:else if nav.route.view === "space"}
-      <SpaceDetail server={nav.route.server} ws={nav.route.ws} />
-    {:else if nav.route.view === "settings"}
-      <Settings page={nav.route.page} />
-    {:else if nav.route.view === "serverinfo"}
-      <ServerInfo server={nav.route.server} />
-    {:else if nav.route.view === "tools"}
-      <Tools server={nav.route.server} />
-    {:else}
-      <Dashboard />
-    {/if}
+    </div>
   </section>
 </main>
 
@@ -239,7 +254,8 @@
   .ico { width: 16px; text-align: center; font-size: 13px; }
   .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
-  .main { min-width: 0; min-height: 0; overflow: hidden; }
+  .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .view { grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; }
   .agentwrap { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
   .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>

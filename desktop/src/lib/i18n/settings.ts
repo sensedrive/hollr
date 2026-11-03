@@ -161,6 +161,28 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Server-Tabs oben: zwischen deinen Rechnern wechseln – mit Verbindungspunkt, „Braucht dich“-Zähler und ⌘⌥1…9; ein Klick öffnet die zuletzt genutzte Session dort":
+    "Server tabs at the top: switch between your machines – with connection dot, “Needs you” count and ⌘⌥1…9; a click opens the session you last used there",
+  "Tabs per Drag & Drop umsortieren – Server-Tabs und Session-Tabs (die Reihenfolge gilt in Hollr)":
+    "Reorder tabs by drag & drop – server tabs and session tabs (the order applies in Hollr)",
+  "Der Space ist jetzt der erste Tab – die Tab-Leiste bleibt auch in der Space-Ansicht stehen":
+    "The space is now the first tab – the tab bar stays in the space view too",
+  "Live läuft weiter, wenn du Tab oder Session wechselst – die Live-Pille in der Seitenleiste zeigt Zustand, Mikro und Auflegen; Tabs, Server und Seitenleiste markieren, wo gesprochen wird":
+    "Live keeps running when you switch tab or session – the live pill in the sidebar shows state, mic and hang up; tabs, servers and sidebar mark where the call is",
+  "Live merkt eine abgerissene Verbindung („Verbindung verloren“, neu verbinden) und folgt dem Wechsel von Mikrofon und Lautsprecher (AirPods, Bildschirm)":
+    "Live notices a dropped connection (“Connection lost”, reconnect) and follows microphone and speaker changes (AirPods, display)",
+  "Neue Einstellung „Kopfhörer: Mikrofon immer an“ – du kannst omp dann jederzeit unterbrechen":
+    "New setting “Headphones: mic always on” – you can then interrupt omp any time",
+  "Uhrzeiten im Chat und eine Zeitleiste über dem Terminal: wann du was geschrieben hast und wann omp geantwortet hat":
+    "Times in the chat and a time strip above the terminal: when you wrote what and when omp answered",
+  "Terminal-Modus ohne doppelte TODO-Liste und Statuszeile; „Session / Eigene Shell“ und Zen-Modus merkt sich jede Session":
+    "Terminal mode without the duplicate TODO list and status line; every session remembers “Session / Own shell” and zen mode",
+  "Space-Ansicht frei anordnen: Spalten ziehen, einklappen (⌘\\), Liste und Detail nebeneinander oder untereinander":
+    "Arrange the space view freely: drag columns, collapse them (⌘\\), list and detail side by side or stacked",
+  "Aus der Seitenleiste genommene Spaces verschwinden auch aus der Übersicht – bis sie dich brauchen":
+    "Spaces removed from the sidebar also disappear from the overview – until they need you",
+  "Eine neue omp-Session zeigt nicht mehr den Chat einer anderen Session im selben Ordner (braucht hollr 0.33 auf dem Server)":
+    "A new omp session no longer shows the chat of another session in the same folder (needs hollr 0.33 on the server)",
   "Live: nach dem Stummschalten hört omp wieder zu – auch wenn die Stummschaltung in omp selbst (Leertaste) aufgehoben wurde; bisher blieb das Mikrofon stumm, obwohl „hört zu“ angezeigt wurde":
     "Live: omp listens again after muting – also when it was unmuted in omp itself (Space); so far the mic stayed silent although “listening” was shown",
   "Tabs schließen: ✕ am Tab, Mittelklick oder Rechtsklick › Schließen – Sessions mit Agent nach Rückfrage":
@@ -287,4 +309,8 @@ export default {
   "Hollr zu entsperren": "unlock Hollr",
   "die Sperre einzuschalten": "turn on the lock",
   "die Sperre auszuschalten": "turn off the lock",
+  "Live-Sprache": "Live voice",
+  "Kopfhörer: Mikrofon immer an": "Headphones: microphone always on",
+  "Ohne Kopfhörer schaltet Hollr das Mikrofon stumm, solange omp spricht (sonst hört omp sich selbst) – nur deutlich lauteres Reinreden kommt durch. Mit Kopfhörern kannst du jederzeit unterbrechen. Gilt sofort, auch mitten im Gespräch.":
+    "Without headphones Hollr mutes the microphone while omp speaks (otherwise omp hears itself) – only clearly louder talking gets through. With headphones you can interrupt any time. Applies at once, even mid-call.",
 };

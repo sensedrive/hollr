@@ -1,7 +1,10 @@
 <script lang="ts">
   // Moshi-style repo browser for one space: files, changes, history graph, branches.
-  // Wide: list left, file/diff/commit right. Narrow: list, then the detail with a back button.
+  // List and detail side by side (draggable splitter) or stacked (list on top, detail below);
+  // "auto" stacks when narrow. The list can make way for the detail. Layout remembered per place.
   import { t } from "../i18n";
+  import { GIT_LAYOUT, clamp, gitKey, loadLayout, nextArrange, resolveArrange, saveLayout, type GitPlace } from "../layoutPrefs";
+  import Splitter from "./Splitter.svelte";
   import BranchesTab from "./git/BranchesTab.svelte";
   import ChangesTab from "./git/ChangesTab.svelte";
   import CommitView from "./git/CommitView.svelte";
@@ -12,20 +15,52 @@
   import Icon from "./git/Icon.svelte";
   import { detailKey, type Detail, type Tab } from "./git/nav";
 
-  let { server, ws, title = "", initialTab = "changes" }:
-    { server: string; ws: string; title?: string; initialTab?: Tab } = $props();
+  let { server, ws, title = "", initialTab = "changes", place = "side" }:
+    { server: string; ws: string; title?: string; initialTab?: Tab; place?: GitPlace } = $props();
 
   // svelte-ignore state_referenced_locally
   let tab = $state<Tab>(initialTab);
   let rev = $state(0);
   let width = $state(0);
+  let height = $state(0);
+  let listWidth = $state(0);
   let details = $state<Record<Tab, Detail[]>>({ files: [], changes: [], history: [], branches: [] });
+  // svelte-ignore state_referenced_locally
+  const key = gitKey(place);
+  let layout = $state(loadLayout(key, GIT_LAYOUT));
+  const save = () => saveLayout(key, layout);
 
-  const wide = $derived(width >= 820);
+  const arrange = $derived(resolveArrange(layout.arrange, width));
+  const wide = $derived(arrange === "side");
   const stack = $derived(details[tab]);
   const top = $derived(stack.at(-1));
   const openKey = $derived(detailKey(top));
   const hasDetail = $derived(tab !== "branches");
+  /** side by side: the detail pane (or its placeholder) is always there; stacked: only while something is open */
+  const showDetail = $derived(hasDetail && (wide || !!top));
+  const listHidden = $derived(layout.listHidden && hasDetail && !!top);
+  const showSplit = $derived(showDetail && !listHidden);
+
+  const LIST_MIN_W = 220, DETAIL_MIN_W = 300, LIST_MIN_H = 110, DETAIL_MIN_H = 140;
+  const maxW = $derived(Math.max(LIST_MIN_W, width - DETAIL_MIN_W));
+  const maxH = $derived(Math.max(LIST_MIN_H, height - DETAIL_MIN_H));
+  const listW = $derived(clamp(layout.listW, LIST_MIN_W, maxW));
+  const listH = $derived(clamp(layout.listH, LIST_MIN_H, maxH));
+
+  const arrangeLabel = $derived(
+    layout.arrange === "auto"
+      ? t("Anordnung: automatisch ({mode})", { mode: wide ? t("nebeneinander") : t("untereinander") })
+      : layout.arrange === "side" ? t("Anordnung: nebeneinander") : t("Anordnung: untereinander"));
+  function cycleArrange() {
+    layout.arrange = nextArrange(layout.arrange);
+    save();
+  }
+  function toggleList() {
+    layout.listHidden = !layout.listHidden;
+    save();
+  }
+  const mac = navigator.platform.toLowerCase().includes("mac");
+  const listKeys = mac ? "⌥⌘\\" : "Ctrl+Alt+\\";
 
   // another space: start over
   let lastWs = "";
@@ -52,6 +87,11 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.altKey && (e.code === "Backslash" || e.key === "\\")) {
+      e.preventDefault();
+      if (hasDetail && top) toggleList();
+      return;
+    }
     const tag = (e.target as HTMLElement).tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "Escape" && stack.length) { e.preventDefault(); back(); }
@@ -70,28 +110,48 @@
         </button>
       {/each}
     </div>
+    {#if hasDetail && top}
+      <button class="icon" class:on={listHidden} onclick={toggleList}
+        title={`${listHidden ? t("Liste einblenden") : t("Liste ausblenden – Detail über die ganze Fläche")} (${listKeys})`}
+        aria-label={listHidden ? t("Liste einblenden") : t("Liste ausblenden")} aria-pressed={listHidden}>
+        <Icon name={wide ? "panelLeft" : "panelTop"} size={15} /></button>
+    {/if}
+    <button class="icon" onclick={cycleArrange} title={`${arrangeLabel} – ${t("klicken zum Wechseln")}`} aria-label={arrangeLabel}>
+      <Icon name={wide ? "split" : "unified"} size={15} />{#if layout.arrange === "auto"}<span class="auto">A</span>{/if}
+    </button>
     <button class="icon" onclick={() => rev++} title={t("Neu laden")} aria-label={t("Neu laden")}><Icon name="reload" size={15} /></button>
   </nav>
 
-  <div class="main" class:wide={wide && hasDetail}>
-    <div class="list" class:hidden={!wide && hasDetail && !!top}>
+  <div class="main" class:wide={wide && hasDetail} class:stacked={!wide && showDetail} bind:clientHeight={height}>
+    <div class="list" class:hidden={listHidden} bind:clientWidth={listWidth}
+      style:flex-basis={showSplit ? `${wide ? listW : listH}px` : null}>
       {#if tab === "files"}
-        <FilesTab {server} {ws} {rev} {title} {openKey} preview={wide} onOpen={open} />
+        <FilesTab {server} {ws} {rev} {title} {openKey} preview={wide || !!top} onOpen={open} />
       {:else if tab === "changes"}
-        <ChangesTab {server} {ws} {rev} {openKey} preview={wide} onOpen={open} onStaged={staged} />
+        <ChangesTab {server} {ws} {rev} {openKey} preview={wide || !!top} onOpen={open} onStaged={staged} />
       {:else if tab === "history"}
-        <HistoryTab {server} {ws} {rev} {openKey} preview={wide} wide={width >= 1100 || !wide} onOpen={open} onChanges={() => (tab = "changes")} />
+        <HistoryTab {server} {ws} {rev} {openKey} preview={wide || !!top} wide={listWidth >= 560} onOpen={open} onChanges={() => (tab = "changes")} />
       {:else}
         <BranchesTab {server} {ws} {rev} />
       {/if}
     </div>
 
-    {#if hasDetail && (wide || top)}
+    {#if showSplit}
+      {#if wide}
+        <Splitter size={listW} min={LIST_MIN_W} max={maxW} label={t("Liste breiter / schmaler")}
+          onSize={(v) => (layout.listW = v)} onDone={save} onReset={() => { layout.listW = GIT_LAYOUT.listW; save(); }} />
+      {:else}
+        <Splitter axis="y" size={listH} min={LIST_MIN_H} max={maxH} label={t("Liste höher / niedriger")}
+          onSize={(v) => (layout.listH = v)} onDone={save} onReset={() => { layout.listH = GIT_LAYOUT.listH; save(); }} />
+      {/if}
+    {/if}
+
+    {#if showDetail}
       <div class="detail">
         {#if top}
           {#if stack.length > 1 || !wide}
             <div class="crumbbar">
-              <button class="backbtn" onclick={back}><Icon name="back" size={14} /><span>{t("Zurück")}</span></button>
+              <button class="backbtn" onclick={back}><Icon name="back" size={14} /><span>{stack.length > 1 ? t("Zurück") : t("Schließen")}</span></button>
               {#if stack.length > 1}{@const prev = stack[stack.length - 2]}
                 <span class="from">{prev.k === "commit" ? prev.subject : prev.k === "file" ? prev.path : prev.title}</span>
               {/if}
@@ -128,12 +188,16 @@
     color: var(--muted); font-size: 13px; }
   .seg button:hover { color: var(--fg); }
   .seg button.on { background: color-mix(in srgb, var(--fg) 12%, transparent); color: var(--fg); }
-  .icon { margin-left: auto; background: none; border: 1px solid transparent; border-radius: 8px; padding: 5px; color: var(--muted); display: inline-flex; }
+  .icon { background: none; border: 1px solid transparent; border-radius: 8px; padding: 5px; color: var(--muted); display: inline-flex; position: relative; }
   .icon:hover { border-color: var(--border); color: var(--fg); }
+  .icon.on { color: var(--accent); }
+  .bar > .icon:first-of-type { margin-left: auto; }
+  .auto { position: absolute; right: 1px; bottom: 0; font: 700 8px/1 var(--mono); color: var(--accent); }
   .main { flex: 1; min-height: 0; display: flex; }
-  .list { flex: 1; min-width: 0; overflow: auto; }
+  .main.stacked { flex-direction: column; }
+  .list { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
   .list.hidden { display: none; }
-  .main.wide .list { flex: 0 0 clamp(300px, 36%, 460px); border-right: 1px solid var(--border); }
+  .main.wide .list, .main.stacked .list { flex-grow: 0; flex-shrink: 0; }
   .detail { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
   .content { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
   .content > :global(*) { flex: 1; }

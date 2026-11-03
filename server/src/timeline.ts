@@ -32,6 +32,8 @@ export interface ToolCall {
   bg?: string;
 }
 
+/** `at`: epoch ms of the log entry the item comes from (the user's prompt, the assistant message the
+ *  text/thinking/tool calls arrived with, the turn's final answer) – absent when the entry had none. */
 export type TimelineItem =
   | {
       k: "user";
@@ -40,9 +42,9 @@ export type TimelineItem =
       source: "typed" | "voice" | "skill" | "agent";
       at: number;
     }
-  | { k: "thinking"; id: string; text: string }
-  | { k: "text"; id: string; text: string }
-  | { k: "tools"; id: string; calls: ToolCall[] }
+  | { k: "thinking"; id: string; text: string; at?: number }
+  | { k: "text"; id: string; text: string; at?: number }
+  | { k: "tools"; id: string; calls: ToolCall[]; at?: number }
   | ({
       k: "ask";
       id: string;
@@ -50,9 +52,10 @@ export type TimelineItem =
       pending: boolean;
       /** every question when omp asks several at once (the question fields here are the first one) */
       questions?: AskQuestion[];
+      at?: number;
     } & AskQuestion)
-  | { k: "end"; id: string; ms: number; status: "done" | "aborted" | "error"; error?: string }
-  | { k: "info"; id: string; text: string };
+  | { k: "end"; id: string; ms: number; status: "done" | "aborted" | "error"; error?: string; at?: number }
+  | { k: "info"; id: string; text: string; at?: number };
 
 /** One question of omp's ask dialog. */
 export interface AskQuestion {
@@ -259,6 +262,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
         ms: Math.max(0, lastFinal.at - turnStart),
         status: lastFinal.status,
         error: lastFinal.error,
+        at: lastFinal.at,
       });
     }
     lastFinal = undefined;
@@ -282,6 +286,8 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
       continue;
     }
     const at = e.timestamp ? Date.parse(e.timestamp) : Date.now();
+    /** the entry's own time for `at` – never "now", so an unchanged item stays unchanged for follow */
+    const ts = e.timestamp ? Date.parse(e.timestamp) || undefined : undefined;
     switch (e.type) {
       case "title":
         title = e.title || title;
@@ -290,7 +296,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
         model = e.model ?? model;
         continue;
       case "compaction":
-        pushItem({ k: "info", id: nid(e.id), text: "Kontext wurde zusammengefasst" });
+        pushItem({ k: "info", id: nid(e.id), text: "Kontext wurde zusammengefasst", at: ts });
         continue;
       case "custom": {
         const data = (typeof e.data === "object" ? e.data : {}) as Record<string, unknown>;
@@ -324,6 +330,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
             k: "info",
             id: nid(e.id),
             text: `Hintergrund-Job fertig: ${clip(names || "Job", 120)}`,
+            at: ts,
           });
         } else if (e.customType === "irc:incoming") {
           const from = str(e.details?.from) ?? "Agent";
@@ -331,6 +338,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
             k: "info",
             id: nid(e.id),
             text: `Nachricht von ${from}: ${clip(str(e.details?.message) ?? text, 200)}`,
+            at: ts,
           });
         }
         continue;
@@ -361,9 +369,9 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
       const blocks = Array.isArray(m.content) ? m.content : [];
       for (const b of blocks) {
         if (b.type === "thinking" && b.thinking?.trim()) {
-          pushItem({ k: "thinking", id: nid(), text: clip(b.thinking, 1500) });
+          pushItem({ k: "thinking", id: nid(), text: clip(b.thinking, 1500), at: ts });
         } else if (b.type === "text" && b.text?.trim()) {
-          pushItem({ k: "text", id: nid(), text: redact(b.text) });
+          pushItem({ k: "text", id: nid(), text: redact(b.text), at: ts });
         } else if (b.type === "toolCall" && b.id && b.name) {
           const args = (b.arguments ?? {}) as Record<string, unknown>;
           if (b.name === "ask") {
@@ -385,6 +393,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
               ...first,
               ...(questions.length > 1 ? { questions } : {}),
               pending: true,
+              at: ts,
             });
             continue;
           }
@@ -402,7 +411,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
           };
           calls.set(b.id, call);
           if (!currentGroup) {
-            currentGroup = { k: "tools", id: `g-${b.id}`, calls: [] };
+            currentGroup = { k: "tools", id: `g-${b.id}`, calls: [], at: ts };
             items.push(currentGroup);
           }
           currentGroup.calls.push(call);
@@ -418,7 +427,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
       ) {
         lastFinal = {
           id: e.id ?? nid(),
-          at: m.completedAt ?? at,
+          at: m.completedAt ?? ts ?? at,
           status:
             m.stopReason === "stop" ? "done" : m.stopReason === "aborted" ? "aborted" : "error",
           error: m.errorMessage ? clip(m.errorMessage, 200) : undefined,

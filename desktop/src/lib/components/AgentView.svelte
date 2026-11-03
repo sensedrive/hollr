@@ -3,14 +3,16 @@
   // working row), composer with keys and live voice, omp's status line, ⋯ menu, zen mode and a right side
   // panel (git / in-app browser / info).
   import { onDestroy, onMount, untrack } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
-  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
   import type { AskPick, Pane, Timeline } from "../api";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
+  import {
+    live, liveAbout, liveActive, liveColor as liveColorNow, liveDetail, liveTitle, liveStateLabel, reconnectLive, startLive as startLiveOn,
+    stopLive, stopLiveOn, toggleLiveMic as toggleMic, toggleLiveSpeaker as toggleSpeaker,
+  } from "../live.svelte";
   import { draftKey } from "../drafts";
   import { followTimeline } from "../follow";
   import { sessionTerms } from "../dictationText";
@@ -20,13 +22,14 @@
   } from "../agent";
   import TimelineView from "./TimelineView.svelte";
   import TerminalView from "./TerminalView.svelte";
+  import TimeStrip from "./TimeStrip.svelte";
   import Composer from "./Composer.svelte";
   import Markdown from "./Markdown.svelte";
   import BrowserPanel from "./BrowserPanel.svelte";
   import ModelDialog from "./ModelDialog.svelte";
   import GitPanel from "./GitPanel.svelte";
   import Modal from "./Modal.svelte";
-  import { rememberViewMode, viewModeOf, type ViewMode } from "../viewModes";
+  import { rememberViewPrefs, viewPrefsOf, type ViewMode } from "../viewPrefs";
 
   let { server, pane, title, onClosed, open, url }: {
     server: string; pane: Pane; title: string;
@@ -174,14 +177,17 @@
 
   // ------------------------------------------------------------ view state
 
-  // chat or terminal as last left in this session (a dashboard "Terminal" click wins)
-  let mode = $state<ViewMode>(
-    untrack(() => (!pane.agent || open === "terminal" ? "terminal" : (viewModeOf(`${server}|${pane.pane}`) ?? "chat"))),
-  );
+  // chat or terminal and zen as last left in this session (a dashboard "Terminal" click wins)
+  const prefs = untrack(() => viewPrefsOf(`${server}|${pane.pane}`));
+  let mode = $state<ViewMode>(untrack(() => (!pane.agent || open === "terminal" ? "terminal" : (prefs.view ?? "chat"))));
   $effect(() => {
-    if (pane.agent) rememberViewMode(`${server}|${pane.pane}`, mode);
+    if (pane.agent) rememberViewPrefs(`${server}|${pane.pane}`, { view: mode });
   });
-  let zen = $state(false);
+  let zen = $state(prefs.zen ?? false);
+  $effect(() => {
+    // only "on" is kept: every session opened once would otherwise take a slot
+    rememberViewPrefs(`${server}|${pane.pane}`, { zen: zen || undefined });
+  });
   let panel = $state<"" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
   /** browser stays mounted (tunnels open) until its ✕, even while another panel tab shows */
   let browserOpen = $state(untrack(() => open === "browser"));
@@ -249,6 +255,17 @@
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
     stick = true;
     unseen = false;
+  }
+  /** From the terminal's time strip: the chat, scrolled to that message and briefly lit. */
+  async function showMessage(id: string) {
+    mode = "chat";
+    // the chat is mounted and has run its first stick-to-bottom after two frames
+    for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
+    const el = inner?.querySelector<HTMLElement>(`[data-item="${CSS.escape(id)}"]`);
+    if (!el) return;
+    stick = false;
+    el.scrollIntoView({ block: "center" });
+    el.animate([{ boxShadow: "0 0 0 2px var(--accent)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1800, easing: "ease-out" });
   }
   $effect(() => {
     if (!inner || !scroller) return;
@@ -319,7 +336,7 @@
   async function close() {
     confirmClose = false;
     const id = key;
-    if (livePhase) await invoke("live_stop").catch(() => {});
+    await stopLiveOn(server, pane.pane);
     try {
       await api.closePane(server, pane.pane);
       onClosed(id);
@@ -400,89 +417,30 @@
   }
 
   // ------------------------------------------------------------ live voice (omp /live)
-  let livePhase = $state<"" | "connecting" | "live" | "ending">("");
-  let ompState = $state<string | undefined>();
-  let micMuted = $derived(ompState === "muted");
-  let speakerMuted = $state(false);
-  let levels = $state({ input: 0, output: 0 });
-  let liveError = $state("");
-  let liveNote = $state("");
-  let unlisten: UnlistenFn[] = [];
-  /** false once this view is gone (a start may still be under way) */
-  let alive = true;
-  /** id from live_start; events of other (older) sessions are ignored */
-  let liveSession: number | null = null;
-  /** events that arrived before live_start returned the id */
-  let early: Record<string, unknown>[] = [];
-
-  async function startLive() {
-    liveError = "";
-    liveNote = "";
-    livePhase = "connecting";
-    liveSession = null;
-    early = [];
-    const offs = [
-      await listen<Record<string, unknown>>("live", (e) => {
-        if (liveSession === null) early.push(e.payload);
-        else if (e.payload.session === liveSession) onLive(e.payload);
-      }),
-      await listen<{ input: number; output: number; session?: number }>("live-levels", (e) => {
-        if (e.payload.session === liveSession) levels = e.payload;
-      }),
-    ];
-    if (!alive) return offs.forEach((u) => u());
-    unlisten.push(...offs);
-    try {
-      const id = await invoke<number>("live_start", { server, pane: pane.pane });
-      if (!alive) return;
-      liveSession = id;
-      for (const m of early.splice(0)) if (m.session === id) onLive(m);
-    } catch (e) {
-      liveError = String(e);
-      endLive();
-    }
+  // The call lives app-wide (live.svelte.ts): leaving this view doesn't hang up, the live pill leads back.
+  /** the store's call (or its last error / note) is this session's */
+  const liveMine = $derived(liveAbout(server, pane.pane));
+  const livePhase = $derived(liveMine ? live.phase : "");
+  /** a call is running here (not lost) */
+  const liveHere = $derived(liveMine && liveActive());
+  const ompState = $derived(liveMine ? live.ompState : undefined);
+  const micMuted = $derived(ompState === "muted");
+  const speakerMuted = $derived(liveMine && live.speakerMuted);
+  const levels = $derived(liveMine ? live.levels : { input: 0, output: 0 });
+  const liveError = $derived(liveMine ? live.error : "");
+  const liveNote = $derived(liveMine ? live.note : "");
+  const liveColor = $derived(liveMine ? liveColorNow() : "var(--accent)");
+  /** Live runs on another session: starting here ends it (one microphone) – asked first */
+  let confirmLiveSwitch = $state(false);
+  function startLive() {
+    if (liveActive() && !liveMine) return void (confirmLiveSwitch = true);
+    void startLiveOn(server, pane.pane, title);
   }
-  function onLive(m: Record<string, unknown>) {
-    if (m.t === "phase") {
-      if (m.phase === "live") livePhase = "live";
-      else if (m.phase === "ended") {
-        if (m.reason === "live_stopped") liveNote = t("Live wurde am Rechner beendet.");
-        endLive();
-      } else if (m.phase === "failed") { liveError = String(m.message ?? m.reason ?? t("Live fehlgeschlagen")); endLive(); }
-    } else if (m.t === "omp") ompState = String(m.state);
-    else if (m.t === "error") liveError = String(m.message ?? m.code);
-    else if (m.t === "audio_error") liveError = String(m.message);
-    else if (m.t === "closed") endLive();
-  }
-  function endLive() {
-    livePhase = "";
-    liveSession = null;
-    early = [];
-    ompState = undefined;
-    speakerMuted = false;
-    for (const u of unlisten) u();
-    unlisten = [];
-  }
-  async function stopLive() {
-    livePhase = "ending";
-    await invoke("live_stop").catch(() => {});
-    setTimeout(() => { if (livePhase === "ending") endLive(); }, 6000);
-  }
-  const toggleMic = () => { ompState = micMuted ? "listening" : "muted"; invoke("live_mute", { on: ompState === "muted" }); };
-  const toggleSpeaker = () => { speakerMuted = !speakerMuted; invoke("live_speaker", { muted: speakerMuted }); };
-  // always: a start may still be under way (live_stop waits for it, then stops it)
-  onDestroy(() => { alive = false; invoke("live_stop").catch(() => {}); endLive(); });
-
-  function ompStateLabel(s?: string) {
-    if (!s) return t("verbunden");
-    return ({ listening: t("hört zu"), speaking: t("spricht"), working: t("arbeitet"), thinking: t("arbeitet"), muted: t("stumm"), connecting: t("verbindet") } as Record<string, string>)[s] ?? s;
-  }
-  const liveColor = $derived(
-    micMuted ? "var(--orange)" : livePhase !== "live" ? "var(--accent)" : ompState === "working" || ompState === "thinking" ? "var(--purple)" : "var(--green)",
-  );
+  const switchLive = () => { confirmLiveSwitch = false; void startLiveOn(server, pane.pane, title); };
+  const ompStateLabel = liveStateLabel;
 
   const placeholder = $derived(
-    isShell ? t("Befehl ausführen …") : livePhase ? t("Oder tippen …") : t("Nachricht an {agent} …", { agent: agentName }),
+    isShell ? t("Befehl ausführen …") : liveHere ? t("Oder tippen …") : t("Nachricht an {agent} …", { agent: agentName }),
   );
   const keysTitle = $derived(isShell ? t("Tasten ans Terminal senden") : t("Tasten an {agent} senden", { agent: agentName }));
   const transcriptTitle = $derived(cleanTitle(timeline?.title) ?? pane.title);
@@ -493,18 +451,24 @@
 
 {#snippet liveStrip()}
   {#if livePhase}
-    <div class="live" style:--live={liveColor}>
+    <div class="live" style:--live={liveColor} title={live.devices}>
       <div class="bars">{#each [0.45, 0.8, 1, 0.7, 0.4] as w}<span style:height="{6 + 22 * w * Math.min(1, micMuted ? 0 : Math.max(levels.input * 6, levels.output * 4))}px"></span>{/each}</div>
       <div class="grow">
-        <b>{livePhase === "connecting" ? t("Verbinde …") : livePhase === "ending" ? t("Beende …") : "Live"}</b>
-        <div class="small livestate">{livePhase === "live" ? [micMuted ? t("Mikro aus") : ompStateLabel(ompState), speakerMuted ? t("Ton aus") : ""].filter(Boolean).join(" · ") : "omp /live"}</div>
+        <b>{liveTitle()}</b>
+        <div class="small livestate">{liveDetail()}</div>
       </div>
-      <button class="round" class:warn={speakerMuted} disabled={livePhase !== "live"} title={speakerMuted ? t("Ton an") : t("Ton aus (Antwort nicht hören)")} onclick={toggleSpeaker}>{speakerMuted ? "🔇" : "🔊"}</button>
-      <button class="round" class:warn={micMuted} disabled={livePhase !== "live"} title={micMuted ? t("Mikrofon an") : t("Mikrofon aus (wie Leertaste) – du hörst weiter zu")} onclick={toggleMic}>{micMuted ? "🎙̸" : "🎙"}</button>
-      <button class="round hang" title={t("Live beenden")} onclick={stopLive}>✕</button>
+      {#if livePhase === "lost"}
+        <button class="relive" onclick={reconnectLive}>{t("Neu verbinden")}</button>
+        <button class="round" title={t("Schließen")} aria-label={t("Schließen")} onclick={stopLive}>✕</button>
+      {:else}
+        <button class="round" class:warn={speakerMuted} disabled={livePhase !== "live"} title={speakerMuted ? t("Ton an") : t("Ton aus (Antwort nicht hören)")} onclick={toggleSpeaker}>{speakerMuted ? "🔇" : "🔊"}</button>
+        <button class="round" class:warn={micMuted} disabled={livePhase !== "live"} title={micMuted ? t("Mikrofon an") : t("Mikrofon aus (wie Leertaste) – du hörst weiter zu")} onclick={toggleMic}>{micMuted ? "🎙̸" : "🎙"}</button>
+        <button class="round hang" title={t("Live beenden")} onclick={stopLive}>✕</button>
+      {/if}
     </div>
+    {#if liveHere && live.audioError}<div class="err small">⚠ {live.audioError}</div>{/if}
   {/if}
-  {#if liveError}<div class="err small">{liveError}</div>{/if}
+  {#if liveError && livePhase !== "lost"}<div class="err small">{liveError}</div>{/if}
   {#if liveNote && !livePhase}<div class="muted small">{liveNote}</div>{/if}
 {/snippet}
 
@@ -683,20 +647,22 @@
         {/if}
       {:else}
         <div class="termwrap">
+          {#if isOmp && timeline}<TimeStrip {timeline} {working} agent={agentName} onPick={showMessage} />{/if}
           <TerminalView bind:this={term} {server} pane={pane.pane} {onLink} />
           {#if error}<div class="warnline">⚠ {error}</div>{/if}
         </div>
       {/if}
 
-      <div class="bottom" class:float={zen}>
-        {#if timeline && hudVisible(timeline)}
+      <!-- terminal mode: the TUI shows TODO, jobs and status itself – only the composer stays (live, typing) -->
+      <div class="bottom" class:float={zen} class:term={mode === "terminal"}>
+        {#if mode === "chat" && timeline && hudVisible(timeline)}
           <div class="hudwrap" class:glass={zen}>{@render hud(timeline)}</div>
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
           bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
-          {server} {ws} top={liveStrip} trailing={liveButton} dictationKey={key} micBlocked={!!livePhase}
+          {server} {ws} top={liveStrip} trailing={liveButton} dictationKey={key} micBlocked={liveActive()}
           vocabulary={() => sessionTerms([title, pane.cwd.split("/").pop() ?? "", timeline?.title ?? ""], timeline?.items ?? [])} />
-        {#if !zen}{@render statusLine()}{/if}
+        {#if !zen && mode === "chat"}{@render statusLine()}{/if}
       </div>
 
       {#if zen}
@@ -829,6 +795,16 @@
   </Modal>
 {/if}
 
+{#if confirmLiveSwitch}
+  <Modal title={t("Live wechseln?")} onClose={() => (confirmLiveSwitch = false)}>
+    <p>{t("Live läuft gerade mit „{other}“. Das Gespräch dort endet, wenn du hier startest.", { other: live.label || live.pane })}</p>
+    <div class="mbuttons">
+      <button class="btn" onclick={() => (confirmLiveSwitch = false)}>{t("Abbrechen")}</button>
+      <button class="btn primary" onclick={switchLive}>{t("Hier starten")}</button>
+    </div>
+  </Modal>
+{/if}
+
 {#if linkUrl}
   {@const url = linkUrl}
   <Modal title={url.host || "Link"} onClose={() => (linkUrl = null)}>
@@ -883,6 +859,7 @@
   .ttl { text-align: center; font-size: 11.5px; color: var(--dim); }
   .termwrap { flex: 1; min-height: 0; padding: 12px 16px 6px; display: flex; flex-direction: column; gap: 6px; }
   .bottom { padding: 6px 16px 8px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 952px; margin: 0 auto; }
+  .bottom.term { padding: 2px 16px 6px; gap: 4px; }
   .bottom.float { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(880px, calc(100% - 32px)); padding: 0; }
   .hudwrap.glass { background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     border-radius: 12px; padding: 6px 10px; }
@@ -935,6 +912,9 @@
   .livebtn { all: unset; cursor: pointer; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
     color: var(--green); background: color-mix(in srgb, var(--green) 20%, transparent); }
   .livebtn:hover { background: color-mix(in srgb, var(--green) 30%, transparent); }
+  .relive { all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); flex: none; }
+  .relive:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 
   .readbar { position: absolute; top: 10px; right: 14px; z-index: 4; display: flex; align-items: center; gap: 2px; padding: 3px 6px;
     border-radius: 999px; background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px);

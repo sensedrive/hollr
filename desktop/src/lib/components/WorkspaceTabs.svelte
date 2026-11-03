@@ -1,21 +1,32 @@
 <script lang="ts">
-  // herdr's tab bar for the open session's workspace: every tab (and every pane of a split tab) with its
-  // number, name and status – one click switches, double-click (or right-click › Umbenennen) renames the
-  // tab in herdr, ✕ / middle click closes it (agents after asking), ＋ starts a new session in the same space.
+  // herdr's tab bar for a workspace, above its sessions and its space view: the space itself as the first tab
+  // (its overview), then every tab (and every pane of a split tab) with its number, name and status – one click
+  // switches, double-click (or right-click › Umbenennen) renames the tab in herdr, ✕ / middle click closes it
+  // (agents after asking), ＋ starts a new session in the same space. 〰 marks the tab a live call runs on.
+  // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move"), the
+  // numbers stay herdr's.
   import { tick } from "svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
-  import { dialogs, go, mySessions, refresh, type PaneRef } from "$lib/store.svelte";
+  import type { Workspace } from "$lib/api";
+  import { dialogs, go, mySessions, refresh } from "$lib/store.svelte";
   import ConfirmDialog from "$lib/views/dashboard/ConfirmDialog.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import type { MenuItem } from "$lib/views/dashboard/util";
+  import LiveMark from "./LiveMark.svelte";
+  import { sortable } from "$lib/sortable";
+  import { moveBefore, ordered } from "$lib/tabOrder";
+  import { tabOrders } from "$lib/tabOrders.svelte";
 
-  let { current }: { current: PaneRef } = $props();
-
-  const ws = $derived(current.workspace);
-  const server = $derived(current.server.id);
+  /** `active`: the open session's pane – none in the space view, then the space tab is the active one */
+  let { server, workspace: ws, active }: { server: string; workspace: Workspace; active?: string } = $props();
   type Tab = (typeof ws.tabs)[number];
   type Pane = Tab["panes"][number];
+
+  const orderKey = $derived(`${server}|${ws.id}`);
+  const tabs = $derived(ordered(ws.tabs, tabOrders.all[orderKey], (tb) => tb.id));
+  const moveTab = (id: string, before: string | null) =>
+    tabOrders.set(orderKey, moveBefore(tabs.map((tb) => tb.id), id, before));
 
   /** herdr numbers unnamed tabs: show what runs in them instead */
   const unnamed = (tab: Tab) => /^(Tab )?\d+$/.test(tab.label);
@@ -84,8 +95,8 @@
   }
   async function close(pane: Pane) {
     // leaving the closed session: the tab next to it, else the space
-    if (pane.pane === current.pane.pane) {
-      const all = ws.tabs.flatMap((tb) => tb.panes);
+    if (pane.pane === active) {
+      const all = tabs.flatMap((tb) => tb.panes);
       const i = all.findIndex((p) => p.pane === pane.pane);
       const next = all[i + 1] ?? all[i - 1];
       go(next ? { view: "agent", server, pane: next.pane } : { view: "space", server, ws: ws.id });
@@ -102,11 +113,12 @@
 </script>
 
 <div class="tabs" role="tablist" aria-label={ws.label}>
-  <button class="ws ellipsis" title={t("Space öffnen")} onclick={() => go({ view: "space", server, ws: ws.id })}>{ws.label}</button>
-  <div class="strip">
-    {#each ws.tabs as tab (tab.id)}
+  <button class="tab home" class:on={!active} role="tab" aria-selected={!active} title={t("Space öffnen")}
+    onclick={() => go({ view: "space", server, ws: ws.id })}><span class="num">❒</span><span class="name ellipsis">{ws.label}</span></button>
+  <div class="strip" use:sortable={{ onMove: moveTab }}>
+    {#each tabs as tab (tab.id)}
       {#each tab.panes as pane, i (pane.pane)}
-        {@const on = pane.pane === current.pane.pane}
+        {@const on = pane.pane === active}
         {#if editing === tab.id && i === 0}
           <div class="tab on edit">
             <span class="num">{tab.number}</span>
@@ -114,7 +126,7 @@
               aria-label={t("Tab umbenennen")} onkeydown={(e) => onKey(e, tab)} onblur={() => commit(tab)} />
           </div>
         {:else}
-          <div class="tabwrap" class:on>
+          <div class="tabwrap" class:on data-sort-id={tab.id}>
             <button class="tab" class:on class:split={i > 0} role="tab" aria-selected={on}
               title="{pane.title || nameOf(tab, pane)} · {t('Doppelklick: umbenennen · Mittelklick: schließen')}"
               onclick={() => go({ view: "agent", server, pane: pane.pane })}
@@ -123,6 +135,7 @@
               <span class="num">{i === 0 ? tab.number : "┊"}</span>
               <span class="dot {pane.status}"></span>
               <span class="name ellipsis">{nameOf(tab, pane)}</span>
+              <LiveMark {server} pane={pane.pane} />
             </button>
             <button class="x" title={t("Schließen")} aria-label={t("Schließen")} onclick={() => askClose(tab, pane)}>✕</button>
           </div>
@@ -148,9 +161,8 @@
 <style>
   .tabs { display: flex; align-items: stretch; gap: 2px; padding: 5px 10px 0; border-bottom: 1px solid var(--border);
     background: var(--side); font-family: var(--mono); font-size: 12px; min-width: 0; }
-  .ws { all: unset; cursor: pointer; align-self: center; max-width: 160px; padding: 0 10px 5px 6px; color: var(--muted); font-weight: 600; }
-  .ws:hover { color: var(--fg); }
-  .strip { display: flex; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+  .tab.home { padding-right: 12px; max-width: 180px; font-weight: 600; }
+  .strip { position: relative; display: flex; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
   .strip::-webkit-scrollbar { display: none; }
   .tabwrap { position: relative; display: flex; flex: none; }
   .tab { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 5px 26px 6px 12px; max-width: 220px;

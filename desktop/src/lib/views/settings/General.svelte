@@ -1,10 +1,11 @@
 <script lang="ts">
-  // Settings → general: zoom, app language, app lock, notifications, shells, prompt snippets, shortcuts to design / servers / notes.
+  // Settings → general: zoom, app language, app lock, notifications, shells, live voice, prompt snippets, shortcuts to design / servers / notes.
   import { onMount } from "svelte";
   import { appLock, biometryName, loadSupport, setEnabled } from "$lib/applock.svelte";
   import { t } from "$lib/i18n";
   import { hasUnseen } from "$lib/releaseNotes";
   import { settings } from "$lib/settings.svelte";
+  import { setLiveHeadphones } from "$lib/live.svelte";
   import { app, go } from "$lib/store.svelte";
   import { openTour } from "$lib/tips.svelte";
   import Snippets from "./Snippets.svelte";
@@ -124,6 +125,15 @@
     </label>
   </div>
   <p class="foot">{t("Zeigt auch Terminals ohne Agent in den Listen.")}</p>
+
+  <div class="section">{t("Live-Sprache")}</div>
+  <div class="rows">
+    <label class="row">
+      <span class="grow">{t("Kopfhörer: Mikrofon immer an")}</span>
+      <input type="checkbox" class="toggle" checked={settings.liveHeadphones} onchange={(e) => setLiveHeadphones(e.currentTarget.checked)} />
+    </label>
+  </div>
+  <p class="foot">{t("Ohne Kopfhörer schaltet Hollr das Mikrofon stumm, solange omp spricht (sonst hört omp sich selbst) – nur deutlich lauteres Reinreden kommt durch. Mit Kopfhörern kannst du jederzeit unterbrechen. Gilt sofort, auch mitten im Gespräch.")}</p>
 
   <Snippets />
 

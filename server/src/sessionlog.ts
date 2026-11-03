@@ -2,7 +2,7 @@
  * Follows an omp session JSONL file and turns new entries into app events:
  * what the voice delegated, which tools the agent used, and its answers.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -121,24 +121,63 @@ export function sessionDirCandidates(cwd: string, home = homedir()): string[] {
   return [...names];
 }
 
-/** Newest session file for `cwd` that was written after `sinceMs`. */
-export function findSessionFile(
-  cwd: string,
-  sinceMs: number,
-  root = join(homedir(), ".omp", "agent", "sessions"),
-): string | undefined {
+/** file → its title at that mtime: the first line is read once per change, not on every poll */
+const titles = new Map<string, { mtime: number; title: string | undefined }>();
+
+/** The title omp keeps in the first line of a session file – omp also sets it as the pane's terminal title. */
+function sessionTitle(file: string, mtime: number): string | undefined {
+  const known = titles.get(file);
+  if (known?.mtime === mtime) return known.title;
+  let title: string | undefined;
+  try {
+    const fd = openSync(file, "r");
+    try {
+      const buf = Buffer.alloc(8192);
+      const n = readSync(fd, buf, 0, buf.length, 0);
+      const entry = JSON.parse(buf.subarray(0, n).toString("utf8").split("\n")[0] ?? "") as {
+        type?: string;
+        title?: string;
+      };
+      title = (entry.type === "title" && entry.title?.trim()) || undefined;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {}
+  titles.set(file, { mtime, title });
+  return title;
+}
+
+/** Newest session file in `dirs` with that title. */
+function newestTitled(root: string, dirs: Iterable<string>, title: string) {
   let best: { file: string; mtime: number } | undefined;
-  for (const name of sessionDirCandidates(cwd)) {
+  for (const name of dirs) {
     const dir = join(root, name);
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir)) {
       if (!f.endsWith(".jsonl")) continue;
       const file = join(dir, f);
       const mtime = statSync(file).mtimeMs;
-      if (mtime >= sinceMs && (!best || mtime > best.mtime)) best = { file, mtime };
+      if ((!best || mtime > best.mtime) && sessionTitle(file, mtime) === title) best = { file, mtime };
     }
   }
   return best?.file;
+}
+
+/**
+ * The session file of an omp pane herdr names no path for: the newest one whose title is the pane's terminal
+ * title – first in the pane's folder, then anywhere (herdr's cwd can be the shell's, not the folder omp was
+ * started in). "Newest in the folder" alone showed another omp working in the same folder; a fresh omp (no
+ * title, no file yet) gets none.
+ */
+export function findSessionByTitle(
+  cwd: string,
+  title: string,
+  root = join(homedir(), ".omp", "agent", "sessions"),
+): string | undefined {
+  const near = sessionDirCandidates(cwd);
+  const found = newestTitled(root, near, title);
+  if (found || !existsSync(root)) return found;
+  return newestTitled(root, readdirSync(root).filter((d) => !near.includes(d)), title);
 }
 
 /** Last `limit` conversation events of a session file (for reopening a chat). */

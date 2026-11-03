@@ -11,6 +11,7 @@
   import { t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { findLinks, keySequence, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
+  import { rememberViewPrefs, viewPrefsOf } from "../viewPrefs";
 
   let { server, pane, onLink }: {
     server: string; pane: string; onLink?: (href: string) => void;
@@ -107,7 +108,13 @@
   // is new on every poll, which would otherwise restart the terminal each time
   const srv = $derived(server);
   const paneId = $derived(pane);
-  const mode = $derived<TermMode>(settings.terminalMode === "shell" ? "shell" : "pane");
+  // "Session" or "Eigene Shell" as last left in this session; a session never set uses the last choice made
+  let mode = $state<TermMode>(untrack(() => viewPrefsOf(`${server}|${pane}`).term ?? (settings.terminalMode === "shell" ? "shell" : "pane")));
+  function setMode(m: TermMode) {
+    mode = m;
+    settings.terminalMode = m;
+    rememberViewPrefs(`${srv}|${paneId}`, { term: m });
+  }
 
   $effect(() => {
     const el = host;
@@ -232,8 +239,8 @@
   <div class="bar">
     <span class="mono">&gt;_</span>
     <div class="seg" role="tablist" aria-label={t("Terminal")}>
-      <button role="tab" aria-selected={mode === "pane"} class:on={mode === "pane"} onclick={() => (settings.terminalMode = "pane")}>{t("Session")}</button>
-      <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => (settings.terminalMode = "shell")}>{t("Eigene Shell")}</button>
+      <button role="tab" aria-selected={mode === "pane"} class:on={mode === "pane"} onclick={() => setMode("pane")}>{t("Session")}</button>
+      <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => setMode("shell")}>{t("Eigene Shell")}</button>
     </div>
     <span class="grow">{focused ? t("Tippen geht direkt ans Terminal – Esc, Pfeile und Ctrl-Tasten inklusive") : t("Ins Terminal klicken, um direkt zu tippen")}</span>
     <span class="hint" title={mac ? t("Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal") : t("Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links") : t("Strg-Klick öffnet Links")}</span>

@@ -421,7 +421,8 @@
           <button class="micx" title={t("Diktat verwerfen")} aria-label={t("Diktat verwerfen")} onclick={() => dictator.cancel()}>✕</button>
         {/if}
         <button class="mic" class:rec={recordingHere} disabled={!micEnabled} style:--lvl={recordingHere ? Math.min(dictator.level * 8, 0.25) : 0}
-          title={recordingHere ? t("Diktat beenden") : t("Diktieren – klicken startet und beendet, gedrückt halten diktiert bis zum Loslassen")}
+          title={recordingHere ? t("Diktat beenden") : micBlocked ? t("Während Live hört omp direkt zu – Diktieren geht nach dem Gespräch wieder")
+            : t("Diktieren – klicken startet und beendet, gedrückt halten diktiert bis zum Loslassen")}
           aria-label={recordingHere ? t("Diktat beenden") : t("Diktieren")}
           onpointerdown={micDown} onpointerup={micUp} onpointercancel={micUp} onclick={micClick}>
           {#if recordingHere}

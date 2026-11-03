@@ -245,6 +245,49 @@ test("session tail only reports entries since the call started", async () => {
   rmSync(file);
 });
 
+test("a pane without herdr's session path gets its own session by title, a fresh omp none", async () => {
+  const { findSessionByTitle, sessionDirCandidates } = await import("../src/sessionlog");
+  const root = mkdtempSync(join(tmpdir(), "hollr-sessions-"));
+  const cwd = "/home/ubuntu/projects/tendr";
+  const dir = join(root, sessionDirCandidates(cwd, "/home/ubuntu")[0] ?? "");
+  Bun.spawnSync(["mkdir", "-p", dir]);
+  const write = (name: string, title: string | undefined, ageS: number) => {
+    const file = join(dir, name);
+    const head = title === undefined ? { type: "session", cwd } : { type: "title", v: 1, title, pad: "   " };
+    writeFileSync(file, `${JSON.stringify(head)}\n${JSON.stringify({ type: "message" })}\n`);
+    const t = new Date(Date.now() - ageS * 1000);
+    Bun.spawnSync(["touch", "-d", t.toISOString(), file]);
+    return file;
+  };
+  try {
+    const mine = write("a_mine.jsonl", "PAT: Patricks gelabelte Tickets auflisten", 120);
+    // another omp in the same folder, busy right now – the newest file there
+    write("b_other.jsonl", "WTREE: Run sandcastle PRs for nine stories", 1);
+    write("c_untitled.jsonl", undefined, 0);
+    expect(findSessionByTitle(cwd, "PAT: Patricks gelabelte Tickets auflisten", root)).toBe(mine);
+    expect(findSessionByTitle(cwd, "Fresh session title", root)).toBeUndefined();
+    // a file whose title is still empty never matches
+    write("e_empty.jsonl", "", 0);
+    expect(findSessionByTitle(cwd, "", root)).toBeUndefined();
+    // herdr's cwd is the shell's home, omp was started in a worktree: found there by its title
+    const wt = join(root, "-.herdr-worktrees-tendr-feature-x");
+    Bun.spawnSync(["mkdir", "-p", wt]);
+    writeFileSync(join(wt, "d_wt.jsonl"), `${JSON.stringify({ type: "title", v: 1, title: "DASH: Navigation" })}\n`);
+    expect(findSessionByTitle("/home/ubuntu", "DASH: Navigation", root)).toBe(join(wt, "d_wt.jsonl"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a fresh omp pane (folder name as title, no path from herdr) gets no session file", async () => {
+  const { Herdr } = await import("../src/herdr");
+  const exec = async (args: string[]) =>
+    args[0] === "agent"
+      ? { agent: { agent: "omp", pane_id: "wH:pQ", agent_status: "idle", terminal_title_stripped: "π > tendr", cwd: "/home/ubuntu/projects/tendr" } }
+      : { process_info: { foreground_processes: [] } };
+  expect((await new Herdr(exec).agent("wH:pQ")).sessionFile).toBeUndefined();
+});
+
 test("omp live footer state", async () => {
   const { parseLiveState } = await import("../src/herdr");
   expect(parseLiveState("╰─ × muted · 󱁐 mute · 󱊷 end ───")).toBe("muted");
@@ -398,6 +441,17 @@ describe("timeline", () => {
     expect(t.jobs.map((j) => j.id)).toEqual(["bg_1"]);
     expect((t.items.at(-1) as { ms: number }).ms).toBe(134_000);
     expect(t.running).toBe(false);
+    // every item carries the time of the log entry it came from
+    expect(t.items.map((i) => i.at)).toEqual([t0, t0 + 1000, t0 + 1000, t0 + 8000, t0 + 134_000]);
+  });
+
+  test("no entry timestamp: no `at` (never the read time)", async () => {
+    const { buildTimeline } = await import("../src/timeline");
+    const t = buildTimeline(
+      line({ type: "message", message: { role: "assistant", stopReason: "toolUse", content: [{ type: "text", text: "Hi" }] } }),
+    );
+    expect(t.items[0]).toEqual({ k: "text", id: "i0", text: "Hi" });
+    expect(JSON.stringify(t.items[0])).not.toContain('"at"');
   });
 
   test("redacts tokens", async () => {
@@ -1199,5 +1253,38 @@ describe("follow", () => {
     expect(next.items.map((i) => i.id)).toEqual(["2", "3"]); // "1" unchanged: not sent again
     expect(next.order).toEqual(["1", "2", "3"]);
     expect(next.head).toEqual({ running: false });
+  });
+
+  test("`at` survives into full and delta lines", async () => {
+    const { diffTimeline } = await import("../src/follow");
+    const { buildTimeline } = await import("../src/timeline");
+    const t0 = Date.parse("2026-11-03T17:56:00Z");
+    const user = JSON.stringify({
+      type: "message",
+      id: "u1",
+      timestamp: new Date(t0).toISOString(),
+      message: { role: "user", content: "Los", timestamp: t0 },
+    });
+    const reply = JSON.stringify({
+      type: "message",
+      id: "a1",
+      timestamp: new Date(t0 + 88_000).toISOString(),
+      message: { role: "assistant", stopReason: "stop", completedAt: t0 + 88_000, content: [{ type: "text", text: "Fertig" }] },
+    });
+    // runFollow sends the timeline plus status fields as its snapshot
+    const a = buildTimeline(user) as never;
+    const b = buildTimeline(`${user}\n${reply}`) as never;
+    // as the stream sends it: one JSON line per snapshot
+    const wire = (o: object) => JSON.parse(JSON.stringify(o));
+    const full = wire(diffTimeline(undefined, a));
+    expect(full.items).toEqual([{ k: "user", id: "u1", text: "Los", source: "typed", at: t0 }]);
+    const delta = wire(diffTimeline(a, b));
+    expect(delta.full).toBe(false);
+    expect(delta.items.map((i: { k: string; at: number }) => [i.k, i.at])).toEqual([
+      ["text", t0 + 88_000],
+      ["end", t0 + 88_000],
+    ]);
+    // the time is stable: rebuilding the same log changes nothing
+    expect(diffTimeline(b, buildTimeline(`${user}\n${reply}`) as never).items).toEqual([]);
   });
 });

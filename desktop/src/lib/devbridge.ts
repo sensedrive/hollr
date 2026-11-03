@@ -1,7 +1,7 @@
 // Dev only: lets the frontend run in a normal browser against the backend bridge
 // (`cargo run --example bridge -- <data dir>`, then http://localhost:1420/?bridge=7419).
-// Commands the bridge doesn't serve (tunnel, live, plugins) resolve to null. Events the bridge emits
-// (the live terminal's `hollr-term`) arrive as server-sent events from /events.
+// Commands the bridge doesn't serve (tunnel, plugins) resolve to null. Events the bridge emits
+// (the live terminal's `hollr-term`, omp /live's `live`) arrive as server-sent events from /events.
 const port = new URLSearchParams(location.search).get("bridge");
 if (port && !("__TAURI_INTERNALS__" in window)) {
   let id = 0;
@@ -32,7 +32,8 @@ if (port && !("__TAURI_INTERNALS__" in window)) {
           events ??= subscribe();
           return handler;
         }
-        if (!["servers", "gate", "term_start", "term_write", "term_resize", "term_stop"].includes(cmd)) return null;
+        const bridged = ["servers", "gate", "term_start", "term_write", "term_resize", "term_stop", "live_start", "live_stop", "live_mute", "live_speaker", "live_headphones"];
+        if (!bridged.includes(cmd)) return null;
         const r = await fetch(`http://127.0.0.1:${port}/`, { method: "POST", body: JSON.stringify({ cmd, args }) });
         const data = await r.json();
         if (!r.ok) throw data;

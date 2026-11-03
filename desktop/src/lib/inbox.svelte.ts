@@ -5,6 +5,7 @@ import * as api from "./api";
 import { history } from "./agent";
 import { buildEntries, fromHistory, fromTimeline, isDue, wantsYou, type InboxDetail, type InboxEntry } from "./inbox";
 import { allPanes, refresh, type PaneRef } from "./store.svelte";
+import { isHidden } from "./hiddenSpaces.svelte";
 
 export type { InboxEntry } from "./inbox";
 
@@ -30,9 +31,10 @@ const inflight = new Set<string>();
 
 const agentPanes = () => allPanes().filter((r) => r.pane.agent);
 
-/** The inbox with its pane refs (reactive: reads app.trees and the inbox state). */
+/** The inbox with its pane refs (reactive: reads app.trees and the inbox state). Spaces taken off the list
+ *  stay out unless the agent waits for you. */
 export function inboxEntries(): (InboxEntry & { ref: PaneRef })[] {
-  const refs = new Map(agentPanes().map((r) => [r.id, r]));
+  const refs = new Map(agentPanes().filter((r) => !isHidden(r)).map((r) => [r.id, r]));
   return buildEntries([...refs.values()].map((r) => ({ id: r.id, status: r.pane.status })), inbox, inbox.now).map((e) => ({
     ...e,
     ref: refs.get(e.id)!,

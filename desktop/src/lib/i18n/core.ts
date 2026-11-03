@@ -41,4 +41,8 @@ export default {
   "Lädt …": "Loading …",
   "wartet auf Hintergrund-Jobs": "waiting for background jobs",
   "Modell suchen": "Search models",
+  // live marker on the server tab, session tab and space (LiveMark)
+  "Live verbindet …": "Live connecting …",
+  "Live läuft hier": "Live call running here",
+  "Live läuft – Mikrofon stumm": "Live running – microphone muted",
 };

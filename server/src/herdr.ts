@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { startArgs } from "./models";
+import { findSessionByTitle } from "./sessionlog";
 
 export interface Agent {
   pane: string;
@@ -97,11 +98,16 @@ interface RawAgent {
   agent_session?: { kind?: string; value?: string };
 }
 
-export function toAgent(raw: RawAgent): Agent {
-  const title = (raw.terminal_title_stripped ?? "")
+/** The pane's terminal title without omp's prompt glyph and private-use icons (omp sets it to the session title). */
+function terminalTitle(raw: RawAgent): string {
+  return (raw.terminal_title_stripped ?? "")
     .replace(/^π\s*\S*\s*/u, "")
     .replace(/^[\p{Co}\s]+/u, "")
     .trim();
+}
+
+export function toAgent(raw: RawAgent): Agent {
+  const title = terminalTitle(raw);
   return {
     pane: raw.pane_id,
     kind: raw.agent ?? "unknown",
@@ -183,6 +189,13 @@ export class Herdr {
       const pid = await this.agentPid(pane).catch(() => undefined);
       const open = pid ? openSessionFile(pid) : undefined;
       if (open) agent.sessionFile = open;
+      // no path from herdr (older herdr, no omp hook): the file with this pane's title. A fresh omp shows just
+      // its folder name as title and has no file yet – none then, not some other session's
+      else if (!agent.sessionFile) {
+        const title = terminalTitle(res.agent);
+        const untitled = !title || title === agent.cwd.split("/").pop();
+        agent.sessionFile = untitled ? undefined : findSessionByTitle(agent.cwd, title);
+      }
     }
     return agent;
   }

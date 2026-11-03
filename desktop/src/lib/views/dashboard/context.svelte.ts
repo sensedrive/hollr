@@ -19,7 +19,8 @@ export interface WorkRow {
 
 export const sessionCtx = $state({
   byId: {} as Record<string, SessionContext | undefined>,
-  /** "serverId|pane" → last change this app saw (status or content, ms) */
+  /** "serverId|pane" → last activity (ms): the log's real time when the server sends one, else the last change this
+   *  app saw (status or content) */
   changed: {} as Record<string, number | undefined>,
   ports: {} as Record<string, WebPort[] | undefined>,
 });
@@ -39,8 +40,8 @@ export async function fetchContexts(refs: PaneRef[], now = Date.now()) {
     if (!r.pane.agent) continue;
     const status = r.pane.status;
     if (lastStatus[r.id] !== status) {
-      // a status change is activity, and a new turn may be there
-      if (lastStatus[r.id] !== undefined) sessionCtx.changed[r.id] = now;
+      // a status change is activity, and a new turn may be there (a dated log says when itself)
+      if (lastStatus[r.id] !== undefined && sessionCtx.byId[r.id]?.lastAt === undefined) sessionCtx.changed[r.id] = now;
       lastStatus[r.id] = status;
       lastFetch[r.id] = undefined;
     }
@@ -65,7 +66,8 @@ async function load(r: PaneRef, now: number) {
       ctx = contextFromHistory(h.events ?? [], r.pane.status === "working");
     }
     const print = JSON.stringify(ctx);
-    if (fingerprint[r.id] !== undefined && fingerprint[r.id] !== print) sessionCtx.changed[r.id] = Date.now();
+    if (ctx.lastAt !== undefined) sessionCtx.changed[r.id] = ctx.lastAt;
+    else if (fingerprint[r.id] !== undefined && fingerprint[r.id] !== print) sessionCtx.changed[r.id] = Date.now();
     else if (sessionCtx.changed[r.id] === undefined && ctx.turnStartedAt) sessionCtx.changed[r.id] = ctx.turnStartedAt;
     fingerprint[r.id] = print;
     sessionCtx.byId[r.id] = ctx;

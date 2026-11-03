@@ -7,7 +7,6 @@
  * The keys are worked out here from the question as the session log has it, so every app
  * only says *what* was picked.
  */
-import { findSessionFile } from "./sessionlog";
 import { type Herdr, HerdrError } from "./herdr";
 import { type AskQuestion, readTimeline, type TimelineItem } from "./timeline";
 
@@ -78,7 +77,7 @@ export async function pendingAsk(
 ): Promise<Extract<TimelineItem, { k: "ask" }> | undefined> {
   const agent = await herdr.agent(pane);
   if (agent.kind !== "omp") return undefined;
-  const file = agent.sessionFile ?? findSessionFile(agent.cwd, 0);
+  const file = agent.sessionFile;
   if (!file) return undefined;
   const tl = await readTimeline(file, 60);
   const ask = tl.items.findLast((i) => i.k === "ask");

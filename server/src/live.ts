@@ -24,7 +24,7 @@ interface AudioRoute {
   destroy(): Promise<void>;
 }
 
-import { findSessionFile, SessionTail } from "./sessionlog";
+import { SessionTail } from "./sessionlog";
 
 export interface LiveIO {
   input: AsyncIterable<Uint8Array>;
@@ -273,8 +273,8 @@ export async function runLive(
       const s = await pulse.attach(pid).catch(() => ({ capturing: true, playing: false }));
       if (!s.capturing) return void end("live_stopped");
       const a = await herdr.agent(pane).catch(() => undefined);
-      // a fresh omp session only gets its file on the first message
-      followSession(a?.sessionFile ?? findSessionFile(agent.cwd, startedAt));
+      // a fresh omp session only gets its file on the first message (herdr.agent finds it then)
+      followSession(a?.sessionFile);
       if (a && a.status !== lastStatus) {
         lastStatus = a.status;
         send({ t: "status", status: a.status });

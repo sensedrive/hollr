@@ -74,6 +74,8 @@ export interface SessionContext {
   turnStartedAt?: number;
   /** background jobs */
   jobs: number;
+  /** when its log last got something (ms, the last timeline item's `at`) – absent from older servers */
+  lastAt?: number;
 }
 
 const closed = (s: string) => s === "completed" || s === "abandoned";
@@ -105,6 +107,7 @@ export function contextFromTimeline(tl: Timeline): SessionContext {
     running,
     turnStartedAt: running ? tl.turnStartedAt : undefined,
     jobs: tl.jobs?.length ?? 0,
+    lastAt: tl.items.at(-1)?.at,
   };
 }
 

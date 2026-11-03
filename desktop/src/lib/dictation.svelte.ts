@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { t } from "./i18n";
 import { DEFAULT_VOCABULARY, finishText, LANGUAGES, promptTerms, type Replacement } from "./dictationText";
+import { liveActive } from "./live.svelte";
 
 const KEY = "hollr.dictation";
 
@@ -188,7 +189,8 @@ class Dictator {
   }
 
   async start(owner: string, extra: string[], deliver?: (text: string) => void) {
-    if (this.isBusy) return;
+    // omp /live has the microphone (the composer's mic button says so)
+    if (this.isBusy || liveActive()) return;
     const gen = ++this.generation;
     // busy right away: a second click during the (slow) start must not start a second recording
     this.state = "preparing";

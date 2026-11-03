@@ -16,6 +16,8 @@ export interface InboxDetail {
   recommended?: number;
   /** last answer or error, plain text */
   text?: string;
+  /** when it happened according to the log (the question / the turn's end; ms) – absent from older servers */
+  at?: number;
 }
 
 /** A pane as the tree knows it (status working|blocked|idle|done). */
@@ -28,7 +30,7 @@ export interface InboxEntry extends InboxDetail {
   id: string;
   /** dismiss/answer key: pane + turn */
   key: string;
-  /** first seen in this state (ms) */
+  /** since when it is in this state (ms): the log's time when known, else when this app first saw it */
   since: number;
 }
 
@@ -60,7 +62,7 @@ export function fromTimeline(status: string, tl: Pick<Timeline, "items">): Inbox
     const oneTap = !ask.questions && !ask.multi;
     return {
       kind: "ask", turn: ask.id, question: plain(ask.question), options: oneTap ? ask.options : [],
-      recommended: oneTap ? ask.recommended : undefined,
+      recommended: oneTap ? ask.recommended : undefined, at: ask.at,
     };
   }
   // only look at the current turn (after the last user message)
@@ -72,8 +74,8 @@ export function fromTimeline(status: string, tl: Pick<Timeline, "items">): Inbox
   if (status === "blocked") return { kind: "waiting", turn: last, text: snippet };
   const end = turn.findLast((i) => i.k === "end");
   if (end?.k === "end" && end.status === "error")
-    return { kind: "error", turn: end.id, text: end.error ? plain(end.error) : undefined };
-  return { kind: "done", turn: end?.id ?? last, text: snippet };
+    return { kind: "error", turn: end.id, text: end.error ? plain(end.error) : undefined, at: end.at };
+  return { kind: "done", turn: end?.id ?? last, text: snippet, at: end?.at };
 }
 
 /** Other agents: only the session log's last answer. */
@@ -104,16 +106,18 @@ export function buildEntries(
   const out: InboxEntry[] = [];
   for (const p of panes) {
     if (!wantsYou(p.status)) continue;
-    const since = s.since[p.id] ?? now;
     const fetched = s.details[p.id];
     // a detail from the other state (e.g. still "done" while the tree already says "blocked") is stale
     const fits = fetched && (p.status === "blocked") === (fetched.kind === "ask" || fetched.kind === "waiting");
-    const detail: InboxDetail = fits ? fetched : { kind: p.status === "blocked" ? "waiting" : "done", turn: `@${since}` };
+    /** when this app saw it – the "seen" check compares local times only (the server's clock may be off) */
+    const noticed = s.since[p.id] ?? now;
+    const since = (fits ? fetched.at : undefined) ?? noticed;
+    const detail: InboxDetail = fits ? fetched : { kind: p.status === "blocked" ? "waiting" : "done", turn: `@${noticed}` };
     const key = `${p.id}#${detail.turn}`;
     if (s.dismissed[key]) continue;
     // a question still waits for an answer however long it was looked at; a result is seen once opened
     const seenAt = s.seen?.[p.id];
-    if ((detail.kind === "done" || detail.kind === "error") && seenAt !== undefined && seenAt >= since) continue;
+    if ((detail.kind === "done" || detail.kind === "error") && seenAt !== undefined && seenAt >= noticed) continue;
     const answered = s.answered[key];
     if (answered && now - answered < ANSWERED_MS) continue;
     out.push({ ...detail, id: p.id, key, since });

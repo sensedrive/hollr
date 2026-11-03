@@ -1,7 +1,7 @@
 pub mod hollr;
 mod feed;
 mod follow;
-mod live;
+pub mod live;
 mod tunnel;
 mod pairing_code;
 pub mod applock;
@@ -55,44 +55,49 @@ async fn gate_long(state: tauri::State<'_, Hollr>, server: String, command: Stri
     state.gate_with(&server, &command, stdin, hollr::LONG_TIMEOUT).await.map_err(err)
 }
 
-#[derive(Default)]
-struct Live(tokio::sync::Mutex<Option<live::LiveSession>>, std::sync::atomic::AtomicU64);
-
-/// Starts omp /live; returns the session id that every `live` / `live-levels` event carries.
+/// Starts omp /live (ending a call on another pane); returns the session id that every `live` /
+/// `live-levels` event carries and `live_stop` / `live_mute` / `live_speaker` take.
 #[tauri::command]
-async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live: tauri::State<'_, Live>, server: String, pane: String) -> R<u64> {
-    let mut current = live.0.lock().await;
-    if let Some(old) = current.take() {
-        old.stop();
-    }
-    let session = live.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live: tauri::State<'_, live::Lives>, server: String, pane: String, headphones: bool) -> R<u64> {
+    use tauri::Emitter;
     let handle = state.handle_for(&server).await.map_err(err)?;
-    *current = Some(live::start(app, handle, pane, session).await.map_err(err)?);
-    Ok(session)
+    let emit: live::Emit = {
+        let handle = handle.clone();
+        std::sync::Arc::new(move |name: &str, v: serde_json::Value| {
+            // connection lost: "Neu verbinden" should get a fresh SSH connection
+            if v["t"] == "lost" {
+                let (app, server, handle) = (app.clone(), server.clone(), handle.clone());
+                tauri::async_runtime::spawn(async move { app.state::<Hollr>().drop_stale(&server, &handle).await });
+            }
+            let _ = app.emit(name, v);
+        })
+    };
+    live.start(emit, handle, pane, live::Options { headphones, audio: true }).await.map_err(err)
 }
 
+/// Hangs up call `session` only – a stale stop can't end a newer call.
 #[tauri::command]
-async fn live_stop(live: tauri::State<'_, Live>) -> R<()> {
-    if let Some(s) = live.0.lock().await.take() {
-        s.stop();
-    }
-    Ok(())
+async fn live_stop(live: tauri::State<'_, live::Lives>, session: u64) -> R<bool> {
+    Ok(live.stop(session).await)
 }
 
 /// Mic mute = omp's own mute (Space): you keep hearing the answer.
 #[tauri::command]
-async fn live_mute(live: tauri::State<'_, Live>, on: bool) -> R<()> {
-    if let Some(s) = live.0.lock().await.as_ref() {
-        s.send_json(serde_json::json!({ "t": "mute", "on": on }));
-    }
+async fn live_mute(live: tauri::State<'_, live::Lives>, session: u64, on: bool) -> R<()> {
+    live.mute(session, on).await;
     Ok(())
 }
 
 #[tauri::command]
-async fn live_speaker(live: tauri::State<'_, Live>, muted: bool) -> R<()> {
-    if let Some(s) = live.0.lock().await.as_ref() {
-        s.speaker_muted.store(muted, std::sync::atomic::Ordering::Relaxed);
-    }
+async fn live_speaker(live: tauri::State<'_, live::Lives>, session: u64, muted: bool) -> R<()> {
+    live.speaker(session, muted).await;
+    Ok(())
+}
+
+/// Settings › "Kopfhörer": no echo gate; applies to a running call at once.
+#[tauri::command]
+async fn live_headphones(live: tauri::State<'_, live::Lives>, on: bool) -> R<()> {
+    live.headphones(on).await;
     Ok(())
 }
 
@@ -169,18 +174,21 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        // a reloaded webview leaves its terminals behind: hang them up
+        // a reloaded webview leaves its terminals and its live call behind: hang them up
         .on_page_load(|webview, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
                 let app = webview.app_handle().clone();
-                tauri::async_runtime::spawn(async move { app.state::<term::Terms>().stop_all().await });
+                tauri::async_runtime::spawn(async move {
+                    app.state::<term::Terms>().stop_all().await;
+                    app.state::<live::Lives>().stop_all().await;
+                });
             }
         })
         .setup(|app| {
             let dir = app.path().app_data_dir().expect("app data dir");
             app.manage(dictation::Dictation::new(dir.join("whisper")));
             app.manage(Hollr::new(dir));
-            app.manage(Live::default());
+            app.manage(live::Lives::default());
             app.manage(feed::Feeds::default());
             app.manage(follow::Follows::default());
             app.manage(tunnel::Tunnels::default());
@@ -188,7 +196,7 @@ pub fn run() {
             notice::init(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel])
+        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

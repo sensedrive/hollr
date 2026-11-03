@@ -12,6 +12,7 @@
     allPanes, app, dialogs, findPane, go, loadServers, mySessions, refresh, type AgentOpen, type PaneRef,
   } from "$lib/store.svelte";
   import { answer, dismiss, fetchInbox, inboxEntries, type InboxEntry } from "$lib/inbox.svelte";
+  import { hiddenSpaces, isHidden } from "$lib/hiddenSpaces.svelte";
   import SessionCard from "./dashboard/SessionCard.svelte";
   import ContextMenu from "./dashboard/ContextMenu.svelte";
   import ConfirmDialog from "./dashboard/ConfirmDialog.svelte";
@@ -59,6 +60,7 @@
     const items: Focus[] = entries.map((e) => ({ kind: e.kind, since: e.since, ref: e.ref, entry: e }));
     const listed = new Set(entries.map((e) => e.id));
     for (const r of allPanes()) {
+      if (isHidden(r)) continue;
       const ctx = sessionCtx.byId[r.id];
       if (r.pane.agent && r.pane.status === "working" && !listed.has(r.id) && isLong(ctx, now) && hiddenLong[r.id] !== ctx!.turnStartedAt)
         items.push({ kind: "long", since: ctx!.turnStartedAt!, ref: r });
@@ -69,9 +71,10 @@
   // ------------------------------------------------------------ "Woran ich arbeite" (by project)
 
   const mineSet = $derived(new Set(mySessions.ids));
-  /** what's going on: sessions you opened here plus every agent that works, waits or just finished */
+  /** what's going on: sessions you opened here plus every agent that works, waits or just finished – not from
+   *  spaces taken off the list (unless the agent waits for you) */
   const workRefs = $derived(
-    allPanes().filter((r) => mineSet.has(r.id) || (!!r.pane.agent && ["working", "blocked", "done"].includes(r.pane.status))),
+    allPanes().filter((r) => !isHidden(r) && (mineSet.has(r.id) || (!!r.pane.agent && ["working", "blocked", "done"].includes(r.pane.status)))),
   );
   const rowOf = (r: PaneRef): WorkRow => {
     const ctx = sessionCtx.byId[r.id];
@@ -99,7 +102,7 @@
         const i = id.indexOf("|");
         return findPane(id.slice(0, i), id.slice(i + 1));
       })
-      .filter((r): r is PaneRef => !!r),
+      .filter((r): r is PaneRef => !!r && !isHidden(r)),
   );
   const groups = $derived(
     app.servers.map((server) => ({ server, refs: mine.filter((r) => r.server.id === server.id) })).filter((g) => g.refs.length),
@@ -135,6 +138,7 @@
         { label: t("Git & Dateien"), icon: "⑂", action: () => open(r, "git") },
         ...row.ports.map((p) => ({ label: t("Im Browser öffnen") + ` :${p.port}`, icon: "◍", action: () => open(r, "browser", `http://localhost:${p.port}`) })),
         ...(mineSet.has(r.id) ? [{ label: t("Aus der Übersicht nehmen"), icon: "◌", action: () => mySessions.remove(r.id) }] : []),
+        { label: t("Space aus der Liste nehmen"), icon: "◌", action: () => hiddenSpaces.hide(r.server.id, r.workspace.id) },
         { label: t("Sitzung beenden"), icon: "✕", danger: true, action: () => (ending = r) },
       ],
     };

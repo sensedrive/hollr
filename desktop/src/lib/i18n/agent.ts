@@ -135,4 +135,21 @@ export default {
   "Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal":
     "Selecting copies right away · ⇧-click goes to the program in the terminal",
   "Auswahl kopiert": "Selection copied",
+  // message times: terminal time strip
+  Du: "You",
+  "Im Chat zeigen": "Show in chat",
+  "arbeitet seit {time}": "working since {time}",
+  "Verlauf mit Zeiten aufklappen": "Expand history with times",
+  "Verlauf mit Zeiten einklappen": "Collapse history with times",
+  "Während Live hört omp direkt zu – Diktieren geht nach dem Gespräch wieder": "During Live omp listens directly – dictation works again after the call",
+  "Verbindung unterbrochen – bitte neu verbinden.": "Connection interrupted – please reconnect.",
+  "Live konnte auf dem Server nicht starten.": "Live couldn't start on the server.",
+  "Verbindung verloren – keine Antwort vom Server.": "Connection lost – no answer from the server.",
+  "Verbindung zum Server wurde unerwartet beendet.": "The connection to the server ended unexpectedly.",
+  "Verbindung verloren": "Connection lost",
+  "Live wechseln?": "Switch Live?",
+  "Live läuft gerade mit „{other}“. Das Gespräch dort endet, wenn du hier startest.": "Live is running with “{other}”. That call ends when you start here.",
+  "Hier starten": "Start here",
+  "Zur Sitzung „{name}“ ({server})": "Go to session “{name}” ({server})",
+  "Live beendet": "Live ended",
 };

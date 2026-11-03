@@ -1,8 +1,10 @@
 // Dev only: serves the backend commands over HTTP on 127.0.0.1 so the frontend can be tested in a
 // normal browser (`bun run dev`, then open http://localhost:1420/?bridge=7419). Events (the live
-// terminal's `hollr-term`) come as server-sent events from GET /events.
+// terminal's `hollr-term`, omp /live's `live`) come as server-sent events from GET /events.
+// Live runs without microphone / speakers here: only the connection, phases and omp's state.
 //   cargo run --example bridge -- "<app data dir>" [port]
 use hollr_desktop_lib::hollr::Hollr;
+use hollr_desktop_lib::live::{Emit, Lives, Options};
 use hollr_desktop_lib::term::{self, Cmd};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -19,13 +21,14 @@ async fn main() -> anyhow::Result<()> {
     let hollr = Arc::new(Hollr::new(args[1].clone().into()));
     let (events, _) = broadcast::channel::<String>(4096);
     let terms: Terms = Default::default();
+    let lives = Arc::new(Lives::default());
     let port = args.get(2).map(|p| p.parse()).transpose()?.unwrap_or(7419u16);
     let listener = TcpListener::bind(("127.0.0.1", port)).await?;
     println!("bridge on 127.0.0.1:{port}");
     loop {
         let (mut sock, _) = listener.accept().await?;
         let hollr = hollr.clone();
-        let (events, terms) = (events.clone(), terms.clone());
+        let (events, terms, lives) = (events.clone(), terms.clone(), lives.clone());
         tokio::spawn(async move {
             let mut buf = Vec::new();
             let mut chunk = [0u8; 8192];
@@ -84,6 +87,20 @@ async fn main() -> anyhow::Result<()> {
                         }
                         Ok(json!(null))
                     }
+                    "live_start" => match hollr.handle_for(&s("server")).await {
+                        Ok(handle) => {
+                            let events = events.clone();
+                            let emit: Emit = Arc::new(move |name: &str, v: Value| {
+                                let _ = events.send(json!({ "event": name, "payload": v }).to_string());
+                            });
+                            lives.start(emit, handle, s("pane"), Options { headphones: false, audio: false }).await.map(|id| json!(id))
+                        }
+                        Err(e) => Err(e),
+                    },
+                    "live_stop" => Ok(json!(lives.stop(a["session"].as_u64().unwrap_or_default()).await)),
+                    "live_mute" => { lives.mute(a["session"].as_u64().unwrap_or_default(), a["on"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
+                    "live_speaker" => { lives.speaker(a["session"].as_u64().unwrap_or_default(), a["muted"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
+                    "live_headphones" => { lives.headphones(a["on"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
                     other => Err(anyhow::anyhow!("bridge: {other} not available")),
                 };
                 match r { Ok(v) => (200, v), Err(e) => (500, json!(format!("{e:#}"))) }

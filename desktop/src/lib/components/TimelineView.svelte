@@ -2,8 +2,9 @@
   // omp's transcript, rendered like its TUI (same rules as the iPhone app, TimelineViews.swift):
   // read/grep/glob as compact lines (consecutive reads merged), bash & edits as framed cards, thinking folded.
   import type { AskPick, Timeline, ToolCall } from "../api";
-  import { t } from "../i18n";
+  import { lang, t } from "../i18n";
   import { duration, shortPath, thinkingProse, toolIcon, toolTitle, visibleItems } from "../agent";
+  import { clock, fullTime, stampedIds } from "../msgTimes";
   import AskCard from "./AskCard.svelte";
   import Markdown from "./Markdown.svelte";
 
@@ -35,6 +36,8 @@
   }
 
   const items = $derived(visibleItems(timeline));
+  /** items that show their time (user messages, the start of each reply) */
+  const stamped = $derived(stampedIds(items));
   let openThinking = $state<Record<string, boolean>>({});
   let openTool = $state<Record<string, boolean>>({});
   const tip = (c: ToolCall) => [c.label, c.ms !== undefined ? duration(c.ms) : ""].filter(Boolean).join(" · ");
@@ -61,20 +64,32 @@
   {:else}<span style:color={okColor}>{ok}</span>{/if}
 {/snippet}
 
+{#snippet stamp(at: number | undefined, id: string, alone = false)}
+  {#if at !== undefined && stamped.has(id)}<time class="stamp" class:alone datetime={new Date(at).toISOString()} title={fullTime(at, lang())}>{clock(at, lang())}</time>{/if}
+{/snippet}
+
 <div class="tl">
   {#each items as item (item.id)}
     {#if item.k === "user"}
-      <div class="user" class:voice={item.source === "voice"}>
-        {#if item.source === "voice"}<span class="src" title={t("gesprochen")}>🎙</span>{/if}{item.text}
+      <div class="msg" data-item={item.id}>
+        {@render stamp(item.at, item.id)}
+        <div class="user" class:voice={item.source === "voice"}>
+          {#if item.source === "voice"}<span class="src" title={t("gesprochen")}>🎙</span>{/if}{item.text}
+        </div>
       </div>
     {:else if item.k === "thinking"}
       {@const prose = thinkingProse(item.text)}
+      {@render stamp(item.at, item.id, true)}
       {#if prose}
         <button class="thinking" class:open={openThinking[item.id]} onclick={() => (openThinking[item.id] = !openThinking[item.id])}>{prose}</button>
       {/if}
     {:else if item.k === "text"}
-      <Markdown text={item.text} plain {onLink} />
+      <div class="msg" data-item={item.id}>
+        {@render stamp(item.at, item.id)}
+        <Markdown text={item.text} plain {onLink} />
+      </div>
     {:else if item.k === "tools"}
+      {@render stamp(item.at, item.id, true)}
       <div class="tools">
         {#each pieces(item.calls) as p (p.id)}
           {#if "reads" in p}
@@ -160,7 +175,10 @@
         {/each}
       </div>
     {:else if item.k === "ask"}
-      <AskCard {item} {onAnswer} />
+      <div class="msg" data-item={item.id}>
+        {@render stamp(item.at, item.id)}
+        <AskCard {item} {onAnswer} />
+      </div>
     {:else if item.k === "end"}
       {#if item.status === "aborted"}<div class="mono small warn">⏹ {t("Abgebrochen")}</div>
       {:else if item.status !== "done"}<div class="mono small err clamp8">Error: {item.error ?? t("unbekannt")}</div>{/if}
@@ -176,6 +194,11 @@
   .user { background: color-mix(in srgb, var(--orange) 11%, transparent); border-radius: 10px; padding: 10px 12px;
     white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
   .src { font-size: 11px; margin-right: 6px; opacity: 0.7; }
+  .msg { display: flex; flex-direction: column; gap: 3px; min-width: 0; border-radius: 10px; }
+  /* the time of a message: quiet, above it; the user's on the right like their bubble */
+  .stamp { font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; padding: 0 4px; user-select: none; cursor: default; }
+  .msg:has(> .user) > .stamp { align-self: flex-end; }
+  .stamp.alone { margin-bottom: -9px; }
   .thinking { all: unset; cursor: pointer; color: var(--muted); font-style: italic; font-size: 0.95em; white-space: pre-wrap; padding: 0 4px;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   .thinking:hover { color: color-mix(in srgb, var(--muted) 70%, var(--fg)); }

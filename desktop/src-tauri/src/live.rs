@@ -2,24 +2,37 @@
 //! Same wire protocol as the iPhone app over `hollr gate live <pane>`:
 //!   [type u8][len u24 BE][payload]  · 0x01 = PCM s16le 24 kHz mono · 0x02 = JSON
 //! Desktop audio has no echo cancellation, so the mic is muted while omp speaks
-//! (unless you talk clearly louder – barge-in).
+//! (unless you talk clearly louder – barge-in – or the headphones option is on).
+//!
+//! Like the iPhone: a `ping` every 5 s (also while muted; the server answers `pong` and ends a
+//! pinging call it hasn't heard from for 20 s). Nothing from the server for 20 s → `lost`.
+//! Audio follows the system's default input/output (AirPods, monitor, wake from sleep) by
+//! rebuilding the streams; the server connection stays.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleFormat, StreamConfig};
+use cpal::{ErrorKind, SampleFormat, StreamConfig};
 use russh::ChannelMsg;
-use tauri::{AppHandle, Emitter};
+use serde_json::{json, Value};
 use tokio::io::AsyncWriteExt;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 const RATE: f64 = 24_000.0;
 const FRAME_AUDIO: u8 = 1;
 const FRAME_JSON: u8 = 2;
+const PING_EVERY: Duration = Duration::from_secs(5);
+/// nothing from the server this long (it answers every ping) = the connection is gone
+const LOST_AFTER: Duration = Duration::from_secs(20);
+/// how often the default input/output devices are checked for a change
+const DEVICE_POLL: Duration = Duration::from_secs(2);
+
+/// Where `live` / `live-levels` events go (the app's webview, or stdout in the smoke example).
+pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
 fn frame(kind: u8, payload: &[u8]) -> Vec<u8> {
     let n = payload.len();
@@ -27,6 +40,10 @@ fn frame(kind: u8, payload: &[u8]) -> Vec<u8> {
     out.extend_from_slice(&[kind, (n >> 16) as u8, (n >> 8) as u8, n as u8]);
     out.extend_from_slice(payload);
     out
+}
+
+fn json_frame(value: Value) -> Vec<u8> {
+    frame(FRAME_JSON, value.to_string().as_bytes())
 }
 
 /// Linear resampler (good enough for speech).
@@ -59,93 +76,209 @@ impl Resampler {
     }
 }
 
-pub struct LiveSession {
+pub struct Options {
+    /// headphones: no echo gate, the mic stays open while omp speaks
+    pub headphones: bool,
+    /// false: no microphone / speakers at all (smoke tests, dev bridge) – only the connection
+    pub audio: bool,
+}
+
+struct LiveSession {
+    id: u64,
     control: mpsc::UnboundedSender<Vec<u8>>,
-    pub speaker_muted: Arc<AtomicBool>,
+    speaker_muted: Arc<AtomicBool>,
+    headphones: Arc<AtomicBool>,
     stop_audio: Arc<AtomicBool>,
 }
 
 impl LiveSession {
-    pub fn send_json(&self, value: serde_json::Value) {
-        let _ = self.control.send(frame(FRAME_JSON, value.to_string().as_bytes()));
-    }
-    pub fn stop(&self) {
-        self.send_json(serde_json::json!({ "t": "stop" }));
-        // audio threads end with the session
-        let stop = self.stop_audio.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_secs(4));
-            stop.store(true, Ordering::Relaxed);
-        });
+    fn send_json(&self, value: Value) {
+        let _ = self.control.send(json_frame(value));
     }
 }
 
 impl Drop for LiveSession {
     fn drop(&mut self) {
+        // hang up; the server answers with phase "ended" and closes the channel
+        self.send_json(json!({ "t": "stop" }));
         self.stop_audio.store(true, Ordering::Relaxed);
     }
 }
 
-pub async fn start<H: russh::client::Handler + 'static>(
-    app: AppHandle,
+/// The app's one live call (one microphone). Every call has an id; the UI passes it back so a
+/// late stop from an old view can't hang up a newer call.
+#[derive(Default)]
+pub struct Lives {
+    current: tokio::sync::Mutex<Option<LiveSession>>,
+    next: AtomicU64,
+}
+
+impl Lives {
+    /// Ends a running call and starts one on `pane`; returns its id (carried by every event).
+    pub async fn start<H: russh::client::Handler + 'static>(
+        &self,
+        emit: Emit,
+        handle: Arc<russh::client::Handle<H>>,
+        pane: String,
+        options: Options,
+    ) -> Result<u64> {
+        let mut current = self.current.lock().await;
+        current.take();
+        let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
+        *current = Some(start(emit, handle, pane, id, options).await?);
+        Ok(id)
+    }
+
+    /// Hangs up call `id`; any other (newer) call keeps running. True if `id` was the current call.
+    pub async fn stop(&self, id: u64) -> bool {
+        let mut current = self.current.lock().await;
+        if current.as_ref().is_some_and(|s| s.id == id) {
+            current.take();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// The webview reloaded: nobody is left to show or end the call.
+    pub async fn stop_all(&self) {
+        self.current.lock().await.take();
+    }
+
+    /// Mic mute = omp's own mute (Space): you keep hearing the answer.
+    pub async fn mute(&self, id: u64, on: bool) {
+        if let Some(s) = self.current.lock().await.as_ref().filter(|s| s.id == id) {
+            s.send_json(json!({ "t": "mute", "on": on }));
+        }
+    }
+
+    pub async fn speaker(&self, id: u64, muted: bool) {
+        if let Some(s) = self.current.lock().await.as_ref().filter(|s| s.id == id) {
+            s.speaker_muted.store(muted, Ordering::Relaxed);
+        }
+    }
+
+    /// The headphones setting, applied to a running call at once.
+    pub async fn headphones(&self, on: bool) {
+        if let Some(s) = self.current.lock().await.as_ref() {
+            s.headphones.store(on, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Resolves once the call is closed (the watch's guard must not live across an await).
+async fn until(closed: &mut watch::Receiver<bool>) {
+    let _ = closed.wait_for(|c| *c).await;
+}
+
+async fn start<H: russh::client::Handler + 'static>(
+    emit: Emit,
     handle: Arc<russh::client::Handle<H>>,
     pane: String,
     session: u64,
+    options: Options,
 ) -> Result<LiveSession> {
     let channel = handle.channel_open_session().await.map_err(|e| anyhow!("{e}"))?;
     channel.exec(true, format!("live {pane}")).await.map_err(|e| anyhow!("{e}"))?;
     let (mut reader, writer) = channel.split();
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    // true once the call is over (server closed, or the watchdog gave up): every task ends
+    let (closed_tx, closed_rx) = watch::channel(false);
+    let closed_tx = Arc::new(closed_tx);
     let stop_audio = Arc::new(AtomicBool::new(false));
     let speaker_muted = Arc::new(AtomicBool::new(false));
+    let headphones = Arc::new(AtomicBool::new(options.headphones));
     let playback: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
     let out_level = Arc::new(AtomicU32::new(0));
     let in_level = Arc::new(AtomicU32::new(0));
     let live = Arc::new(AtomicBool::new(false));
+    let heard = Arc::new(Mutex::new(Instant::now()));
 
     // writer: everything for the server goes through one queue
-    tokio::spawn(async move {
-        let mut w = writer.make_writer();
-        while let Some(bytes) = rx.recv().await {
-            if w.write_all(&bytes).await.is_err() {
-                break;
+    {
+        let mut closed = closed_rx.clone();
+        tokio::spawn(async move {
+            let mut w = writer.make_writer();
+            loop {
+                tokio::select! {
+                    _ = until(&mut closed) => break,
+                    bytes = rx.recv() => {
+                        let Some(bytes) = bytes else { break };
+                        // a write can hang on a dead connection – the watchdog's close ends it
+                        tokio::select! {
+                            r = w.write_all(&bytes) => if r.is_err() { break },
+                            _ = until(&mut closed) => break,
+                        }
+                    }
+                }
             }
-        }
-    });
+            let _ = tokio::time::timeout(Duration::from_secs(2), writer.close()).await;
+        });
+    }
 
-    // audio thread (cpal streams are not Send on every platform)
-    let device_rate = Arc::new(AtomicU32::new(48_000));
+    // heartbeat + watchdog
     {
         let tx = tx.clone();
-        let stop = stop_audio.clone();
-        let playback = playback.clone();
-        let speaker_muted = speaker_muted.clone();
-        let out_level = out_level.clone();
-        let in_level = in_level.clone();
-        let live = live.clone();
-        let device_rate = device_rate.clone();
-        let app = app.clone();
-        std::thread::spawn(move || {
-            if let Err(e) = run_audio(tx, stop.clone(), playback, speaker_muted, out_level, in_level, live, device_rate) {
-                let _ = app.emit("live", serde_json::json!({ "t": "audio_error", "message": format!("{e:#}"), "session": session }));
-                stop.store(true, Ordering::Relaxed);
+        let mut closed = closed_rx.clone();
+        let closed_tx = closed_tx.clone();
+        let heard = heard.clone();
+        let emit = emit.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = until(&mut closed) => return,
+                    _ = tokio::time::sleep(PING_EVERY) => {}
+                }
+                let _ = tx.send(json_frame(json!({ "t": "ping" })));
+                let age = heard.lock().unwrap().elapsed();
+                if age > LOST_AFTER {
+                    emit("live", json!({ "t": "lost", "seconds": age.as_secs(), "session": session }));
+                    closed_tx.send_replace(true);
+                    return;
+                }
             }
         });
     }
 
+    // audio thread (cpal streams are not Send on every platform)
+    let device_rate = Arc::new(AtomicU32::new(48_000));
+    if options.audio {
+        let audio = Audio {
+            tx: tx.clone(),
+            stop: stop_audio.clone(),
+            playback: playback.clone(),
+            speaker_muted: speaker_muted.clone(),
+            headphones: headphones.clone(),
+            out_level: out_level.clone(),
+            in_level: in_level.clone(),
+            live: live.clone(),
+            device_rate: device_rate.clone(),
+            emit: emit.clone(),
+            session,
+        };
+        std::thread::spawn(move || run_audio(audio));
+    }
+
     // reader: frames from the server
     {
-        let app = app.clone();
+        let emit = emit.clone();
         let playback = playback.clone();
         let live = live.clone();
         let stop = stop_audio.clone();
         let device_rate = device_rate.clone();
+        let mut closed = closed_rx.clone();
         tokio::spawn(async move {
             let mut buf: Vec<u8> = Vec::new();
             let mut resampler: Option<(u32, Resampler)> = None;
             let mut tmp = Vec::new();
-            while let Some(msg) = reader.wait().await {
+            loop {
+                let msg = tokio::select! {
+                    m = reader.wait() => m,
+                    _ = until(&mut closed) => None,
+                };
+                let Some(msg) = msg else { break };
+                *heard.lock().unwrap() = Instant::now();
                 let ChannelMsg::Data { data } = msg else {
                     if matches!(msg, ChannelMsg::Eof | ChannelMsg::Close) {
                         break;
@@ -178,8 +311,11 @@ pub async fn start<H: russh::client::Handler + 'static>(
                             q.extend(tmp.iter());
                         }
                     } else if kind == FRAME_JSON
-                        && let Ok(mut v) = serde_json::from_slice::<serde_json::Value>(&payload)
+                        && let Ok(mut v) = serde_json::from_slice::<Value>(&payload)
                     {
+                        if v["t"] == "pong" {
+                            continue; // only the watchdog cares
+                        }
                         if v["t"] == "phase" && v["phase"] == "live" {
                             live.store(true, Ordering::Relaxed);
                         }
@@ -187,57 +323,143 @@ pub async fn start<H: russh::client::Handler + 'static>(
                         if let Some(o) = v.as_object_mut() {
                             o.insert("session".into(), session.into());
                         }
-                        let _ = app.emit("live", v);
+                        emit("live", v);
                     }
                 }
             }
             stop.store(true, Ordering::Relaxed);
-            let _ = app.emit("live", serde_json::json!({ "t": "closed", "session": session }));
+            closed_tx.send_replace(true);
+            emit("live", json!({ "t": "closed", "session": session }));
         });
     }
 
     // levels for the UI
-    {
-        let app = app.clone();
+    if options.audio {
         let stop = stop_audio.clone();
         tokio::spawn(async move {
             while !stop.load(Ordering::Relaxed) {
                 tokio::time::sleep(Duration::from_millis(120)).await;
                 let i = f32::from_bits(in_level.load(Ordering::Relaxed));
                 let o = f32::from_bits(out_level.load(Ordering::Relaxed));
-                let _ = app.emit("live-levels", serde_json::json!({ "input": i, "output": o, "session": session }));
+                emit("live-levels", json!({ "input": i, "output": o, "session": session }));
             }
         });
     }
 
-    Ok(LiveSession { control: tx, speaker_muted, stop_audio })
+    Ok(LiveSession { id: session, control: tx, speaker_muted, headphones, stop_audio })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_audio(
+/// What the audio thread shares with the connection.
+struct Audio {
     tx: mpsc::UnboundedSender<Vec<u8>>,
     stop: Arc<AtomicBool>,
     playback: Arc<Mutex<VecDeque<f32>>>,
     speaker_muted: Arc<AtomicBool>,
+    headphones: Arc<AtomicBool>,
     out_level: Arc<AtomicU32>,
     in_level: Arc<AtomicU32>,
     live: Arc<AtomicBool>,
     device_rate: Arc<AtomicU32>,
-) -> Result<()> {
+    emit: Emit,
+    session: u64,
+}
+
+type DeviceIds = (Option<cpal::DeviceId>, Option<cpal::DeviceId>);
+
+fn default_ids(host: &cpal::Host) -> DeviceIds {
+    (
+        host.default_input_device().and_then(|d| d.id().ok()),
+        host.default_output_device().and_then(|d| d.id().ok()),
+    )
+}
+
+/// Keeps streams on the current default devices until the call ends: rebuilds them when a
+/// default changes or a stream breaks; errors go to the UI as `audio_error`, recovery as `audio`.
+fn run_audio(a: Audio) {
     let host = cpal::default_host();
+    let mut shown_error = String::new();
+    let mut shown_devices = (String::new(), String::new());
+    while !a.stop.load(Ordering::Relaxed) {
+        let ids = default_ids(&host);
+        let fault: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        match open_streams(&host, &a, &fault) {
+            Ok((streams, devices)) => {
+                if !shown_error.is_empty() || devices != shown_devices {
+                    (a.emit)("live", json!({ "t": "audio", "input": devices.0, "output": devices.1, "session": a.session }));
+                    shown_error.clear();
+                    shown_devices = devices;
+                }
+                let mut polled = Instant::now();
+                while !a.stop.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_millis(100));
+                    if let Some(message) = fault.lock().unwrap().take() {
+                        (a.emit)("live", json!({ "t": "audio_error", "message": message, "session": a.session }));
+                        shown_error = message;
+                        break;
+                    }
+                    if polled.elapsed() >= DEVICE_POLL {
+                        polled = Instant::now();
+                        if default_ids(&host) != ids {
+                            break;
+                        }
+                    }
+                }
+                drop(streams);
+                // queued at the old device's rate
+                a.playback.lock().unwrap().clear();
+            }
+            Err(e) => {
+                let message = format!("{e:#}");
+                if message != shown_error {
+                    (a.emit)("live", json!({ "t": "audio_error", "message": message, "session": a.session }));
+                    shown_error = message;
+                }
+                // try again (a device may come back, e.g. after sleep)
+                for _ in 0..20 {
+                    if a.stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+    }
+}
+
+/// Error callback: reroutes / glitches are fine, anything else means rebuild.
+fn on_stream_error(fault: &Arc<Mutex<Option<String>>>, what: &'static str) -> impl FnMut(cpal::Error) + Send + 'static {
+    let fault = fault.clone();
+    move |e: cpal::Error| {
+        if matches!(e.kind(), ErrorKind::Xrun | ErrorKind::RealtimeDenied | ErrorKind::DeviceChanged) {
+            return;
+        }
+        fault.lock().unwrap().get_or_insert_with(|| format!("{what}: {e}"));
+    }
+}
+
+/// Opens and starts speaker + microphone; returns them with the devices' names.
+fn open_streams(
+    host: &cpal::Host,
+    a: &Audio,
+    fault: &Arc<Mutex<Option<String>>>,
+) -> Result<([cpal::Stream; 2], (String, String))> {
     let input = host.default_input_device().context("Kein Mikrofon gefunden")?;
     let output = host.default_output_device().context("Kein Lautsprecher gefunden")?;
     let in_cfg = input.default_input_config().context("Mikrofon-Format")?;
     let out_cfg = output.default_output_config().context("Lautsprecher-Format")?;
-    device_rate.store(out_cfg.sample_rate(), Ordering::Relaxed);
+    let name = |d: &cpal::Device| d.description().map(|d| d.name().to_string()).unwrap_or_default();
+    let names = (name(&input), name(&output));
+    a.device_rate.store(out_cfg.sample_rate(), Ordering::Relaxed);
 
     // ---- speaker
     let out_channels = out_cfg.channels() as usize;
     let out_config: StreamConfig = out_cfg.config();
     let last_output = Arc::new(Mutex::new(Instant::now() - Duration::from_secs(10)));
     let fill = {
-        let playback = playback.clone();
+        let playback = a.playback.clone();
         let last_output = last_output.clone();
+        let speaker_muted = a.speaker_muted.clone();
+        let out_level = a.out_level.clone();
         move |data: &mut [f32]| {
             let mut q = playback.lock().unwrap();
             let muted = speaker_muted.load(Ordering::Relaxed);
@@ -261,8 +483,9 @@ fn run_audio(
             }
         }
     };
+    let speaker_error = on_stream_error(fault, "Lautsprecher");
     let out_stream = match out_cfg.sample_format() {
-        SampleFormat::F32 => output.build_output_stream::<f32, _, _>(out_config, move |d, _| fill(d), |_| {}, None)?,
+        SampleFormat::F32 => output.build_output_stream::<f32, _, _>(out_config, move |d, _| fill(d), speaker_error, None)?,
         SampleFormat::I16 => {
             let fill = fill;
             let mut scratch = Vec::new();
@@ -275,7 +498,7 @@ fn run_audio(
                         *o = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
                     }
                 },
-                |_| {},
+                speaker_error,
                 None,
             )?
         }
@@ -289,6 +512,7 @@ fn run_audio(
     let mut resampler = Resampler::new(in_rate, RATE);
     let mut pending: Vec<f32> = Vec::new();
     let mut mono: Vec<f32> = Vec::new();
+    let (tx, in_level, live, headphones) = (a.tx.clone(), a.in_level.clone(), a.live.clone(), a.headphones.clone());
     let capture = move |data: &[f32]| {
         mono.clear();
         let mut sum = 0.0f32;
@@ -302,24 +526,24 @@ fn run_audio(
         if !live.load(Ordering::Relaxed) {
             return;
         }
-        // echo gate: omp is speaking → only let clearly louder speech through
+        // echo gate: omp is speaking → only let clearly louder speech through (not with headphones)
         let speaking = last_output.lock().unwrap().elapsed() < Duration::from_millis(350);
-        let gated = speaking && rms < 0.08;
+        let gated = speaking && rms < 0.08 && !headphones.load(Ordering::Relaxed);
         resampler.push(&mono, &mut pending);
         while pending.len() >= 480 {
-            let chunk: Vec<f32> = pending.drain(..480).collect();
             let mut bytes = Vec::with_capacity(960);
-            for s in chunk {
+            for s in pending.drain(..480) {
                 let v = if gated { 0 } else { (s.clamp(-1.0, 1.0) * 32767.0) as i16 };
                 bytes.extend_from_slice(&v.to_le_bytes());
             }
             let _ = tx.send(frame(FRAME_AUDIO, &bytes));
         }
     };
+    let mic_error = on_stream_error(fault, "Mikrofon");
     let in_stream = match in_cfg.sample_format() {
         SampleFormat::F32 => {
             let mut capture = capture;
-            input.build_input_stream::<f32, _, _>(in_config, move |d, _| capture(d), |_| {}, None)?
+            input.build_input_stream::<f32, _, _>(in_config, move |d, _| capture(d), mic_error, None)?
         }
         SampleFormat::I16 => {
             let mut capture = capture;
@@ -331,7 +555,7 @@ fn run_audio(
                     scratch.extend(d.iter().map(|s| *s as f32 / 32768.0));
                     capture(&scratch);
                 },
-                |_| {},
+                mic_error,
                 None,
             )?
         }
@@ -340,10 +564,5 @@ fn run_audio(
 
     out_stream.play()?;
     in_stream.play()?;
-    while !stop.load(Ordering::Relaxed) {
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    drop(in_stream);
-    drop(out_stream);
-    Ok(())
+    Ok(([in_stream, out_stream], names))
 }

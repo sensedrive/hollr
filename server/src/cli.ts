@@ -78,7 +78,7 @@ import {
   setupPushKey,
   unregisterDevice,
 } from "./push";
-import { findSessionFile, readHistory } from "./sessionlog";
+import { readHistory } from "./sessionlog";
 import {
   type FsRequest,
   listSpaces,
@@ -95,7 +95,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.32.11";
+export const VERSION = "0.33.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -253,7 +253,7 @@ async function gate(): Promise<number> {
       // a pane that is gone: an answer the app understands, not empty output
       const agent = await agentOrError(herdr, pane);
       if (!agent) return 0;
-      const file = agent.sessionFile ?? findSessionFile(agent.cwd, 0);
+      const file = agent.sessionFile;
       const timeline = file
         ? await readTimeline(file, Number(rest[0] ?? 150))
         : { items: [], jobs: [], running: false, waiting: false };
@@ -428,7 +428,7 @@ async function gate(): Promise<number> {
     case "history": {
       const agent = await agentOrError(herdr, pane);
       if (!agent) return 0;
-      const file = agent.sessionFile ?? findSessionFile(agent.cwd, 0);
+      const file = agent.sessionFile;
       json({
         events: file ? await readHistory(file, Number(rest[0] ?? 60)) : [],
         status: agent.status,

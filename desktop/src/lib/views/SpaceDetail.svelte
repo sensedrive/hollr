@@ -1,8 +1,12 @@
 <script lang="ts">
   // One space: its sessions (panes) on the left, the git panel (changes, history, branches, files) on the right.
+  // The space column can be dragged wider / narrower and collapsed to a rail (⌘\); remembered.
   import GitPanel from "$lib/components/GitPanel.svelte";
+  import Splitter from "$lib/components/Splitter.svelte";
+  import Icon from "$lib/components/git/Icon.svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
+  import { SPACE_KEY, SPACE_LAYOUT, clamp, loadLayout, saveLayout } from "$lib/layoutPrefs";
   import { allPanes, app, back, dialogs, go, mySessions, refresh, refreshSpaces, type PaneRef } from "$lib/store.svelte";
   import AgentRow from "./dashboard/AgentRow.svelte";
   import ConfirmDialog from "./dashboard/ConfirmDialog.svelte";
@@ -31,6 +35,26 @@
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   let showGit = $state(true);
 
+  const gitShown = $derived(!!space?.git && showGit && !gone);
+  let layout = $state(loadLayout(SPACE_KEY, SPACE_LAYOUT));
+  const save = () => saveLayout(SPACE_KEY, layout);
+  const collapsed = $derived(gitShown && layout.leftHidden);
+  let width = $state(0);
+  const LEFT_MIN = 240;
+  const leftMax = $derived(Math.max(LEFT_MIN, Math.min(680, width - 460)));
+  const leftW = $derived(clamp(layout.leftW, LEFT_MIN, leftMax));
+  const keys = navigator.platform.toLowerCase().includes("mac") ? "⌘\\" : "Ctrl+\\";
+  function toggleLeft() {
+    layout.leftHidden = !layout.leftHidden;
+    save();
+  }
+  function onKey(e: KeyboardEvent) {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || !gitShown) return;
+    if (e.code !== "Backslash" && e.key !== "\\") return;
+    e.preventDefault();
+    toggleLeft();
+  }
+
   function rowMenu(e: MouseEvent, r: PaneRef) {
     menu = {
       x: e.clientX, y: e.clientY,
@@ -52,10 +76,25 @@
   }
 </script>
 
-<div class="detail" class:nogit={!space?.git || !showGit}>
-  <div class="left page">
+<svelte:window onkeydown={onKey} />
+
+<div class="detail" class:nogit={!gitShown} bind:clientWidth={width}>
+  {#if collapsed}
+    <div class="rail">
+      <button class="railbtn" onclick={toggleLeft} title={`${t("Space-Spalte einblenden")} (${keys})`} aria-label={t("Space-Spalte einblenden")}>
+        <Icon name="chevronR" size={15} /></button>
+      <span class="ring" style="--c:{statusColor(space?.status ?? 'unknown')}" class:fill={space?.status === "working"}></span>
+      <button class="raillabel" onclick={toggleLeft} title={`${t("Space-Spalte einblenden")} (${keys})`}>{label}</button>
+    </div>
+  {/if}
+  <div class="left page" class:hidden={collapsed} style:width={gitShown ? `${leftW}px` : null}>
     <div class="crumbs small"><button class="link" onclick={() => go({ view: "spaces" })}>{t("Spaces")}</button>
-      {#if app.servers.length > 1}<span class="dim"> · {serverLabel}</span>{/if}</div>
+      {#if app.servers.length > 1}<span class="dim"> · {serverLabel}</span>{/if}
+      {#if gitShown}
+        <button class="collapse" onclick={toggleLeft} title={`${t("Space-Spalte ausblenden")} (${keys})`} aria-label={t("Space-Spalte ausblenden")}>
+          <Icon name="back" size={14} /></button>
+      {/if}
+    </div>
     <div class="page-head">
       <span class="ring" style="--c:{statusColor(space?.status ?? 'unknown')}" class:fill={space?.status === "working"}></span>
       <h1 class="ellipsis">{label}</h1>
@@ -113,9 +152,13 @@
     {/if}
   </div>
 
-  {#if space?.git && showGit && !gone}
+  {#if gitShown}
+    {#if !collapsed}
+      <Splitter size={leftW} min={LEFT_MIN} max={leftMax} label={t("Space-Spalte breiter / schmaler")}
+        onSize={(v) => (layout.leftW = v)} onDone={save} onReset={() => { layout.leftW = SPACE_LAYOUT.leftW; save(); }} />
+    {/if}
     <div class="right">
-      {#key ws}<GitPanel {server} {ws} />{/key}
+      {#key ws}<GitPanel {server} {ws} place="space" />{/key}
     </div>
   {/if}
 </div>
@@ -137,13 +180,21 @@
 {/if}
 
 <style>
-  .detail { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; height: 100%; min-height: 0; }
-  .detail.nogit { grid-template-columns: 1fr; }
-  .detail.nogit .left { max-width: 900px; }
-  .left { border-right: 1px solid var(--border); }
-  .nogit .left { border-right: 0; }
-  .right { min-width: 0; min-height: 0; overflow: hidden; }
-  .crumbs { margin-bottom: 4px; }
+  .detail { display: flex; height: 100%; min-height: 0; }
+  .left { flex: none; min-width: 0; padding-left: 22px; padding-right: 22px; }
+  .detail.nogit .left { flex: 1; max-width: 900px; }
+  .hidden { display: none; }
+  /* width 0: the git panel's long rows must not widen the whole view (it only takes the space left over) */
+  .right { flex: 1 1 0; width: 0; min-width: 0; min-height: 0; overflow: hidden; }
+  .rail { flex: none; width: 38px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 0;
+    border-right: 1px solid var(--border); min-height: 0; overflow: hidden; }
+  .railbtn, .collapse { background: none; border: 1px solid transparent; border-radius: 8px; padding: 4px; color: var(--muted); display: inline-flex; }
+  .railbtn:hover, .collapse:hover { border-color: var(--border); color: var(--fg); }
+  .raillabel { all: unset; cursor: pointer; writing-mode: vertical-rl; font-weight: 600; font-size: 13px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 100%; min-height: 0; }
+  .raillabel:hover { color: var(--fg); }
+  .crumbs { margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+  .collapse { margin-left: auto; padding: 3px; }
   .link { all: unset; cursor: pointer; color: var(--muted); }
   .link:hover, .link:focus-visible { color: var(--accent); }
   .page-head { margin-bottom: 8px; }
