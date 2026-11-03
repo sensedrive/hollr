@@ -12,6 +12,7 @@
   import { settings } from "../settings.svelte";
   import { findLinks, keySequence, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
   import { rememberViewPrefs, viewPrefsOf } from "../viewPrefs";
+  import { cleanSelection, ScrollSelection } from "../scrollSelection";
 
   let { server, pane, onLink }: {
     server: string; pane: string; onLink?: (href: string) => void;
@@ -42,24 +43,11 @@
     }
   }
 
-  /** The selection as plain text: without the blanks a TUI pads its lines with, its left margin (the indent all
-   *  following lines share – the first one starts where the drag did) and trailing empty lines. */
-  function selectionText(x: Terminal): string {
-    const lines = x.getSelection().split("\n").map((l) => l.replace(/\s+$/, ""));
-    const rest = lines.slice(1).filter(Boolean);
-    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)![0].length)) : 0;
-    return lines
-      .map((l, i) => (i === 0 ? l.trimStart() : l.slice(indent)))
-      .join("\n")
-      .replace(/\n+$/, "");
-  }
-
   // the dev bridge (normal browser) has no native clipboard plugin behind it
   const viaBridge = new URLSearchParams(location.search).has("bridge");
   let copied = $state(0);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-  async function copySelection(x: Terminal) {
-    const text = selectionText(x);
+  async function copyText(text: string) {
     if (!text) return;
     try {
       if (viaBridge) await navigator.clipboard.writeText(text);
@@ -166,7 +154,7 @@
         }
         const copy = mac ? e.metaKey && key === "c" : e.ctrlKey && key === "c" && x.hasSelection();
         if (copy) {
-          copySelection(x);
+          void copyText(cleanSelection(x.getSelection()));
           return false;
         }
         // Cmd shortcuts stay with the app (Cmd+V arrives as a paste, which xterm types in)
@@ -180,14 +168,93 @@
       const forceKey = mac ? "altKey" : "shiftKey";
       const forceSelect = (e: MouseEvent) => {
         if (e.button !== 0 || e.metaKey || e.ctrlKey || !x.modes.mouseTrackingMode || x.modes.mouseTrackingMode === "none") return;
+        const selects = !e[forceKey];
         Object.defineProperty(e, forceKey, { value: !e[forceKey] });
+        const box = screenBox();
+        // a plain drag in a full-screen program: past the edge Hollr scrolls it (dragMove)
+        if (!selects || e.detail > 1 || x.buffer.active.type !== "alternate" || !box) return;
+        const at = cellOf(e, box);
+        drag = { ...at, at, speed: 0 };
+        window.addEventListener("mousemove", dragMove, true);
+        window.addEventListener("mouseup", dragEnd, true);
       };
       el.addEventListener("mousedown", forceSelect, { capture: true });
       // like Ghostty: letting go of a selection copies it
       const copyOnSelect = (e: MouseEvent) => {
-        if (e.button === 0) setTimeout(() => x.hasSelection() && copySelection(x), 0);
+        if (e.button === 0) setTimeout(() => x.hasSelection() && copyText(cleanSelection(x.getSelection())), 0);
       };
       el.addEventListener("mouseup", copyOnSelect);
+
+      // Selecting past the top/bottom edge: herdr's attach has no scrollback in xterm, so Hollr takes the
+      // drag over from xterm, scrolls the pane with the mouse wheel and collects the text (scrollSelection.ts).
+      type Drag = { row: number; col: number; at: { row: number; col: number }; speed: number; sel?: ScrollSelection; timer?: ReturnType<typeof setInterval> };
+      let drag: Drag | null = null;
+      function screenBox() {
+        return x.element?.querySelector(".xterm-screen")?.getBoundingClientRect();
+      }
+      function cellOf(e: MouseEvent, box: DOMRect) {
+        return {
+          row: Math.floor(((e.clientY - box.top) / box.height) * x.rows),
+          col: Math.min(x.cols - 1, Math.max(0, Math.floor(((e.clientX - box.left) / box.width) * x.cols))),
+        };
+      }
+      function screenRows() {
+        const buf = x.buffer.active;
+        return Array.from({ length: x.rows }, (_, r) => buf.getLine(buf.viewportY + r)?.translateToString(true) ?? "");
+      }
+      /** the part of the selection on screen */
+      function highlight(d: Drag, sel: ScrollSelection) {
+        const [s, e] = sel.range(sel.point(d.at.row, d.at.col, x.rows));
+        let [rs, cs, re, ce] = [s.line - sel.top, s.col, e.line - sel.top, Math.min(e.col, x.cols - 1)];
+        if (rs < 0) [rs, cs] = [0, 0];
+        if (re >= x.rows) [re, ce] = [x.rows - 1, x.cols - 1];
+        if (rs > re) x.clearSelection();
+        else x.select(cs, x.buffer.active.viewportY + rs, (re - rs) * x.cols + ce - cs + 1);
+      }
+      function scrollTick() {
+        if (!drag?.speed) return;
+        // SGR mouse wheel (herdr asks for 1006) in the middle of the screen: 64 up, 65 down
+        const wheel = `\x1b[<${drag.speed < 0 ? 64 : 65};${Math.ceil(x.cols / 2)};${Math.ceil(x.rows / 2)}M`;
+        s.type(wheel.repeat(Math.min(3, Math.abs(drag.speed))));
+      }
+      const parsed = x.onWriteParsed(() => {
+        if (drag?.sel?.update(screenRows())) highlight(drag, drag.sel);
+      });
+      function dragMove(e: MouseEvent) {
+        const d = drag;
+        const box = screenBox();
+        if (!d || !box || !e.isTrusted) return;
+        d.at = cellOf(e, box);
+        const over = e.clientY < box.top ? e.clientY - box.top : e.clientY > box.bottom ? e.clientY - box.bottom : 0;
+        if (!d.sel) {
+          if (!over) return;
+          // xterm's own drag ends here (its mouseup listener sits on the document)
+          document.dispatchEvent(new MouseEvent("mouseup", { clientX: e.clientX, clientY: e.clientY, button: 0 }));
+          d.sel = new ScrollSelection(screenRows(), d.row, d.col);
+          d.timer = setInterval(scrollTick, 80);
+        }
+        d.speed = over ? Math.sign(over) * (1 + Math.floor(Math.abs(over) / 30)) : 0;
+        highlight(d, d.sel);
+      }
+      function dragEnd(e: MouseEvent) {
+        if (!e.isTrusted || e.button !== 0) return;
+        const d = drag;
+        stopDrag();
+        if (!d?.sel) return;
+        const box = screenBox();
+        if (box) d.at = cellOf(e, box);
+        d.sel.update(screenRows());
+        highlight(d, d.sel);
+        // copied here in full – copyOnSelect would take only the part on screen
+        e.stopPropagation();
+        void copyText(cleanSelection(d.sel.text(d.sel.point(d.at.row, d.at.col, x.rows))));
+      }
+      function stopDrag() {
+        clearInterval(drag?.timer);
+        drag = null;
+        window.removeEventListener("mousemove", dragMove, true);
+        window.removeEventListener("mouseup", dragEnd, true);
+      }
       const input = x.onData((data) => s.type(data));
       const focusIn = () => (focused = true);
       const focusOut = () => (focused = false);
@@ -213,6 +280,8 @@
         ro.disconnect();
         el.removeEventListener("mousedown", forceSelect, { capture: true });
         el.removeEventListener("mouseup", copyOnSelect);
+        stopDrag();
+        parsed.dispose();
         clearTimeout(copiedTimer);
         input.dispose();
         x.textarea?.removeEventListener("focus", focusIn);

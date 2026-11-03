@@ -46,6 +46,7 @@
 		608A1B91DAB5CD3CA4C0096A /* DictationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCC6225238A5F43D225C929 /* DictationPipeline.swift */; };
 		63B7E612AB0B2CC322A66180 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81077892E1641FD2CE8FAE26 /* ShareViewController.swift */; };
 		6A4EB22604337DEC01BBF565 /* TimelineFollow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40922C5DC52774032423CD54 /* TimelineFollow.swift */; };
+		6ADA30076AE5DC79952AA7D8 /* SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 22537A937722D8162EB0DE68 /* SymbolsNerdFontMono-Regular.ttf */; };
 		73CD54283B0784775323AE62 /* StatusWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 579BCDD7CD8D810DF3C53517 /* StatusWidgets.swift */; };
 		7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D5C6613C409FB4F134C940D7 /* WhisperKit */; };
 		7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */; };
@@ -168,6 +169,7 @@
 		1AB41FCEDCC4C89A85369DAC /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
 		1D506F45973D977B4EB1B01E /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
 		20135523C477C7E3FF4526F3 /* PairingPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingPayload.swift; sourceTree = "<group>"; };
+		22537A937722D8162EB0DE68 /* SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
 		28DF57FDC8FE93780D52F1D7 /* InboxSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxSection.swift; sourceTree = "<group>"; };
 		2FF87247E6B2C42C39C700C1 /* InboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxTests.swift; sourceTree = "<group>"; };
 		32AD6EE69ADDD4E7DF04704C /* GitModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitModels.swift; sourceTree = "<group>"; };
@@ -406,6 +408,7 @@
 		CBFDDF54DE41FC285D79C97F /* Terminal */ = {
 			isa = PBXGroup;
 			children = (
+				22537A937722D8162EB0DE68 /* SymbolsNerdFontMono-Regular.ttf */,
 				758FB5EFB6354348A0AA5B8D /* terminal.html */,
 				7AD46C8E62EE971FEBBE849A /* xterm.css */,
 				B7925BF8375327A708009D82 /* xterm.js */,
@@ -728,6 +731,7 @@
 				600EC276313BAAE941AFEB1C /* Assets.xcassets in Resources */,
 				8ECE8D1C3BB595B2E7C2FB6F /* InfoPlist.xcstrings in Resources */,
 				47597F2CACD6AFC33AF883C9 /* Localizable.xcstrings in Resources */,
+				6ADA30076AE5DC79952AA7D8 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
 				0F17CBD7B1347E893D651BA8 /* terminal.html in Resources */,
 				AA041BF2D4D6CBEA5EB23AD3 /* xterm.css in Resources */,
 				ADAFE90A9096CA7D07C84B1E /* xterm.js in Resources */,
@@ -935,7 +939,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 48;
+				CURRENT_PROJECT_VERSION = 49;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1044,7 +1048,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 48;
+				CURRENT_PROJECT_VERSION = 49;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

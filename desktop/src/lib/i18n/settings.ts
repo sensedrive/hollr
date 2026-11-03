@@ -161,6 +161,12 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Terminal: Beim Markieren über den oberen oder unteren Rand ziehen scrollt die Session mit – die ganze Auswahl landet in der Zwischenablage":
+    "Terminal: dragging a selection past the top or bottom edge scrolls the session along – the whole selection goes to the clipboard",
+  "iPhone: Das Terminal scrollt leichter – feinere Schritte, und ein schneller Wisch läuft mit Schwung aus":
+    "iPhone: the terminal scrolls more easily – finer steps, and a quick flick glides on",
+  "iPhone: Powerline- und Nerd-Font-Zeichen in Shell-Prompts werden im Terminal richtig gezeichnet":
+    "iPhone: Powerline and Nerd Font characters in shell prompts are drawn properly in the terminal",
   "Terminal: Shift+Enter macht in omp und Claude Code eine neue Zeile, statt abzuschicken":
     "Terminal: Shift+Enter makes a new line in omp and Claude Code instead of sending",
   "Terminal: Powerline- und Nerd-Font-Zeichen in Shell-Prompts (Pfeile, Branch-Symbol) werden richtig gezeichnet statt als Kästchen":

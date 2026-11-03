@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=6, user-scalable=yes">
 <link rel="stylesheet" href="xterm.css">
 <style>
+  /* Nerd Fonts symbols (MIT, github.com/ryanoasis/nerd-fonts) – only the private-use icons shell prompts draw
+     (powerline arrows, git branch …) */
+  @font-face {
+    font-family: "Symbols Nerd Font Mono";
+    src: url("SymbolsNerdFontMono-Regular.ttf") format("truetype");
+    unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD, U+23FB-23FE, U+2B58, U+2665, U+26A1;
+  }
   html, body { margin: 0; height: 100%; background: #0f1216; overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y pinch-zoom; }
   #term { position: absolute; inset: 0; padding: 4px; -webkit-touch-callout: none; }
   .xterm .xterm-viewport { overflow-y: hidden !important; }
@@ -21,7 +28,7 @@
   // that fits the phone, and passes what you type back. The pane itself is never resized.
   const post = (name, value) => window.webkit?.messageHandlers?.[name]?.postMessage(value);
   const term = new Terminal({
-    fontFamily: 'Menlo, ui-monospace, monospace', fontSize: 12, lineHeight: 1.0,
+    fontFamily: 'Menlo, ui-monospace, "Symbols Nerd Font Mono", monospace', fontSize: 12, lineHeight: 1.0,
     cursorBlink: false, scrollback: 0, disableStdin: true, convertEol: false, allowProposedApi: true,
     theme: { background: '#0f1216', foreground: '#d7dae0', cursor: '#7aa2f7' },
     // OSC 8 hyperlinks (a click on them)
@@ -77,27 +84,50 @@
   window.writeRaw = (data) => term.write(data);
 
   // a full-screen TUI (omp, Claude …) has no scrollback of its own: a swipe becomes mouse-wheel
-  // input for it, the way a trackpad scrolls it on the computer
-  let touchY = null, acc = 0;
+  // input for it, the way a trackpad scrolls it on the computer – and a flick glides on like iOS scrolling
+  const STEP = 12; // finger travel (px) per wheel step; herdr scrolls 3 lines a step
+  let touchY = null, acc = 0, velocity = 0, lastT = 0, glide = 0;
   const el = document.getElementById('term');
-  el.addEventListener('touchstart', (e) => { touchY = e.touches[0].clientY; acc = 0; }, { passive: true });
-  el.addEventListener('touchmove', (e) => {
-    if (!shell || touchY === null) return;
-    const alt = term.buffer.active.type === 'alternate';
-    if (!alt || term.modes.mouseTrackingMode === 'none') return; // normal screen: xterm scrolls itself
-    const y = e.touches[0].clientY;
-    acc += y - touchY;
-    touchY = y;
-    const step = 18;
+  const scrollsTui = () => shell && term.buffer.active.type === 'alternate' && term.modes.mouseTrackingMode !== 'none';
+  function wheel(dy) {
+    acc += dy;
     const col = Math.floor(term.cols / 2) + 1, row = Math.floor(term.rows / 2) + 1;
-    while (Math.abs(acc) >= step) {
+    let seq = '';
+    while (Math.abs(acc) >= STEP) {
       // finger down = content down = scroll up (button 64), finger up = scroll down (65)
-      post('input', `\x1b[<${acc > 0 ? 64 : 65};${col};${row}M`);
-      acc += acc > 0 ? -step : step;
+      seq += `\x1b[<${acc > 0 ? 64 : 65};${col};${row}M`;
+      acc += acc > 0 ? -STEP : STEP;
     }
+    if (seq) post('input', seq);
+  }
+  el.addEventListener('touchstart', (e) => {
+    cancelAnimationFrame(glide);
+    touchY = e.touches[0].clientY; acc = 0; velocity = 0; lastT = e.timeStamp;
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (touchY === null || !scrollsTui()) return; // normal screen: xterm scrolls itself
+    const y = e.touches[0].clientY;
+    const dt = Math.max(1, e.timeStamp - lastT);
+    velocity = 0.8 * ((y - touchY) / dt) + 0.2 * velocity; // px per ms, smoothed
+    lastT = e.timeStamp;
+    wheel(y - touchY);
+    touchY = y;
     e.preventDefault();
   }, { passive: false });
-  el.addEventListener('touchend', () => { touchY = null; });
+  el.addEventListener('touchend', (e) => {
+    touchY = null;
+    // a flick (fast, and still moving when the finger left) glides on and slows down
+    if (!scrollsTui() || Math.abs(velocity) < 0.3 || e.timeStamp - lastT > 80) return;
+    let v = velocity, t0 = performance.now();
+    const step = (now) => {
+      const dt = now - t0;
+      t0 = now;
+      wheel(v * dt);
+      v *= Math.pow(0.995, dt);
+      if (Math.abs(v) > 0.05) glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
+  });
   window.addEventListener('resize', () => (shell ? fitShell() : fit()));
 
   // ---- text under the finger: links (tap) and selecting text (long press) ----

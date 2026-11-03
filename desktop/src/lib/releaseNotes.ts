@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 19,
+    version: "0.33.3",
+    date: "03.11.2026",
+    items: [
+      { icon: "⇕", text: "Terminal: Beim Markieren über den oberen oder unteren Rand ziehen scrollt die Session mit – die ganze Auswahl landet in der Zwischenablage" },
+      { icon: "📱", text: "iPhone: Das Terminal scrollt leichter – feinere Schritte, und ein schneller Wisch läuft mit Schwung aus" },
+      { icon: "⑂", text: "iPhone: Powerline- und Nerd-Font-Zeichen in Shell-Prompts werden im Terminal richtig gezeichnet" },
+    ],
+  },
+  {
     build: 18,
     version: "0.33.2",
     date: "03.11.2026",
