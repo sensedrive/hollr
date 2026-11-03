@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Hollr uses the microphone for dictation on this computer and to send your voice to omp /live on your server.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Hollr connects over SSH to your servers – also to those on your local network, like a virtual machine on this Mac.</string>
 </dict>
 </plist>
