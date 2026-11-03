@@ -1,0 +1,20 @@
+// Tool cards in the chat (components/chat/*) – German source → English.
+export default {
+  "weniger anzeigen": "show less",
+  "{n} weitere Zeilen": "{n} more lines",
+  "{n} weitere Einträge": "{n} more entries",
+  "{n} weitere Links": "{n} more links",
+  "… {n} weitere Zeilen nicht übertragen": "… {n} more lines not sent",
+  "… {n} frühere Zeilen nicht übertragen": "… {n} earlier lines not sent",
+  "{n} frühere Zeilen": "{n} earlier lines",
+  "Pfad kopieren": "Copy path",
+  Pfad: "Path",
+  "Änderung als Diff kopieren": "Copy change as diff",
+  Befehl: "Command",
+  Ausgabe: "Output",
+  "Ausgabe kopieren": "Copy output",
+  "im Hintergrund: {id}": "in background: {id}",
+  "{done}/{total} erledigt": "{done}/{total} done",
+  "{n} Aufrufe": "{n} calls",
+  "Antwort kopieren": "Copy answer",
+};

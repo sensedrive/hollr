@@ -77,6 +77,11 @@ export function followTimeline(
     unsupported: () => void;
   },
 ): () => void {
+  // the dev bridge (a normal browser, see src-tauri/examples/bridge.rs) has no stream: poll
+  if (new URLSearchParams(location.search).has("bridge")) {
+    queueMicrotask(on.unsupported);
+    return () => {};
+  }
   let stopped = false;
   let id: number | null = null;
   /** events that arrived before follow_start returned the id */

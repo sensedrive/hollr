@@ -1,0 +1,40 @@
+      try:
+          for name, qty in lines:
+              self.remove(name, qty)
+      except OutOfStock:
+          self.items = snapshot
+          raise
+      return sum(self.items[n][1] * q for n, q in lines)
+
+  Die flache Kopie reicht, weil die Werte unveränderliche Tupel sind.
+
+  Gefundene TODOs:
+  - README.md:5: <!-- TODO: CLI ergänzen -->
+  - inventory.py:23: # TODO: round to whole euros for the report
+
+  Nächste Schritte:
+  1. Eine .gitignore mit __pycache__/ anlegen. Der Ordner liegt gerade unversioniert im Projekt, ich habe ihn bewusst
+     nicht committet.
+  2. Das Runden für den Report klären. Am besten bleibt total_value() exakt und der Report rundet selbst. Python rundet
+     mit round() auf die nächste gerade Zahl, nicht kaufmännisch. Für kaufmännisches Runden bräuchte man Decimal mit
+     ROUND_HALF_UP.
+  3. Unklare Eingaben prüfen. Im Moment legt remove() einen unbekannten Artikel mit der Menge 0 als Eintrag (0, 0) an.
+     Negative Mengen werden gar nicht abgefangen.
+  4. Je nach Wahl unten die nächste Funktion bauen.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Nächstes
+
+Welche Funktion soll als Nächstes ins Bäckerei-Inventar kommen?
+
+❯ 1. CLI
+     Bedienung über die Kommandozeile (Artikel hinzufügen, entnehmen, bestellen, Bestand anzeigen). Erledigt das TODO
+     aus der README.
+  2. Preis-Report
+     Übersicht über Bestand und Warenwert je Artikel, auf ganze Euro gerundet. Erledigt das TODO in total_value.
+  3. Mindestbestand-Warnung
+     Mindestmenge je Artikel festlegen und warnen, wenn ein Artikel nach Entnahme oder Bestellung darunter fällt.
+  4. Type something.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

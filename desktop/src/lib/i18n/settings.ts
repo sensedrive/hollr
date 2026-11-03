@@ -161,6 +161,18 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Claude Code im Chat: der ganze Verlauf statt nur des Bildschirms – Fragen, Freigaben und der Ordner-Check als Karten zum Antippen":
+    "Claude Code in the chat: the whole conversation instead of just the screen – questions, permission prompts and the folder check as cards to tap",
+  "Änderungen als echte Diffs mit Zeilennummern und Syntaxfarben; lange Diffs klappen ein":
+    "Changes as real diffs with line numbers and syntax colours; long diffs fold",
+  "TODO-Listen im Verlauf: jede Änderung als kompakte Zeile, die neueste offen, Erledigtes durchgestrichen":
+    "TODO lists in the conversation: every change as a compact line, the newest open, done items struck through",
+  "Grep mit Fundstellen, Dateilisten, Subagenten mit ihrer Antwort, Websuche mit Links, Bash mit mehr Ausgabe und Kopierknöpfen":
+    "Grep with matching lines, file lists, subagents with their answer, web search with links, bash with more output and copy buttons",
+  "Antworten mit Syntax-Highlighting, Kopierknopf an jedem Codeblock und besseren Tabellen":
+    "Answers with syntax highlighting, a copy button on every code block and better tables",
+  "Statuszeile sagt „Wartet auf dich“, solange der Agent auf dich wartet – die Arbeitszeit zählt ohne diese Wartezeit":
+    "The status line says “Waiting for you” while the agent waits for you – working time no longer counts that wait",
   "Git-Stand in Seitenleiste und Spaces aktualisiert sich nach git pull, Commit oder Checkout – nach Aktivität in einer Session binnen Sekunden, sonst spätestens nach 30 s":
     "Git state in the sidebar and spaces updates after git pull, commit or checkout – within seconds after activity in a session, otherwise within 30 s",
   "Terminal: Beim Markieren über den oberen oder unteren Rand ziehen scrollt die Session mit – die ganze Auswahl landet in der Zwischenablage":

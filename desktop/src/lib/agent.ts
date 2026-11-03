@@ -1,7 +1,7 @@
 // Helpers for the session view (AgentView & co): extra gate wrappers, omp formatting rules,
 // terminal key mapping and link/URL handling. Mirrors the iPhone app (AgentSession, Timeline, BrowserView).
 import { gate } from "./api";
-import type { Timeline, TimelineItem, TodoPhase } from "./api";
+import type { Timeline, TimelineItem, TodoPhase, ToolCall } from "./api";
 
 // ------------------------------------------------------------ gate wrappers
 
@@ -27,29 +27,32 @@ export const portLabel = (p: WebPort) => p.title ?? p.cwd?.split("/").filter(Boo
 
 // ------------------------------------------------------------ timeline (Model/Timeline.swift)
 
-/** Items as omp's transcript shows them: todo updates live only in the pinned TODO tree. */
-export function visibleItems(tl: Timeline): TimelineItem[] {
-  const out: TimelineItem[] = [];
-  for (const item of tl.items) {
-    if (item.k !== "tools") {
-      out.push(item);
-      continue;
-    }
-    const calls = item.calls.filter((c) => c.name !== "todo");
-    if (calls.length) out.push(calls.length === item.calls.length ? item : { ...item, calls });
-  }
-  return out;
-}
-
-/** What omp shows in its working row: the intent of the latest running tool call. */
-export function workingLabel(tl: Timeline): string | undefined {
+/** The latest running tool call – what the agent does right now. */
+export function runningCall(tl: Timeline): ToolCall | undefined {
   for (let i = tl.items.length - 1; i >= 0; i--) {
     const item = tl.items[i];
     if (item?.k !== "tools") continue;
-    const c = [...item.calls].reverse().find((c) => c.status === "running");
-    if (c) return c.label;
+    const c = item.calls.findLast((c) => c.status === "running");
+    if (c) return c;
   }
   return undefined;
+}
+
+/** What omp shows in its working row: the intent of the latest running tool call. */
+export const workingLabel = (tl: Timeline): string | undefined => runningCall(tl)?.label;
+
+/** The question the agent waits on (omp's ask, Claude's question / permission prompt). */
+export const pendingAsk = (tl: Timeline) =>
+  tl.items.findLast((i): i is Extract<TimelineItem, { k: "ask" }> => i.k === "ask" && !!i.pending);
+
+/**
+ * Since when the agent waits for the user: its open question's time, else the last logged item's
+ * (a permission prompt or dialog that isn't in the log yet blocks right after it).
+ */
+export function waitingSince(tl: Timeline): number | undefined {
+  const ask = pendingAsk(tl);
+  if (ask?.at !== undefined) return ask.at;
+  return tl.items.findLast((i) => i.at !== undefined)?.at;
 }
 
 export const cleanTitle = (title?: string) => title?.replace(/^[^\p{L}\p{N}]+/u, "") || undefined;
@@ -106,14 +109,17 @@ export const shortPath = (p?: string) => (p ?? "").replace(/^\/home\/[^/]+/, "~"
 export function toolIcon(name: string): string {
   switch (name) {
     case "bash": return "❯";
-    case "edit": case "write": return "✎";
+    case "edit": case "write": case "notebook": return "✎";
     case "read": return "≡";
-    case "grep": case "glob": return "⌕";
+    case "grep": case "glob": case "find": return "⌕";
+    case "ls": return "▤";
     case "task": return "⇶";
     case "todo": return "☑";
     case "ask": return "?";
     case "wait": case "hub": return "⚙";
-    case "web_search": case "browser": return "◍";
+    case "web_search": case "fetch": case "browser": return "◍";
+    case "plan": return "☰";
+    case "skill": return "✦";
     case "eval": return "λ";
     default: return "•";
   }
@@ -121,7 +127,8 @@ export function toolIcon(name: string): string {
 
 export function toolTitle(name: string): string {
   if (name === "web_search") return "Search";
-  if (name.startsWith("mcp__")) return name.split("_").pop() || name;
+  // mcp__<server>__<tool>: the tool's own name (servers may contain "_", tools too – split on "__")
+  if (name.startsWith("mcp__")) return name.split("__").slice(2).join("__") || name;
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 

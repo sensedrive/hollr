@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { claudeSessionFile } from "./claudelog";
 import { startArgs } from "./models";
 import { findSessionByTitle } from "./sessionlog";
 
@@ -196,6 +197,10 @@ export class Herdr {
         const untitled = !title || title === agent.cwd.split("/").pop();
         agent.sessionFile = untitled ? undefined : findSessionByTitle(agent.cwd, title);
       }
+    } else if (agent.kind === "claude" && !agent.sessionFile) {
+      // herdr knows Claude's session id (its hook), the transcript lies under the folder Claude started in
+      const session = res.agent.agent_session;
+      if (session?.kind === "id" && session.value) agent.sessionFile = claudeSessionFile(agent.cwd, session.value);
     }
     return agent;
   }

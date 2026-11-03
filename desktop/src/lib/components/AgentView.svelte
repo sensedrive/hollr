@@ -1,6 +1,6 @@
 <script lang="ts">
-  // One session (AgentDetailView.swift): omp transcript / chat history / terminal, pinned HUD (TODO, jobs,
-  // working row), composer with keys and live voice, omp's status line, ⋯ menu, zen mode and a right side
+  // One session (AgentDetailView.swift): omp/Claude transcript (else chat history + screen) / terminal, pinned HUD
+  // (TODO, jobs, working or waiting-for-you row), composer with keys and live voice, the status line, ⋯ menu, zen mode and a right side
   // panel (git / in-app browser / info).
   import { onDestroy, onMount, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -17,9 +17,10 @@
   import { followTimeline } from "../follow";
   import { sessionTerms } from "../dictationText";
   import {
-    cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, phaseDone, phaseName,
-    shortPath, todoColor, urlPort, viaTunnel, workingLabel, type HistoryEvent,
+    cleanScreen, cleanTitle, duration, history as loadHistory, hudVisible, isLoopback, openPhase, pendingAsk, phaseDone, phaseName,
+    runningCall, shortPath, todoColor, urlPort, viaTunnel, waitingSince, type HistoryEvent,
   } from "../agent";
+  import MsgActions from "./MsgActions.svelte";
   import TimelineView from "./TimelineView.svelte";
   import TerminalView from "./TerminalView.svelte";
   import TimeStrip from "./TimeStrip.svelte";
@@ -43,6 +44,8 @@
 
   const ws = $derived(pane.pane.split(":")[0] ?? "");
   const isOmp = $derived(pane.agent === "omp");
+  /** agents whose session log the server turns into a timeline (codex: history + screen) */
+  const hasTimeline = $derived(pane.agent === "omp" || pane.agent === "claude");
   const isShell = $derived(!pane.agent);
   const agentName = $derived(
     pane.agent ? ({ omp: "omp", claude: "Claude", codex: "Codex" } as Record<string, string>)[pane.agent] ?? pane.agent : "Shell",
@@ -69,17 +72,47 @@
   /** chat stream problem – cleared by its next timeline */
   let streamError = $state("");
   const error = $derived(actionError || pollError || streamError);
-  /** typed prompts that are not in the log yet */
-  let pending = $state<string[]>([]);
+  /** typed prompts that are not in the log yet; `seen` = how often the log had this text when it was sent
+   *  (a prompt sent again only counts as arrived once the log has one more of it). Raw: entries are
+   *  removed by identity, and a deep proxy would hand back a different object. */
+  let pending = $state.raw<{ text: string; seen: number }[]>([]);
   let lastSig = "";
   let busy = false;
 
   const status = $derived(timeline?.status ?? pane.status);
-  const working = $derived(!!timeline?.running && status !== "blocked");
-  // omp's question already shows as an Ask card – then the raw screen would only repeat it
-  const askShown = $derived(isOmp && (timeline?.items ?? []).some((i) => i.k === "ask" && i.pending));
-  const showsScreen = $derived((!isOmp || status === "blocked") && !askShown);
+  const ask = $derived(hasTimeline && timeline ? pendingAsk(timeline) : undefined);
+  // the question already shows as an Ask card – then the raw screen would only repeat it
+  const askShown = $derived(!!ask);
+  /** the agent waits for you (question, permission prompt, dialog) – never "working" then */
+  const waitingForUser = $derived(status === "blocked" || askShown);
+  const working = $derived(!!timeline?.running && !waitingForUser);
+  /** the log has something to show as chat – omp's always does; a Claude timeline stays empty on servers
+   *  without its parser (then the screen card is the chat, like for codex). Still loading: the chat's skeleton. */
+  const chat = $derived(isOmp || (hasTimeline && (!loaded || !!timeline?.items.length)));
+  const showsScreen = $derived((!chat || status === "blocked") && !askShown);
   let screenOpen = $state(false);
+  /** when this view saw the agent start waiting – fallback for "since when" when the log has no time.
+   *  Only a change seen here counts: waiting already on open has an unknown start (no made-up "4s"). */
+  let blockedAt = $state<number | undefined>();
+  let sawBusy = false;
+  $effect(() => {
+    if (!timeline) return;
+    if (!waitingForUser) {
+      sawBusy = true;
+      blockedAt = undefined;
+    } else if (sawBusy && untrack(() => blockedAt) === undefined) blockedAt = Date.now();
+  });
+  const waitStart = $derived((timeline && waitingSince(timeline)) ?? blockedAt);
+
+  const loggedCount = (texts: string[], text: string) => texts.reduce((n, x) => n + (x === text ? 1 : 0), 0);
+  /** your prompts in the log (timeline or history) */
+  const loggedPrompts = (): string[] =>
+    hasTimeline
+      ? (timeline?.items ?? []).flatMap((i) => (i.k === "user" ? [i.text] : []))
+      : bubbles.filter((b) => b.kind === "typed").map((b) => b.text);
+  function dropArrived(logged: string[]) {
+    if (pending.some((p) => loggedCount(logged, p.text) > p.seen)) pending = pending.filter((p) => loggedCount(logged, p.text) <= p.seen);
+  }
 
   function toBubbles(events: HistoryEvent[]): Bubble[] {
     const out: Bubble[] = [];
@@ -94,14 +127,13 @@
 
   function setTimeline(tl: Timeline) {
     timeline = tl;
-    const logged = new Set(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
-    if (pending.some((p) => logged.has(p))) pending = pending.filter((p) => !logged.has(p));
+    dropArrived(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
   }
 
-  /** omp's chat comes as a stream (`follow`); false = poll `timeline` (older server) */
+  /** the chat comes as a stream (`follow`); false = poll `timeline` (older server) */
   let streaming = false;
   $effect(() => {
-    if (!isOmp) return;
+    if (!hasTimeline) return;
     streaming = true;
     const stop = untrack(() =>
       followTimeline(server, pane.pane, {
@@ -110,7 +142,10 @@
           streamError = "";
           loaded = true;
         },
-        error: (e) => (streamError = e),
+        error: (e) => {
+          streamError = e;
+          loaded = true;
+        },
         unsupported: () => {
           streaming = false;
           streamError = "";
@@ -128,7 +163,7 @@
     if (busy || isShell) return;
     busy = true;
     try {
-      if (isOmp) {
+      if (hasTimeline) {
         // the stream brings the timeline; polled only from servers without `follow`
         if (!streaming) {
           // unchanged → the server answers a few bytes instead of the whole timeline
@@ -143,8 +178,7 @@
           lastSig = sig;
           bubbles = fresh;
         }
-        const logged = new Set(fresh.filter((b) => b.kind === "typed").map((b) => b.text));
-        if (pending.some((p) => logged.has(p))) pending = pending.filter((p) => !logged.has(p));
+        dropArrived(fresh.filter((b) => b.kind === "typed").map((b) => b.text));
       }
       if (showsScreen && mode === "chat") screen = cleanScreen(await api.screen(server, pane.pane, 40));
       else screen = "";
@@ -152,7 +186,8 @@
     } catch (e) {
       pollError = e instanceof Error ? e.message : String(e);
     } finally {
-      loaded = true;
+      // with a stream the chat counts as loaded once it delivered (else an empty chat flashes "start talking")
+      if (!hasTimeline || !streaming || timeline) loaded = true;
       busy = false;
     }
   }
@@ -166,7 +201,7 @@
       // slow down while the window is hidden
       if (document.visibilityState !== "visible" && ticks % 4) return;
       tick();
-    }, isOmp ? 2000 : 3000);
+    }, hasTimeline ? 2000 : 3000);
   });
   onDestroy(() => clearInterval(poll));
 
@@ -174,6 +209,19 @@
   let now = $state(Date.now());
   const clock = setInterval(() => (now = Date.now()), 1000);
   onDestroy(() => clearInterval(clock));
+
+  /** Since when the agent works on its own: the turn's start, or – when it asked you mid-turn – the first entry
+   *  after your answer (the wait for you is not work). Undefined right after an answer, before anything new. */
+  function workingSince(tl: Timeline): number | undefined {
+    const lastAsk = tl.items.findLastIndex((i) => i.k === "ask" && !i.pending);
+    if (lastAsk < 0) return tl.turnStartedAt;
+    const after = tl.items.slice(lastAsk + 1).find((i) => i.at !== undefined);
+    if (!after?.at) return undefined;
+    return tl.turnStartedAt && tl.turnStartedAt > after.at ? tl.turnStartedAt : after.at;
+  }
+
+  /** Claude's background ids are hashes ("afd6f2ad03d5d4791") – shown only as a tooltip; omp's are short names */
+  const hashId = (id: string) => /^[0-9a-f]{12,}$/i.test(id);
 
   // ------------------------------------------------------------ view state
 
@@ -284,14 +332,15 @@
     stick = true;
     // omp waits on its question: the server makes the text the own answer – it never shows as a message
     const answering = askShown;
-    if (!isShell && !answering) pending = [...pending, msg];
+    const entry = { text: msg, seen: loggedCount(loggedPrompts(), msg) };
+    if (!isShell && !answering) pending = [...pending, entry];
     try {
       await api.prompt(server, pane.pane, msg);
       actionError = "";
       setTimeout(tick, 500);
       return true;
     } catch (e) {
-      pending = pending.filter((p) => p !== msg);
+      pending = pending.filter((p) => p !== entry);
       const why = e instanceof Error ? e.message : String(e);
       actionError = answering ? t("Antwort nicht gesendet: {e}", { e: why }) : t("Senden fehlgeschlagen: {e}", { e: why });
       return false;
@@ -309,6 +358,9 @@
       return false;
     }
   }
+
+  /** A prompt's hover action "send again": the same way as typed, not via the drafts. */
+  const resend = (text: string) => void sendText(text);
 
   /** Composer text: stays in the drafts until the server took it (back into the draft if not – even if this view is gone). */
   async function sendDraft(msg: string): Promise<boolean> {
@@ -508,13 +560,28 @@
       </div>
     {/if}
     {#each tl.jobs as job (job.id)}
-      <div class="hrow"><span class="acc">⚙</span><span class="acc">{job.id}</span><span class="dim ellipsis grow">{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>
+      <div class="hrow"><span class="acc">⚙</span>{#if !hashId(job.id)}<span class="acc">{job.id}</span>{/if}<span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>
     {/each}
-    {#if tl.running}
+    {#if waitingForUser}
+      <div class="hrow">
+        <span class="waitc">⚠</span>
+        <span class="waitc ellipsis grow">{t("Wartet auf dich")}{ask?.header ? ` · ${ask.header}` : ""}</span>
+        {#if waitStart}<span class="dim">{duration(now - waitStart)}</span>{/if}
+      </div>
+    {:else if tl.running}
+      {@const call = tl.waiting ? undefined : runningCall(tl)}
+      {@const detail = call?.detail?.split("\n")[0]?.trim()}
       <div class="hrow">
         <span class="braille acc"></span>
-        <span class="acc ellipsis grow">{tl.waiting ? t("wartet auf Hintergrund-Jobs") : (workingLabel(tl) ?? "Working…")}</span>
-        {#if tl.turnStartedAt}<span class="dim">{duration(now - tl.turnStartedAt)}</span>{/if}
+        {#if tl.waiting}
+          <span class="acc ellipsis grow">{t("wartet auf Hintergrund-Jobs")}</span>
+        {:else if call}
+          <span class="acc ellipsis doing">{call.label}</span>
+          <span class="dim ellipsis grow">{detail && detail !== call.label ? shortPath(detail) : ""}</span>
+        {:else}
+          <span class="acc ellipsis grow">{tl.items.at(-1)?.k === "thinking" ? t("Denkt nach …") : t("Arbeitet …")}</span>
+        {/if}
+        {#if workingSince(tl)}<span class="dim">{duration(now - (workingSince(tl) ?? now))}</span>{/if}
       </div>
     {/if}
   </div>
@@ -529,7 +596,7 @@
   {#if timeline?.line}
     {@const l = timeline.line}
     <div class="status mono">
-      {#if timeline.running}<span class="braille acc"></span>{/if}
+      {#if working}<span class="braille acc"></span>{:else if waitingForUser}<span class="waitc">⚠</span>{/if}
       {#if l.model}<button class="model" title={t("Modell wechseln")} onclick={openModels}>⬢ {l.model}</button>{/if}
       {#if l.folder}<span class="fg">🗀 …{l.folder}</span>{/if}
       {#if l.branch}<button class="branch" title={t("Git & Dateien")} onclick={() => togglePanel("git")}>⑂ {l.branch}{l.dirty ? ` *${l.dirty}` : ""}</button>{/if}
@@ -606,14 +673,14 @@
         <div class="scroll" bind:this={scroller} onscroll={onScroll}>
           <div class="inner" bind:this={inner}>
             <div class="ttl">{transcriptTitle}</div>
-            {#if isOmp && timeline}
+            {#if chat && timeline}
               {#if !timeline.items.length && !pending.length}{@render emptyHint()}{/if}
-              <TimelineView {timeline} {onLink} onAnswer={answerAsk} />
-            {:else if !isOmp}
+              <TimelineView {timeline} {onLink} onAnswer={answerAsk} onResend={askShown ? undefined : resend} root={pane.cwd} />
+            {:else if !hasTimeline}
               {#if !bubbles.length && !pending.length && (!screen || !showsScreen)}{@render emptyHint()}{/if}
               {#each bubbles as b, i (i)}
                 {#if b.kind === "voice" || b.kind === "typed"}
-                  <div class="bubble"><span class="bi">{b.kind === "voice" ? "〰" : "⌨"}</span><div class="bt">{b.text}</div></div>
+                  <div class="bubble"><span class="bi">{b.kind === "voice" ? "〰" : "⌨"}</span><div class="bt">{b.text}<MsgActions text={b.text} onResend={b.kind === "typed" && !askShown ? resend : undefined} /></div></div>
                 {:else if b.kind === "agent"}
                   <Markdown text={b.text} dimmed={!b.final} {onLink} />
                 {:else if b.kind === "tool"}
@@ -622,21 +689,21 @@
                   <div class="info">{b.text}</div>
                 {/if}
               {/each}
-            {:else}
+            {:else if !pending.length && (!screen || !showsScreen)}
               {@render emptyHint()}
             {/if}
             {#each pending as p}
-              <div class="bubble pending"><span class="bi">⌨</span><div class="bt">{p}</div></div>
+              <div class="bubble pending"><span class="bi">⌨</span><div class="bt">{p.text}</div></div>
             {/each}
             {#if showsScreen && screen}
               {@const waiting = status === "blocked"}
               <div class="screencard" class:waiting>
                 <div class="sc-head">
                   <span>{waiting ? `⚠ ${t("Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)")}` : `>_ ${t("Terminal")}`}</span>
-                  {#if isOmp}<button class="link" onclick={() => (screenOpen = !screenOpen)}>{screenOpen ? "▴" : "▾"}</button>{/if}
+                  {#if chat}<button class="link" onclick={() => (screenOpen = !screenOpen)}>{screenOpen ? "▴" : "▾"}</button>{/if}
                   <button class="link" onclick={() => (mode = "terminal")}>{t("Interaktiv öffnen")}</button>
                 </div>
-                {#if !isOmp || screenOpen}<pre>{screen}</pre>{/if}
+                {#if !chat || screenOpen}<pre>{screen}</pre>{/if}
               </div>
             {/if}
             {#if error}<div class="warnline">⚠ {error}</div>{/if}
@@ -647,7 +714,7 @@
         {/if}
       {:else}
         <div class="termwrap">
-          {#if isOmp && timeline}<TimeStrip {timeline} {working} agent={agentName} onPick={showMessage} />{/if}
+          {#if chat && timeline}<TimeStrip {timeline} {working} agent={agentName} onPick={showMessage} />{/if}
           <TerminalView bind:this={term} {server} pane={pane.pane} {onLink} />
           {#if error}<div class="warnline">⚠ {error}</div>{/if}
         </div>
@@ -655,7 +722,7 @@
 
       <!-- terminal mode: the TUI shows TODO, jobs and status itself – only the composer stays (live, typing) -->
       <div class="bottom" class:float={zen} class:term={mode === "terminal"}>
-        {#if mode === "chat" && timeline && hudVisible(timeline)}
+        {#if mode === "chat" && timeline && (hudVisible(timeline) || waitingForUser)}
           <div class="hudwrap" class:glass={zen}>{@render hud(timeline)}</div>
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
@@ -748,7 +815,7 @@
     {#if timeline?.jobs.length}
       <div class="section">{t("Hintergrund-Jobs")}</div>
       <div class="card mono small">
-        {#each timeline.jobs as job (job.id)}<div class="hrow"><span class="acc">⚙ {job.id}</span><span class="dim ellipsis grow">{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>{/each}
+        {#each timeline.jobs as job (job.id)}<div class="hrow"><span class="acc">⚙{hashId(job.id) ? "" : ` ${job.id}`}</span><span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>{/each}
       </div>
     {/if}
     <div class="section">{t("Tastenkürzel")}</div>
@@ -870,6 +937,9 @@
   .b { font-weight: 700; }
   .strike { text-decoration: line-through; }
   .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* the running tool's intent keeps its room, its command/path gets the rest */
+  .doing { flex: 0 1 auto; max-width: 60%; }
+  .waitc { color: var(--yellow); }
   .status { display: flex; align-items: center; gap: 14px; padding: 0 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
   .status button { all: unset; cursor: pointer; border-radius: 5px; padding: 1px 3px; margin: 0 -3px; }
   .status button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
@@ -878,7 +948,7 @@
   .fg { color: color-mix(in srgb, var(--fg) 80%, transparent); }
 
   .bubble { align-self: flex-end; display: flex; align-items: flex-end; gap: 6px; max-width: 78%; }
-  .bt { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; padding: 9px 14px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+  .bt { position: relative; background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; padding: 9px 14px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
   .bubble.pending .bt { background: color-mix(in srgb, var(--accent) 20%, transparent); }
   .bubble.pending { opacity: 0.85; }
   .bi { font-size: 11px; color: var(--muted); padding-bottom: 6px; }

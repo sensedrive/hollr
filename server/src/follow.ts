@@ -8,6 +8,7 @@
  */
 import { createHash } from "node:crypto";
 import { type FSWatcher, watch } from "node:fs";
+import { type ClaudeUsage, claudeFooter, claudeLive, readClaudeLog } from "./claudelog";
 import { execHerdr, type Herdr } from "./herdr";
 import { readTimeline, type Timeline, type TimelineItem } from "./timeline";
 
@@ -27,6 +28,8 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
   cwd: string,
   screen: string,
   model?: string,
+  /** Claude's context/cost from its log, instead of omp's footer on the screen */
+  fromLog?: { context?: string; cost?: string },
 ) => unknown): Promise<number> {
   const out = (line: object) => {
     try {
@@ -54,6 +57,7 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
   let lastPing = Date.now();
   /** parsed log, re-read only when it was written (a 7 MB log costs ~20 ms per read) */
   let cached: Timeline | undefined;
+  let usage: ClaudeUsage | undefined;
 
   /** `changed`: the log was written since the last read (taken before reading, so a write during
    *  the read is not lost) */
@@ -76,8 +80,26 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
           })
         : undefined;
     }
+    const claude = agent.kind === "claude";
     if (!cached || changed) {
-      cached = f ? await readTimeline(f, limit) : { items: [], jobs: [], running: false, waiting: false };
+      if (claude) {
+        const log = f
+          ? await readClaudeLog(f, limit)
+          : { timeline: { agent: "claude" as const, items: [], jobs: [], running: false, waiting: false }, usage: {} };
+        cached = log.timeline;
+        usage = log.usage;
+      } else cached = f ? await readTimeline(f, limit) : { items: [], jobs: [], running: false, waiting: false };
+    }
+    if (claude) {
+      // Claude's permission/trust dialogs are only on its screen: read it while herdr says it waits
+      const screen = agent.status === "blocked" ? await herdr.screen(pane, 40).catch(() => "") : undefined;
+      const timeline = claudeLive(cached, agent.status, screen);
+      lastStatus = agent.status;
+      return {
+        ...timeline,
+        status: agent.status,
+        line: statusLineOf(agent.cwd, "", timeline.model, claudeFooter(usage)),
+      } as Snapshot;
     }
     const timeline = cached;
     // omp's footer (model, context, cost) – it changes with the log or the status, else every 5 s

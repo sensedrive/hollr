@@ -1,13 +1,16 @@
 <script lang="ts">
-  // omp's question (AskCard in TimelineViews.swift): one question with one choice answers on click,
-  // several questions or multi-select are filled in here and sent together. The server types the keys.
+  // The agent's question (AskCard in TimelineViews.swift) – omp's ask, Claude's question, permission prompt or
+  // trust dialog: one question with one choice answers on click, several questions or multi-select are filled
+  // in here and sent together. The server types the keys.
   import type { AskPick, TimelineItem } from "../api";
   import { t } from "../i18n";
 
-  let { item, onAnswer }: {
+  let { item, onAnswer, agent = "omp" }: {
     item: Extract<TimelineItem, { k: "ask" }>;
     /** false = not sent (the session view shows why) */
     onAnswer: (ask: string, picks: AskPick[]) => Promise<boolean>;
+    /** who asks ("omp", "Claude") */
+    agent?: string;
   } = $props();
 
   const questions = $derived(item.questions ?? [item]);
@@ -57,7 +60,7 @@
 </script>
 
 <div class="ask" class:pending={item.pending}>
-  <div class="mono hrow"><b class="acc">?</b> <b class="small" class:warn={item.pending}>{item.pending ? t("Ask – omp wartet auf dich") : t("Ask")}</b>{#if questions.length === 1 && item.header}<span class="small muted"> · {item.header}</span>{/if}</div>
+  <div class="mono hrow"><b class="acc">?</b> <b class="small" class:warn={item.pending}>{item.pending ? t("Ask – {agent} wartet auf dich", { agent }) : t("Ask")}</b>{#if questions.length === 1 && item.header}<span class="small muted"> · {item.header}</span>{/if}</div>
   {#each questions as q, qi}
     {#if questions.length > 1}
       <div class="mono small qhead"><b class="acc">{qi + 1}.</b>{#if q.header} <span class="muted">{q.header}</span>{/if}{#if q.multi} <span class="muted">{t("mehrere möglich")}</span>{/if}</div>

@@ -12,7 +12,7 @@ import { hostKeyFingerprint } from "./pairing";
 import { describeProgress, planActivity, START_AFTER_MS, type Track, UPDATE_EVERY_MS } from "./activity";
 import { type Notice, pushConfig, pushDevices, sendActivity, sendNotice } from "./push";
 import { usageLimits } from "./spaces";
-import { readTimeline } from "./timeline";
+import { paneTimeline } from "./claudelog";
 import { prune, UsageRecorder } from "./usagehistory";
 
 interface Seen {
@@ -103,8 +103,9 @@ async function describe(
   try {
     const agent = await herdr.agent(pane);
     const file = agent.sessionFile;
-    if (file) {
-      const tl = await readTimeline(file, 30);
+    // Claude's dialogs are only on its screen: without a log there can still be a question
+    if (file || agent.kind === "claude") {
+      const { timeline: tl } = await paneTimeline(herdr, agent, 30);
       const items = [...tl.items].reverse();
       if (kind === "waiting") {
         const ask = items.find((i) => i.k === "ask" && i.pending);
@@ -313,7 +314,7 @@ async function progressOf(herdr: Herdr, pane: string, agentName: string) {
     const agent = await herdr.agent(pane);
     const file = agent.sessionFile;
     if (file) {
-      const tl = await readTimeline(file, 40);
+      const { timeline: tl } = await paneTimeline(herdr, agent, 40);
       const end = [...tl.items].reverse().find((i) => i.k === "end");
       return {
         state: describeProgress(tl, `${agentName} arbeitet`),

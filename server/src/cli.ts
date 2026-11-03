@@ -91,11 +91,12 @@ import {
 } from "./spaces";
 import { restartWatcher, sysinfo } from "./sysinfo";
 import { readTimeline } from "./timeline";
+import { claudeFooter, paneTimeline, readClaudeHistory } from "./claudelog";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.33.4";
+export const VERSION = "0.34.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -246,32 +247,43 @@ async function gate(): Promise<number> {
       return 0;
     case "follow":
       // the chat as a stream (only changes) – replaces polling `timeline`
-      return runFollow(new Herdr(), pane, Number(rest[0] ?? 150) || 150, (cwd, screen, model) =>
-        statusLine(cwd, parseFooter(screen), model),
+      return runFollow(new Herdr(), pane, Number(rest[0] ?? 150) || 150, (cwd, screen, model, fromLog) =>
+        statusLine(cwd, fromLog ?? parseFooter(screen), model),
       );
     case "timeline": {
       // a pane that is gone: an answer the app understands, not empty output
       const agent = await agentOrError(herdr, pane);
       if (!agent) return 0;
-      const file = agent.sessionFile;
-      const timeline = file
-        ? await readTimeline(file, Number(rest[0] ?? 150))
-        : { items: [], jobs: [], running: false, waiting: false };
-      const screen = await execHerdr([
-        "agent",
-        "read",
-        pane,
-        "--source",
-        "visible",
-        "--lines",
-        "4",
-      ]).catch(() => "");
-      const footer = parseFooter(typeof screen === "string" ? screen : "");
-      const full = {
-        ...timeline,
-        status: agent.status,
-        line: statusLine(agent.cwd, footer, (timeline as { model?: string }).model),
-      };
+      let full: Record<string, unknown>;
+      if (agent.kind === "claude") {
+        // Claude's transcript; its dialogs come from the screen, model/context/cost from the log
+        const { timeline, usage } = await paneTimeline(herdr, agent, Number(rest[0] ?? 150));
+        full = {
+          ...timeline,
+          status: agent.status,
+          line: statusLine(agent.cwd, claudeFooter(usage), timeline.model),
+        };
+      } else {
+        const file = agent.sessionFile;
+        const timeline = file
+          ? await readTimeline(file, Number(rest[0] ?? 150))
+          : { items: [], jobs: [], running: false, waiting: false };
+        const screen = await execHerdr([
+          "agent",
+          "read",
+          pane,
+          "--source",
+          "visible",
+          "--lines",
+          "4",
+        ]).catch(() => "");
+        const footer = parseFooter(typeof screen === "string" ? screen : "");
+        full = {
+          ...timeline,
+          status: agent.status,
+          line: statusLine(agent.cwd, footer, (timeline as { model?: string }).model),
+        };
+      }
       // the app polls often: with its last etag, an unchanged timeline is a few bytes, not ~100 KB
       const etag = createHash("sha1").update(JSON.stringify(full)).digest("base64url").slice(0, 16);
       if (rest[1] && rest[1] === etag) json({ same: true, etag });
@@ -430,7 +442,9 @@ async function gate(): Promise<number> {
       if (!agent) return 0;
       const file = agent.sessionFile;
       json({
-        events: file ? await readHistory(file, Number(rest[0] ?? 60)) : [],
+        events: file
+          ? await (agent.kind === "claude" ? readClaudeHistory : readHistory)(file, Number(rest[0] ?? 60))
+          : [],
         status: agent.status,
       });
       return 0;

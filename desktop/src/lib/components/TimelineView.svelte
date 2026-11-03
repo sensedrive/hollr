@@ -1,68 +1,34 @@
 <script lang="ts">
-  // omp's transcript, rendered like its TUI (same rules as the iPhone app, TimelineViews.swift):
-  // read/grep/glob as compact lines (consecutive reads merged), bash & edits as framed cards, thinking folded.
-  import type { AskPick, Timeline, ToolCall } from "../api";
+  // The agent's transcript (omp or Claude Code), rendered like omp's TUI but richer (rules shared with the iPhone
+  // app, TimelineViews.swift): messages, folded thinking, and tool calls as cards (components/chat/*).
+  import type { AskPick, Timeline } from "../api";
   import { lang, t } from "../i18n";
-  import { duration, shortPath, thinkingProse, toolIcon, toolTitle, visibleItems } from "../agent";
+  import { thinkingProse } from "../agent";
+  import { chatView } from "../chatTools";
   import { clock, fullTime, stampedIds } from "../msgTimes";
   import AskCard from "./AskCard.svelte";
   import Markdown from "./Markdown.svelte";
+  import ToolCalls from "./chat/ToolCalls.svelte";
+  import MsgActions from "./MsgActions.svelte";
 
-  let { timeline, onAnswer, onLink }: {
+  let { timeline, root, onAnswer, onLink, onResend }: {
     timeline: Timeline;
+    /** the space folder (pane cwd): tool paths under it show relative */
+    root?: string;
     /** answers omp's question (ask id, one pick per question); false = not sent */
     onAnswer: (ask: string, picks: AskPick[]) => Promise<boolean>;
     onLink?: (url: string) => void;
+    /** sends one of your prompts again (its hover action); absent = no such action */
+    onResend?: (text: string) => void;
   } = $props();
 
-  type Piece = { reads: ToolCall[]; id: string } | { call: ToolCall; id: string };
-  function pieces(calls: ToolCall[]): Piece[] {
-    const out: Piece[] = [];
-    for (const c of calls) {
-      const last = out.at(-1);
-      if (c.name === "read" && last && "reads" in last) last.reads.push(c);
-      else if (c.name === "read") out.push({ reads: [c], id: `r-${c.id}` });
-      else out.push({ call: c, id: c.id });
-    }
-    return out;
-  }
-
-  type Kind = "bash" | "compact" | "header" | "generic";
-  function kind(c: ToolCall): Kind {
-    if (c.name === "bash" || c.name === "eval") return "bash";
-    if (["grep", "glob", "find", "todo", "wait"].includes(c.name) || c.name.startsWith("mcp__")) return "compact";
-    if (["edit", "write", "task", "web_search"].includes(c.name)) return "header";
-    return "generic";
-  }
-
-  const items = $derived(visibleItems(timeline));
+  /** visible items, tool calls grouped into pieces, todo history – derived once per timeline, not per render */
+  const view = $derived(chatView(timeline.items));
+  const items = $derived(view.items);
   /** items that show their time (user messages, the start of each reply) */
   const stamped = $derived(stampedIds(items));
   let openThinking = $state<Record<string, boolean>>({});
-  let openTool = $state<Record<string, boolean>>({});
-  const tip = (c: ToolCall) => [c.label, c.ms !== undefined ? duration(c.ms) : ""].filter(Boolean).join(" · ");
-
-  function compactMeta(c: ToolCall) {
-    const parts: string[] = [];
-    if (c.status !== "error" && c.result) parts.push(c.result);
-    if (c.path) parts.push(`in ${shortPath(c.path)}`);
-    return parts.length ? `  ${parts.join(" · ")}` : "";
-  }
-  function bashFooter(c: ToolCall) {
-    return [
-      c.ms !== undefined ? `Wall: ${(c.ms / 1000).toFixed(2)}s` : "",
-      c.exit !== undefined ? `Exit: ${c.exit}` : "",
-      c.bg ? `Backgrounded: ${c.bg}` : "",
-    ].filter(Boolean).join(" | ");
-  }
-  const copy = (s?: string) => s && navigator.clipboard.writeText(s).catch(() => {});
 </script>
-
-{#snippet glyph(c: ToolCall, ok: string, okColor: string)}
-  {#if c.status === "running"}<span class="braille acc"></span>
-  {:else if c.status === "error"}<span class="err">✘</span>
-  {:else}<span style:color={okColor}>{ok}</span>{/if}
-{/snippet}
 
 {#snippet stamp(at: number | undefined, id: string, alone = false)}
   {#if at !== undefined && stamped.has(id)}<time class="stamp" class:alone datetime={new Date(at).toISOString()} title={fullTime(at, lang())}>{clock(at, lang())}</time>{/if}
@@ -74,14 +40,19 @@
       <div class="msg" data-item={item.id}>
         {@render stamp(item.at, item.id)}
         <div class="user" class:voice={item.source === "voice"}>
-          {#if item.source === "voice"}<span class="src" title={t("gesprochen")}>🎙</span>{/if}{item.text}
+          {#if item.source === "voice"}<span class="src" title={t("gesprochen")}>🎙</span>{/if}{item.text}<MsgActions text={item.text} {onResend} side="start" />
         </div>
       </div>
     {:else if item.k === "thinking"}
       {@const prose = thinkingProse(item.text)}
       {@render stamp(item.at, item.id, true)}
-      {#if prose}
-        <button class="thinking" class:open={openThinking[item.id]} onclick={() => (openThinking[item.id] = !openThinking[item.id])}>{prose}</button>
+      {#if prose && openThinking[item.id]}
+        <div class="thinking-open">
+          <button class="th-head" onclick={() => (openThinking[item.id] = false)}>✻ {t("Gedanken")} <span class="dim">▴</span></button>
+          <div class="th-body">{prose}</div>
+        </div>
+      {:else if prose}
+        <button class="thinking" title={t("Gedanken aufklappen")} onclick={() => (openThinking[item.id] = true)}>{prose}</button>
       {/if}
     {:else if item.k === "text"}
       <div class="msg" data-item={item.id}>
@@ -90,94 +61,11 @@
       </div>
     {:else if item.k === "tools"}
       {@render stamp(item.at, item.id, true)}
-      <div class="tools">
-        {#each pieces(item.calls) as p (p.id)}
-          {#if "reads" in p}
-            {@const reads = p.reads}
-            <div class="line mono">
-              {#if reads.length === 1}
-                {@const r = reads[0]!}
-                <div class="hrow" title={tip(r)}>{@render glyph(r, "●", "var(--fg)")} <b>Read</b> <span class="acc ellipsis">{shortPath(r.detail)}</span></div>
-                {#if r.status === "error" && r.result}<div class="err indent clamp3">{r.result}</div>{/if}
-              {:else}
-                {@const running = reads.find((r) => r.status === "running")}
-                <div class="hrow">
-                  {#if running}{@render glyph(running, "", "")}{:else}<span class:err={reads.some((r) => r.status === "error")}>•</span>{/if}
-                  <b>Read</b> <span class="dim">({reads.length})</span>
-                </div>
-                {#each reads as r, i (r.id)}
-                  <div class="hrow indent" title={tip(r)}>
-                    <span class="dim">{i === reads.length - 1 ? "└─" : "├─"}</span>
-                    <span class="ellipsis" class:acc={r.status !== "error"} class:err={r.status === "error"}>{shortPath(r.detail)}</span>
-                  </div>
-                {/each}
-              {/if}
-            </div>
-          {:else}
-            {@const c = p.call}
-            {@const k = kind(c)}
-            {#if k === "bash"}
-              {@const open = !!openTool[c.id]}
-              {@const out = c.out ?? []}
-              {@const tail = open ? out : out.slice(-4)}
-              {@const hidden = (c.outTotal ?? out.length) - tail.length}
-              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-              <div class="frame click mono {c.status}" class:open onclick={(e) => { if (!window.getSelection()?.toString()) openTool[c.id] = !open; e.stopPropagation(); }} title={open ? "" : t("Klicken für mehr Ausgabe")}>
-                {#if c.name === "eval"}
-                  <div class="hrow">{@render glyph(c, "•", "var(--orange)")} <b class="ellipsis">{c.detail ?? "Eval"}</b></div>
-                {:else}
-                  <div class="cmd" class:clamp3={!open}><span class="dim">$ </span>{c.detail ?? ""}</div>
-                  <button class="copy" title={t("Befehl kopieren")} onclick={(e) => { e.stopPropagation(); copy(c.detail); }}>⧉</button>
-                {/if}
-                {#if out.length}
-                  <hr />
-                  {#if hidden > 0}
-                    <div class="dim">… ({hidden} earlier lines, showing {tail.length} of {c.outTotal ?? out.length})</div>
-                  {/if}
-                  <pre class:err={c.status === "error"} class:clamp8={!open}>{tail.join("\n")}</pre>
-                {:else if c.status === "error" && c.result}
-                  <pre class="err" class:clamp4={!open}>{c.result}</pre>
-                {/if}
-                {#if c.status === "running"}
-                  <div class="hrow"><span class="braille acc"></span> <span class="muted">{t("läuft")}</span></div>
-                {:else if bashFooter(c)}
-                  <div class:err={c.exit !== undefined} class:dim={c.exit === undefined}>⟨{bashFooter(c)}⟩</div>
-                {/if}
-                {#if open && c.path}<div class="dim">in {shortPath(c.path)}</div>{/if}
-              </div>
-            {:else if k === "header"}
-              <div class="frame mono muted-border {c.status}" title={tip(c)}>
-                <div class="hrow">
-                  {@render glyph(c, toolIcon(c.name), "var(--orange)")}
-                  <span class="grow clamp2"><b>{toolTitle(c.name)}</b>{#if c.detail}<span class="acc">: {shortPath(c.detail)}</span>{/if}</span>
-                  {#if (c.add ?? 0) + (c.del ?? 0) > 0}
-                    <span class="nowrap"><span class="dim">⟦</span><span class="ok">+{c.add ?? 0}</span><span class="dim">/</span><span class="err">-{c.del ?? 0}</span><span class="dim">⟧</span></span>
-                  {/if}
-                </div>
-                {#if c.status === "error" && c.result}<div class="err clamp4">{c.result}</div>{/if}
-              </div>
-            {:else if k === "compact"}
-              <div class="line mono" title={tip(c)}>
-                <div class="hrow top">
-                  {@render glyph(c, toolIcon(c.name), "var(--muted)")}
-                  <span class="clamp2"><b>{toolTitle(c.name)}</b><span class="muted">{c.detail ? `: ${c.detail}` : ""}</span><span class="dim">{compactMeta(c)}</span></span>
-                </div>
-                {#if c.status === "error" && c.result}<div class="err indent clamp3">{c.result}</div>{/if}
-              </div>
-            {:else}
-              <div class="line mono" title={tip(c)}>
-                <div class="hrow">{@render glyph(c, "•", "var(--fg)")} <b>{toolTitle(c.name)}</b></div>
-                {#if c.detail}<div class="dim ellipsis"> └─ {c.detail}</div>{/if}
-                {#if c.status === "error" && c.result}<div class="err clamp3">{c.result}</div>{/if}
-              </div>
-            {/if}
-          {/if}
-        {/each}
-      </div>
+      <ToolCalls pieces={view.pieces.get(item.id) ?? []} todo={view.todo} {root} {onLink} />
     {:else if item.k === "ask"}
       <div class="msg" data-item={item.id}>
         {@render stamp(item.at, item.id)}
-        <AskCard {item} {onAnswer} />
+        <AskCard {item} {onAnswer} agent={timeline.agent === "claude" ? "Claude" : "omp"} />
       </div>
     {:else if item.k === "end"}
       {#if item.status === "aborted"}<div class="mono small warn">⏹ {t("Abgebrochen")}</div>
@@ -190,8 +78,7 @@
 
 <style>
   .tl { display: flex; flex-direction: column; gap: 12px; }
-  .tools { display: flex; flex-direction: column; gap: 10px; }
-  .user { background: color-mix(in srgb, var(--orange) 11%, transparent); border-radius: 10px; padding: 10px 12px;
+  .user { position: relative; background: color-mix(in srgb, var(--orange) 11%, transparent); border-radius: 10px; padding: 10px 12px;
     white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
   .src { font-size: 11px; margin-right: 6px; opacity: 0.7; }
   .msg { display: flex; flex-direction: column; gap: 3px; min-width: 0; border-radius: 10px; }
@@ -202,40 +89,17 @@
   .thinking { all: unset; cursor: pointer; color: var(--muted); font-style: italic; font-size: 0.95em; white-space: pre-wrap; padding: 0 4px;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   .thinking:hover { color: color-mix(in srgb, var(--muted) 70%, var(--fg)); }
-  .thinking.open { -webkit-line-clamp: unset; line-clamp: unset; display: block; user-select: text; }
+  /* open: upright, full contrast and roomy – it is read now, not skimmed */
+  .thinking-open { padding: 2px 0 2px 12px; border-left: 2px solid color-mix(in srgb, var(--purple) 45%, transparent); display: flex; flex-direction: column; gap: 4px; }
+  .th-head { all: unset; cursor: pointer; align-self: flex-start; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .th-head:hover { color: var(--fg); }
+  .th-body { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; line-height: 1.6; font-size: 0.95em;
+    color: color-mix(in srgb, var(--fg) 82%, transparent); max-width: 80ch; }
   .mono { font-family: var(--mono); }
-  .line { font-size: 12px; padding: 0 4px; line-height: 1.5; }
-  .hrow { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-  .hrow.top { align-items: flex-start; }
-  .indent { padding-left: 14px; }
-  .frame { position: relative; border: 1px solid color-mix(in srgb, var(--dim) 70%, transparent); border-radius: 10px; padding: 10px 12px;
-    background: var(--raised); font-size: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .frame.muted-border { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
-  .frame.running { border-color: color-mix(in srgb, var(--orange) 70%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-  .frame.error { border-color: color-mix(in srgb, var(--red) 80%, transparent); background: color-mix(in srgb, var(--red) 14%, transparent); }
-  .frame.click { cursor: pointer; }
-  .frame.click.open { cursor: default; }
-  .cmd { white-space: pre-wrap; word-break: break-all; padding-right: 22px; user-select: text; }
-  .copy { all: unset; cursor: pointer; position: absolute; top: 7px; right: 9px; color: var(--dim); opacity: 0; font-size: 13px; }
-  .frame:hover .copy { opacity: 1; }
-  .copy:hover { color: var(--fg); }
-  hr { border: 0; border-top: 1px solid var(--border); margin: 0; width: 100%; }
-  pre { margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--muted); font-family: var(--mono); font-size: inherit; user-select: text; }
-  .frame.open pre { max-height: 60vh; overflow: auto; }
-  .clamp2, .clamp3, .clamp4, .clamp8 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-  .clamp2 { -webkit-line-clamp: 2; line-clamp: 2; }
-  .clamp3 { -webkit-line-clamp: 3; line-clamp: 3; }
-  .clamp4 { -webkit-line-clamp: 4; line-clamp: 4; }
-  .clamp8 { -webkit-line-clamp: 8; line-clamp: 8; }
-  .grow { flex: 1; min-width: 0; }
-  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; direction: ltr; }
-  .nowrap { white-space: nowrap; }
-  .acc { color: var(--orange); }
-  .ok { color: var(--green); }
+  .clamp8 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; -webkit-line-clamp: 8; line-clamp: 8; }
   .err { color: var(--red); }
   .warn { color: var(--yellow); }
   .dim { color: var(--dim); }
-  .muted { color: var(--muted); }
   .small { font-size: 12px; }
   .info { text-align: center; color: var(--dim); font-size: 12px; }
 </style>

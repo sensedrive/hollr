@@ -12,6 +12,19 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 21,
+    version: "0.34.0",
+    date: "03.11.2026",
+    items: [
+      { icon: "✦", text: "Claude Code im Chat: der ganze Verlauf statt nur des Bildschirms – Fragen, Freigaben und der Ordner-Check als Karten zum Antippen" },
+      { icon: "±", text: "Änderungen als echte Diffs mit Zeilennummern und Syntaxfarben; lange Diffs klappen ein" },
+      { icon: "☑", text: "TODO-Listen im Verlauf: jede Änderung als kompakte Zeile, die neueste offen, Erledigtes durchgestrichen" },
+      { icon: "⌕", text: "Grep mit Fundstellen, Dateilisten, Subagenten mit ihrer Antwort, Websuche mit Links, Bash mit mehr Ausgabe und Kopierknöpfen" },
+      { icon: "</>", text: "Antworten mit Syntax-Highlighting, Kopierknopf an jedem Codeblock und besseren Tabellen" },
+      { icon: "⚠", text: "Statuszeile sagt „Wartet auf dich“, solange der Agent auf dich wartet – die Arbeitszeit zählt ohne diese Wartezeit" },
+    ],
+  },
+  {
     build: 20,
     version: "0.33.4",
     date: "03.11.2026",

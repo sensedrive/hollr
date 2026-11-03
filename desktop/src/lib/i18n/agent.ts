@@ -1,6 +1,13 @@
 // Session view strings (AgentView, TimelineView, Composer, TerminalView, BrowserPanel) – German source → English.
 export default {
   Abgebrochen: "Aborted",
+  "Arbeitet …": "Working …",
+  "Code kopieren": "Copy code",
+  "Denkt nach …": "Thinking …",
+  Gedanken: "Thoughts",
+  "Gedanken aufklappen": "Expand thoughts",
+  Kopieren: "Copy",
+  "Nochmal senden": "Send again",
   Agent: "Agent",
   Aktualisieren: "Refresh",
   "An {agent} kannst du unten Text schicken.": "You can send text to {agent} below.",

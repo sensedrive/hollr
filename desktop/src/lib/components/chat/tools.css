@@ -1,0 +1,44 @@
+/* Shared look of the chat's tool cards (components/chat/*). Global but scoped under .chat-tools,
+   so every card uses the same frame, rows and colors without repeating them per component. */
+.chat-tools { display: flex; flex-direction: column; gap: 10px; font-family: var(--mono); font-size: 12px; }
+.chat-tools .line { padding: 0 4px; line-height: 1.5; min-width: 0; }
+.chat-tools .hrow { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.chat-tools .hrow.mid { align-items: center; }
+.chat-tools .indent { padding-left: 14px; }
+.chat-tools .frame { position: relative; border: 1px solid color-mix(in srgb, var(--dim) 70%, transparent); border-radius: 10px;
+  padding: 10px 12px; background: var(--raised); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.chat-tools .frame.soft { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
+.chat-tools .frame.running { border-color: color-mix(in srgb, var(--orange) 70%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.chat-tools .frame.error { border-color: color-mix(in srgb, var(--red) 80%, transparent); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.chat-tools .frame.flush { padding: 0; gap: 0; overflow: clip; }
+.chat-tools .click { cursor: pointer; }
+.chat-tools hr { border: 0; border-top: 1px solid var(--border); margin: 0; width: 100%; }
+.chat-tools pre { margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--muted); font-family: var(--mono); font-size: inherit; user-select: text; }
+.chat-tools .sel { user-select: text; }
+.chat-tools .acts { position: absolute; top: 6px; right: 8px; display: flex; gap: 2px; opacity: 0; transition: opacity .1s; }
+.chat-tools .acts.inline { position: static; flex: none; }
+.chat-tools .frame:hover .acts, .chat-tools .acts:focus-within { opacity: 1; }
+.chat-tools .act { all: unset; cursor: pointer; color: var(--dim); font-size: 11px; padding: 1px 6px; border-radius: 5px;
+  background: var(--raised); border: 1px solid var(--border); font-family: -apple-system, system-ui, sans-serif; }
+.chat-tools .act:hover, .chat-tools .act:focus-visible { color: var(--fg); border-color: var(--accent); }
+/* "N weitere Zeilen" / "weniger" */
+.chat-tools .more { all: unset; cursor: pointer; color: var(--muted); font: 11.5px/1.6 -apple-system, system-ui, sans-serif; padding: 1px 0; }
+.chat-tools .more:hover, .chat-tools .more:focus-visible { color: var(--fg); text-decoration: underline; }
+.chat-tools .chip { font-size: 11px; padding: 0 6px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 7%, transparent); color: var(--muted); white-space: nowrap; }
+.chat-tools .clamp2, .chat-tools .clamp3, .chat-tools .clamp4 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.chat-tools .clamp2 { -webkit-line-clamp: 2; line-clamp: 2; }
+.chat-tools .clamp3 { -webkit-line-clamp: 3; line-clamp: 3; }
+.chat-tools .clamp4 { -webkit-line-clamp: 4; line-clamp: 4; }
+.chat-tools .grow { flex: 1; min-width: 0; }
+.chat-tools .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chat-tools .nowrap { white-space: nowrap; }
+.chat-tools .acc { color: var(--orange); }
+.chat-tools .ok { color: var(--green); }
+.chat-tools .err { color: var(--red); }
+.chat-tools .warn { color: var(--yellow); }
+.chat-tools .dim { color: var(--dim); }
+.chat-tools .muted { color: var(--muted); }
+.chat-tools .tree { color: var(--dim); user-select: none; }
+/* syntax colors of git.highlight() */
+.chat-tools .hl-k { color: var(--pink); } .chat-tools .hl-s { color: var(--yellow); } .chat-tools .hl-c { color: var(--dim); font-style: italic; }
+.chat-tools .hl-n { color: var(--purple); } .chat-tools .hl-t { color: var(--cyan); } .chat-tools .hl-p { color: var(--muted); }

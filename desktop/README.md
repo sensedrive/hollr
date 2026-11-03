@@ -6,7 +6,8 @@ its own Ed25519 device key, the server's host key pinned at pairing, and only `h
 
 Same features as the native app:
 
-- **Sessions** of all servers in the sidebar; omp chats in the TUI style, Claude/Codex/terminals as screens.
+- **Sessions** of all servers in the sidebar; omp and Claude Code as rich chats (diffs, todos, questions and permission
+  prompts as cards), Codex/terminals as screens.
   New sessions with model and thinking/effort, model switch in running sessions.
 - **Dashboard** across servers, **spaces** (herdr workspaces by repo and worktree), **git** (changes, diffs, history, branches).
 - **Live voice** with `omp /live` – microphone and speaker on this computer, streamed over SSH.

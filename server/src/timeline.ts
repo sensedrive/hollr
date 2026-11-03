@@ -3,12 +3,49 @@
  * turns, grouped tool calls (with status, duration, diff stats), thinking, answers,
  * questions, the current todo list and running background jobs.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 
 export type ToolStatus = "running" | "ok" | "error";
 
+/** One line of a diff hunk: " " context, "+" added, "-" removed; `o`/`n` = old/new line number. */
+export interface DiffLine {
+  t: " " | "+" | "-";
+  o?: number;
+  n?: number;
+  text: string;
+}
+
+export interface DiffHunk {
+  lines: DiffLine[];
+  /** the file of this hunk when one call changed several files (omp multi-file edit) */
+  file?: string;
+}
+
+/** One file's grep matches: line number + text (clipped to 300 chars). */
+export interface MatchFile {
+  file: string;
+  lines: Array<{ n: number; text: string }>;
+}
+
+/** Caps of the rich tool data – the app polls/streams the timeline, so every call must stay small. */
+export const RICH_CAPS = {
+  diffLines: 400,
+  /** a written file is shown whole only when small – its head otherwise (writes were the biggest
+   *  share of a timeline at 400 lines: whole generated files nobody reads in the chat) */
+  writeLines: 120,
+  matchFiles: 20,
+  matchLines: 8,
+  matchText: 300,
+  files: 50,
+  links: 10,
+  subAnswer: 4000,
+  outLines: 60,
+  outLineChars: 240,
+} as const;
+
 export interface ToolCall {
   id: string;
+  /** canonical lower-case tool name (see chat contract) */
   name: string;
   /** what the agent says it is doing (omp's `intent`) */
   label: string;
@@ -20,7 +57,7 @@ export interface ToolCall {
   del?: number;
   /** short result preview (errors, match counts …) */
   result?: string;
-  /** last output lines (bash/eval), like omp's collapsed output pane */
+  /** last output lines (bash/eval, at most 60), like omp's output pane */
   out?: string[];
   /** total output line count */
   outTotal?: number;
@@ -30,6 +67,26 @@ export interface ToolCall {
   path?: string;
   /** background job id when the call was backgrounded */
   bg?: string;
+  /** edit/write: the change as hunks with context (whole new file for small creates);
+   *  at most 400 diff lines over all hunks, then `diffMore` = how many lines were left out */
+  diff?: DiffHunk[];
+  diffMore?: number;
+  /** edit/write/read: absolute or space-relative file path (`detail` may be shortened) */
+  file?: string;
+  /** grep: matches per file, at most 20 files × 8 lines; `result` keeps the count summary */
+  matches?: MatchFile[];
+  /** glob/find/ls: found paths, at most 50 */
+  files?: string[];
+  /** read: line range read, "start-end" plus "/total" when the file's line count is known ("12-80/993") */
+  range?: string;
+  /** todo calls: the full todo state right after this call (same shape as Timeline.todo) */
+  todo?: TodoPhase[];
+  /** web_search / fetch: result links, at most 10 */
+  links?: Array<{ title: string; url: string }>;
+  /** subagent (task/agent): final answer (markdown, ≤4000 chars), its tool call count, agent type */
+  sub?: { answer?: string; calls?: number; agent?: string };
+  /** the agent's original tool name when `name` was mapped to a canonical one (Claude "MultiEdit" → "edit") */
+  tool?: string;
 }
 
 /** `at`: epoch ms of the log entry the item comes from (the user's prompt, the assistant message the
@@ -94,6 +151,8 @@ export interface Timeline {
   waiting: boolean;
   turnStartedAt?: number;
   model?: string;
+  /** which agent's log the timeline came from */
+  agent?: "omp" | "claude";
 }
 
 type Block = {
@@ -139,7 +198,8 @@ export function redact(text: string): string {
   return text.replace(SECRET_RE, "•••");
 }
 
-function clip(text: string, max: number): string {
+/** Trims, redacts and shortens a text to `max` chars (with "…"). */
+export function clip(text: string, max: number): string {
   const t = redact(text.trim());
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
 }
@@ -154,6 +214,12 @@ function textOf(content: unknown): string {
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+/** A real file, not a URL or an omp device/message target (`agent://`, `xd://`, `https://`);
+ *  `local://` is omp's session scratch folder, so it counts as a file. */
+function isFilePath(path: string): boolean {
+  return path.startsWith("local://") || !/^[a-z][a-z0-9+.-]*:\/\//i.test(path);
+}
 
 /** One-line description of a tool call's arguments. */
 export function toolDetail(name: string, args: Record<string, unknown> = {}): string | undefined {
@@ -205,6 +271,160 @@ function diffStats(diff: unknown): { add?: number; del?: number } {
   return add || del ? { add, del } : {};
 }
 
+/** Longest diff line text sent – keeps minified one-liners from blowing up the timeline. */
+const DIFF_TEXT_MAX = 400;
+
+/** Applies the 400-line budget over all hunks (redacting and shortening each line);
+ *  `diffMore` counts the lines left out. Both parsers use it so the cap is the same everywhere. */
+export function capDiff(hunks: DiffHunk[], alreadyLeftOut = 0): { diff?: DiffHunk[]; diffMore?: number } {
+  let left: number = RICH_CAPS.diffLines;
+  let more = alreadyLeftOut;
+  const diff: DiffHunk[] = [];
+  for (const h of hunks) {
+    const take = Math.min(left, h.lines.length);
+    more += h.lines.length - take;
+    left -= take;
+    if (!take) continue;
+    const lines = h.lines.slice(0, take).map((l) => ({ ...l, text: redact(l.text).slice(0, DIFF_TEXT_MAX) }));
+    diff.push(h.file ? { file: h.file, lines } : { lines });
+  }
+  if (!diff.length) return {};
+  return more ? { diff, diffMore: more } : { diff };
+}
+
+/** omp's compact diff line: marker, line number, "|", text ("-24|old", "+24|new", " 25|context"). */
+const OMP_DIFF_RE = /^([ +-])\s*(\d+)\|(.*)$/;
+
+/** Parses omp's edit diff into hunks. Hunks are separated by blank lines. omp numbers "-" and context
+ *  lines with the OLD line and "+" lines with the NEW one, so a context line's new number is its old one
+ *  shifted by the lines added/removed above it. */
+export function ompDiffHunks(diff: string, file?: string): DiffHunk[] {
+  const hunks: DiffHunk[] = [];
+  let cur: DiffHunk | undefined;
+  let shift = 0;
+  for (const raw of diff.split("\n")) {
+    const m = OMP_DIFF_RE.exec(raw);
+    if (!m) {
+      cur = undefined;
+      continue;
+    }
+    if (!cur) {
+      cur = file ? { file, lines: [] } : { lines: [] };
+      hunks.push(cur);
+    }
+    const num = Number(m[2]);
+    const text = m[3] ?? "";
+    if (m[1] === "+") {
+      cur.lines.push({ t: "+", n: num, text });
+      shift++;
+    } else if (m[1] === "-") {
+      cur.lines.push({ t: "-", o: num, text });
+      shift--;
+    } else cur.lines.push({ t: " ", o: num, n: num + shift, text });
+  }
+  return hunks;
+}
+
+/** A written file as one all-added hunk; only the first lines are even split into objects. */
+function writeDiff(content: string): { diff?: DiffHunk[]; diffMore?: number } {
+  const all = content.endsWith("\n") ? content.slice(0, -1).split("\n") : content.split("\n");
+  const kept = all.slice(0, RICH_CAPS.writeLines);
+  const lines = kept.map((text, i): DiffLine => ({ t: "+", n: i + 1, text }));
+  return capDiff([{ lines }], all.length - kept.length);
+}
+
+/** grep line in omp's display: "*" marks a match, the rest is context ("*23│text", " 24│text"). */
+const OMP_GREP_RE = /^\s*(\*)?\s*(\d+)[│:](.*)$/;
+/** omp's per-file hash tag after a grep file header ("# inventory.py#706F"). */
+const OMP_TAG_RE = /#[0-9A-Z]{4}$/;
+
+/** Matches per file from omp's grep output. Files are "#" headers, nested by depth under directory
+ *  headers ending in "/" ("# .do/", "## app.stage.yaml"); a single-file search has no header. */
+export function ompGrepMatches(display: string, singleFile?: string): MatchFile[] {
+  const out: MatchFile[] = [];
+  const dirs: string[] = [];
+  let cur: MatchFile | undefined;
+  let full = false;
+  for (const raw of display.split("\n")) {
+    const head = /^(#+) (.+)$/.exec(raw);
+    if (head) {
+      const depth = head[1]?.length ?? 1;
+      const name = (head[2] ?? "").replace(OMP_TAG_RE, "");
+      dirs.length = depth - 1;
+      if (name.endsWith("/")) {
+        dirs.push(name);
+        cur = undefined;
+      } else {
+        cur = undefined;
+        if (out.length >= RICH_CAPS.matchFiles) {
+          full = true;
+          continue;
+        }
+        cur = { file: dirs.join("") + name, lines: [] };
+        out.push(cur);
+      }
+      continue;
+    }
+    const m = OMP_GREP_RE.exec(raw);
+    if (!m?.[1]) continue;
+    if (!cur && !full && !out.length && singleFile) {
+      cur = { file: singleFile, lines: [] };
+      out.push(cur);
+    }
+    if (!cur || cur.lines.length >= RICH_CAPS.matchLines) continue;
+    cur.lines.push({ n: Number(m[2]), text: redact(m[3] ?? "").trimEnd().slice(0, RICH_CAPS.matchText) });
+  }
+  return out.filter((f) => f.lines.length);
+}
+
+/** The todo state of a todo tool result, shortened like Timeline.todo. */
+function todoPhases(phases: unknown): TodoPhase[] | undefined {
+  if (!Array.isArray(phases)) return undefined;
+  return (phases as TodoPhase[]).map((p) => ({
+    name: p.name,
+    tasks: (p.tasks ?? []).map((t) => ({
+      content: clip(t.content, 200),
+      status: t.status,
+      blocker: t.blocker,
+    })),
+  }));
+}
+
+/** A subagent's report inside a wait result or async delivery:
+ *  `<task-result id="X" agent="scout" …><meta …/><preview …>answer</preview></task-result>`. */
+const TASK_RESULT_RE = /<task-result id="([^"]+)"([^>]*)>([\s\S]*?)<\/task-result>/g;
+
+function taskResults(text: string): Array<{ id: string; agent?: string; answer: string }> {
+  const out: Array<{ id: string; agent?: string; answer: string }> = [];
+  for (const m of text.matchAll(TASK_RESULT_RE)) {
+    const body = m[3] ?? "";
+    const preview = /<preview[^>]*>([\s\S]*?)<\/preview>/.exec(body)?.[1];
+    const answer = (preview ?? body.replace(/<meta[^>]*\/>/g, "")).trim();
+    out.push({ id: m[1] ?? "", agent: /\bagent="([^"]*)"/.exec(m[2] ?? "")?.[1], answer });
+  }
+  return out;
+}
+
+/** `ToolCall.sub` of a task call from its subagents' reports (several agents: one section each). */
+function subOf(
+  agents: Map<string, { agent?: string; answer?: string }>,
+  calls: number | undefined,
+): NonNullable<ToolCall["sub"]> {
+  const list = [...agents];
+  const answers = list.filter(([, a]) => a.answer);
+  const answer =
+    list.length === 1
+      ? answers[0]?.[1].answer
+      : answers.map(([id, a]) => `**${id}**\n\n${a.answer}`).join("\n\n") || undefined;
+  const types = new Set(list.map(([, a]) => a.agent));
+  const agent = types.size === 1 ? [...types][0] : undefined;
+  return {
+    ...(answer ? { answer: clip(answer, RICH_CAPS.subAnswer) } : {}),
+    ...(calls !== undefined ? { calls } : {}),
+    ...(agent ? { agent } : {}),
+  };
+}
+
 function resultPreview(
   name: string,
   details: Record<string, unknown> | undefined,
@@ -235,12 +455,117 @@ const TERMINAL_JOB = new Set([
   "done",
 ]);
 
+/** Optional lookups outside the main log. `subCalls`: tool calls a subagent made so far (from its own log). */
+export interface TimelineOptions {
+  subCalls?: (agentId: string) => number | undefined;
+}
+
 /** Builds the timeline from the raw JSONL text. `maxItems` limits the returned history. */
-export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
+export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptions = {}): Timeline {
   const items: TimelineItem[] = [];
   const calls = new Map<string, ToolCall>();
   const starts = new Map<string, number>();
   const jobs = new Map<string, Job>();
+  /** write calls' content until their result says whether the write happened */
+  const writes = new Map<string, string>();
+  /** task calls: their subagents (id → type, answer) and which call each subagent belongs to */
+  const subAgents = new Map<string, Map<string, { agent?: string; answer?: string }>>();
+  const subCall = new Map<string, string>();
+  const noteTaskResults = (text: string) => {
+    if (!text.includes("<task-result")) return;
+    for (const r of taskResults(text)) {
+      const agents = subAgents.get(subCall.get(r.id) ?? "");
+      const a = agents?.get(r.id);
+      if (!a) continue;
+      a.answer = r.answer || a.answer;
+      a.agent = r.agent ?? a.agent;
+    }
+  };
+  /** Fills the rich tool data of a successful call from omp's result details. */
+  const richResult = (call: ToolCall, d: Record<string, unknown>, content: unknown) => {
+    switch (call.name) {
+      case "edit": {
+        // a multi-file edit: the combined `diff` runs the files together, the per-file diffs keep them apart
+        const perFile = Array.isArray(d.perFileResults)
+          ? (d.perFileResults as Array<{ path?: unknown; diff?: unknown }>)
+          : [];
+        const path = str(d.path) ?? (perFile.length === 1 ? str(perFile[0]?.path) : undefined);
+        if (path) call.file = path;
+        const hunks =
+          perFile.length > 1
+            ? perFile.flatMap((f) => (typeof f.diff === "string" ? ompDiffHunks(f.diff, str(f.path)) : []))
+            : typeof d.diff === "string"
+              ? ompDiffHunks(d.diff)
+              : [];
+        Object.assign(call, capDiff(hunks));
+        return;
+      }
+      case "write": {
+        const path = str(d.resolvedPath);
+        if (path && isFilePath(path)) call.file = path;
+        const text = writes.get(call.id);
+        if (text !== undefined && call.file) Object.assign(call, writeDiff(text));
+        return;
+      }
+      case "read": {
+        if (d.isDirectory || d.kind === "url") {
+          // a directory listing or a fetched page: no file to open, no line range
+          delete call.file;
+          return;
+        }
+        const meta = d.meta as
+          | { source?: { type?: string; value?: string }; truncation?: { shownRange?: { start?: number; end?: number } } }
+          | undefined;
+        if (meta?.source?.type === "path" && meta.source.value) call.file = meta.source.value;
+        const shown = d.displayContent as { startLine?: number; lineNumbers?: number[] } | undefined;
+        const start = shown?.startLine ?? meta?.truncation?.shownRange?.start;
+        const end = shown?.lineNumbers?.at(-1) ?? meta?.truncation?.shownRange?.end;
+        const total = typeof d.totalLines === "number" ? `/${d.totalLines}` : "";
+        if (typeof start === "number" && typeof end === "number") call.range = `${start}-${end}${total}`;
+        return;
+      }
+      case "grep": {
+        const found = Array.isArray(d.files) ? (d.files as unknown[]) : [];
+        const single = found.length === 1 ? str(found[0]) : undefined;
+        const matches = ompGrepMatches(str(d.displayContent) ?? textOf(content), single);
+        if (matches.length) call.matches = matches;
+        return;
+      }
+      case "glob": {
+        const files = (Array.isArray(d.files) ? (d.files as unknown[]) : []).filter(
+          (f): f is string => typeof f === "string",
+        );
+        if (files.length) call.files = files.slice(0, RICH_CAPS.files);
+        return;
+      }
+      case "web_search": {
+        const sources = (d.response as { sources?: Array<{ title?: unknown; url?: unknown }> } | undefined)?.sources;
+        const links = (Array.isArray(sources) ? sources : [])
+          .filter((s) => typeof s?.url === "string")
+          .slice(0, RICH_CAPS.links)
+          .map((s) => ({ title: clip(str(s.title) || String(s.url), 200), url: String(s.url) }));
+        if (links.length) call.links = links;
+        return;
+      }
+      case "todo": {
+        const phases = todoPhases(d.phases);
+        if (phases) call.todo = phases;
+        return;
+      }
+      case "task": {
+        const progress = Array.isArray(d.progress) ? (d.progress as Array<{ id?: unknown; agent?: unknown }>) : [];
+        const agents = new Map<string, { agent?: string; answer?: string }>();
+        for (const p of progress) {
+          const id = str(p.id);
+          if (!id) continue;
+          agents.set(id, { agent: str(p.agent) });
+          subCall.set(id, call.id);
+        }
+        if (agents.size) subAgents.set(call.id, agents);
+        return;
+      }
+    }
+  };
   let todo: TodoPhase[] | undefined;
   let title: string | undefined;
   let model: string | undefined;
@@ -309,6 +634,8 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
         continue;
       }
       case "custom_message": {
+        // a background subagent's report – also when omp does not show the delivery
+        if (e.customType === "async-result") noteTaskResults(textOf(e.content));
         if (!e.display) continue;
         const text = textOf(e.content);
         if (e.customType === "live-delegation") {
@@ -410,6 +737,11 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
             status: "running",
           };
           calls.set(b.id, call);
+          if (b.name === "read" || b.name === "write" || b.name === "edit") {
+            const file = b.name === "edit" ? toolDetail("edit", args) : str(args.path);
+            if (file && isFilePath(file)) call.file = file;
+          }
+          if (b.name === "write" && typeof args.content === "string") writes.set(b.id, args.content);
           if (!currentGroup) {
             currentGroup = { k: "tools", id: `g-${b.id}`, calls: [], at: ts };
             items.push(currentGroup);
@@ -454,7 +786,7 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
           const lines = text.split("\n");
           const async = (details.async as { state?: string } | undefined)?.state === "running";
           if (text && !async) {
-            call.out = lines.slice(-12).map((l) => redact(l).slice(0, 240));
+            call.out = lines.slice(-RICH_CAPS.outLines).map((l) => redact(l).slice(0, RICH_CAPS.outLineChars));
             call.outTotal = lines.length;
           }
           if (typeof details.exitCode === "number" && details.exitCode !== 0)
@@ -491,17 +823,16 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
                 );
           }
         }
+        if (!m.isError) richResult(call, details, m.content);
+        writes.delete(m.toolCallId);
+      }
+      if (m.toolName === "wait") {
+        const waited = (details.jobs as Array<{ resultText?: string }> | undefined) ?? [];
+        for (const j of waited) if (typeof j.resultText === "string") noteTaskResults(j.resultText);
       }
       // todo snapshot
       if (m.toolName === "todo" && !m.isError && Array.isArray(details.phases)) {
-        todo = (details.phases as TodoPhase[]).map((p) => ({
-          name: p.name,
-          tasks: (p.tasks ?? []).map((t) => ({
-            content: clip(t.content, 200),
-            status: t.status,
-            blocker: t.blocker,
-          })),
-        }));
+        todo = todoPhases(details.phases);
       }
       // background jobs
       const asyncInfo = details.async as
@@ -533,6 +864,17 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
     lastAssistantStop === "toolUse" ||
     [...calls.values()].some((c) => c.status === "running" && c.name !== "ask");
   const sliced = items.slice(-maxItems);
+  // subagent answers arrive after the task call (wait, async delivery) – assemble them at the end
+  for (const [callId, agents] of subAgents) {
+    const call = calls.get(callId);
+    if (!call) continue;
+    let count: number | undefined;
+    for (const id of agents.keys()) {
+      const n = opts.subCalls?.(id);
+      if (n !== undefined) count = (count ?? 0) + n;
+    }
+    call.sub = subOf(agents, count);
+  }
   return {
     title,
     items: sliced,
@@ -542,12 +884,40 @@ export function buildTimeline(jsonl: string, maxItems = 150): Timeline {
     waiting: openWait && jobs.size > 0,
     turnStartedAt: turnStart,
     model,
+    agent: "omp",
   };
 }
 
+/** Tool calls per subagent log, keyed by path – reread only when the log changed. */
+const subCallCache = new Map<string, { size: number; mtime: number; calls: number }>();
+
+/** How many tool calls a subagent of `session` made: omp keeps its log next to the session,
+ *  nested by parent id ("A.B" → `<session>/A/A.B.jsonl`). */
+export function subagentCalls(session: string, agentId: string): number | undefined {
+  const parts = agentId.split(".");
+  const dirs = parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join("."));
+  const path = [session.replace(/\.jsonl$/, ""), ...dirs, `${agentId}.jsonl`].join("/");
+  let st: { size: number; mtimeMs: number };
+  try {
+    st = statSync(path);
+  } catch {
+    return undefined;
+  }
+  const hit = subCallCache.get(path);
+  if (hit && hit.size === st.size && hit.mtime === st.mtimeMs) return hit.calls;
+  const text = readFileSync(path, "utf8");
+  const needle = '"type":"toolCall"';
+  let calls = 0;
+  for (let i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + needle.length)) calls++;
+  subCallCache.set(path, { size: st.size, mtime: st.mtimeMs, calls });
+  return calls;
+}
+
 export async function readTimeline(file: string, maxItems = 150): Promise<Timeline> {
-  if (!existsSync(file)) return { items: [], jobs: [], running: false, waiting: false };
-  return buildTimeline(await Bun.file(file).text(), maxItems);
+  if (!existsSync(file)) return { items: [], jobs: [], running: false, waiting: false, agent: "omp" };
+  return buildTimeline(await Bun.file(file).text(), maxItems, {
+    subCalls: (id) => subagentCalls(file, id),
+  });
 }
 
 /** Labels, descriptions and the recommended one – as the question index or a flag on the option. */

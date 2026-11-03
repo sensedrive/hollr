@@ -37,7 +37,7 @@ export default {
   Wechseln: "Switch",
   "Gilt nur für diese Sitzung.": "Applies to this session only.",
   "Shells anzeigen": "Show shells",
-  "Ask – omp wartet auf dich": "Ask – omp is waiting for you",
+  "Ask – {agent} wartet auf dich": "Ask – {agent} is waiting for you",
   "Lädt …": "Loading …",
   "wartet auf Hintergrund-Jobs": "waiting for background jobs",
   "Modell suchen": "Search models",

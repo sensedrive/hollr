@@ -53,7 +53,34 @@ export interface ToolCall {
   outTotal?: number;
   exit?: number;
   path?: string;
+  // ---- rich tool data (all optional, capped by the server; see the chat contract)
+  /** edit/write: the change as hunks (~3 context lines), at most 400 lines; `diffMore` = lines left out */
+  diff?: DiffHunk[];
+  diffMore?: number;
+  /** edit/write/read: absolute or space-relative file path (`detail` may be shortened) */
+  file?: string;
+  /** grep: matches per file (≤ 20 files × 8 lines); `result` keeps the count summary */
+  matches?: MatchFile[];
+  /** glob/find/ls: found paths (≤ 50) */
+  files?: string[];
+  /** read: line range read ("12-80") */
+  range?: string;
+  /** todo: the full todo state right after this call */
+  todo?: TodoPhase[];
+  /** web_search/fetch: result links (≤ 10) */
+  links?: { title: string; url: string }[];
+  /** subagent (task): its final answer (markdown, clipped), tool calls it made, agent name */
+  sub?: { answer?: string; calls?: number; agent?: string };
+  /** the agent's own tool name when `name` is the canonical one (Claude "MultiEdit" → "edit") */
+  tool?: string;
 }
+
+/** one line of a diff hunk: " " context, "+" added, "-" removed; `o`/`n` = old/new line number */
+export interface DiffLine { t: " " | "+" | "-"; o?: number; n?: number; text: string }
+/** `file`: only when one call changed several files (omp multi-file edit) – a file header where it changes */
+export interface DiffHunk { lines: DiffLine[]; file?: string }
+/** one file's grep matches: line number + text */
+export interface MatchFile { file: string; lines: { n: number; text: string }[] }
 
 /** `at`: epoch ms of the session-log entry the item comes from (older servers send it on user items only). */
 export type TimelineItem =
@@ -103,6 +130,8 @@ export interface StatusLine {
   cost?: string;
 }
 export interface Timeline {
+  /** which session log the timeline comes from (older servers: omp only, field missing) */
+  agent?: "omp" | "claude";
   title?: string;
   items: TimelineItem[];
   todo?: TodoPhase[];

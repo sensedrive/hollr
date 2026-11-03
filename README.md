@@ -18,7 +18,8 @@
   Hollr gives the server a virtual microphone and speaker per session and streams both over SSH to your phone or desktop.
   You talk, omp works on the server, you hear the answer.
 - **Sessions like in the terminal.** All herdr sessions (omp, Claude Code, Codex, plain terminals) grouped by machine.
-  omp chats are rendered like omp's TUI: tool cards, diffs, TODO tree, background jobs, status line.
+  omp and Claude Code chats are rendered from their session logs: diffs with line numbers, TODO history, grep matches,
+  subagent answers, web links, highlighted code – and their questions and permission prompts answerable as cards.
 - **Start and steer.** New sessions with model and thinking/effort level, switch models in running sessions,
   send prompts and keys, answer agent questions, open terminals in your home directory.
 - **Git and files.** Uncommitted changes with full-context diffs, stage/unstage, history graph, branches with PR checks, file browser.

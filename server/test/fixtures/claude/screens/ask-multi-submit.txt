@@ -1,0 +1,18 @@
+❯ Use the AskUserQuestion tool once with exactly two questions: (1) header "Farbe", question "Welche Farbe?", single
+  choice, options Rot, Grün, Blau; (2) header "Extras", question "Welche Extras?", multiSelect true, options Käse,
+  Salat, Soße. Do nothing else.
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Farbe  ☒ Extras  ✔ Submit  →
+
+Review your answers
+
+ ● Welche Farbe?
+   → Grün
+ ● Welche Extras?
+   → Käse, Soße
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel
