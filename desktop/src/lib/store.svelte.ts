@@ -195,6 +195,7 @@ export async function listenFeeds(): Promise<() => void> {
     app.changes++;
     await refresh(server);
     if (spaces) await refreshSpaces(server);
+    else refreshSpacesSoon(server);
   });
   const offLive = await api.onFeed(({ server, live }) => {
     app.live[server] = live;
@@ -244,6 +245,10 @@ export async function refresh(...only: string[]) {
   }
 }
 
+/** when each server's spaces (with their git state) were last loaded */
+const spacesAt: Record<string, number> = {};
+const spacesSoon: Record<string, ReturnType<typeof setTimeout>> = {};
+
 export async function refreshSpaces(serverId?: string) {
   await Promise.all(
     app.servers
@@ -251,9 +256,30 @@ export async function refreshSpaces(serverId?: string) {
       .map(async (s) => {
         try {
           app.spaces[s.id] = await loadSpaces(s.id);
+          spacesAt[s.id] = Date.now();
         } catch (e) {
           app.errors[s.id] = String(e instanceof Error ? e.message : e);
         }
       }),
   );
+}
+
+/** A pull, commit or checkout changes no herdr structure – only a session's activity (status, title, folder)
+ *  shows it: that reloads the spaces, at most every 5 s. */
+function refreshSpacesSoon(server: string) {
+  if (spacesSoon[server]) return;
+  const wait = Math.max(0, (spacesAt[server] ?? 0) + 5_000 - Date.now());
+  spacesSoon[server] = setTimeout(() => {
+    delete spacesSoon[server];
+    void refreshSpaces(server);
+  }, wait);
+}
+
+/** The safety net, every 10 s from the space lists: servers without a live feed each time, the others every
+ *  30 s (a pull or fetch outside any session – in the IDE, a cron job – changes nothing herdr reports). */
+export function pollSpaces() {
+  const now = Date.now();
+  for (const s of app.servers) {
+    if (!app.live[s.id] || now - (spacesAt[s.id] ?? 0) >= 30_000) void refreshSpaces(s.id);
+  }
 }

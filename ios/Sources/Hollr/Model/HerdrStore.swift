@@ -18,9 +18,29 @@ final class HerdrStore {
     private(set) var changeCount = 0
     private var feeds: [UUID: Task<Void, Never>] = [:]
 
+    /// when each server's spaces (with their git state) were last loaded
+    private var spacesAt: [UUID: Date] = [:]
+    private var spacesSoon: Set<UUID> = []
+
     func refreshSpaces(_ servers: [Server]) async {
         for server in servers {
-            if let list = try? await HollrClient.spaces(server) { spaces[server.id] = list }
+            if let list = try? await HollrClient.spaces(server) {
+                spaces[server.id] = list
+                spacesAt[server.id] = Date()
+            }
+        }
+    }
+
+    /// A pull, commit or checkout changes no herdr structure – only a session's activity (status, title,
+    /// folder) shows it: that reloads the spaces, at most every 5 s.
+    private func refreshSpacesSoon(_ server: Server) {
+        guard !spacesSoon.contains(server.id) else { return }
+        spacesSoon.insert(server.id)
+        let wait = max(0, 5 - Date().timeIntervalSince(spacesAt[server.id] ?? .distantPast))
+        Task {
+            try? await Task.sleep(for: .seconds(wait))
+            spacesSoon.remove(server.id)
+            await refreshSpaces([server])
         }
     }
 
@@ -160,7 +180,7 @@ final class HerdrStore {
                             case "changed":
                                 changeCount += 1
                                 await refresh(server: server)
-                                if obj["spaces"] as? Bool == true { await refreshSpaces([server]) }
+                                if obj["spaces"] as? Bool == true { await refreshSpaces([server]) } else { refreshSpacesSoon(server) }
                             default:
                                 break
                             }

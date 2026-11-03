@@ -67,9 +67,10 @@ struct SpacesView: View {
         .task {
             while !Task.isCancelled {
                 await herdr.refreshSpaces(store.servers)
-                // the live feed refreshes spaces on every change; this is only the safety net
+                // the live feed refreshes spaces on every change; this is the safety net – also for git
+                // state changed outside any session (a pull in the IDE), which herdr doesn't report
                 let allLive = store.servers.allSatisfy { herdr.live.contains($0.id) }
-                try? await Task.sleep(for: .seconds(allLive ? 60 : 10))
+                try? await Task.sleep(for: .seconds(allLive ? 30 : 10))
             }
         }
     }

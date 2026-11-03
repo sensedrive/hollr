@@ -5,7 +5,7 @@
   // dashboard (it comes back by itself as soon as it needs you). 〰 shows where a live call runs.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n";
-  import { allPanes, app, dialogs, go, nav, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, go, nav, pollSpaces, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
   import { groupSpaces, type FullSpace } from "$lib/views/spaces/spaces";
@@ -36,10 +36,9 @@
   }
 
   onMount(() => {
-    // pushed changes refresh spaces right away (listenFeeds); this is the safety net for servers without a feed
-    const timer = setInterval(() => {
-      if (app.servers.some((s) => !app.live[s.id])) refreshSpaces();
-    }, 10_000);
+    // pushed changes refresh spaces right away (listenFeeds); this is the safety net (git state changes
+    // herdr doesn't report)
+    const timer = setInterval(pollSpaces, 10_000);
     return () => clearInterval(timer);
   });
 

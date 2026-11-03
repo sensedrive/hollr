@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 20,
+    version: "0.33.4",
+    date: "03.11.2026",
+    items: [
+      { icon: "⑂", text: "Git-Stand in Seitenleiste und Spaces aktualisiert sich nach git pull, Commit oder Checkout – nach Aktivität in einer Session binnen Sekunden, sonst spätestens nach 30 s" },
+    ],
+  },
+  {
     build: 19,
     version: "0.33.3",
     date: "03.11.2026",

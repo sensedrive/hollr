@@ -2,7 +2,7 @@
   // herdr's "spaces" sidebar: repos with main checkout + worktrees, standalone workspaces.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n";
-  import { app, dialogs, go, refreshSpaces } from "$lib/store.svelte";
+  import { app, dialogs, go, pollSpaces, refreshSpaces } from "$lib/store.svelte";
   import ContextMenu from "./dashboard/ContextMenu.svelte";
   import { arrowNav, type MenuItem } from "./dashboard/util";
   import SpaceRow from "./spaces/SpaceRow.svelte";
@@ -12,10 +12,8 @@
 
   onMount(() => {
     refreshSpaces();
-    // pushed changes refresh spaces right away; this is only the safety net
-    const timer = setInterval(() => {
-      if (app.servers.some((x) => !app.live[x.id])) refreshSpaces();
-    }, 10_000);
+    // pushed changes refresh spaces right away; this is the safety net (git state changes herdr doesn't report)
+    const timer = setInterval(pollSpaces, 10_000);
     return () => clearInterval(timer);
   });
 

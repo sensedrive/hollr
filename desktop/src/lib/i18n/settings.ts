@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Git-Stand in Seitenleiste und Spaces aktualisiert sich nach git pull, Commit oder Checkout – nach Aktivität in einer Session binnen Sekunden, sonst spätestens nach 30 s":
+    "Git state in the sidebar and spaces updates after git pull, commit or checkout – within seconds after activity in a session, otherwise within 30 s",
   "Terminal: Beim Markieren über den oberen oder unteren Rand ziehen scrollt die Session mit – die ganze Auswahl landet in der Zwischenablage":
     "Terminal: dragging a selection past the top or bottom edge scrolls the session along – the whole selection goes to the clipboard",
   "iPhone: Das Terminal scrollt leichter – feinere Schritte, und ein schneller Wisch läuft mit Schwung aus":
