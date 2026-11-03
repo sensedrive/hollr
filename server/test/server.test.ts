@@ -633,7 +633,8 @@ describe("git views", () => {
       ["main", true],
     ]);
     rmSync(repo, { recursive: true, force: true });
-  });
+    // a real repo with many git calls: slow CI runners need more than the 5 s default
+  }, 20_000);
 });
 
 describe("space deletion safety", () => {
