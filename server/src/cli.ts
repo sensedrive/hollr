@@ -21,6 +21,7 @@ import { type AskPick, answerAsk, answerWithText } from "./ask";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { runEvents } from "./events";
+import { closeFork, type ForkRequest, forkPane } from "./fork";
 import {
   execHerdr,
   Herdr,
@@ -97,7 +98,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.36.0";
+export const VERSION = "0.37.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -245,6 +246,29 @@ async function gate(): Promise<number> {
     case "close":
       await execHerdr(["pane", "close", pane]);
       json({ ok: true });
+      return 0;
+    case "fork": {
+      // a side conversation about <pane>'s session: {"label?","readOnly?"} → {"pane","at","kind"} (fork.ts)
+      const req = JSON.parse((await readStdinLine()) || "{}") as ForkRequest;
+      const agent = await agentOrError(herdr, pane);
+      if (!agent) return 0;
+      try {
+        const fork = await forkPane(execHerdr, agent, req);
+        log("gate", `fork ${pane} → ${fork.pane} (${fork.kind})`);
+        json({ pane: fork.pane, tab: fork.tab, kind: fork.kind, at: fork.at });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "fork-close":
+      // only panes `fork` made (registry) – never the main session
+      try {
+        await closeFork(execHerdr, pane);
+        json({ ok: true });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
       return 0;
     case "follow":
       // the chat as a stream (only changes) – replaces polling `timeline`
@@ -527,7 +551,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | fork-close <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize",
       });
       return 2;
   }

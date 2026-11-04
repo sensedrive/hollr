@@ -15,7 +15,21 @@ export default {
   "Fasse zusammen …": "Summarizing …",
   "schnelles Modell": "fast model",
   "Liest die Zusammenfassung": "Reading the summary",
-  "Zusammenfassung gelesen": "Summary read",
+  // reading panel
+  Original: "Original",
+  "Zusammenfassung vorlesen": "Read the summary",
+  Nochmal: "Again",
+  Langsamer: "Slower",
+  Schneller: "Faster",
+  "Einstellungen › Vorlesen": "Settings › Read aloud",
+  "Schließen (Esc)": "Close (Esc)",
+  "omp fasst den markierten Text zusammen …": "omp is summarizing the selected text …",
+  "Tempo – gilt ab dem nächsten Vorlesen („Nochmal“ liest gleich im neuen Tempo)":
+    "Speed – applies from the next reading (“Again” reads at the new speed right away)",
+  "Tempo – Phonon liest etwa zwischen 0,8× und 1,3×, die Systemstimme im ganzen Bereich":
+    "Speed – Phonon reads between about 0.8× and 1.3×, the system voice across the whole range",
+  "Phonon liest etwa zwischen 0,8× und 1,3×, die Systemstimme im ganzen Bereich.":
+    "Phonon reads between about 0.8× and 1.3×, the system voice across the whole range.",
   "Original vorlesen": "Read the original",
   "Dieser Server kann noch nicht zusammenfassen – Hollr auf dem Server aktualisieren.":
     "This server can't summarize yet – update Hollr on the server.",

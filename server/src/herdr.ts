@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { claudeSessionFile } from "./claudelog";
+import { type ForkMark, forkMarks } from "./fork";
 import { startArgs } from "./models";
 import { findSessionByTitle } from "./sessionlog";
 
@@ -25,6 +26,8 @@ export interface TreePane {
   focused: boolean;
   /** omp panes can do /live */
   live: boolean;
+  /** a side conversation (`hollr gate fork`): the pane it was forked from and when */
+  fork?: ForkMark;
 }
 
 export interface TreeTab {
@@ -144,7 +147,10 @@ export class Herdr {
     ];
     const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
     const num = (v: unknown) => (typeof v === "number" ? v : 0);
-    const treePanes = (panes.panes ?? []).map((p) => {
+    const rawPanes = panes.panes ?? [];
+    // side conversations (fork.ts); forks whose pane is gone leave the registry here
+    const forks = forkMarks(new Map(rawPanes.map((p) => [str(p.pane_id), str(p.terminal_id)])));
+    const treePanes = rawPanes.map((p) => {
       const agent = typeof p.agent === "string" && p.agent ? p.agent : undefined;
       const raw = toAgent(p as unknown as RawAgent);
       return {
@@ -157,6 +163,7 @@ export class Herdr {
           cwd: str(p.cwd),
           focused: p.focused === true,
           live: agent === "omp",
+          fork: forks.get(str(p.pane_id)),
         } satisfies TreePane,
       };
     });

@@ -8,7 +8,7 @@
   import { lang as uiLang, t } from "$lib/i18n";
   import {
     cancelPhonon, deletePhonon, downloadPhonon, LANG_NAMES, loadVoices, localModel, modelPage, PHONON_MODELS,
-    refreshSpeech, shortModel, speaker, speech, speechState, summaryError, summaryOf, type ModelVoice,
+    refreshSpeech, shortModel, SPEED, speaker, speech, speechState, summaryError, summaryOf, type ModelVoice,
   } from "$lib/speech.svelte";
   import { SAMPLES, SPEECH_LANGS, SUMMARY_SAMPLES, type SpeechLang } from "$lib/speechText";
   import { app, serverById } from "$lib/store.svelte";
@@ -277,9 +277,13 @@
     <label class="row">
       <span class="grow">
         {t("Tempo")}
-        {#if chosenLocal && !chosenLocal.speed}<div class="small muted">{t("Dieses Phonon-Modell liest immer im eigenen Tempo.")}</div>{/if}
+        {#if chosenLocal && !chosenLocal.speed}
+          <div class="small muted">{t("Dieses Phonon-Modell liest immer im eigenen Tempo.")}</div>
+        {:else}
+          <div class="small muted">{t("Phonon liest etwa zwischen 0,8× und 1,3×, die Systemstimme im ganzen Bereich.")}</div>
+        {/if}
       </span>
-      <input type="range" min="0.8" max="1.3" step="0.05" bind:value={speech.speed} />
+      <input type="range" min={SPEED.min} max={SPEED.max} step="0.05" bind:value={speech.speed} />
       <span class="num">{speech.speed.toFixed(2)}×</span>
     </label>
     <label class="row">

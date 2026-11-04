@@ -23,6 +23,8 @@ export interface Pane {
   cwd: string;
   focused: boolean;
   live: boolean;
+  /** a side conversation (server 0.36.1+ `fork`): the pane it was forked from, and when (epoch ms) */
+  fork?: { of: string; at: number };
 }
 export interface Tab {
   id: string;
@@ -210,12 +212,18 @@ export const kinds = (s: string) => gate<{ kinds: string[] }>(s, "kinds").then((
 export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
 export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
+/** A side conversation about `pane`'s session: its agent session copied into a new tab, write-guarded.
+ *  Older servers answer "not_allowed". Loading a big session takes the agent a while – the long path. */
+export const fork = (s: string, pane: string, label: string) =>
+  gate<{ pane: string; tab?: string; kind: string; at: number }>(s, `fork ${pane}`, { label, readOnly: true }, true);
+/** Closes a side conversation's pane (the server refuses any pane that isn't one). */
+export const closeFork = (s: string, pane: string) => gate(s, `fork-close ${pane}`);
 /** herdr tab name (`rename <tab id>`, server 0.32.5+) */
 export const renameTab = (s: string, tab: string, label: string) => gate(s, `rename ${tab}`, { label });
 export const models = (s: string, kind: string) => gate<ModelList>(s, `models ${kind}`);
 /** A spoken summary of `text` (older servers lack the command and answer "not_allowed"). The server runs omp – or
  *  Claude Code – with `model` ("" = its fast model) and caps the text; the long path carries big selections. */
-export const summarize = (s: string, body: { text: string; model?: string; lang: string; length: string }) =>
+export const summarize = (s: string, body: { text: string; model?: string; lang: string; length?: string; style?: "handoff" }) =>
   gate<{ summary: string; model: string }>(s, "summarize", body, true);
 /** A file for the agent (base64): lands outside the repo on the server, gives back its absolute path. */
 export const upload = (s: string, name: string, data: string) =>

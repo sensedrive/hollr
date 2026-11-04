@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 25,
+    version: "0.37.0",
+    date: "04.11.2026",
+    items: [
+      { icon: "🎙", text: "Nebengespräch: neben einer Session über sie reden (Live mit omp, ⌘⇧L), ohne sie zu stören – eine schreibgeschützte Abzweigung im Seitenbereich, das Ergebnis auf Wunsch als Entwurf zurück in den Hauptchat" },
+      { icon: "🔊", text: "Vorlesen: Die Leiste zeigt den gelesenen Text (Zusammenfassung oder Original) und bleibt offen, bis du sie schließt – mit Tempo (0,7–1,6×), „Nochmal“, Wechsel zwischen Original und Zusammenfassung und ⚙ zu den Einstellungen" },
+    ],
+  },
+  {
     build: 24,
     version: "0.36.0",
     date: "04.11.2026",

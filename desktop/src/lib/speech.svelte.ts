@@ -16,7 +16,7 @@ export interface SpeechSettings {
   model: string;
   /** Phonon voice per language ("" = the model's own) */
   voices: Partial<Record<SpeechLang, string>>;
-  /** 0.8 … 1.3 (Phonon: duration_delta, system voice: words per minute) */
+  /** SPEED.min … SPEED.max (Phonon: duration_delta, system voice: words per minute) */
   speed: number;
   /** the "Vorlesen" / "Zusammenfassung" buttons next to selected text */
   button: boolean;
@@ -216,6 +216,25 @@ type SpeechEvent = { session: number; t: "playing" | "end" | "error"; error?: st
 type Started = { session: number } & EngineInfo;
 type Phase = "idle" | "summarizing" | "loading" | "speaking";
 
+/** What the reading panel shows – it stays until closed: the selection read last and, once made, its summary. */
+export interface Reading {
+  /** the selection as it was given (Markdown, terminal text) */
+  original: string;
+  /** the server it came from: a summary can be made there */
+  server?: string;
+  summary: string | null;
+  /** the model that makes / made the summary ("" = the server's fast one, until it says which) */
+  model: string;
+  /** which of the two is (or was last) read */
+  showing: "original" | "summary";
+  /** why the summary failed */
+  error: string;
+}
+
+/** The speaking rate's range (Settings and the panel); speech.rs clamps to 0.5 … 2. Phonon itself only
+ *  goes from about 0.8× to 1.3× (duration_delta), the system voice covers all of it. */
+export const SPEED = { min: 0.7, max: 1.6, step: 0.1 };
+
 /** One voice in the whole app: a new request stops the old one. */
 class Speaker {
   state = $state<Phase>("idle");
@@ -225,12 +244,7 @@ class Speaker {
   /** the last error / warning, shown for a few seconds */
   notice = $state("");
   failed = $state(false);
-  /** the model that makes (summarizing) or made (speaking) the summary – "" until the server says */
-  summaryModel = $state("");
-  /** while a summary is read: its original */
-  summaryFor = $state<string | null>(null);
-  /** a summary was just read to the end: its original, one click away for a few seconds */
-  original = $state<string | null>(null);
+  reading = $state<Reading | null>(null);
 
   private session: number | null = null;
   private early: SpeechEvent[] = [];
@@ -238,10 +252,9 @@ class Speaker {
   private events: Promise<unknown> | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private previewTimer: ReturnType<typeof setTimeout> | undefined;
-  private originalTimer: ReturnType<typeof setTimeout> | undefined;
   private warmed = "";
-  /** read right after the current one ("Zusammenfassung, danach Original") */
-  private next: string | null = null;
+  /** read the original once the summary is through ("Zusammenfassung, danach Original") */
+  private thenOriginal = false;
 
   get busy() {
     return this.state !== "idle";
@@ -269,19 +282,15 @@ class Speaker {
       this.session = null;
       this.state = "idle";
       if (e.t === "end") this.finished();
-      else this.next = this.summaryFor = null;
+      else this.thenOriginal = false;
     }
   }
 
-  /** Read to the end: the original follows (setting), or it is offered for a few seconds. */
+  /** Read to the end: the original follows the summary if the setting says so. */
   private finished() {
-    const { next, summaryFor } = this;
-    this.next = this.summaryFor = null;
-    if (next) return void this.speak(next);
-    if (!summaryFor) return;
-    this.original = summaryFor;
-    clearTimeout(this.originalTimer);
-    this.originalTimer = setTimeout(() => (this.original = null), 8000);
+    if (!this.thenOriginal) return;
+    this.thenOriginal = false;
+    this.readOriginal();
   }
 
   /** Loads the model the next request would need (text got selected), so it starts right away. */
@@ -293,8 +302,15 @@ class Speaker {
     invoke("speech_prewarm", { request: r }).catch(() => {});
   }
 
-  /** Reads `raw`; with `source` it is the summary of that original. */
-  async speak(raw: string, source?: string) {
+  /** Reads `raw` (a selection from `server`, or a test text) as it is; the panel shows it. */
+  async speak(raw: string, server?: string) {
+    if (!speakable(raw)) return this.say(t("Nichts zum Vorlesen markiert."));
+    this.reading = { original: raw, server, summary: null, model: "", showing: "original", error: "" };
+    await this.play(raw);
+  }
+
+  /** Speaks `raw` (cleaned up first); `thenOriginal`: the reading's original follows. */
+  private async play(raw: string, thenOriginal = false) {
     const text = speakable(raw);
     if (!text) return this.say(t("Nichts zum Vorlesen markiert."));
     const gen = ++this.generation;
@@ -303,9 +319,7 @@ class Speaker {
     this.state = "loading";
     this.lang = r.lang;
     this.notice = "";
-    this.original = null;
-    this.summaryFor = source ?? null;
-    this.next = source && speech.summary.thenOriginal ? source : null;
+    this.thenOriginal = thenOriginal;
     this.session = null;
     this.early = [];
     try {
@@ -323,7 +337,7 @@ class Speaker {
     } catch (e) {
       if (gen !== this.generation) return;
       this.state = "idle";
-      this.next = this.summaryFor = null;
+      this.thenOriginal = false;
       this.say(t(message(e)), true);
     }
   }
@@ -335,28 +349,53 @@ class Speaker {
     if (!server) return this.say(t("Zusammenfassen geht nur im Chat oder Terminal einer Sitzung."), true);
     this.stop();
     const gen = ++this.generation;
+    this.reading = { original: raw, server, summary: null, model: speech.summary.model, showing: "summary", error: "" };
+    const reading = this.reading;
     this.state = "summarizing";
-    this.summaryModel = speech.summary.model;
     this.lang = this.request(plain).lang;
     this.notice = "";
-    this.original = null;
     try {
       // the model reads the selection as it is (Markdown and all), the voice reads its plain sentences
       const made = await summaryOf(server, raw, this.lang);
       if (gen !== this.generation) return;
-      this.summaryModel = made.model;
-      await this.speak(made.summary, raw);
+      reading.summary = made.summary;
+      reading.model = made.model;
+      await this.play(made.summary, speech.summary.thenOriginal);
     } catch (e) {
       if (gen !== this.generation) return;
       this.state = "idle";
-      this.say(summaryError(e), true);
+      reading.showing = "original";
+      reading.error = summaryError(e);
     }
   }
 
-  /** "Original vorlesen" after a summary */
+  /** The panel's "Original vorlesen" */
   readOriginal() {
-    const text = this.original;
-    if (text) void this.speak(text);
+    const r = this.reading;
+    if (!r) return;
+    r.showing = "original";
+    void this.play(r.original);
+  }
+
+  /** The panel's "Zusammenfassung vorlesen": the one made already, else a new one */
+  readSummary() {
+    const r = this.reading;
+    if (r?.summary) {
+      r.showing = "summary";
+      void this.play(r.summary);
+    } else if (r) void this.summarize(r.original, r.server);
+  }
+
+  /** The panel's "Nochmal": what it shows, from the start */
+  again() {
+    if (this.reading?.showing === "summary") this.readSummary();
+    else this.readOriginal();
+  }
+
+  /** Stops and closes the panel. */
+  close() {
+    this.stop();
+    this.reading = null;
   }
 
   /** No backend (dev bridge in a browser): log what would be read and show the controls for a while. */
@@ -365,7 +404,7 @@ class Speaker {
       this.state = "idle";
       return;
     }
-    console.info(`[speech] (${lang}) ${text}`);
+    console.info(`[speech] (${lang}, ${speech.speed}×) ${text}`);
     this.engine = { engine: "system", label: t("Vorschau ohne Ton") };
     this.state = "speaking";
     const gen = this.generation;
@@ -382,7 +421,9 @@ class Speaker {
     this.generation++;
     clearTimeout(this.previewTimer);
     this.session = null;
-    this.next = this.summaryFor = null;
+    this.thenOriginal = false;
+    // stopped while summarizing: nothing to show but the original
+    if (this.reading?.showing === "summary" && !this.reading.summary) this.reading.showing = "original";
     this.state = "idle";
     invoke("speech_stop").catch(() => {});
   }

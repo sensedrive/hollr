@@ -161,6 +161,10 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Nebengespräch: neben einer Session über sie reden (Live mit omp, ⌘⇧L), ohne sie zu stören – eine schreibgeschützte Abzweigung im Seitenbereich, das Ergebnis auf Wunsch als Entwurf zurück in den Hauptchat":
+    "Side conversation: talk about a session next to it (live with omp, ⌘⇧L) without disturbing it – a read-only fork in the side panel, the result optionally as a draft back in the main chat",
+  "Vorlesen: Die Leiste zeigt den gelesenen Text (Zusammenfassung oder Original) und bleibt offen, bis du sie schließt – mit Tempo (0,7–1,6×), „Nochmal“, Wechsel zwischen Original und Zusammenfassung und ⚙ zu den Einstellungen":
+    "Read aloud: the panel shows the text being read (summary or original) and stays open until you close it – with speed (0.7–1.6×), “Again”, switching between original and summary, and ⚙ to the settings",
   "Zusammenfassung vorlesen: neben markiertem Text oder mit ⌘⌥⇧S fasst omp auf dem Server zusammen (Modell und Konto unter Einstellungen › Vorlesen) – danach ist das Original einen Klick entfernt":
     "Read a summary aloud: next to selected text or with ⌘⌥⇧S omp summarizes on the server (model and account in Settings › Read aloud) – the original is one click away afterwards",
   "Terminal: Eine Markierung bleibt stehen, wenn du die Maus danach bewegst – vorher verschwand sie sofort":

@@ -1,18 +1,18 @@
 <script lang="ts">
   // One session (AgentDetailView.swift): omp/Claude transcript (else chat history + screen) / terminal, pinned HUD
   // (TODO, jobs, working or waiting-for-you row), composer with keys and live voice, the status line, ⋯ menu, zen mode and a right side
-  // panel (git / in-app browser / info).
+  // panel (side conversation / git / in-app browser / info).
   import { onDestroy, onMount, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
   import type { AskPick, Pane, Timeline } from "../api";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
-  import { allPanes, drafts, go, serverById, tabName } from "../store.svelte";
+  import { allPanes, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
   import {
-    live, liveAbout, liveActive, liveColor as liveColorNow, liveDetail, liveTitle, liveStateLabel, reconnectLive, startLive as startLiveOn,
-    stopLive, stopLiveOn, toggleLiveMic as toggleMic, toggleLiveSpeaker as toggleSpeaker,
+    live, liveAbout, liveActive, liveColor as liveColorNow, liveOn, liveStateLabel, startLive as startLiveOn, stopLiveOn,
   } from "../live.svelte";
+  import { appendDraft, forkOf } from "../sidetalk";
   import { draftKey } from "../drafts";
   import { followTimeline } from "../follow";
   import { sessionTerms } from "../dictationText";
@@ -31,6 +31,8 @@
   import ModelDialog from "./ModelDialog.svelte";
   import GitPanel from "./GitPanel.svelte";
   import Modal from "./Modal.svelte";
+  import LiveBar from "./LiveBar.svelte";
+  import SideTalk from "./SideTalk.svelte";
   import { rememberViewPrefs, viewPrefsOf, type ViewMode } from "../viewPrefs";
 
   let { server, pane, title, onClosed, open, url }: {
@@ -234,7 +236,14 @@
     // only "on" is kept: every session opened once would otherwise take a slot
     rememberViewPrefs(`${server}|${pane.pane}`, { zen: zen || undefined });
   });
-  let panel = $state<"" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
+  // a call running on this session's side conversation brings its panel back when you return here
+  let panel = $state<"" | "git" | "browser" | "info" | "talk">(
+    untrack(() => {
+      if (open === "git" || open === "browser") return open;
+      const f = forkOf(allPanes(server), pane.pane);
+      return f && liveOn(server, f.pane.pane) ? "talk" : "";
+    }),
+  );
   /** browser stays mounted (tunnels open) until its ✕, even while another panel tab shows */
   let browserOpen = $state(untrack(() => open === "browser"));
   let browserRequest = $state<{ url: string } | null>(untrack(() => (open === "browser" && url ? { url } : null)));
@@ -251,7 +260,7 @@
   const PW = "hollr.agent.panelWidth";
   let panelWidth = $state(Number(localStorage.getItem(PW)) || 460);
 
-  function togglePanel(p: "git" | "browser" | "info") {
+  function togglePanel(p: "git" | "browser" | "info" | "talk") {
     if (p === "browser") browserOpen = true;
     panel = panel === p ? "" : p;
     zen = false;
@@ -457,6 +466,7 @@
       else if (c === "KeyI") togglePanel("info");
       else if (c === "KeyM") openModels();
       else if (c === "KeyT" && pane.agent) mode = mode === "chat" ? "terminal" : "chat";
+      else if (c === "KeyL" && canTalk) openTalk();
       else return;
     } else if (c === "KeyK") {
       if (mode === "terminal") term?.focus();
@@ -474,20 +484,109 @@
   /** a call is running here (not lost) */
   const liveHere = $derived(liveMine && liveActive());
   const ompState = $derived(liveMine ? live.ompState : undefined);
-  const micMuted = $derived(ompState === "muted");
-  const speakerMuted = $derived(liveMine && live.speakerMuted);
-  const levels = $derived(liveMine ? live.levels : { input: 0, output: 0 });
-  const liveError = $derived(liveMine ? live.error : "");
-  const liveNote = $derived(liveMine ? live.note : "");
   const liveColor = $derived(liveMine ? liveColorNow() : "var(--accent)");
-  /** Live runs on another session: starting here ends it (one microphone) – asked first */
-  let confirmLiveSwitch = $state(false);
+  /** Live runs on another pane: starting `begin` ends that call (one microphone) – asked first */
+  let confirmLiveSwitch = $state<(() => void) | null>(null);
   function startLive() {
-    if (liveActive() && !liveMine) return void (confirmLiveSwitch = true);
-    void startLiveOn(server, pane.pane, title);
+    const begin = () => void startLiveOn(server, pane.pane, title);
+    if (liveActive() && !liveMine) confirmLiveSwitch = begin;
+    else begin();
   }
-  const switchLive = () => { confirmLiveSwitch = false; void startLiveOn(server, pane.pane, title); };
   const ompStateLabel = liveStateLabel;
+
+  // ------------------------------------------------------------ side conversation ("Nebengespräch", sidetalk.ts)
+  // A write-guarded fork of this session in its own tab, talked to in the side panel while this chat goes on.
+  /** this session is itself a side conversation: the session it was forked from */
+  const forkMain = $derived(pane.fork ? findPane(server, pane.fork.of) : undefined);
+  const canTalk = $derived(hasTimeline && !pane.fork);
+  /** this session's side conversation in the tree (the server marks forks) */
+  const treeFork = $derived(canTalk ? forkOf(allPanes(server), pane.pane) : undefined);
+  /** the one started here, until the tree shows it */
+  let startedFork = $state<{ pane: string; at: number; kind: string } | null>(null);
+  /** the fork the tree once showed – gone from the tree afterwards = closed elsewhere */
+  let seenFork = $state("");
+  $effect(() => {
+    if (treeFork) seenFork = treeFork.pane.pane;
+  });
+  const side = $derived(
+    treeFork?.pane.fork
+      ? { pane: treeFork.pane.pane, at: treeFork.pane.fork.at, kind: treeFork.pane.agent ?? "" }
+      : startedFork,
+  );
+  const sideGone = $derived(!!startedFork && !treeFork && seenFork === startedFork.pane);
+  let forking = $state(false);
+  let talkError = $state("");
+  const talkLabel = $derived(`🎙 ${title}`);
+
+  function talkLive(fork: string) {
+    const begin = () => void startLiveOn(server, fork, talkLabel);
+    if (liveActive() && !liveOn(server, fork)) confirmLiveSwitch = begin;
+    else begin();
+  }
+
+  /** "Abbrechen": a side conversation that was about to start for it isn't left as an empty panel */
+  function cancelLiveSwitch() {
+    confirmLiveSwitch = null;
+    if (panel === "talk" && !side && !forking) panel = "";
+  }
+
+  /** 🎙 / ⌘⇧L: the side conversation's panel – started first when there is none */
+  function openTalk() {
+    if (side && !sideGone) return togglePanel("talk");
+    panel = "talk";
+    zen = false;
+    // omp talks right away: a call running anywhere (this chat's own too) would end – asked before anything is made
+    if (pane.agent === "omp" && liveActive()) confirmLiveSwitch = () => void startTalk();
+    else void startTalk();
+  }
+
+  async function startTalk() {
+    if (forking) return;
+    forking = true;
+    talkError = "";
+    startedFork = null;
+    seenFork = "";
+    try {
+      const r = await api.fork(server, pane.pane, `🎙 ${t("Nebengespräch")} · ${title}`);
+      startedFork = { pane: r.pane, at: r.at, kind: r.kind };
+      await refresh(server);
+      if (r.kind === "omp") void startLiveOn(server, r.pane, talkLabel);
+    } catch (e) {
+      const code = e instanceof Error ? e.message : String(e);
+      talkError =
+        code === "not_allowed" ? t("Hollr auf dem Server ist zu alt für Nebengespräche – unter Server › Werkzeuge aktualisieren.")
+        : code === "not_found" ? t("Diese Sitzung gibt es nicht mehr.")
+        : code === "no_session" ? t("Diese Sitzung hat noch keinen Verlauf – erst etwas schreiben, dann nebenbei darüber reden.")
+        : code === "unsupported" ? t("Nebengespräche gibt es für omp und Claude Code.")
+        : t("Nebengespräch nicht gestartet: {e}", { e: code });
+    } finally {
+      forking = false;
+    }
+  }
+
+  /** Hangs up, closes the fork's pane (its session file stays on the server, like any session). */
+  async function endTalk() {
+    const fork = side?.pane;
+    if (!fork) return;
+    await stopLiveOn(server, fork);
+    try {
+      if (!sideGone) await api.closeFork(server, fork);
+      talkError = "";
+    } catch (e) {
+      return void (talkError = e instanceof Error ? e.message : String(e));
+    }
+    startedFork = null;
+    seenFork = "";
+    panel = "";
+    void refresh(server);
+  }
+
+  /** The side conversation's result as this chat's draft – below what is typed, never sent. */
+  function talkResult(text: string) {
+    drafts.setText(key, appendDraft(drafts.text(key), text));
+    mode = "chat";
+    composer?.focus();
+  }
 
   const placeholder = $derived(
     isShell ? t("Befehl ausführen …") : liveHere ? t("Oder tippen …") : t("Nachricht an {agent} …", { agent: agentName }),
@@ -501,28 +600,7 @@
 
 <svelte:window onkeydown={onKey} onclick={() => (menu = false)} />
 
-{#snippet liveStrip()}
-  {#if livePhase}
-    <div class="live" style:--live={liveColor} title={live.devices}>
-      <div class="bars">{#each [0.45, 0.8, 1, 0.7, 0.4] as w}<span style:height="{6 + 22 * w * Math.min(1, micMuted ? 0 : Math.max(levels.input * 6, levels.output * 4))}px"></span>{/each}</div>
-      <div class="grow">
-        <b>{liveTitle()}</b>
-        <div class="small livestate">{liveDetail()}</div>
-      </div>
-      {#if livePhase === "lost"}
-        <button class="relive" onclick={reconnectLive}>{t("Neu verbinden")}</button>
-        <button class="round" title={t("Schließen")} aria-label={t("Schließen")} onclick={stopLive}>✕</button>
-      {:else}
-        <button class="round" class:warn={speakerMuted} disabled={livePhase !== "live"} title={speakerMuted ? t("Ton an") : t("Ton aus (Antwort nicht hören)")} onclick={toggleSpeaker}>{speakerMuted ? "🔇" : "🔊"}</button>
-        <button class="round" class:warn={micMuted} disabled={livePhase !== "live"} title={micMuted ? t("Mikrofon an") : t("Mikrofon aus (wie Leertaste) – du hörst weiter zu")} onclick={toggleMic}>{micMuted ? "🎙̸" : "🎙"}</button>
-        <button class="round hang" title={t("Live beenden")} onclick={stopLive}>✕</button>
-      {/if}
-    </div>
-    {#if liveHere && live.audioError}<div class="err small">⚠ {live.audioError}</div>{/if}
-  {/if}
-  {#if liveError && livePhase !== "lost"}<div class="err small">{liveError}</div>{/if}
-  {#if liveNote && !livePhase}<div class="muted small">{liveNote}</div>{/if}
-{/snippet}
+{#snippet liveStrip()}<LiveBar {server} pane={pane.pane} />{/snippet}
 
 {#snippet liveButton()}
   {#if pane.live && !livePhase}
@@ -615,9 +693,16 @@
           {#if livePhase === "live"}<span style:color={liveColor}> · Live: {ompStateLabel(ompState)}</span>{/if}
           {#if !isShell}<span class="dim"> · {shortPath(pane.cwd)}</span>{/if}
           <span class="dim"> · {serverLabel}</span>
+          {#if pane.fork}<span class="forkmark"> · 🎙 {t("Nebengespräch – ändert nichts ohne dich")}</span>{/if}
         </div>
       </div>
       <div class="actions">
+        {#if pane.fork && forkMain}
+          <button class="talkbtn" title={t("Zur Sitzung, aus der dieses Nebengespräch kommt")} onclick={() => go({ view: "agent", server, pane: forkMain.pane.pane })}>↩ {t("Hauptchat")}</button>
+        {:else if canTalk}
+          <button class="talkbtn" class:on={panel === "talk"} disabled={forking}
+            title={`${t("Nebengespräch: daneben über diese Sitzung reden, ohne sie zu stören")} (${mod}${shift}L)`} onclick={openTalk}>🎙 {t("Nebengespräch")}</button>
+        {/if}
         {#if pane.agent}
           <div class="seg">
             <button class:on={mode === "chat"} onclick={() => (mode = "chat")} title={`${mod}${shift}T`}>{t("Chat")}</button>
@@ -634,6 +719,7 @@
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div class="menu" onclick={(e) => e.stopPropagation()}>
               {#if pane.agent}<button class="mi" onclick={openModels}>⬢ {t("Modell wechseln")}<kbd>{mod}{shift}M</kbd></button>{/if}
+              {#if canTalk}<button class="mi" onclick={() => { menu = false; openTalk(); }}>🎙 {t("Nebengespräch")}<kbd>{mod}{shift}L</kbd></button>{/if}
               <button class="mi" onclick={() => { menu = false; togglePanel("git"); }}>⑂ {t("Git & Dateien")}<kbd>{mod}{shift}G</kbd></button>
               <button class="mi" onclick={() => { menu = false; togglePanel("browser"); }}>◍ {t("Browser")}<kbd>{mod}{shift}B</kbd></button>
               <button class="mi" onclick={() => { menu = false; zen = true; }}>⤢ {t("Zen-Modus")}<kbd>{mod}{shift}F</kbd></button>
@@ -747,6 +833,9 @@
     <aside class="side" class:hidden={!panel || zen} style:width="{panelWidth}px">
       {#if panel || browserOpen}
         <div class="tabs">
+          {#if canTalk && (side || panel === "talk")}
+            <button class:on={panel === "talk"} onclick={() => (panel = "talk")}>🎙 {t("Nebengespräch")}</button>
+          {/if}
           <button class:on={panel === "git"} onclick={() => (panel = "git")}>⑂ Git</button>
           <button class:on={panel === "browser"} onclick={() => { browserOpen = true; panel = "browser"; }}>◍ {t("Browser")}</button>
           <button class:on={panel === "info"} onclick={() => (panel = "info")}>ⓘ {t("Info")}</button>
@@ -758,6 +847,12 @@
             <div class="fill"><GitPanel {server} {ws} /></div>
           {:else if panel === "info"}
             {@render info()}
+          {:else if panel === "talk"}
+            <div class="fill">
+              <SideTalk {server} fork={side?.pane ?? ""} at={side?.at ?? 0} forkPane={treeFork?.pane} kind={side?.kind || pane.agent || ""}
+                starting={forking} gone={sideGone} error={talkError} mainTitle={title} onLive={() => side && talkLive(side.pane)}
+                onResult={talkResult} onEnd={endTalk} onRestart={openTalk} {onLink} />
+            </div>
           {/if}
           {#if browserOpen}
             <div class="fill" class:hidden={panel !== "browser"}>
@@ -818,7 +913,7 @@
     {/if}
     <div class="section">{t("Tastenkürzel")}</div>
     <div class="card small keys">
-      {#each [["⏎", t("Senden")], [`${shift}⏎`, t("Neue Zeile")], ["↑", t("Letzte Nachricht")], [`${mod}K`, t("Eingabe fokussieren")], [`${mod}.`, t("Unterbrechen (Esc)")], [`${mod}${shift}T`, t("Chat / Terminal")], [`${mod}${shift}F`, t("Zen-Modus")], ["Esc", t("Zen-Modus beenden")], [`${mod}${shift}G / B / I`, t("Git / Browser / Info")], [`${mod}${shift}M`, t("Modell wechseln")], [`${mod}+ / ${mod}-`, t("Textgröße")]] as [k, v]}
+      {#each [["⏎", t("Senden")], [`${shift}⏎`, t("Neue Zeile")], ["↑", t("Letzte Nachricht")], [`${mod}K`, t("Eingabe fokussieren")], [`${mod}.`, t("Unterbrechen (Esc)")], [`${mod}${shift}T`, t("Chat / Terminal")], [`${mod}${shift}F`, t("Zen-Modus")], ["Esc", t("Zen-Modus beenden")], [`${mod}${shift}G / B / I`, t("Git / Browser / Info")], [`${mod}${shift}L`, t("Nebengespräch")], [`${mod}${shift}M`, t("Modell wechseln")], [`${mod}+ / ${mod}-`, t("Textgröße")]] as [k, v]}
         <div class="hrow"><kbd>{k}</kbd><span class="muted">{v}</span></div>
       {/each}
     </div>
@@ -861,11 +956,12 @@
 {/if}
 
 {#if confirmLiveSwitch}
-  <Modal title={t("Live wechseln?")} onClose={() => (confirmLiveSwitch = false)}>
+  {@const begin = confirmLiveSwitch}
+  <Modal title={t("Live wechseln?")} onClose={cancelLiveSwitch}>
     <p>{t("Live läuft gerade mit „{other}“. Das Gespräch dort endet, wenn du hier startest.", { other: live.label || live.pane })}</p>
     <div class="mbuttons">
-      <button class="btn" onclick={() => (confirmLiveSwitch = false)}>{t("Abbrechen")}</button>
-      <button class="btn primary" onclick={switchLive}>{t("Hier starten")}</button>
+      <button class="btn" onclick={cancelLiveSwitch}>{t("Abbrechen")}</button>
+      <button class="btn primary" onclick={() => { confirmLiveSwitch = null; begin(); }}>{t("Hier starten")}</button>
     </div>
   </Modal>
 {/if}
@@ -984,21 +1080,14 @@
   .zen .jump { bottom: 190px; }
   .jump.new { border-color: var(--accent); }
 
-  .live { display: flex; align-items: center; gap: 12px; }
-  .live b { font-size: 13.5px; }
-  .livestate { color: var(--live); }
-  .bars { display: flex; gap: 3px; align-items: center; width: 36px; height: 30px; flex: none; }
-  .bars span { width: 4px; border-radius: 2px; background: var(--live); transition: height 0.1s; }
-  .round { width: 34px; height: 34px; border-radius: 50%; border: 0; background: color-mix(in srgb, var(--fg) 10%, transparent); flex: none; }
-  .round:disabled { opacity: 0.4; }
-  .round.warn { background: var(--orange); }
-  .round.hang { background: var(--red); color: #fff; }
   .livebtn { all: unset; cursor: pointer; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
     color: var(--green); background: color-mix(in srgb, var(--green) 20%, transparent); }
   .livebtn:hover { background: color-mix(in srgb, var(--green) 30%, transparent); }
-  .relive { all: unset; cursor: pointer; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
-    color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); flex: none; }
-  .relive:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  .talkbtn { all: unset; cursor: pointer; height: 28px; padding: 0 11px; margin-right: 6px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    color: var(--fg); background: color-mix(in srgb, var(--accent) 16%, transparent); white-space: nowrap; }
+  .talkbtn:hover, .talkbtn.on { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .talkbtn:disabled { opacity: 0.5; cursor: default; }
+  .forkmark { color: var(--accent); }
 
   .readbar { position: absolute; top: 10px; right: 14px; z-index: 4; display: flex; align-items: center; gap: 2px; padding: 3px 6px;
     border-radius: 999px; background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px);
@@ -1047,7 +1136,6 @@
   .acc { color: var(--orange); }
   .dim { color: var(--dim); }
   .muted { color: var(--muted); }
-  .err { color: var(--red); }
 
   /* omp's braille spinner (chat cards, HUD, status line). A vertical strip of the eight frames scrolled in steps –
      WebKit (the app's webview) doesn't animate `content`, so swapping the glyph in keyframes stood still there. */

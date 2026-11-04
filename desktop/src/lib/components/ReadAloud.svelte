@@ -1,16 +1,18 @@
 <script lang="ts">
   // Read aloud, app-wide (mounted once in +page.svelte): next to text selected in a chat or in the terminal
   // (TerminalView offers its xterm selection) a small group – "Vorlesen" (⌘⇧S) reads the selection,
-  // "Zusammenfassung" (⌘⌥⇧S) has the server's omp summarize it first – and while it works a pill with a
-  // stop button (Esc stops too); after a summary the pill offers the original for a few seconds. The chat's
-  // own components stay untouched: its selection is read from the document, its server from the route.
+  // "Zusammenfassung" (⌘⌥⇧S) has the server's omp summarize it first. What is read shows in a panel at the
+  // top – the summary (and its model) or the cleaned-up original, selectable – with stop, replay, the speed
+  // and a way to the settings; it stays after reading until closed (Esc stops, a second Esc closes). The
+  // chat's own components stay untouched: its selection is read from the document, its server from the route.
   // ⌘⇧Y would be the obvious key, but macOS' "Make Sticky" service owns it (⌘⇧L/A/F/M/B too); the app's
   // own ⌘⇧ keys are F G B I M T, ⌘⇧Z is redo – ⌘⌥⇧S is free in the app and in macOS.
   import { t } from "$lib/i18n";
   import {
-    LANG_NAMES, offerSelection, PHONON_MODELS, selection, shortModel, speaker, speech, withdrawSelection,
+    LANG_NAMES, offerSelection, PHONON_MODELS, selection, shortModel, SPEED, speaker, speech, withdrawSelection,
   } from "$lib/speech.svelte";
-  import { nav } from "$lib/store.svelte";
+  import { speakable } from "$lib/speechText";
+  import { go, nav } from "$lib/store.svelte";
 
   /** the chat transcript (TimelineView) */
   const CHAT = ".tl";
@@ -80,8 +82,8 @@
   const current = () => chatSelection() ?? selection.offer;
 
   function read() {
-    const text = current()?.text;
-    if (text) void speaker.speak(text);
+    const offer = current();
+    if (offer) void speaker.speak(offer.text, offer.server);
   }
 
   function summarize() {
@@ -90,11 +92,13 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    // capture phase: while it speaks, Esc means "stop" – not zen mode, not the TUI in the terminal
-    if (e.key === "Escape" && speaker.busy) {
+    // capture phase: while it speaks, Esc means "stop" – not zen mode, not the TUI in the terminal;
+    // afterwards the next Esc closes the panel (unless a dialog is open: that Esc is the dialog's)
+    if (e.key === "Escape" && (speaker.busy || (speaker.reading && !document.querySelector('[role="dialog"]')))) {
       e.preventDefault();
       e.stopPropagation();
-      speaker.stop();
+      if (speaker.busy) speaker.stop();
+      else speaker.close();
     } else if ((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && e.code === "KeyS") {
       e.preventDefault();
       e.stopPropagation();
@@ -103,6 +107,36 @@
       else read();
     }
   }
+
+  /** the speed in 0.05 steps, inside the range (the settings slider moves in 0.05) */
+  function nudgeSpeed(by: number) {
+    speech.speed = Math.round(Math.min(SPEED.max, Math.max(SPEED.min, speech.speed + by)) * 20) / 20;
+  }
+
+  const reading = $derived(speaker.reading);
+  /** the panel's text: the summary, or the original as the voice reads it */
+  const shown = $derived(
+    !reading ? "" : reading.showing === "summary" ? (reading.summary ?? "") : speakable(reading.original),
+  );
+  const status = $derived.by(() => {
+    if (!reading) return "";
+    if (speaker.state === "summarizing") return t("Fasse zusammen …");
+    if (speaker.state === "loading") return t("Stimme startet …");
+    const summary = reading.showing === "summary";
+    if (speaker.state === "speaking") return summary ? t("Liest die Zusammenfassung") : t("Liest vor");
+    return summary ? t("Zusammenfassung") : t("Original");
+  });
+  const detail = $derived.by(() => {
+    if (!reading) return "";
+    const model = reading.showing === "summary" ? shortModel(reading.model) || t("schnelles Modell") : "";
+    const voice = speaker.busy && speaker.state !== "summarizing" ? [t(LANG_NAMES[speaker.lang]), engineLabel] : [];
+    return [model, ...voice].filter(Boolean).join(" · ");
+  });
+  const speedTitle = $derived(
+    speaker.busy
+      ? t("Tempo – gilt ab dem nächsten Vorlesen („Nochmal“ liest gleich im neuen Tempo)")
+      : t("Tempo – Phonon liest etwa zwischen 0,8× und 1,3×, die Systemstimme im ganzen Bereich"),
+  );
 
   /** the button next to the selection end, inside the window */
   const place = $derived.by(() => {
@@ -145,30 +179,47 @@
   </div>
 {/if}
 
-{#if speaker.busy}
-  <div class="pill" role="status">
-    <span class="bars" class:on={speaker.state === "speaking"} class:wait={speaker.state === "summarizing"} aria-hidden="true"><i></i><i></i><i></i></span>
-    <span class="grow">
-      {#if speaker.state === "summarizing"}
-        {t("Fasse zusammen …")}
-        <span class="muted">· {speaker.summaryModel ? shortModel(speaker.summaryModel) : t("schnelles Modell")}</span>
+{#if reading}
+  <section class="panel" aria-label={t("Vorlesen")}>
+    <div class="head" role="status">
+      <span class="bars" class:on={speaker.state === "speaking"} class:wait={speaker.state === "summarizing" || speaker.state === "loading"} aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="grow title">{status}{#if detail}<span class="muted detail">· {detail}</span>{/if}</span>
+      <span class="speed" title={speedTitle}>
+        <button class="ic" aria-label={t("Langsamer")} disabled={speech.speed <= SPEED.min} onclick={() => nudgeSpeed(-SPEED.step)}>−</button>
+        <span class="num">{speech.speed.toFixed(2)}×</span>
+        <button class="ic" aria-label={t("Schneller")} disabled={speech.speed >= SPEED.max} onclick={() => nudgeSpeed(SPEED.step)}>+</button>
+      </span>
+      <button class="ic" title={t("Einstellungen › Vorlesen")} aria-label={t("Einstellungen › Vorlesen")} onclick={() => go({ view: "settings", page: "speech" })}>⚙</button>
+      {#if speaker.busy}
+        <button class="stop" title={t("Vorlesen stoppen (Esc)")} aria-label={t("Vorlesen stoppen (Esc)")} onclick={() => speaker.stop()}>
+          <span class="sq"></span>
+        </button>
       {:else}
-        {speaker.state === "loading" ? t("Stimme startet …") : speaker.summaryFor ? t("Liest die Zusammenfassung") : t("Liest vor")}
-        <span class="muted">· {t(LANG_NAMES[speaker.lang])}{engineLabel ? ` · ${engineLabel}` : ""}</span>
+        <button class="ic" title={t("Schließen (Esc)")} aria-label={t("Schließen (Esc)")} onclick={() => speaker.close()}>✕</button>
       {/if}
-    </span>
-    <button class="stop" title={t("Vorlesen stoppen (Esc)")} aria-label={t("Vorlesen stoppen (Esc)")} onclick={() => speaker.stop()}>
-      <span class="sq"></span>
-    </button>
-  </div>
+    </div>
+    <div class="body">
+      {#if speaker.state === "summarizing"}
+        <p class="muted">{t("omp fasst den markierten Text zusammen …")}</p>
+      {:else}
+        <p class="text">{shown}</p>
+      {/if}
+      {#if reading.error}<p class="warn small">{reading.error}</p>{/if}
+      {#if speaker.notice}<p class="small" class:warn={speaker.failed} class:muted={!speaker.failed}>{speaker.notice}</p>{/if}
+    </div>
+    {#if speaker.state !== "summarizing"}
+      <div class="actions">
+        {#if reading.showing === "summary"}
+          <button class="act" onclick={() => speaker.readOriginal()}>{t("Original vorlesen")}</button>
+        {:else if reading.summary || reading.server}
+          <button class="act" onclick={() => speaker.readSummary()}>{t("Zusammenfassung vorlesen")}</button>
+        {/if}
+        <button class="act" onclick={() => speaker.again()}>↻ {t("Nochmal")}</button>
+      </div>
+    {/if}
+  </section>
 {:else if speaker.notice}
-  <div class="pill note" class:warn={speaker.failed} role="status">{speaker.notice}</div>
-{:else if speaker.original}
-  <div class="pill" role="status">
-    <span class="grow muted">{t("Zusammenfassung gelesen")}</span>
-    <button class="again" onclick={() => speaker.readOriginal()}>{t("Original vorlesen")}</button>
-    <button class="close" title={t("Schließen")} aria-label={t("Schließen")} onclick={() => (speaker.original = null)}>✕</button>
-  </div>
+  <div class="pill" class:warn={speaker.failed} role="status">{speaker.notice}</div>
 {/if}
 
 <style>
@@ -177,12 +228,30 @@
   .offer button { all: unset; display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 10px; border-radius: 99px; }
   .offer button:hover { color: var(--accent); }
   .offer .sep { width: 1px; align-self: stretch; margin: 5px 0; background: var(--border); }
-  .pill { position: fixed; z-index: 60; left: 50%; top: 12px; transform: translateX(-50%); display: flex; align-items: center;
-    gap: 10px; max-width: min(520px, 80vw); padding: 5px 6px 5px 14px; border-radius: 99px; font-size: 12.5px;
+  .panel, .pill { position: fixed; z-index: 60; left: 50%; top: 12px; transform: translateX(-50%); font-size: 12.5px;
     background: var(--raised, var(--card)); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
-  .pill .grow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pill.note { padding: 7px 14px; white-space: normal; }
-  .pill.warn { color: var(--red); }
+  .pill { max-width: min(520px, 80vw); padding: 7px 14px; border-radius: 99px; }
+  .pill.warn, .warn { color: var(--red); }
+  .panel { width: min(640px, calc(100vw - 32px)); border-radius: 12px; display: flex; flex-direction: column; }
+  .head { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; }
+  .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .detail { margin-left: 5px; }
+  .speed { display: flex; align-items: center; flex: none; }
+  .num { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .ic { all: unset; cursor: pointer; flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px;
+    color: var(--muted); font-size: 13px; }
+  .ic:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); }
+  .ic:disabled { opacity: .3; cursor: default; }
+  .body { max-height: 40vh; overflow-y: auto; padding: 2px 14px 8px; border-top: 1px solid var(--border); user-select: text; cursor: text; }
+  .body p { margin: 8px 0 0; }
+  .text { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
+  .small { font-size: 12px; }
+  .actions { display: flex; gap: 6px; padding: 0 10px 10px; }
+  .act { all: unset; cursor: pointer; padding: 3px 10px; border-radius: 99px; font-size: 12px; color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 7%, transparent); }
+  .act:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+  .act:first-child { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .act:first-child:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
   .bars { display: flex; align-items: flex-end; gap: 2px; height: 12px; flex: none; }
   .bars i { width: 3px; height: 4px; border-radius: 1px; background: var(--accent); }
   .bars.on i { animation: bar .9s ease-in-out infinite; }
@@ -193,12 +262,6 @@
   .bars.wait i:nth-child(2) { animation-delay: .2s; }
   .bars.wait i:nth-child(3) { animation-delay: .4s; }
   @keyframes wait { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
-  .again { all: unset; cursor: pointer; flex: none; padding: 3px 10px; border-radius: 99px; font-size: 12px; color: var(--fg);
-    background: color-mix(in srgb, var(--accent) 22%, transparent); }
-  .again:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
-  .close { all: unset; cursor: pointer; flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%;
-    color: var(--muted); font-size: 11px; }
-  .close:hover { color: var(--fg); }
   .stop { all: unset; cursor: pointer; flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
     background: var(--red); }
   .stop:hover { filter: brightness(1.1); }
