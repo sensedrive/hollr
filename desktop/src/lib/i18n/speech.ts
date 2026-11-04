@@ -22,42 +22,30 @@ export default {
   "Nur auf dem Mac (say).": "Only on the Mac (say).",
   "macOS-Stimmen (say), ohne Download.": "macOS voices (say), no download.",
   "Phonon-Modelle": "Phonon models",
-  "Modellseite auf Hugging Face": "Model page on Hugging Face",
+  "Modellseite in der Ollama-Registry": "Model page in the Ollama registry",
   "Deutsch, Englisch, Französisch, Spanisch, Portugiesisch – empfohlen": "German, English, French, Spanish, Portuguese – recommended",
   "Nur Deutsch": "German only",
   "Nur Englisch": "English only",
-  "Nur Englisch, frei (Apache 2.0) – ohne Token": "English only, free (Apache 2.0) – no token",
-  "Phonon von Gradium läuft auf diesem Computer (CPU, etwa 20× schneller als Echtzeit) und streamt, während es liest. Die Modelle liegen im App-Ordner.":
-    "Gradium's Phonon runs on this computer (CPU, about 20× faster than real time) and streams while it reads. The models live in the app folder.",
-  "Hugging-Face-Zugang": "Hugging Face access",
-  "Token gespeichert": "Token saved",
-  Speichern: "Save",
-  "Phonon 40m ist frei für nicht-kommerzielle Nutzung (CC BY-NC 4.0) und auf Hugging Face freigabepflichtig:":
-    "Phonon 40m is free for non-commercial use (CC BY-NC 4.0) and gated on Hugging Face:",
-  "1. Modellseite öffnen, anmelden und die Bedingungen akzeptieren": "1. open the model page, sign in and accept the terms",
-  "2. einen Token mit Leserecht anlegen": "2. create a token with read access",
-  "3. hier eintragen und das Modell laden. Der Token bleibt auf diesem Computer (App-Ordner, nur für dich lesbar).":
-    "3. enter it here and download the model. The token stays on this computer (app folder, readable only by you).",
-  "Phonon 31m (nur Englisch) braucht keinen Token.": "Phonon 31m (English only) needs no token.",
+  "„Laden“ macht dort weiter.": "“Download” picks up where it stopped.",
+  "Phonon von Gradium läuft auf diesem Computer (CPU, etwa 20× schneller als Echtzeit) und streamt, während es liest.":
+    "Gradium's Phonon runs on this computer (CPU, about 20× faster than real time) and streams while it reads.",
+  "Quelle: Ollama-Registry (library/phonon), ohne Anmeldung. Die Modelle stammen von Gradium – Phonon 40m unter CC BY-NC 4.0 (nur nicht-kommerziell), Phonon 31m unter Apache 2.0; die Lizenztexte liegen beim Modell im App-Ordner.":
+    "Source: the Ollama registry (library/phonon), no sign-in. The models are by Gradium – Phonon 40m under CC BY-NC 4.0 (non-commercial only), Phonon 31m under Apache 2.0; the licence texts are stored with the model in the app folder.",
   "Stimme ({model})": "Voice ({model})",
-  "Standard (Modellstimme)": "Default (the model's voice)",
+  Standard: "Default",
+  "Standard ({name})": "Default ({name})",
   weiblich: "female",
   männlich: "male",
-  "Dieses Modell nimmt keine Stimmen aus Gradiums Katalog – es liest mit seiner eigenen.":
-    "This model takes no voices from Gradium's catalog – it reads with its own.",
-  "Stimmen aus Gradiums Katalog (gradium/phonon-voices), je ca. 250 KB, werden beim Wählen geladen.":
-    "Voices from Gradium's catalog (gradium/phonon-voices), about 250 KB each, are downloaded when you pick them.",
+  "Die Stimmen aus Gradiums Katalog sind im Modell enthalten – kein weiterer Download.":
+    "The voices from Gradium's catalog come with the model – nothing more to download.",
   Tempo: "Speed",
   "Dieses Phonon-Modell liest immer im eigenen Tempo.": "This Phonon model always reads at its own pace.",
   "Knopf „Vorlesen“ bei markiertem Text": "“Read aloud” button next to selected text",
   // speech.rs
-  "Kein Zugriff – Hugging-Face-Token eintragen (Einstellungen › Vorlesen).": "No access – enter a Hugging Face token (Settings › Read aloud).",
-  "Noch nicht freigeschaltet – auf der Modellseite bei Hugging Face die Bedingungen akzeptieren.":
-    "Not unlocked yet – accept the terms on the model's Hugging Face page.",
   "Kein Phonon-Modell für diese Sprache und keine Systemstimme – Einstellungen › Vorlesen.":
     "No Phonon model for this language and no system voice – Settings › Read aloud.",
   "Keine Systemstimme – ein Phonon-Modell laden (Einstellungen › Vorlesen).": "No system voice – download a Phonon model (Settings › Read aloud).",
-  "Das sieht nicht nach einem Hugging-Face-Token aus.": "That doesn't look like a Hugging Face token.",
+  "Download beschädigt (Prüfsumme stimmt nicht)": "Download corrupted (checksum mismatch)",
   "Kein Lautsprecher gefunden": "No speaker found",
   "Lautsprecher getrennt": "Speaker disconnected",
 };

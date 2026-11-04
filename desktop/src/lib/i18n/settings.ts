@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Phonon 40m ohne Hugging Face: ein Klick auf „Laden“ unter Einstellungen › Vorlesen holt das Modell (148 MB, Deutsch, Englisch, Französisch, Spanisch, Portugiesisch) – kein Konto, kein Token; über 100 Stimmen sind dabei":
+    "Phonon 40m without Hugging Face: one click on “Download” in Settings › Read aloud fetches the model (148 MB, German, English, French, Spanish, Portuguese) – no account, no token; over 100 voices included",
   "Vorlesen: Text im Chat oder Terminal markieren und „Vorlesen“ tippen (⌘⇧S) – mit Phonon 40m auf dem Gerät, bis dahin mit der macOS-Stimme; Einstellungen › Vorlesen":
     "Read aloud: select text in the chat or terminal and tap “Read aloud” (⌘⇧S) – with Phonon 40m on the device, until then with the macOS voice; Settings › Read aloud",
   "Warten auf Hintergrund-Jobs zeigt, worauf: Absicht, Jobs, Laufzeit – und wenn fertig, wie lange es gedauert hat":

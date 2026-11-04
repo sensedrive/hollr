@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 23,
+    version: "0.35.1",
+    date: "04.11.2026",
+    items: [
+      { icon: "🔊", text: "Phonon 40m ohne Hugging Face: ein Klick auf „Laden“ unter Einstellungen › Vorlesen holt das Modell (148 MB, Deutsch, Englisch, Französisch, Spanisch, Portugiesisch) – kein Konto, kein Token; über 100 Stimmen sind dabei" },
+    ],
+  },
+  {
     build: 22,
     version: "0.35.0",
     date: "04.11.2026",

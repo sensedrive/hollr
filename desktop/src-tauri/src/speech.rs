@@ -4,21 +4,27 @@
 //! before any model is there. Markdown cleanup and language detection happen in the frontend
 //! (speechText.ts); this gets plain text plus a language code.
 //!
-//! Files in `<app data>/speech`: `models/<id>/` (one Phonon checkpoint from `gradium/<id>` on
-//! Hugging Face: config, tokenizer, q8 weights, default voice), `voices/` (Gradium's voice catalog
-//! and the voices picked from it) and `hf-token` (0600). The Phonon 40m models are gated (CC BY-NC):
-//! their download needs the terms accepted on Hugging Face and a read token.
+//! Models come from Ollama's registry (`library/phonon:<tag>`), which hosts Gradium's checkpoints
+//! without Hugging Face's gate: one single-tensor safetensors blob per weight plus config, tokenizer
+//! and licence files. The blobs are checked against their digests and merged into one
+//! `model.safetensors`, so `ptts` loads the folder like a Hugging Face checkpoint.
+//!
+//! Files in `<app data>/speech`: `models/<id>/` (config.json, tokenizer.json, model.safetensors,
+//! LICENSE*.txt), `models/<id>.part/` while downloading (kept on failure: the next try resumes) and
+//! `voices.jsonl` (Gradium's public voice catalog from Hugging Face, only for names → language and
+//! gender). Gradium's voices are baked into the weights; each language reads with the catalog's
+//! first voice of that language unless another one is chosen.
 //!
 //! Events: `speech` {session, t: "playing" | "end" | "error", error?, warning?} and
 //! `speech-download` {id, progress} / {id, done} / {id, cancelled} / {id, error}.
 
 use std::collections::{HashMap, VecDeque};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -27,23 +33,28 @@ use ptts::checkpoint::{Checkpoint, ResolveOptions, read_config};
 use ptts::preprocess::{Lang, Normalize};
 use ptts::synth::{DeviceKind, Quant, SpeechOptions, SpeechStream, Synth};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::live::Resampler;
 
-/// What a checkpoint needs here: `Checkpoint::resolve` finds the q8 weights, the tokenizer and the
-/// default voice by these names. Small files first, so a missing licence fails before the big one.
-const MODEL_FILES: [&str; 4] = ["config.json", "tokenizer.json", "default-voice.safetensors", "model.q8.gguf"];
-/// The voice format of every voice in Gradium's catalog (its README); a checkpoint lists the formats
-/// it takes in `embeddings_ext`. A voice made for another checkpoint gives confident nonsense.
-const CATALOG_VOICE_FORMAT: &str = "ba7a5a45@300";
+/// Where Ollama keeps the Phonon checkpoints; tag = the model id without `phonon-`.
+const REGISTRY: &str = "https://registry.ollama.ai/v2/library/phonon";
+/// What a finished model folder holds (`Checkpoint::resolve` finds them by these names).
+const MODEL_FILES: [&str; 3] = ["config.json", "tokenizer.json", "model.safetensors"];
+/// The model licence (its first lines name the source: "Gradium gradium/<repo>", "Source: <url>").
+const LICENSE_FILE: &str = "LICENSE.txt";
+/// Parallel blob downloads: a checkpoint is ~300 small files, each behind a redirect.
+const DOWNLOAD_THREADS: usize = 6;
+/// The tensors Ollama's checkpoints keep Gradium's voices in: `voices.<name>`.
+const VOICE_PREFIX: &str = "voices.";
 /// The conditioner Phonon checkpoints read the speaking rate from (positive = slower).
 const DURATION_DELTA: &str = "duration_delta";
 
 // ------------------------------------------------------------ files
 
-/// `<dir>/models/<id>`; ids are the repo names under `gradium/` ("phonon-40m-multilingual" …).
+/// `<dir>/models/<id>`; ids are "phonon-<tag>" ("phonon-40m-multilingual" …).
 pub fn model_dir(dir: &Path, id: &str) -> Result<PathBuf> {
     let ok = id.starts_with("phonon-") && id.len() < 64 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if !ok {
@@ -52,46 +63,12 @@ pub fn model_dir(dir: &Path, id: &str) -> Result<PathBuf> {
     Ok(dir.join("models").join(id))
 }
 
+fn tag(id: &str) -> &str {
+    id.strip_prefix("phonon-").unwrap_or(id)
+}
+
 pub fn model_page(id: &str) -> String {
-    format!("https://huggingface.co/gradium/{id}")
-}
-
-fn token_file(dir: &Path) -> PathBuf {
-    dir.join("hf-token")
-}
-
-/// The Hugging Face read token: the one entered in the settings, else `HF_TOKEN` (like ptts' own CLI).
-pub fn token(dir: &Path) -> Option<String> {
-    let saved = std::fs::read_to_string(token_file(dir)).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-    saved.or_else(|| std::env::var("HF_TOKEN").ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()))
-}
-
-/// Saves the token readable by this user only; "" deletes it.
-pub fn save_token(dir: &Path, token: &str) -> Result<()> {
-    let token = token.trim();
-    let file = token_file(dir);
-    if token.is_empty() {
-        return match std::fs::remove_file(&file) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
-            _ => Ok(()),
-        };
-    }
-    if token.len() > 256 || !token.chars().all(|c| c.is_ascii_graphic()) {
-        bail!("Das sieht nicht nach einem Hugging-Face-Token aus.");
-    }
-    std::fs::create_dir_all(dir).context("Ordner für die Sprachausgabe")?;
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-        options.mode(0o600);
-        // an older file keeps its mode on truncate
-        if file.exists() {
-            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))?;
-        }
-    }
-    options.open(&file).and_then(|mut f| f.write_all(token.as_bytes())).context("Token speichern")
+    format!("https://ollama.com/library/phonon:{}", tag(id))
 }
 
 fn agent() -> ureq::Agent {
@@ -100,80 +77,279 @@ fn agent() -> ureq::Agent {
 
 fn http_error(e: ureq::Error) -> anyhow::Error {
     match e {
-        ureq::Error::StatusCode(401) => anyhow!("Kein Zugriff – Hugging-Face-Token eintragen (Einstellungen › Vorlesen)."),
-        ureq::Error::StatusCode(403) => anyhow!("Noch nicht freigeschaltet – auf der Modellseite bei Hugging Face die Bedingungen akzeptieren."),
         ureq::Error::StatusCode(404) => anyhow!("Datei nicht gefunden (404)"),
         e => anyhow!("Download fehlgeschlagen: {e}"),
     }
 }
 
-/// One file into `dest`; `progress` gets 0 … 1 when the size is known. Stops as soon as `cancel` is set.
-fn fetch(url: &str, token: Option<&str>, dest: &Path, cancel: &AtomicBool, mut progress: impl FnMut(f64)) -> Result<()> {
-    let mut req = agent().get(url);
-    if let Some(token) = token {
-        // ureq drops it on the redirect to the CDN (signed URL there)
-        req = req.header("Authorization", format!("Bearer {token}"));
-    }
-    let resp = req.call().map_err(http_error)?;
-    let total = resp.body().content_length();
-    let mut reader = resp.into_body().into_reader();
-    let mut out = std::io::BufWriter::new(std::fs::File::create(dest).context("Datei anlegen")?);
-    let mut buf = vec![0u8; 1 << 16];
-    let mut done = 0u64;
-    let mut reported = Instant::now();
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            bail!("Abgebrochen");
-        }
-        let n = reader.read(&mut buf).map_err(|e| anyhow!("Download unterbrochen: {e}"))?;
-        if n == 0 {
-            break;
-        }
-        out.write_all(&buf[..n]).context("Datei schreiben")?;
-        done += n as u64;
-        if let Some(total) = total
-            && reported.elapsed() > Duration::from_millis(150)
-        {
-            reported = Instant::now();
-            progress(done as f64 / total.max(1) as f64);
-        }
-    }
-    out.flush()?;
-    if let Some(total) = total
-        && done != total
-    {
-        bail!("Download unvollständig ({done} von {total} Bytes)");
-    }
-    Ok(())
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Downloads a Phonon checkpoint into `<dir>/models/<id>.part` and renames it when complete.
-pub fn download_model(dir: &Path, id: &str, token: Option<&str>, cancel: &AtomicBool, mut progress: impl FnMut(f64)) -> Result<PathBuf> {
-    let target = model_dir(dir, id)?;
-    let part = target.with_extension("part");
-    let _ = std::fs::remove_dir_all(&part);
-    std::fs::create_dir_all(&part).context("Modellordner")?;
+/// One file into `dest` (via `<dest>.part`); `on_bytes` gets every piece's length. With `sha256` the
+/// content must hash to it. Stops as soon as `cancel` is set.
+fn fetch(agent: &ureq::Agent, url: &str, dest: &Path, sha256: Option<&str>, cancel: &AtomicBool, mut on_bytes: impl FnMut(u64)) -> Result<()> {
+    let part = dest.with_extension("part");
     let mut run = || -> Result<()> {
-        for name in MODEL_FILES {
-            let url = format!("https://huggingface.co/gradium/{id}/resolve/main/{name}");
-            let weights = name.ends_with(".gguf");
-            // no file-name prefix: the 401 / 403 texts are what the settings show (and translate)
-            fetch(&url, token, &part.join(name), cancel, |p| {
-                if weights {
-                    progress(p);
-                }
-            })?;
+        let resp = agent.get(url).call().map_err(http_error)?;
+        let total = resp.body().content_length();
+        let mut reader = resp.into_body().into_reader();
+        let mut out = std::io::BufWriter::new(std::fs::File::create(&part).context("Datei anlegen")?);
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 1 << 16];
+        let mut done = 0u64;
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                bail!("Abgebrochen");
+            }
+            let n = reader.read(&mut buf).map_err(|e| anyhow!("Download unterbrochen: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buf[..n]).context("Datei schreiben")?;
+            hasher.update(&buf[..n]);
+            done += n as u64;
+            on_bytes(n as u64);
+        }
+        out.flush()?;
+        if let Some(total) = total
+            && done != total
+        {
+            bail!("Download unvollständig ({done} von {total} Bytes)");
+        }
+        if let Some(want) = sha256
+            && hex(&hasher.finalize()) != want
+        {
+            bail!("Download beschädigt (Prüfsumme stimmt nicht)");
         }
         Ok(())
     };
     if let Err(e) = run() {
-        let _ = std::fs::remove_dir_all(&part);
+        let _ = std::fs::remove_file(&part);
         return Err(e);
     }
+    std::fs::rename(&part, dest).context("Datei ablegen")
+}
+
+#[derive(Deserialize, Debug)]
+struct Manifest {
+    layers: Vec<Layer>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Layer {
+    #[serde(rename = "mediaType")]
+    media_type: String,
+    digest: String,
+    size: u64,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+impl Layer {
+    /// The digest's hex part – also the blob's file name, so it must be exactly that.
+    fn sha256(&self) -> Result<&str> {
+        let hex = self.digest.strip_prefix("sha256:").unwrap_or_default();
+        if hex.len() != 64 || !hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
+            bail!("Unerwarteter Eintrag im Modell-Manifest: {}", self.digest);
+        }
+        Ok(hex)
+    }
+
+    fn kind(&self) -> &str {
+        self.media_type.strip_prefix("application/vnd.ollama.image.").unwrap_or(&self.media_type)
+    }
+}
+
+fn manifest(agent: &ureq::Agent, tag: &str) -> Result<Manifest> {
+    let resp = agent
+        .get(format!("{REGISTRY}/manifests/{tag}"))
+        .header("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+        .call()
+        .map_err(http_error)
+        .context("Modell-Manifest")?;
+    let text = resp.into_body().read_to_string().context("Modell-Manifest")?;
+    serde_json::from_str(&text).context("Modell-Manifest")
+}
+
+/// Merges single-tensor safetensors blobs (in order) into one safetensors file at `out`: one header
+/// with the offsets moved along, then the blobs' data back to back, streamed from disk. Returns the
+/// tensor names.
+pub fn merge_safetensors(blobs: &[PathBuf], out: &Path) -> Result<Vec<String>> {
+    let mut header = serde_json::Map::new();
+    // (blob, where its data starts, how long it is)
+    let mut parts = Vec::with_capacity(blobs.len());
+    let mut offset = 0u64;
+    for blob in blobs {
+        let mut f = std::fs::File::open(blob).context("Modellteil")?;
+        let mut len = [0u8; 8];
+        f.read_exact(&mut len).context("Modellteil")?;
+        let len = u64::from_le_bytes(len);
+        if len > 1 << 20 {
+            bail!("Modellteil ist keine safetensors-Datei");
+        }
+        let mut raw = vec![0u8; len as usize];
+        f.read_exact(&mut raw).context("Modellteil")?;
+        let tensors: serde_json::Map<String, Value> = serde_json::from_slice(&raw).context("Modellteil")?;
+        let mut data = 0u64;
+        for (name, info) in tensors {
+            if name == "__metadata__" {
+                continue;
+            }
+            let range = info["data_offsets"].as_array().and_then(|r| Some((r.first()?.as_u64()?, r.get(1)?.as_u64()?)));
+            let Some((begin, end)) = range.filter(|(b, e)| b <= e) else { bail!("Modellteil {name}: ungültige Offsets") };
+            if header.contains_key(&name) {
+                bail!("Tensor {name} doppelt im Modell");
+            }
+            header.insert(name, json!({ "dtype": info["dtype"], "shape": info["shape"], "data_offsets": [offset + begin, offset + end] }));
+            data = data.max(end);
+        }
+        if f.metadata()?.len() != 8 + len + data {
+            bail!("Modellteil {} hat eine unerwartete Größe", blob.display());
+        }
+        parts.push((blob, 8 + len, data));
+        offset += data;
+    }
+    let mut head = serde_json::to_vec(&header)?;
+    // the format pads the header to 8 bytes, so the data starts aligned
+    head.resize(head.len().div_ceil(8) * 8, b' ');
+    let mut w = std::io::BufWriter::new(std::fs::File::create(out).context("model.safetensors")?);
+    w.write_all(&(head.len() as u64).to_le_bytes())?;
+    w.write_all(&head)?;
+    for (blob, start, len) in parts {
+        let mut f = std::fs::File::open(blob)?;
+        f.seek(SeekFrom::Start(start))?;
+        let copied = std::io::copy(&mut f.take(len), &mut w)?;
+        if copied != len {
+            bail!("Modellteil {} ist zu kurz", blob.display());
+        }
+    }
+    w.flush().context("model.safetensors")?;
+    Ok(header.into_iter().map(|(name, _)| name).collect())
+}
+
+/// Downloads the blobs of `layers` that `blobs` doesn't have yet (in parallel, each checked against its
+/// digest); `progress` gets the bytes there so far, including blobs a previous try finished.
+fn download_blobs(agent: &ureq::Agent, layers: &[Layer], blobs: &Path, cancel: &AtomicBool, mut progress: impl FnMut(u64)) -> Result<()> {
+    let done = AtomicU64::new(0);
+    let mut todo = Vec::new();
+    for layer in layers {
+        let hash = layer.sha256()?;
+        let file = blobs.join(hash);
+        // only a verified download gets its final name
+        if file.metadata().is_ok_and(|m| m.len() == layer.size) {
+            done.fetch_add(layer.size, Ordering::Relaxed);
+        } else {
+            todo.push((format!("{REGISTRY}/blobs/{}", layer.digest), hash, file));
+        }
+    }
+    let next = AtomicUsize::new(0);
+    // set by a cancel (copied over below) or the first failing blob: every worker stops
+    let abort = AtomicBool::new(false);
+    let error: Mutex<Option<anyhow::Error>> = Mutex::new(None);
+    std::thread::scope(|s| {
+        let workers: Vec<_> = (0..DOWNLOAD_THREADS.min(todo.len()))
+            .map(|_| {
+                s.spawn(|| {
+                    while !abort.load(Ordering::Relaxed) {
+                        let Some((url, hash, file)) = todo.get(next.fetch_add(1, Ordering::Relaxed)) else { break };
+                        if let Err(e) = fetch(agent, url, file, Some(hash), &abort, |n| {
+                            done.fetch_add(n, Ordering::Relaxed);
+                        }) {
+                            if !abort.swap(true, Ordering::Relaxed) {
+                                *error.lock().unwrap() = Some(e);
+                            }
+                        }
+                    }
+                })
+            })
+            .collect();
+        while !workers.iter().all(|w| w.is_finished()) {
+            if cancel.load(Ordering::Relaxed) {
+                abort.store(true, Ordering::Relaxed);
+            }
+            progress(done.load(Ordering::Relaxed));
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+    if cancel.load(Ordering::Relaxed) {
+        bail!("Abgebrochen");
+    }
+    if let Some(e) = error.into_inner().unwrap() {
+        return Err(e);
+    }
+    progress(done.load(Ordering::Relaxed));
+    Ok(())
+}
+
+/// Downloads a Phonon checkpoint from Ollama's registry into `<dir>/models/<id>` (via `<id>.part`,
+/// kept on failure so the next try only fetches what is missing), plus the default voice of each
+/// language it speaks. `progress` gets 0 … 1.
+pub fn download_model(dir: &Path, id: &str, cancel: &AtomicBool, mut progress: impl FnMut(f64)) -> Result<PathBuf> {
+    let target = model_dir(dir, id)?;
+    let part = target.with_extension("part");
+    let blobs = part.join("blobs");
+    std::fs::create_dir_all(&blobs).context("Modellordner")?;
+    let agent = agent();
+    let manifest = manifest(&agent, tag(id))?;
+    let total: u64 = manifest.layers.iter().map(|l| l.size).sum::<u64>().max(1);
+    // the merge and the voices are the last few percent
+    download_blobs(&agent, &manifest.layers, &blobs, cancel, |done| progress(done as f64 / total as f64 * 0.97))?;
+
+    let blob = |l: &Layer| l.sha256().map(|h| blobs.join(h));
+    let tensors: Vec<PathBuf> = manifest.layers.iter().filter(|l| l.kind() == "tensor").map(blob).collect::<Result<_>>()?;
+    if tensors.is_empty() {
+        bail!("Das Modell im Registry hat keine Gewichte");
+    }
+    let names = merge_safetensors(&tensors, &part.join("model.safetensors"))?;
+    let mut licenses = 0;
+    for layer in &manifest.layers {
+        let name = match (layer.kind(), layer.name.as_deref()) {
+            ("json", Some(name)) if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && !name.starts_with('.') => {
+                name.to_string()
+            }
+            ("license", _) => {
+                // the voice catalog's licence comes along too; the model's own is LICENSE.txt
+                let text = std::fs::read_to_string(blob(layer)?).unwrap_or_default();
+                if text.lines().next().is_some_and(|l| l.contains("phonon-voices")) {
+                    "LICENSE-voices.txt".to_string()
+                } else {
+                    licenses += 1;
+                    if licenses == 1 { LICENSE_FILE.to_string() } else { format!("LICENSE-{licenses}.txt") }
+                }
+            }
+            _ => continue,
+        };
+        std::fs::copy(blob(layer)?, part.join(name)).context("Modelldatei")?;
+    }
+    if !MODEL_FILES.iter().all(|f| part.join(f).is_file()) {
+        bail!("Das Modell im Registry ist unvollständig (config.json / tokenizer.json fehlen)");
+    }
+    bake_voices(&part.join("config.json"), &names)?;
+    // voice names → language and gender for the settings; only nice to have
+    if let Err(e) = catalog(dir) {
+        eprintln!("speech: voice catalog: {e:#}");
+    }
+    std::fs::remove_dir_all(&blobs).context("Modellordner")?;
     let _ = std::fs::remove_dir_all(&target);
     std::fs::rename(&part, &target).context("Modellordner")?;
     progress(1.0);
     Ok(target)
+}
+
+/// Ollama's checkpoints carry Gradium's voices in the weights (`voices.<name>`, speaker latents) but
+/// their config doesn't list them, and ptts refuses tensors it doesn't know: list them as baked-in voices.
+fn bake_voices(config: &Path, tensors: &[String]) -> Result<()> {
+    let voices: Vec<Value> = tensors
+        .iter()
+        .filter_map(|t| t.strip_prefix(VOICE_PREFIX).map(|name| json!({ "name": name, "prefix": t })))
+        .collect();
+    let mut cfg: Value = serde_json::from_str(&std::fs::read_to_string(config).context("config.json")?).context("config.json")?;
+    if voices.is_empty() || cfg.get("voices").and_then(Value::as_array).is_some_and(|v| !v.is_empty()) {
+        return Ok(());
+    }
+    cfg["voices"] = Value::Array(voices);
+    std::fs::write(config, serde_json::to_vec_pretty(&cfg)?).context("config.json")
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -184,8 +360,10 @@ pub struct LocalModel {
     pub languages: Vec<String>,
     /// takes a speaking rate
     pub speed: bool,
-    /// takes the voices of Gradium's catalog
-    pub catalog_voices: bool,
+    /// its voices (baked into the weights), "default" among them
+    pub voices: Vec<String>,
+    /// the licence file's source lines ("Gradium gradium/phonon-40m-multilingual · Source: …")
+    pub attribution: Option<String>,
 }
 
 fn has_speed(config: &ptts::tts_model::TTSConfig) -> bool {
@@ -205,8 +383,12 @@ pub fn local_models(dir: &Path) -> Vec<LocalModel> {
             }
             let config = read_config(path.join("config.json")).ok()?;
             let bytes = MODEL_FILES.iter().filter_map(|f| path.join(f).metadata().ok()).map(|m| m.len()).sum();
-            let catalog_voices = config.embeddings_ext.as_ref().is_none_or(|ext| ext.iter().any(|e| e == CATALOG_VOICE_FORMAT));
-            Some(LocalModel { speed: has_speed(&config), catalog_voices, languages: config.languages, bytes, id })
+            let attribution = std::fs::read_to_string(path.join(LICENSE_FILE))
+                .ok()
+                .map(|t| t.lines().take(2).map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" · "))
+                .filter(|a| !a.is_empty());
+            let voices = config.voices.iter().map(|v| v.name.clone()).collect();
+            Some(LocalModel { speed: has_speed(&config), voices, languages: config.languages, bytes, attribution, id })
         })
         .collect();
     models.sort_by(|a, b| a.id.cmp(&b.id));
@@ -215,11 +397,10 @@ pub fn local_models(dir: &Path) -> Vec<LocalModel> {
 
 // ------------------------------------------------------------ voices
 
+/// A voice of Gradium's catalog: what the model only knows by name.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CatalogVoice {
     pub name: String,
-    /// relative to the catalog ("voices/<id>.safetensors")
-    pub filename: String,
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
@@ -228,65 +409,39 @@ pub struct CatalogVoice {
     pub gender: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
-    /// downloaded already
-    #[serde(default)]
-    pub local: bool,
 }
 
-/// ptts' pinned default catalog (`hf://gradium/phonon-voices@<commit>`) as a download base URL.
-fn catalog_base() -> String {
+/// ptts' pinned default catalog (`hf://gradium/phonon-voices@<commit>`, public) as a download URL.
+fn catalog_url() -> String {
     let source = ptts::voice_catalog::DEFAULT_VOICE_CATALOG.trim_start_matches("hf://");
     let (repo, revision) = source.split_once('@').unwrap_or((source, "main"));
-    format!("https://huggingface.co/{repo}/resolve/{revision}")
+    format!("https://huggingface.co/{repo}/resolve/{revision}/{}", ptts::voice_catalog::CATALOG_FILE)
 }
 
-fn voices_dir(dir: &Path) -> PathBuf {
-    dir.join("voices")
+fn catalog_file(dir: &Path) -> PathBuf {
+    dir.join(ptts::voice_catalog::CATALOG_FILE)
 }
 
-/// A catalog file name that stays inside the catalog folder.
-fn inside(file: &str) -> bool {
-    !file.is_empty() && !file.starts_with('/') && !file.contains('\\') && file.split('/').all(|p| !p.is_empty() && p != "." && p != "..")
+/// The catalog as it is on this computer (no network); empty before the first download.
+fn catalog_entries(dir: &Path) -> Vec<CatalogVoice> {
+    let text = std::fs::read_to_string(catalog_file(dir)).unwrap_or_default();
+    text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect()
 }
 
-/// Gradium's voice catalog (downloaded once, ~35 KB), each voice marked when it is on this computer.
+/// Gradium's voice catalog (~35 KB, fetched once): which language, accent and gender each voice has.
 pub fn catalog(dir: &Path) -> Result<Vec<CatalogVoice>> {
-    let folder = voices_dir(dir);
-    let file = folder.join(ptts::voice_catalog::CATALOG_FILE);
+    let file = catalog_file(dir);
     if !file.is_file() {
-        std::fs::create_dir_all(&folder).context("Stimmenordner")?;
-        let part = file.with_extension("part");
-        let url = format!("{}/{}", catalog_base(), ptts::voice_catalog::CATALOG_FILE);
-        fetch(&url, None, &part, &AtomicBool::new(false), |_| {}).context("Stimmenkatalog")?;
-        std::fs::rename(&part, &file)?;
+        std::fs::create_dir_all(dir).context("Ordner für die Sprachausgabe")?;
+        fetch(&agent(), &catalog_url(), &file, None, &AtomicBool::new(false), |_| {}).context("Stimmenkatalog")?;
     }
-    let text = std::fs::read_to_string(&file)?;
-    let mut voices = Vec::new();
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        let mut v: CatalogVoice = serde_json::from_str(line).context("Stimmenkatalog")?;
-        if !inside(&v.filename) {
-            continue;
-        }
-        v.local = folder.join(&v.filename).is_file();
-        voices.push(v);
-    }
-    Ok(voices)
+    Ok(catalog_entries(dir))
 }
 
-/// Downloads one catalog voice (~250 KB).
-pub fn download_voice(dir: &Path, name: &str) -> Result<()> {
-    let voice = catalog(dir)?.into_iter().find(|v| v.name == name).ok_or_else(|| anyhow!("Unbekannte Stimme „{name}“"))?;
-    if voice.local {
-        return Ok(());
-    }
-    let dest = voices_dir(dir).join(&voice.filename);
-    if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let part = dest.with_extension("part");
-    fetch(&format!("{}/{}", catalog_base(), voice.filename), None, &part, &AtomicBool::new(false), |_| {})?;
-    std::fs::rename(&part, &dest)?;
-    Ok(())
+/// The voice a language reads with when none is chosen: the catalog's first one of that language
+/// the model has; None = the model's "default".
+pub fn default_voice<'a>(catalog: &'a [CatalogVoice], model_voices: &[String], lang: &str) -> Option<&'a CatalogVoice> {
+    catalog.iter().find(|v| v.language.as_deref() == Some(lang) && model_voices.contains(&v.name))
 }
 
 // ------------------------------------------------------------ Phonon
@@ -297,10 +452,10 @@ pub fn duration_delta(speed: f32) -> f32 {
     ((1.0 - speed) * 1.7).clamp(-0.5, 0.5)
 }
 
-/// Loads a checkpoint for the CPU (q8 weights, ~20× realtime on one Apple core) with its own voices
-/// and the catalog voices downloaded so far. Text is normalized per request (`stream`), so one
-/// loaded model serves every language it speaks.
-pub fn load(dir: &Path, model: &Path, speed: f32) -> Result<Synth> {
+/// Loads a checkpoint for the CPU (weights quantized to q8 on load, ~20× realtime on one Apple core)
+/// with the voices baked into it. Text is normalized per request (`stream`), so one loaded model
+/// serves every language it speaks.
+pub fn load(model: &Path, speed: f32) -> Result<Synth> {
     let checkpoint = Checkpoint::resolve(model, ResolveOptions { quant: Quant::Q80, weights: None })
         .map_err(|e| anyhow!("Phonon-Modell lässt sich nicht laden: {e}"))?;
     let mut builder = checkpoint.builder(Normalize::OFF).device(DeviceKind::Cpu);
@@ -309,44 +464,24 @@ pub fn load(dir: &Path, model: &Path, speed: f32) -> Result<Synth> {
     }
     let mut synth = builder.build().map_err(|e| anyhow!("Phonon-Modell lässt sich nicht laden: {e}"))?;
     checkpoint.register_voices(&mut synth);
-    let folder = voices_dir(dir);
-    if let Ok(voices) = catalog_local(&folder) {
-        for (name, path) in voices {
-            // a voice of another format is refused here – speaking falls back to the default voice
-            if let Err(e) = synth.add_voice_file(&name, &path) {
-                eprintln!("speech: voice {name} skipped: {e}");
-            }
-        }
-    }
     Ok(synth)
 }
 
-/// The downloaded catalog voices (no network).
-fn catalog_local(folder: &Path) -> Result<Vec<(String, PathBuf)>> {
-    let text = std::fs::read_to_string(folder.join(ptts::voice_catalog::CATALOG_FILE))?;
-    Ok(text
-        .lines()
-        .filter_map(|l| serde_json::from_str::<CatalogVoice>(l).ok())
-        .filter(|v| inside(&v.filename))
-        .map(|v| (v.name, folder.join(v.filename)))
-        .filter(|(_, p)| p.is_file())
-        .collect())
-}
-
-/// Starts generating `text` (normalized as `lang`) in `voice`; a voice the model doesn't have falls
-/// back to its default one, with a warning.
-pub fn stream(synth: &Synth, text: &str, lang: &str, voice: Option<&str>) -> Result<(SpeechStream, Option<String>)> {
+/// Starts generating `text` (normalized as `lang`) in `voice`. Without one – or with one the model
+/// doesn't have (warning) – it reads with the catalog's first voice of that language, else "default".
+pub fn stream(synth: &Synth, dir: &Path, text: &str, lang: &str, voice: Option<&str>) -> Result<(SpeechStream, Option<String>)> {
     let normalize = lang.parse::<Lang>().map(Normalize::for_lang).unwrap_or(Normalize::OFF);
     let text = normalize.apply(text);
-    let mut options = SpeechOptions::default();
+    let known = synth.voices();
     let mut warning = None;
-    if let Some(voice) = voice.filter(|v| !v.is_empty() && *v != "default") {
-        if synth.voices().iter().any(|v| v == voice) {
-            options = options.voice(voice);
-        } else {
-            warning = Some(format!("Stimme „{voice}“ passt nicht zu diesem Modell – Standardstimme."));
-        }
+    let mut chosen = voice.filter(|v| !v.is_empty() && *v != "default").map(str::to_string);
+    if let Some(v) = chosen.take_if(|v| !known.contains(v)) {
+        warning = Some(format!("Stimme „{v}“ passt nicht zu diesem Modell – Standardstimme."));
     }
+    if chosen.is_none() {
+        chosen = default_voice(&catalog_entries(dir), &known, lang).map(|v| v.name.clone());
+    }
+    let options = chosen.map_or_else(SpeechOptions::default, |v| SpeechOptions::default().voice(v));
     let stream = synth.stream_with(&text, &options).map_err(|e| anyhow!("Phonon: {e}"))?;
     Ok((stream, warning))
 }
@@ -548,7 +683,7 @@ pub fn choose(models: &[LocalModel], engine: &str, preferred: Option<&str>, lang
 struct Loaded(Arc<Mutex<Option<(PathBuf, i32, Arc<Synth>)>>>);
 
 impl Loaded {
-    fn get(&self, dir: &Path, model: &Path, speed: f32) -> Result<Arc<Synth>> {
+    fn get(&self, model: &Path, speed: f32) -> Result<Arc<Synth>> {
         let key = (duration_delta(speed) * 100.0).round() as i32;
         let mut slot = self.0.lock().unwrap();
         if let Some((p, k, synth)) = slot.as_ref()
@@ -558,7 +693,7 @@ impl Loaded {
             return Ok(synth.clone());
         }
         *slot = None; // free the old model first
-        let synth = Arc::new(load(dir, model, speed)?);
+        let synth = Arc::new(load(model, speed)?);
         *slot = Some((model.to_path_buf(), key, synth.clone()));
         Ok(synth)
     }
@@ -624,8 +759,6 @@ const LANGUAGES: [&str; 5] = ["de", "en", "fr", "es", "pt"];
 pub struct Status {
     /// the system voice (`say`) is there
     pub system: bool,
-    /// a Hugging Face token is saved (or in `HF_TOKEN`); the token itself never goes to the webview
-    pub token: bool,
     pub models: Vec<LocalModel>,
     /// what would speak each language with these settings (None = nothing can)
     pub engines: HashMap<&'static str, Option<EngineInfo>>,
@@ -639,13 +772,7 @@ pub async fn speech_status(state: tauri::State<'_, Speech>, engine: String, mode
         .iter()
         .map(|lang| (*lang, choose(&models, &engine, model.as_deref(), lang, SYSTEM_VOICE).map(|c| describe(&c, lang))))
         .collect();
-    Ok(Status { system: SYSTEM_VOICE, token: token(&state.dir).is_some(), models, engines })
-}
-
-/// Saves the Hugging Face read token ("" removes it).
-#[tauri::command]
-pub fn speech_token(state: tauri::State<'_, Speech>, token: String) -> Result<(), String> {
-    save_token(&state.dir, &token).map_err(err)
+    Ok(Status { system: SYSTEM_VOICE, models, engines })
 }
 
 /// Starts a model download in the background; progress comes as `speech-download` events.
@@ -662,8 +789,7 @@ pub fn speech_download(app: AppHandle, state: tauri::State<'_, Speech>, id: Stri
     }
     let dir = state.dir.clone();
     std::thread::spawn(move || {
-        let token = token(&dir);
-        let result = download_model(&dir, &id, token.as_deref(), &cancel, |p| {
+        let result = download_model(&dir, &id, &cancel, |p| {
             let _ = app.emit("speech-download", json!({ "id": id, "progress": p }));
         });
         let state = app.state::<Speech>();
@@ -685,33 +811,45 @@ pub fn speech_download_cancel(state: tauri::State<'_, Speech>, id: String) {
     }
 }
 
+/// Removes a model, and what an unfinished download of it left behind.
 #[tauri::command]
 pub fn speech_delete(state: tauri::State<'_, Speech>, id: String) -> Result<(), String> {
     let path = model_dir(&state.dir, &id).map_err(err)?;
     state.stop();
     state.loaded.forget();
-    match std::fs::remove_dir_all(&path) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
-        _ => Ok(()),
+    for p in [path.with_extension("part"), path] {
+        match std::fs::remove_dir_all(&p) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+            _ => {}
+        }
     }
-}
-
-/// Gradium's voice catalog; `compatible` = the model takes these voices (else only its own default).
-#[tauri::command]
-pub async fn speech_voices(state: tauri::State<'_, Speech>, model: Option<String>) -> Result<serde_json::Value, String> {
-    let dir = state.dir.clone();
-    let compatible = model.as_deref().is_none_or(|m| local_models(&dir).iter().find(|l| l.id == m).is_none_or(|l| l.catalog_voices));
-    let voices = tokio::task::spawn_blocking(move || catalog(&dir)).await.map_err(|e| e.to_string())?.map_err(err)?;
-    Ok(json!({ "voices": voices, "compatible": compatible }))
-}
-
-/// Downloads a catalog voice; the loaded model picks it up on the next request.
-#[tauri::command]
-pub async fn speech_voice_download(state: tauri::State<'_, Speech>, name: String) -> Result<(), String> {
-    let dir = state.dir.clone();
-    tokio::task::spawn_blocking(move || download_voice(&dir, &name)).await.map_err(|e| e.to_string())?.map_err(err)?;
-    state.loaded.forget();
     Ok(())
+}
+
+/// The chosen model's voices with what the catalog says about them (language, gender …; only the
+/// name when the catalog isn't there), and the voice each language reads with when none is chosen.
+#[tauri::command]
+pub async fn speech_voices(state: tauri::State<'_, Speech>, model: String) -> Result<serde_json::Value, String> {
+    let dir = state.dir.clone();
+    let names = local_models(&dir).into_iter().find(|m| m.id == model).map(|m| m.voices).unwrap_or_default();
+    let catalog = tokio::task::spawn_blocking(move || catalog(&dir).unwrap_or_else(|_| catalog_entries(&dir)))
+        .await
+        .map_err(|e| e.to_string())?;
+    let defaults: HashMap<&str, &str> = LANGUAGES.iter().filter_map(|l| Some((*l, default_voice(&catalog, &names, l)?.name.as_str()))).collect();
+    let voices: Vec<CatalogVoice> = names
+        .iter()
+        .filter(|n| *n != "default")
+        .map(|n| {
+            catalog.iter().find(|v| &v.name == n).cloned().unwrap_or(CatalogVoice {
+                name: n.clone(),
+                language: None,
+                locale: None,
+                gender: None,
+                description: None,
+            })
+        })
+        .collect();
+    Ok(json!({ "voices": voices, "defaults": defaults }))
 }
 
 #[derive(Deserialize)]
@@ -760,12 +898,12 @@ pub async fn speech_speak(app: AppHandle, state: tauri::State<'_, Speech>, reque
         let speed = if request.speed.is_finite() { request.speed.clamp(0.5, 2.0) } else { 1.0 };
         let result = match choice {
             Choice::Phonon(id) => model_dir(&dir, &id).and_then(|path| {
-                let synth = loaded.get(&dir, &path, speed)?;
+                let synth = loaded.get(&path, speed)?;
                 // stopped while the model was loading
                 if stop.load(Ordering::Relaxed) {
                     return Ok(());
                 }
-                let (chunks, warning) = stream(&synth, &request.text, &request.lang, request.voice.as_deref())?;
+                let (chunks, warning) = stream(&synth, &dir, &request.text, &request.lang, request.voice.as_deref())?;
                 let rate = chunks.sample_rate();
                 play(chunks, rate, &stop, || emit(json!({ "session": session, "t": "playing", "warning": warning })))
             }),
@@ -790,9 +928,9 @@ pub fn speech_stop(state: tauri::State<'_, Speech>) {
 pub fn speech_prewarm(state: tauri::State<'_, Speech>, request: SpeakRequest) {
     let Ok(Choice::Phonon(id)) = choice_for(&state, &request) else { return };
     let Ok(path) = model_dir(&state.dir, &id) else { return };
-    let (dir, loaded) = (state.dir.clone(), state.loaded.clone());
+    let loaded = state.loaded.clone();
     std::thread::spawn(move || {
-        let _ = loaded.get(&dir, &path, request.speed);
+        let _ = loaded.get(&path, request.speed);
     });
 }
 
@@ -811,12 +949,9 @@ mod tests {
     }
 
     #[test]
-    fn catalog_paths_stay_inside() {
-        assert!(inside("voices/NbpkqMVS3CJeq2j8.safetensors"));
-        assert!(!inside("../x.safetensors"));
-        assert!(!inside("/etc/passwd"));
-        assert!(!inside("voices//x"));
-        assert!(catalog_base().starts_with("https://huggingface.co/gradium/phonon-voices/resolve/"));
+    fn catalog_is_pinned() {
+        assert!(catalog_url().starts_with("https://huggingface.co/gradium/phonon-voices/resolve/"));
+        assert!(catalog_url().ends_with("/voices.jsonl"));
     }
 
     #[test]
@@ -843,7 +978,7 @@ mod tests {
     }
 
     fn model(id: &str, languages: &[&str]) -> LocalModel {
-        LocalModel { id: id.into(), bytes: 0, languages: languages.iter().map(|l| l.to_string()).collect(), speed: true, catalog_voices: true }
+        LocalModel { id: id.into(), bytes: 0, languages: languages.iter().map(|l| l.to_string()).collect(), speed: true, voices: vec![], attribution: None }
     }
 
     #[test]
@@ -862,19 +997,80 @@ mod tests {
         assert_eq!(choose(&[multi], "system", None, "de", false), p("phonon-40m-multilingual"));
     }
 
+    /// One single-tensor safetensors file as Ollama's registry stores it.
+    fn blob(name: &str, data: &[u8]) -> Vec<u8> {
+        let head = json!({ name: { "dtype": "BF16", "shape": [data.len() / 2], "data_offsets": [0, data.len()] } }).to_string();
+        let mut out = (head.len() as u64).to_le_bytes().to_vec();
+        out.extend_from_slice(head.as_bytes());
+        out.extend_from_slice(data);
+        out
+    }
+
     #[test]
-    fn token_file_is_private() {
-        let dir = std::env::temp_dir().join(format!("hollr-speech-{}", std::process::id()));
-        save_token(&dir, " hf_abc123 ").unwrap();
-        assert_eq!(std::fs::read_to_string(token_file(&dir)).unwrap(), "hf_abc123");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            assert_eq!(std::fs::metadata(token_file(&dir)).unwrap().permissions().mode() & 0o777, 0o600);
-        }
-        assert!(save_token(&dir, "no spaces allowed").is_err());
-        save_token(&dir, "").unwrap();
-        assert!(!token_file(&dir).exists());
+    fn merges_tensor_blobs() {
+        let dir = std::env::temp_dir().join(format!("hollr-merge-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let files: Vec<PathBuf> = [("b.weight", &[1u8, 2, 3, 4][..]), ("a.bias", &[5, 6][..])]
+            .iter()
+            .enumerate()
+            .map(|(i, (name, data))| {
+                let f = dir.join(format!("{i}"));
+                std::fs::write(&f, blob(name, data)).unwrap();
+                f
+            })
+            .collect();
+        let out = dir.join("model.safetensors");
+        merge_safetensors(&files, &out).unwrap();
+        let bytes = std::fs::read(&out).unwrap();
+        let len = u64::from_le_bytes(bytes[..8].try_into().unwrap()) as usize;
+        assert_eq!(len % 8, 0, "header padded to 8 bytes");
+        let header: Value = serde_json::from_slice(&bytes[8..8 + len]).unwrap();
+        assert_eq!(header["b.weight"]["data_offsets"], json!([0, 4]));
+        assert_eq!(header["a.bias"]["data_offsets"], json!([4, 6]));
+        assert_eq!(header["a.bias"]["dtype"], "BF16");
+        assert_eq!(&bytes[8 + len..], &[1, 2, 3, 4, 5, 6]);
+
+        // a truncated blob and a duplicate name are refused
+        std::fs::write(&files[1], &blob("a.bias", &[5, 6])[..20]).unwrap();
+        assert!(merge_safetensors(&files, &out).is_err());
+        std::fs::write(&files[1], blob("b.weight", &[5, 6])).unwrap();
+        assert!(merge_safetensors(&files, &out).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn manifest_digests() {
+        let layer = |digest: &str| Layer { media_type: "application/vnd.ollama.image.tensor".into(), digest: digest.into(), size: 1, name: None };
+        let ok = format!("sha256:{}", "ab".repeat(32));
+        assert_eq!(layer(&ok).sha256().unwrap(), "ab".repeat(32));
+        assert_eq!(layer(&ok).kind(), "tensor");
+        assert!(layer("sha256:../../etc").sha256().is_err());
+        assert!(layer(&format!("md5:{}", "ab".repeat(32))).sha256().is_err());
+        assert_eq!(model_page("phonon-40m-multilingual"), "https://ollama.com/library/phonon:40m-multilingual");
+    }
+
+    #[test]
+    fn default_voice_per_language() {
+        let v = |name: &str, lang: &str| CatalogVoice { name: name.into(), language: Some(lang.into()), locale: None, gender: None, description: None };
+        let catalog = [v("Zoey", "en"), v("Nele", "de"), v("Juniper", "en"), v("Anton", "de")];
+        let model: Vec<String> = ["default", "Juniper", "Anton", "Nele"].map(String::from).to_vec();
+        // the catalog's order decides, among the voices the model has
+        assert_eq!(default_voice(&catalog, &model, "en").map(|v| v.name.as_str()), Some("Juniper"));
+        assert_eq!(default_voice(&catalog, &model, "de").map(|v| v.name.as_str()), Some("Nele"));
+        assert!(default_voice(&catalog, &model, "fr").is_none());
+        assert!(default_voice(&[], &model, "de").is_none());
+    }
+
+    #[test]
+    fn bakes_voice_tensors_into_the_config() {
+        let dir = std::env::temp_dir().join(format!("hollr-bake-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = dir.join("config.json");
+        std::fs::write(&cfg, r#"{"languages": ["de"], "flow_lm": {"d_model": 512}}"#).unwrap();
+        bake_voices(&cfg, &["flow_lm.bos_emb".into(), "voices.Nele".into(), "voices.default".into()]).unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(v["voices"], json!([{ "name": "Nele", "prefix": "voices.Nele" }, { "name": "default", "prefix": "voices.default" }]));
+        assert_eq!(v["flow_lm"]["d_model"], 512, "the rest stays");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

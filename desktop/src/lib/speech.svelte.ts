@@ -1,7 +1,6 @@
-// Read aloud: settings in localStorage, the Phonon models / voices / token (speech.rs), the selection on
+// Read aloud: settings in localStorage, the Phonon models and their voices (speech.rs), the selection on
 // offer (chat or terminal, ReadAloud.svelte shows the button) and the one thing the app reads at a time.
-// Cleanup and language detection: speechText.ts. The Hugging Face token lives in Rust (app data, 0600) –
-// the webview only learns whether one is saved.
+// Cleanup and language detection: speechText.ts.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { lang as uiLang, t } from "./i18n";
@@ -46,35 +45,34 @@ $effect.root(() => {
 export interface PhononModel {
   id: string;
   name: string;
+  /** download size (Ollama registry, BF16 weights) */
   size: string;
   languages: SpeechLang[];
-  /** CC BY-NC: terms on Hugging Face + a read token */
-  gated: boolean;
+  license: string;
   note: string;
 }
 
+// Gradium's checkpoints as Ollama's registry hosts them (library/phonon:<tag>) – no Hugging Face login
 export const PHONON_MODELS: PhononModel[] = [
-  { id: "phonon-40m-multilingual", name: "Phonon 40m multilingual", size: "75 MB", languages: ["de", "en", "fr", "es", "pt"], gated: true,
-    note: "Deutsch, Englisch, Französisch, Spanisch, Portugiesisch – empfohlen" },
-  { id: "phonon-40m-de", name: "Phonon 40m de", size: "75 MB", languages: ["de"], gated: true, note: "Nur Deutsch" },
-  { id: "phonon-40m-en", name: "Phonon 40m en", size: "75 MB", languages: ["en"], gated: true, note: "Nur Englisch" },
-  { id: "phonon-31m-en", name: "Phonon 31m en", size: "65 MB", languages: ["en"], gated: false,
-    note: "Nur Englisch, frei (Apache 2.0) – ohne Token" },
+  { id: "phonon-40m-multilingual", name: "Phonon 40m multilingual", size: "148 MB", languages: ["de", "en", "fr", "es", "pt"],
+    license: "CC BY-NC 4.0", note: "Deutsch, Englisch, Französisch, Spanisch, Portugiesisch – empfohlen" },
+  { id: "phonon-40m-de", name: "Phonon 40m de", size: "126 MB", languages: ["de"], license: "CC BY-NC 4.0", note: "Nur Deutsch" },
+  { id: "phonon-40m-en", name: "Phonon 40m en", size: "132 MB", languages: ["en"], license: "CC BY-NC 4.0", note: "Nur Englisch" },
+  { id: "phonon-31m-en", name: "Phonon 31m en", size: "104 MB", languages: ["en"], license: "Apache 2.0", note: "Nur Englisch" },
 ];
 
-export const modelPage = (id: string) => `https://huggingface.co/gradium/${id}`;
-export const TOKEN_PAGE = "https://huggingface.co/settings/tokens";
+export const modelPage = (id: string) => `https://ollama.com/library/phonon:${id.replace(/^phonon-/, "")}`;
 export const LANG_NAMES: Record<SpeechLang, string> = { de: "Deutsch", en: "Englisch", fr: "Französisch", es: "Spanisch", pt: "Portugiesisch" };
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** the dev bridge (normal browser) has no audio: speaking is only logged and shown */
 const viaBridge = new URLSearchParams(location.search).has("bridge");
 
-// ------------------------------------------------------------ models, token, voices
+// ------------------------------------------------------------ models and voices
 
-type LocalModel = { id: string; bytes: number; languages: string[]; speed: boolean; catalog_voices: boolean };
+type LocalModel = { id: string; bytes: number; languages: string[]; speed: boolean; voices: string[]; attribution: string | null };
 type EngineInfo = { engine: "phonon" | "system"; label: string | null };
-type Status = { system: boolean; token: boolean; models: LocalModel[]; engines: Record<string, EngineInfo | null> };
+type Status = { system: boolean; models: LocalModel[]; engines: Record<string, EngineInfo | null> };
 type DownloadEvent = { id: string; progress?: number; done?: boolean; cancelled?: boolean; error?: string };
 
 /** what Rust reports (null until the first answer / in the browser), running downloads (id → 0…1), errors */
@@ -124,21 +122,11 @@ export async function deletePhonon(id: string) {
   await refreshSpeech();
 }
 
-/** "" removes the token */
-export async function saveToken(token: string) {
-  await invoke("speech_token", { token });
-  await refreshSpeech();
-}
+export type ModelVoice = { name: string; language: string | null; locale: string | null; gender: string | null; description: string | null };
 
-export type CatalogVoice = { name: string; language: string | null; locale: string | null; gender: string | null; description: string | null; local: boolean };
-
-/** Gradium's voice catalog; `compatible` = the chosen model takes these voices */
-export async function loadVoices(): Promise<{ voices: CatalogVoice[]; compatible: boolean } | null> {
-  return await invoke<{ voices: CatalogVoice[]; compatible: boolean } | null>("speech_voices", { model: speech.model });
-}
-
-export async function downloadVoice(name: string) {
-  await invoke("speech_voice_download", { name });
+/** The chosen model's voices (with Gradium's catalog data where known) and each language's default one. */
+export async function loadVoices(): Promise<{ voices: ModelVoice[]; defaults: Partial<Record<SpeechLang, string>> } | null> {
+  return await invoke<{ voices: ModelVoice[]; defaults: Partial<Record<SpeechLang, string>> } | null>("speech_voices", { model: speech.model });
 }
 
 refreshSpeech();
