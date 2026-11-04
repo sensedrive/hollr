@@ -1,10 +1,11 @@
 // Read aloud: settings in localStorage, the Phonon models and their voices (speech.rs), the selection on
-// offer (chat or terminal, ReadAloud.svelte shows the button) and the one thing the app reads at a time.
-// Cleanup and language detection: speechText.ts.
+// offer (chat or terminal, ReadAloud.svelte shows the buttons), spoken summaries (made by the server's omp)
+// and the one thing the app reads at a time. Cleanup, language detection, summary keys: speechText.ts.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { summarize } from "./api";
 import { lang as uiLang, t } from "./i18n";
-import { detectLanguage, speakable, type SpeechLang } from "./speechText";
+import { detectLanguage, speakable, summaryKey, type SpeechLang } from "./speechText";
 
 const KEY = "hollr.speech";
 
@@ -17,17 +18,36 @@ export interface SpeechSettings {
   voices: Partial<Record<SpeechLang, string>>;
   /** 0.8 … 1.3 (Phonon: duration_delta, system voice: words per minute) */
   speed: number;
-  /** the "Vorlesen" button next to selected text */
+  /** the "Vorlesen" / "Zusammenfassung" buttons next to selected text */
   button: boolean;
+  summary: SummarySettings;
 }
 
-const defaults: SpeechSettings = { engine: "auto", model: "phonon-40m-multilingual", voices: {}, speed: 1, button: true };
+export type SummaryLength = "kurz" | "mittel";
+
+export interface SummarySettings {
+  /** whose models Settings lists and tests with ("" = the first server with omp); a summary itself runs on
+   *  the server the text was selected on */
+  server: string;
+  /** omp model selector ("" = the server's fast model) */
+  model: string;
+  /** kurz ≈ 2–3 sentences, mittel ≈ 5–7 */
+  length: SummaryLength;
+  /** read the original right after the summary */
+  thenOriginal: boolean;
+}
+
+const defaults: SpeechSettings = {
+  engine: "auto", model: "phonon-40m-multilingual", voices: {}, speed: 1, button: true,
+  summary: { server: "", model: "", length: "kurz", thenOriginal: false },
+};
 
 function load(): SpeechSettings {
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<SpeechSettings>;
+    return { ...defaults, ...stored, summary: { ...defaults.summary, ...stored.summary } };
   } catch {
-    return { ...defaults };
+    return { ...defaults, summary: { ...defaults.summary } };
   }
 }
 
@@ -137,6 +157,8 @@ export type Source = "chat" | "terminal";
 export interface Offer {
   text: string;
   source: Source;
+  /** the server the chat / terminal belongs to: a summary is made there */
+  server?: string;
   /** where the button goes (viewport px) */
   x: number;
   y: number;
@@ -155,11 +177,44 @@ export function withdrawSelection(source: Source) {
   if (selection.offer?.source === source) selection.offer = null;
 }
 
+// ------------------------------------------------------------ spoken summaries
+
+type Summary = { summary: string; model: string };
+/** this session's summaries (text hash, model, length): reading one again starts right away */
+const summaries = new Map<string, Summary>();
+
+/** A spoken summary of `text`, made by omp on `server` with the chosen model and length. */
+export async function summaryOf(server: string, text: string, lang: SpeechLang): Promise<Summary> {
+  const { model, length } = speech.summary;
+  const key = summaryKey(text, model, length);
+  const known = summaries.get(key);
+  if (known) return known;
+  // the server keeps 40k characters (head and tail) anyway – no need to send megabytes
+  const sent = text.length > 200_000 ? `${text.slice(0, 100_000)}\n…\n${text.slice(-100_000)}` : text;
+  const made = await summarize(server, { text: sent, model: model || undefined, lang, length });
+  summaries.set(key, made);
+  return made;
+}
+
+/** The server's error code → what the pill / Settings say. */
+export function summaryError(e: unknown): string {
+  const code = message(e);
+  if (code === "not_allowed") return t("Dieser Server kann noch nicht zusammenfassen – Hollr auf dem Server aktualisieren.");
+  if (code === "no_agent") return t("Auf dem Server ist weder omp noch Claude Code installiert.");
+  if (code === "no_model") return t("omp ist auf dem Server bei keinem Anbieter angemeldet.");
+  if (code === "timeout") return t("Die Zusammenfassung hat zu lange gedauert.");
+  if (code === "empty_summary") return t("Das Modell hat keine Zusammenfassung geliefert.");
+  return t("Zusammenfassung fehlgeschlagen: {error}", { error: t(code) });
+}
+
+/** "anthropic/claude-haiku-5-5" → "claude-haiku-5-5" (the pill has little room) */
+export const shortModel = (model: string) => model.slice(model.lastIndexOf("/") + 1);
+
 // ------------------------------------------------------------ the speaker
 
 type SpeechEvent = { session: number; t: "playing" | "end" | "error"; error?: string; warning?: string | null };
 type Started = { session: number } & EngineInfo;
-type Phase = "idle" | "loading" | "speaking";
+type Phase = "idle" | "summarizing" | "loading" | "speaking";
 
 /** One voice in the whole app: a new request stops the old one. */
 class Speaker {
@@ -170,6 +225,12 @@ class Speaker {
   /** the last error / warning, shown for a few seconds */
   notice = $state("");
   failed = $state(false);
+  /** the model that makes (summarizing) or made (speaking) the summary – "" until the server says */
+  summaryModel = $state("");
+  /** while a summary is read: its original */
+  summaryFor = $state<string | null>(null);
+  /** a summary was just read to the end: its original, one click away for a few seconds */
+  original = $state<string | null>(null);
 
   private session: number | null = null;
   private early: SpeechEvent[] = [];
@@ -177,7 +238,10 @@ class Speaker {
   private events: Promise<unknown> | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private previewTimer: ReturnType<typeof setTimeout> | undefined;
+  private originalTimer: ReturnType<typeof setTimeout> | undefined;
   private warmed = "";
+  /** read right after the current one ("Zusammenfassung, danach Original") */
+  private next: string | null = null;
 
   get busy() {
     return this.state !== "idle";
@@ -204,7 +268,20 @@ class Speaker {
       if (e.t === "error") this.say(t(e.error ?? ""), true);
       this.session = null;
       this.state = "idle";
+      if (e.t === "end") this.finished();
+      else this.next = this.summaryFor = null;
     }
+  }
+
+  /** Read to the end: the original follows (setting), or it is offered for a few seconds. */
+  private finished() {
+    const { next, summaryFor } = this;
+    this.next = this.summaryFor = null;
+    if (next) return void this.speak(next);
+    if (!summaryFor) return;
+    this.original = summaryFor;
+    clearTimeout(this.originalTimer);
+    this.originalTimer = setTimeout(() => (this.original = null), 8000);
   }
 
   /** Loads the model the next request would need (text got selected), so it starts right away. */
@@ -216,7 +293,8 @@ class Speaker {
     invoke("speech_prewarm", { request: r }).catch(() => {});
   }
 
-  async speak(raw: string) {
+  /** Reads `raw`; with `source` it is the summary of that original. */
+  async speak(raw: string, source?: string) {
     const text = speakable(raw);
     if (!text) return this.say(t("Nichts zum Vorlesen markiert."));
     const gen = ++this.generation;
@@ -225,6 +303,9 @@ class Speaker {
     this.state = "loading";
     this.lang = r.lang;
     this.notice = "";
+    this.original = null;
+    this.summaryFor = source ?? null;
+    this.next = source && speech.summary.thenOriginal ? source : null;
     this.session = null;
     this.early = [];
     try {
@@ -242,8 +323,40 @@ class Speaker {
     } catch (e) {
       if (gen !== this.generation) return;
       this.state = "idle";
+      this.next = this.summaryFor = null;
       this.say(t(message(e)), true);
     }
+  }
+
+  /** Summarizes `raw` on `server` (omp there, the chosen model), then reads the summary. */
+  async summarize(raw: string, server: string | undefined) {
+    const plain = speakable(raw);
+    if (!plain) return this.say(t("Nichts zum Vorlesen markiert."));
+    if (!server) return this.say(t("Zusammenfassen geht nur im Chat oder Terminal einer Sitzung."), true);
+    this.stop();
+    const gen = ++this.generation;
+    this.state = "summarizing";
+    this.summaryModel = speech.summary.model;
+    this.lang = this.request(plain).lang;
+    this.notice = "";
+    this.original = null;
+    try {
+      // the model reads the selection as it is (Markdown and all), the voice reads its plain sentences
+      const made = await summaryOf(server, raw, this.lang);
+      if (gen !== this.generation) return;
+      this.summaryModel = made.model;
+      await this.speak(made.summary, raw);
+    } catch (e) {
+      if (gen !== this.generation) return;
+      this.state = "idle";
+      this.say(summaryError(e), true);
+    }
+  }
+
+  /** "Original vorlesen" after a summary */
+  readOriginal() {
+    const text = this.original;
+    if (text) void this.speak(text);
   }
 
   /** No backend (dev bridge in a browser): log what would be read and show the controls for a while. */
@@ -256,7 +369,12 @@ class Speaker {
     this.engine = { engine: "system", label: t("Vorschau ohne Ton") };
     this.state = "speaking";
     const gen = this.generation;
-    this.previewTimer = setTimeout(() => gen === this.generation && (this.state = "idle"), Math.min(20_000, 1500 + text.length * 55));
+    const done = () => {
+      if (gen !== this.generation) return;
+      this.state = "idle";
+      this.finished();
+    };
+    this.previewTimer = setTimeout(done, Math.min(20_000, 1500 + text.length * 55));
   }
 
   stop() {
@@ -264,6 +382,7 @@ class Speaker {
     this.generation++;
     clearTimeout(this.previewTimer);
     this.session = null;
+    this.next = this.summaryFor = null;
     this.state = "idle";
     invoke("speech_stop").catch(() => {});
   }

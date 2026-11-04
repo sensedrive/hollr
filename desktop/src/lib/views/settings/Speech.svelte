@@ -1,14 +1,18 @@
 <script lang="ts">
   // Settings → Vorlesen: what speaks which language (with a test per language), the engine, Phonon models
   // from Ollama's registry (download / choose / delete, licence and source), a voice per language, the
-  // speed and the button next to selected text. Everything runs on this computer.
+  // speed and the button next to selected text – all on this computer. The spoken summary is the one
+  // part made on a server: its omp model (the account it is logged in with shows), length and a test.
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { t } from "$lib/i18n";
+  import * as api from "$lib/api";
+  import { lang as uiLang, t } from "$lib/i18n";
   import {
     cancelPhonon, deletePhonon, downloadPhonon, LANG_NAMES, loadVoices, localModel, modelPage, PHONON_MODELS,
-    refreshSpeech, speaker, speech, speechState, type ModelVoice,
+    refreshSpeech, shortModel, speaker, speech, speechState, summaryError, summaryOf, type ModelVoice,
   } from "$lib/speech.svelte";
-  import { SAMPLES, SPEECH_LANGS, type SpeechLang } from "$lib/speechText";
+  import { SAMPLES, SPEECH_LANGS, SUMMARY_SAMPLES, type SpeechLang } from "$lib/speechText";
+  import { app, serverById } from "$lib/store.svelte";
+  import { providerName, refreshUsage, usage } from "$lib/views/dashboard/usage.svelte";
 
   const mac = navigator.platform.includes("Mac");
   const status = $derived(speechState.status);
@@ -47,6 +51,53 @@
   }
 
   const open = (url: string) => openUrl(url).catch(() => window.open(url, "_blank"));
+
+  // ---- spoken summary: the servers with omp, the chosen one's models and the accounts behind them
+  let ompServers = $state<string[] | null>(null);
+  $effect(() => {
+    const ids = app.servers.map((s) => s.id);
+    Promise.all(ids.map((id) => api.kinds(id).then((k) => (k.includes("omp") ? id : "")).catch(() => "")))
+      .then((found) => (ompServers = found.filter(Boolean)));
+  });
+  const summaryServer = $derived(
+    ompServers?.includes(speech.summary.server) ? speech.summary.server : (ompServers?.[0] ?? ""),
+  );
+  let ompModels = $state<api.ModelList | null>(null);
+  let modelsError = $state("");
+  $effect(() => {
+    const server = summaryServer;
+    ompModels = null;
+    modelsError = "";
+    if (!server) return;
+    api.models(server, "omp")
+      .then((list) => server === summaryServer && (ompModels = list))
+      .catch((e) => server === summaryServer && (modelsError = t(e instanceof Error ? e.message : String(e))));
+    void refreshUsage();
+  });
+  const modelGroups = $derived.by(() => {
+    const groups = new Map<string, api.ModelList["models"]>();
+    for (const m of ompModels?.models ?? []) groups.set(m.group, [...(groups.get(m.group) ?? []), m]);
+    return [...groups];
+  });
+  /** what a summary uses: the chosen model, else the server's fast one */
+  const usedModel = $derived(speech.summary.model || ompModels?.fast || "");
+  const usedGroup = $derived(ompModels?.models.find((m) => m.id === usedModel)?.group ?? usedModel.split("/")[0] ?? "");
+  const accounts = $derived([
+    ...new Set((usage.limits[summaryServer] ?? []).filter((l) => l.provider === usedGroup && l.account).map((l) => l.account)),
+  ]);
+
+  let summaryTest = $state<{ busy?: boolean; text?: string; model?: string; ms?: number; error?: string }>({});
+  async function testSummary() {
+    const started = performance.now();
+    const lang = uiLang() === "en" ? "en" : "de";
+    summaryTest = { busy: true };
+    try {
+      const made = await summaryOf(summaryServer, SUMMARY_SAMPLES[lang], lang);
+      summaryTest = { text: made.summary, model: made.model, ms: performance.now() - started };
+    } catch (e) {
+      summaryTest = { error: summaryError(e) };
+    }
+  }
 </script>
 
 <div class="page">
@@ -70,6 +121,78 @@
   </div>
   <p class="foot">
     {t("Text im Chat oder Terminal markieren und auf „Vorlesen“ klicken oder {key} drücken; Esc stoppt. Die Sprache erkennt Hollr am Text, Code-Blöcke werden übersprungen.", { key: mac ? "⌘⇧S" : "Ctrl+Shift+S" })}
+  </p>
+
+  <div class="section">{t("Zusammenfassung")}</div>
+  <div class="rows">
+    {#if (ompServers?.length ?? 0) > 1}
+      <label class="row">
+        <span class="grow">{t("Server (Modelle und Test)")}</span>
+        <select value={summaryServer} onchange={(e) => (speech.summary.server = e.currentTarget.value)}>
+          {#each ompServers ?? [] as id (id)}<option value={id}>{serverById(id)?.label ?? id}</option>{/each}
+        </select>
+      </label>
+    {/if}
+    <label class="row">
+      <span class="grow">
+        {t("Modell")}
+        {#if usedModel}
+          <div class="small muted">
+            {t("Konto")}: {providerName(usedGroup)}{accounts.length ? ` · ${accounts.join(", ")}` : ""}
+            {#if accounts.length > 1} · {t("omp wechselt zwischen diesen Konten")}{/if}
+          </div>
+        {/if}
+      </span>
+      <select value={speech.summary.model} disabled={!ompModels} onchange={(e) => (speech.summary.model = e.currentTarget.value)}>
+        <option value="">{ompModels?.fast ? t("Automatisch ({name})", { name: shortModel(ompModels.fast) }) : t("Automatisch (schnelles Modell)")}</option>
+        {#if speech.summary.model && ompModels && !ompModels.models.some((m) => m.id === speech.summary.model)}
+          <option value={speech.summary.model}>{speech.summary.model} · {t("nicht auf diesem Server")}</option>
+        {/if}
+        {#each modelGroups as [group, list] (group)}
+          <optgroup label={providerName(group)}>
+            {#each list as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+          </optgroup>
+        {/each}
+      </select>
+    </label>
+    <div class="row">
+      <span class="grow">{t("Länge")}</span>
+      <label class="choice"><input type="radio" name="summary-length" value="kurz" bind:group={speech.summary.length} /> {t("kurz (2–3 Sätze)")}</label>
+      <label class="choice"><input type="radio" name="summary-length" value="mittel" bind:group={speech.summary.length} /> {t("mittel (5–7 Sätze)")}</label>
+    </div>
+    <label class="row">
+      <span class="grow">
+        {t("Zusammenfassung, danach Original")}
+        <div class="small muted">{t("Liest nach der Zusammenfassung gleich den markierten Text vor.")}</div>
+      </span>
+      <input type="checkbox" class="toggle" bind:checked={speech.summary.thenOriginal} />
+    </label>
+    <div class="row">
+      <span class="grow">
+        {t("Probe")}
+        <div class="small muted">{t("Fasst einen Beispieltext zusammen und zeigt das Ergebnis.")}</div>
+      </span>
+      <button class="btn" disabled={!summaryServer || summaryTest.busy} onclick={testSummary}>
+        {summaryTest.busy ? t("Fasse zusammen …") : t("Testen")}
+      </button>
+    </div>
+    {#if summaryTest.text}
+      <div class="row result">
+        <span class="grow">
+          {summaryTest.text}
+          <div class="small muted">{shortModel(summaryTest.model ?? "")} · {(summaryTest.ms ?? 0) < 50 ? t("aus dem Zwischenspeicher") : `${((summaryTest.ms ?? 0) / 1000).toFixed(1)} s`}</div>
+        </span>
+        <button class="ic" title={speaker.busy ? t("Vorlesen stoppen (Esc)") : t("Vorlesen")} aria-label={speaker.busy ? t("Vorlesen stoppen (Esc)") : t("Vorlesen")}
+          onclick={() => (speaker.busy ? speaker.stop() : speaker.speak(summaryTest.text ?? ""))}>
+          {speaker.busy ? "■" : "▶"}
+        </button>
+      </div>
+    {/if}
+  </div>
+  {#if summaryTest.error || modelsError}<p class="foot warn">{summaryTest.error || modelsError}</p>{/if}
+  {#if ompServers && !ompServers.length}<p class="foot warn">{t("Auf keinem Server ist omp installiert.")}</p>{/if}
+  <p class="foot">
+    {t("„Zusammenfassung“ neben markiertem Text oder {key}: omp fasst den Text auf dem Server der Sitzung zusammen – mit diesem Modell und dem Konto, mit dem omp dort angemeldet ist –, danach wird vorgelesen. Ohne Werkzeuge, ohne gespeicherte Sitzung.", { key: mac ? "⌘⌥⇧S" : "Ctrl+Alt+Shift+S" })}
   </p>
 
   <div class="section">{t("Sprach-Engine")}</div>
@@ -160,7 +283,7 @@
       <span class="num">{speech.speed.toFixed(2)}×</span>
     </label>
     <label class="row">
-      <span class="grow">{t("Knopf „Vorlesen“ bei markiertem Text")}</span>
+      <span class="grow">{t("Knöpfe „Vorlesen“ und „Zusammenfassung“ bei markiertem Text")}</span>
       <input type="checkbox" class="toggle" bind:checked={speech.button} />
     </label>
   </div>
@@ -184,4 +307,6 @@
   label.row { cursor: pointer; }
   select { padding: 4px 8px; max-width: 260px; }
   input[type="range"] { width: 160px; accent-color: var(--accent); }
+  .choice { display: flex; align-items: center; gap: 5px; margin-left: 12px; font-size: 12.5px; cursor: pointer; }
+  .result .grow { line-height: 1.45; }
 </style>

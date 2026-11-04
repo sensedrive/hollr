@@ -65,7 +65,10 @@ export async function runAttach(pane: string, cols: number, rows: number): Promi
     out({ t: "error", error: "not_found" });
     return 1;
   }
-  return runPty([herdrBin(), ...target], homedir(), cols, rows);
+  // herdr allows one client per terminal: the view opened last takes it over – a stale attach (a dropped
+  // connection, the phone, another window) would otherwise block it ("already has an attached client").
+  // The view that lost it ends with "exit" and waits for "Neu verbinden", so two views don't fight.
+  return runPty([herdrBin(), ...target, "--takeover"], homedir(), cols, rows);
 }
 
 async function runPty(command: string[], cwd: string, cols: number, rows: number): Promise<number> {

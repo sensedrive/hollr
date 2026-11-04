@@ -89,6 +89,7 @@ import {
   statusLine,
   usageLimits,
 } from "./spaces";
+import { type SummarizeRequest, summarize } from "./summarize";
 import { restartWatcher, sysinfo } from "./sysinfo";
 import { readTimeline } from "./timeline";
 import { claudeFooter, paneTimeline, readClaudeHistory } from "./claudelog";
@@ -96,7 +97,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.35.1";
+export const VERSION = "0.36.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -517,10 +518,16 @@ async function gate(): Promise<number> {
       }
       return 0;
     }
+    case "summarize": {
+      // a spoken summary for the app's read aloud: {"text","model?","lang","length?"} → {summary, model}
+      const req = JSON.parse((await readStdinLine(1024 * 1024)) || "{}") as SummarizeRequest;
+      json(await summarize(req));
+      return 0;
+    }
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>...",
+        hint: "hello | events | tree | kinds | new | close <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize",
       });
       return 2;
   }

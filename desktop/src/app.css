@@ -38,6 +38,11 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
   font: 14px/1.5 -apple-system, "Inter", "Segoe UI", system-ui, sans-serif; }
 button { font: inherit; color: inherit; cursor: pointer; }
+/* The app's own selection colour: WKWebView paints macOS' "inactive" selection (a faint grey, invisible on the dark
+   background) whenever the web view isn't first responder – a selection then looked like it vanished on mouse-up
+   or as soon as the pointer moved (hover repaints). That state's own WebKit rule is in app.html (the CSS minifier
+   rejects `::selection:window-inactive`). */
+::selection { background: color-mix(in srgb, var(--accent) 42%, transparent); }
 input, textarea, select { font: inherit; color: var(--fg); background: var(--raised); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 10px; outline: none; }
 input:focus, textarea:focus, select:focus { border-color: var(--accent); }

@@ -5,6 +5,9 @@
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hollr</title>
+    <!-- WebKit paints a selection with this style while it thinks the window is inactive (the faint macOS grey
+         otherwise – invisible on the dark background). Here, not in app.css: the CSS minifier rejects the selector. -->
+    <style>::selection:window-inactive { background: color-mix(in srgb, var(--accent) 42%, transparent); }</style>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

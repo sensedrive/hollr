@@ -187,11 +187,18 @@
           if (!x.hasSelection()) return;
           const text = cleanSelection(x.getSelection());
           void copyText(text);
-          offerSelection({ text, source: "terminal", x: e.clientX, y: e.clientY });
+          offerSelection({ text, source: "terminal", server, x: e.clientX, y: e.clientY });
         }, 0);
       };
       el.addEventListener("mouseup", copyOnSelect);
       const selectionGone = x.onSelectionChange(() => x.hasSelection() || withdrawSelection("terminal"));
+      // herdr asks for every pointer motion (any-event mouse tracking), and xterm counts each motion report as
+      // input – which clears its selection: a selection vanished as soon as the pointer moved after letting go.
+      // While text is selected, plain motion (no button held) stays out of the program.
+      const keepSelection = (e: MouseEvent) => {
+        if (e.buttons === 0 && x.hasSelection() && x.modes.mouseTrackingMode === "any") e.stopPropagation();
+      };
+      el.addEventListener("mousemove", keepSelection, { capture: true });
 
       // Selecting past the top/bottom edge: herdr's attach has no scrollback in xterm, so Hollr takes the
       // drag over from xterm, scrolls the pane with the mouse wheel and collects the text (scrollSelection.ts).
@@ -257,7 +264,7 @@
         e.stopPropagation();
         const text = cleanSelection(d.sel.text(d.sel.point(d.at.row, d.at.col, x.rows)));
         void copyText(text);
-        offerSelection({ text, source: "terminal", x: e.clientX, y: e.clientY });
+        offerSelection({ text, source: "terminal", server, x: e.clientX, y: e.clientY });
       }
       function stopDrag() {
         clearInterval(drag?.timer);
@@ -290,6 +297,7 @@
         ro.disconnect();
         el.removeEventListener("mousedown", forceSelect, { capture: true });
         el.removeEventListener("mouseup", copyOnSelect);
+        el.removeEventListener("mousemove", keepSelection, { capture: true });
         stopDrag();
         parsed.dispose();
         selectionGone.dispose();

@@ -25,9 +25,28 @@ export interface ModelList {
   levelName: string;
   /** whether the model can be switched inside a running session */
   canSwitch: boolean;
+  /** a fast, cheap chat model from the list (spoken summaries use it unless one is chosen) */
+  fast?: string;
 }
 
-const bin = (name: string) => {
+// not chat models in practice, even if a provider lists them as such (tested on the model part of
+// "provider/model": the provider "openai-codex" itself must not count as a codex model)
+const SPECIAL = /tts|audio|transcribe|realtime|search|image|embed|codex|-pro\b|deep-research/i;
+
+/** The list's fast, cheap model: newest Haiku first (the list is newest-first per provider), then
+ *  a "mini" / "nano" / "flash" class model, else the first one. */
+export function fastModel(models: ModelOption[]): string | undefined {
+  const part = (id: string) => id.slice(id.lastIndexOf("/") + 1);
+  const usable = models.filter((m) => !SPECIAL.test(part(m.id)));
+  // "gemini" must not count as "mini": the class word stands on its own
+  for (const re of [/haiku/i, /(^|[-_ ])(mini|nano)\b/i, /flash/i]) {
+    const hit = usable.find((m) => re.test(part(m.id)) || re.test(m.name));
+    if (hit) return hit.id;
+  }
+  return (usable[0] ?? models[0])?.id;
+}
+
+export const bin = (name: string) => {
   for (const dir of [
     join(homedir(), ".local", "bin"),
     join(homedir(), ".bun", "bin"),
@@ -163,7 +182,8 @@ export function listModels(kind: string, refresh = false): ModelList {
   if (!refresh) {
     try {
       const cached = JSON.parse(readFileSync(file, "utf8")) as { at: number; list: ModelList };
-      if (Date.now() - cached.at < 600_000 && cached.list.models.length) return cached.list;
+      if (Date.now() - cached.at < 600_000 && cached.list.models.length)
+        return { ...cached.list, fast: fastModel(cached.list.models) };
     } catch {}
   }
   const list =
@@ -179,7 +199,7 @@ export function listModels(kind: string, refresh = false): ModelList {
     mkdirSync(dir, { recursive: true });
     writeFileSync(file, JSON.stringify({ at: Date.now(), list }));
   } catch {}
-  return list;
+  return { ...list, fast: fastModel(list.models) };
 }
 
 const SAFE = /^[\w./:@+-]{1,120}$/;

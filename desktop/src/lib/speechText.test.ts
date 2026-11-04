@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectLanguage, SAMPLES, SPEECH_LANGS, speakable } from "./speechText";
+import { detectLanguage, SAMPLES, SPEECH_LANGS, speakable, SUMMARY_SAMPLES, summaryKey } from "./speechText";
 
 test("each settings sample is read in its own language", () => {
   for (const l of SPEECH_LANGS) {
@@ -84,5 +84,21 @@ describe("detectLanguage", () => {
     expect(detectLanguage("TENDR-725 cargo clippy", "de")).toBe("de");
     expect(detectLanguage("TENDR-725 cargo clippy", "en")).toBe("en");
     expect(detectLanguage("", "en")).toBe("en");
+  });
+});
+
+describe("summaries", () => {
+  test("the cache key tells texts, models and lengths apart", () => {
+    const key = summaryKey("Hallo Welt", "anthropic/claude-haiku-5-5", "kurz");
+    expect(summaryKey("Hallo Welt", "anthropic/claude-haiku-5-5", "kurz")).toBe(key);
+    expect(summaryKey("Hallo Welt!", "anthropic/claude-haiku-5-5", "kurz")).not.toBe(key);
+    expect(summaryKey("Hallo Welt", "", "kurz")).not.toBe(key);
+    expect(summaryKey("Hallo Welt", "anthropic/claude-haiku-5-5", "mittel")).not.toBe(key);
+    expect(key.endsWith("|anthropic/claude-haiku-5-5|kurz")).toBe(true);
+  });
+
+  test("the samples are detected in their language", () => {
+    expect(detectLanguage(speakable(SUMMARY_SAMPLES.de), "en")).toBe("de");
+    expect(detectLanguage(speakable(SUMMARY_SAMPLES.en), "de")).toBe("en");
   });
 });

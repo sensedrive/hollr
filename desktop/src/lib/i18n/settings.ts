@@ -161,6 +161,12 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Zusammenfassung vorlesen: neben markiertem Text oder mit ⌘⌥⇧S fasst omp auf dem Server zusammen (Modell und Konto unter Einstellungen › Vorlesen) – danach ist das Original einen Klick entfernt":
+    "Read a summary aloud: next to selected text or with ⌘⌥⇧S omp summarizes on the server (model and account in Settings › Read aloud) – the original is one click away afterwards",
+  "Terminal: Eine Markierung bleibt stehen, wenn du die Maus danach bewegst – vorher verschwand sie sofort":
+    "Terminal: a selection stays when you move the mouse afterwards – it used to vanish at once",
+  "Terminal: Wird eine Session schon woanders angezeigt (iPhone, zweites Fenster, hängende Verbindung), übernimmt die neue Ansicht – statt „already has an attached client“":
+    "Terminal: when a session is already shown elsewhere (iPhone, a second window, a stale connection), the new view takes over – instead of “already has an attached client”",
   "Phonon 40m ohne Hugging Face: ein Klick auf „Laden“ unter Einstellungen › Vorlesen holt das Modell (148 MB, Deutsch, Englisch, Französisch, Spanisch, Portugiesisch) – kein Konto, kein Token; über 100 Stimmen sind dabei":
     "Phonon 40m without Hugging Face: one click on “Download” in Settings › Read aloud fetches the model (148 MB, German, English, French, Spanish, Portuguese) – no account, no token; over 100 voices included",
   "Vorlesen: Text im Chat oder Terminal markieren und „Vorlesen“ tippen (⌘⇧S) – mit Phonon 40m auf dem Gerät, bis dahin mit der macOS-Stimme; Einstellungen › Vorlesen":

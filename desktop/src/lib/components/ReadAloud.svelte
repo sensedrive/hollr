@@ -1,16 +1,22 @@
 <script lang="ts">
-  // Read aloud, app-wide (mounted once in +page.svelte): a small "Vorlesen" button next to text selected in
-  // a chat or in the terminal (TerminalView offers its xterm selection), ⌘⇧S reads the selection, and while
-  // it speaks a pill with a stop button (Esc stops too). The chat's own components stay untouched: its
-  // selection is read from the document. ⌘⇧Y would be the obvious key, but macOS' "Make Sticky" service
-  // owns it (⌘⇧L/A/F/M/B too); the app's own ⌘⇧ keys are F G B I M T.
+  // Read aloud, app-wide (mounted once in +page.svelte): next to text selected in a chat or in the terminal
+  // (TerminalView offers its xterm selection) a small group – "Vorlesen" (⌘⇧S) reads the selection,
+  // "Zusammenfassung" (⌘⌥⇧S) has the server's omp summarize it first – and while it works a pill with a
+  // stop button (Esc stops too); after a summary the pill offers the original for a few seconds. The chat's
+  // own components stay untouched: its selection is read from the document, its server from the route.
+  // ⌘⇧Y would be the obvious key, but macOS' "Make Sticky" service owns it (⌘⇧L/A/F/M/B too); the app's
+  // own ⌘⇧ keys are F G B I M T, ⌘⇧Z is redo – ⌘⌥⇧S is free in the app and in macOS.
   import { t } from "$lib/i18n";
-  import { LANG_NAMES, offerSelection, PHONON_MODELS, selection, speaker, speech, withdrawSelection } from "$lib/speech.svelte";
+  import {
+    LANG_NAMES, offerSelection, PHONON_MODELS, selection, shortModel, speaker, speech, withdrawSelection,
+  } from "$lib/speech.svelte";
+  import { nav } from "$lib/store.svelte";
 
   /** the chat transcript (TimelineView) */
   const CHAT = ".tl";
   const mac = navigator.platform.includes("Mac");
   const shortcut = mac ? "⌘⇧S" : "Ctrl+Shift+S";
+  const summaryShortcut = mac ? "⌘⌥⇧S" : "Ctrl+Alt+Shift+S";
 
   /** The rendered text of a chat selection. In a selection with prose, code blocks (and the code of tool
    *  cards) are left out; a selection of only code is read as it is. */
@@ -42,7 +48,9 @@
     if (!text.trim()) return null;
     const rects = range.getClientRects();
     const r = rects[rects.length - 1] ?? range.getBoundingClientRect();
-    return { text, source: "chat" as const, x: r.right, y: r.bottom };
+    // only the agent view shows a chat: its route names the server
+    const server = nav.route.view === "agent" ? nav.route.server : undefined;
+    return { text, source: "chat" as const, server, x: r.right, y: r.bottom };
   }
 
   function checkChat() {
@@ -68,9 +76,17 @@
     if (selection.offer?.source === "chat") checkChat();
   }
 
+  /** what to read: the chat's live selection, else the last one offered (the terminal's) */
+  const current = () => chatSelection() ?? selection.offer;
+
   function read() {
-    const text = chatSelection()?.text ?? selection.offer?.text;
+    const text = current()?.text;
     if (text) void speaker.speak(text);
+  }
+
+  function summarize() {
+    const offer = current();
+    if (offer) void speaker.summarize(offer.text, offer.server);
   }
 
   function onKey(e: KeyboardEvent) {
@@ -79,10 +95,11 @@
       e.preventDefault();
       e.stopPropagation();
       speaker.stop();
-    } else if ((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && !e.altKey && e.code === "KeyS") {
+    } else if ((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && e.code === "KeyS") {
       e.preventDefault();
       e.stopPropagation();
       if (speaker.busy) speaker.stop();
+      else if (e.altKey) summarize();
       else read();
     }
   }
@@ -92,7 +109,7 @@
     const o = selection.offer;
     if (!o) return null;
     const below = o.y + 40 < innerHeight;
-    return { left: Math.max(8, Math.min(o.x - 20, innerWidth - 130)), top: below ? o.y + 6 : Math.max(8, o.y - 40) };
+    return { left: Math.max(8, Math.min(o.x - 20, innerWidth - 270)), top: below ? o.y + 6 : Math.max(8, o.y - 40) };
   });
   const engineLabel = $derived.by(() => {
     const e = speaker.engine;
@@ -109,21 +126,36 @@
 
 {#if place && speech.button && !speaker.busy}
   <!-- mousedown would drop the chat selection before the click -->
-  <button class="offer" style:left="{place.left}px" style:top="{place.top}px" title={t("Markierung vorlesen ({key})", { key: shortcut })}
-    onmousedown={(e) => e.preventDefault()} onclick={read}>
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M2.5 6v4h2.75L9 13V3L5.25 6z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.25 3.75a6 6 0 0 1 0 8.5" />
-    </svg>
-    {t("Vorlesen")}
-  </button>
+  <div class="offer" style:left="{place.left}px" style:top="{place.top}px" role="group" aria-label={t("Vorlesen")}>
+    <button title={t("Markierung vorlesen ({key})", { key: shortcut })} onmousedown={(e) => e.preventDefault()} onclick={read}>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2.5 6v4h2.75L9 13V3L5.25 6z" /><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.25 3.75a6 6 0 0 1 0 8.5" />
+      </svg>
+      {t("Vorlesen")}
+    </button>
+    {#if selection.offer?.server}
+      <span class="sep" aria-hidden="true"></span>
+      <button title={t("Zusammenfassung vorlesen ({key})", { key: summaryShortcut })} onmousedown={(e) => e.preventDefault()} onclick={summarize}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 4h10M3 8h7M3 12h4" />
+        </svg>
+        {t("Zusammenfassung")}
+      </button>
+    {/if}
+  </div>
 {/if}
 
 {#if speaker.busy}
   <div class="pill" role="status">
-    <span class="bars" class:on={speaker.state === "speaking"} aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="bars" class:on={speaker.state === "speaking"} class:wait={speaker.state === "summarizing"} aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="grow">
-      {speaker.state === "loading" ? t("Stimme startet …") : t("Liest vor")}
-      <span class="muted">· {t(LANG_NAMES[speaker.lang])}{engineLabel ? ` · ${engineLabel}` : ""}</span>
+      {#if speaker.state === "summarizing"}
+        {t("Fasse zusammen …")}
+        <span class="muted">· {speaker.summaryModel ? shortModel(speaker.summaryModel) : t("schnelles Modell")}</span>
+      {:else}
+        {speaker.state === "loading" ? t("Stimme startet …") : speaker.summaryFor ? t("Liest die Zusammenfassung") : t("Liest vor")}
+        <span class="muted">· {t(LANG_NAMES[speaker.lang])}{engineLabel ? ` · ${engineLabel}` : ""}</span>
+      {/if}
     </span>
     <button class="stop" title={t("Vorlesen stoppen (Esc)")} aria-label={t("Vorlesen stoppen (Esc)")} onclick={() => speaker.stop()}>
       <span class="sq"></span>
@@ -131,13 +163,20 @@
   </div>
 {:else if speaker.notice}
   <div class="pill note" class:warn={speaker.failed} role="status">{speaker.notice}</div>
+{:else if speaker.original}
+  <div class="pill" role="status">
+    <span class="grow muted">{t("Zusammenfassung gelesen")}</span>
+    <button class="again" onclick={() => speaker.readOriginal()}>{t("Original vorlesen")}</button>
+    <button class="close" title={t("Schließen")} aria-label={t("Schließen")} onclick={() => (speaker.original = null)}>✕</button>
+  </div>
 {/if}
 
 <style>
-  .offer { all: unset; position: fixed; z-index: 60; display: flex; align-items: center; gap: 6px; cursor: pointer;
-    padding: 4px 10px; border-radius: 99px; font-size: 12px; background: var(--raised, var(--card)); color: var(--fg);
-    border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
-  .offer:hover { border-color: var(--accent); color: var(--accent); }
+  .offer { position: fixed; z-index: 60; display: flex; align-items: center; border-radius: 99px; font-size: 12px;
+    background: var(--raised, var(--card)); color: var(--fg); border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
+  .offer button { all: unset; display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 10px; border-radius: 99px; }
+  .offer button:hover { color: var(--accent); }
+  .offer .sep { width: 1px; align-self: stretch; margin: 5px 0; background: var(--border); }
   .pill { position: fixed; z-index: 60; left: 50%; top: 12px; transform: translateX(-50%); display: flex; align-items: center;
     gap: 10px; max-width: min(520px, 80vw); padding: 5px 6px 5px 14px; border-radius: 99px; font-size: 12.5px;
     background: var(--raised, var(--card)); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
@@ -150,6 +189,16 @@
   .bars.on i:nth-child(2) { animation-delay: .15s; }
   .bars.on i:nth-child(3) { animation-delay: .3s; }
   @keyframes bar { 0%, 100% { height: 4px; } 50% { height: 12px; } }
+  .bars.wait i { animation: wait 1.2s ease-in-out infinite; }
+  .bars.wait i:nth-child(2) { animation-delay: .2s; }
+  .bars.wait i:nth-child(3) { animation-delay: .4s; }
+  @keyframes wait { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+  .again { all: unset; cursor: pointer; flex: none; padding: 3px 10px; border-radius: 99px; font-size: 12px; color: var(--fg);
+    background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .again:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .close { all: unset; cursor: pointer; flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%;
+    color: var(--muted); font-size: 11px; }
+  .close:hover { color: var(--fg); }
   .stop { all: unset; cursor: pointer; flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
     background: var(--red); }
   .stop:hover { filter: brightness(1.1); }

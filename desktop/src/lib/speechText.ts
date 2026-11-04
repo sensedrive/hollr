@@ -1,5 +1,5 @@
-// Read aloud (speech.svelte.ts): selected chat / terminal text → what a voice should say, and which
-// language it is in. Pure functions, tested in speechText.test.ts.
+// Read aloud (speech.svelte.ts): selected chat / terminal text → what a voice should say, which
+// language it is in, and the key spoken summaries are cached under. Pure functions, tested in speechText.test.ts.
 
 /** The languages Phonon 40m multilingual speaks (speech.rs knows the same five). */
 export type SpeechLang = "de" | "en" | "fr" | "es" | "pt";
@@ -157,4 +157,42 @@ export function detectLanguage(text: string, fallback: SpeechLang): SpeechLang {
   // one common word decides only when no other language has any
   if (best === 0 || (best === 1 && second > 0) || score[fallback] === best) return fallback;
   return ranked[0];
+}
+
+// ------------------------------------------------------------ summaries
+
+/** Settings › Vorlesen › Zusammenfassung: what the test button summarizes (a typical agent answer). */
+export const SUMMARY_SAMPLES: Record<"de" | "en", string> = {
+  de: [
+    "## Erledigt",
+    "Ich habe den Login umgebaut: Statt des alten Tokens nutzt der Server jetzt kurzlebige Schlüssel, die alle 15 Minuten in `auth/refresh.ts` erneuert werden.",
+    "- 42 Tests laufen grün, die zwei veralteten Endpunkte `/api/v1/login` und `/api/v1/token` sind entfernt.",
+    "- `bun test` dauert jetzt 8 statt 21 Sekunden.",
+    "## Offen",
+    "Auf dem iPhone fehlt noch der Hinweis, wenn ein Schlüssel abläuft, und der Desktop-Client muss den neuen Ablauf noch lernen. Soll ich das als Nächstes angehen?",
+  ].join("\n"),
+  en: [
+    "## Done",
+    "I rebuilt the login: instead of the old token the server now uses short-lived keys that `auth/refresh.ts` renews every 15 minutes.",
+    "- 42 tests pass, the two outdated endpoints `/api/v1/login` and `/api/v1/token` are gone.",
+    "- `bun test` now takes 8 instead of 21 seconds.",
+    "## Open",
+    "The iPhone still lacks a notice when a key expires, and the desktop client has yet to learn the new flow. Shall I tackle that next?",
+  ].join("\n"),
+};
+
+/** Cache key of a summary: a 53-bit hash of the text (cyrb53 – the text itself would make huge keys),
+ *  the model and the length. */
+export function summaryKey(text: string, model: string, length: string): string {
+  let h1 = 0xdeadbeef ^ text.length;
+  let h2 = 0x41c6ce57 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const hash = (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  return `${hash}|${model}|${length}`;
 }

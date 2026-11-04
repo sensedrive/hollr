@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 24,
+    version: "0.36.0",
+    date: "04.11.2026",
+    items: [
+      { icon: "📝", text: "Zusammenfassung vorlesen: neben markiertem Text oder mit ⌘⌥⇧S fasst omp auf dem Server zusammen (Modell und Konto unter Einstellungen › Vorlesen) – danach ist das Original einen Klick entfernt" },
+      { icon: "▭", text: "Terminal: Eine Markierung bleibt stehen, wenn du die Maus danach bewegst – vorher verschwand sie sofort" },
+      { icon: "⇄", text: "Terminal: Wird eine Session schon woanders angezeigt (iPhone, zweites Fenster, hängende Verbindung), übernimmt die neue Ansicht – statt „already has an attached client“" },
+    ],
+  },
+  {
     build: 23,
     version: "0.35.1",
     date: "04.11.2026",
