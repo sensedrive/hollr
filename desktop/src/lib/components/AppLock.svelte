@@ -84,10 +84,13 @@
 
 {#if shown}
   <div class="lock" bind:this={overlay} role="dialog" aria-modal="true" aria-label={t("Hollr ist gesperrt")} out:fade={{ duration: 150 }}>
-    <svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z" />
-    </svg>
+    <span class="ico" aria-hidden="true">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+    </span>
     <div class="title">{t("Hollr ist gesperrt")}</div>
+    <div class="text">{t("Die Agents arbeiten auf dem Server weiter.")}</div>
     <button class="btn primary" bind:this={button} disabled={appLock.authenticating} onclick={unlock}>
       {t("Mit {name} entsperren", { name: biometryName() })}
     </button>
@@ -97,8 +100,9 @@
 <style>
   /* opaque: nothing of the app may be readable behind it */
   .lock { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 18px; user-select: none; -webkit-user-select: none; }
-  svg { color: var(--accent); }
-  .title { font-size: 18px; font-weight: 600; }
+    align-items: center; justify-content: center; gap: 16px; user-select: none; -webkit-user-select: none; }
+  .ico { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1px solid var(--border); color: var(--fg); }
+  .title { font-size: 18px; font-weight: 600; margin-top: -4px; }
+  .text { font-size: 13px; color: var(--muted); margin-top: -10px; }
   .btn { padding: 8px 18px; }
 </style>

@@ -92,7 +92,7 @@
   }
 </script>
 
-<Modal title={t("Server koppeln")} onClose={phase.k === "done" ? onPaired : onClose}>
+<Modal icon="server" title={t("Server koppeln")} onClose={phase.k === "done" ? onPaired : onClose}>
   {#if phase.k === "done"}
     <div class="result">
       <div class="big ok"><Icon name="✓" size={15} /></div>

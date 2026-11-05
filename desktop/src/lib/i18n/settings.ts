@@ -359,6 +359,7 @@ export default {
   "Mit {name} entsperren": "Unlock with {name}",
   "Fragt beim Öffnen und nach mehr als 30 Sekunden im Hintergrund.": "Asks when opening and after more than 30 seconds in the background.",
   "Hollr ist gesperrt": "Hollr is locked",
+  "Die Agents arbeiten auf dem Server weiter.": "The agents keep working on the server.",
   Passwort: "Password",
   "Hollr zu entsperren": "unlock Hollr",
   "die Sperre einzuschalten": "turn on the lock",

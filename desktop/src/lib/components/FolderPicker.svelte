@@ -61,7 +61,7 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onKey(e)} />
 
-<Modal title={t("Ordner wählen")} {onClose}>
+<Modal icon="folder" title={t("Ordner wählen")} {onClose}>
   <div class="bar">
     {#if listing?.parent}
       <button class="btn up" title={t("Übergeordneter Ordner")} onclick={() => load(listing!.parent!)}>↑</button>

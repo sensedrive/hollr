@@ -250,7 +250,7 @@
 {#if commenting}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div onkeydown={(e) => dialogKeys(e, () => (commenting = null))}>
-    <Modal title={t("Kommentar an {agent}", { agent: agentName })} onClose={() => (commenting = null)}>
+    <Modal icon="comment" title={t("Kommentar an {agent}", { agent: agentName })} onClose={() => (commenting = null)}>
       <div class="muted small mono">{commenting}</div>
       <!-- svelte-ignore a11y_autofocus -->
       <textarea class="field" rows="4" bind:value={comment} autofocus placeholder={t("Was soll {agent} hier ändern?", { agent: agentName })}
@@ -268,7 +268,7 @@
 {#if committing}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div onkeydown={(e) => dialogKeys(e, () => (committing = false))}>
-    <Modal title={hash ? t("Committet") : t("Commit")} onClose={() => (committing = false)}>
+    <Modal icon="commit" title={hash ? t("Committet") : t("Commit")} onClose={() => (committing = false)}>
       {#if hash}
         <div class="done"><span class="ok small"><Icon name="check" size={14} /></span><span>{t("Commit {hash} angelegt.", { hash })}</span></div>
         {#if pushed}

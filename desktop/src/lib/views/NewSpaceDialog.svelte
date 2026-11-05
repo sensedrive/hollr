@@ -72,7 +72,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<Modal title={t("Neuer Space")} {onClose}>
+<Modal icon="space" title={t("Neuer Space")} {onClose}>
   <div class="seg" role="radiogroup" aria-label={t("Art")}>
     <button role="radio" aria-checked={kind === "worktree"} class:on={kind === "worktree"} disabled={loaded && !repos.length}
       onclick={() => (kind = "worktree")}><Icon name="⑂" size={15} /> {t("Worktree")}</button>

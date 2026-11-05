@@ -39,11 +39,12 @@
 
 <style>
   .shield { position: fixed; inset: 0; z-index: 20; }
-  .menu { position: fixed; z-index: 21; min-width: 200px; background: var(--side); border: 1px solid var(--border); border-radius: 10px;
-    padding: 4px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35); display: grid; }
-  button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
-  button:hover, button:focus-visible { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .menu { position: fixed; z-index: 21; min-width: 240px; background: var(--side); border: 1px solid var(--border); border-radius: 12px;
+    padding: 6px; box-shadow: 0 12px 34px rgba(0, 0, 0, .38); display: grid; }
+  button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; font-size: 13px; }
+  button:hover, button:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .danger { color: var(--red); }
-  .ico { width: 14px; display: grid; place-items: center; color: var(--muted); flex: none; }
+  .ico { width: 16px; display: grid; place-items: center; color: var(--muted); flex: none; }
   .danger .ico { color: var(--red); }
 </style>

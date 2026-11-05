@@ -144,7 +144,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<Modal title={t("Neue Sitzung")} {onClose}>
+<Modal icon="plus" title={t("Neue Sitzung")} {onClose}>
   {#if servers.length > 1}
     <label class="field"><span>{t("Server")}</span>
       <select bind:value={server}>{#each servers as s}<option value={s.id}>{s.label}</option>{/each}</select></label>

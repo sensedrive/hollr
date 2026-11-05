@@ -26,7 +26,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<Modal title={t("Neu und praktisch")} onClose={close}>
+<Modal icon="sparkle" width={460} title={t("Neu und praktisch")} onClose={close}>
   {#if tip}
     <div class="page">
       <div class="icon"><Sym g={tip.icon} size={26} /></div>
@@ -49,9 +49,9 @@
 
 <style>
   .page { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 18px 12px 6px; min-height: 230px; align-content: center; }
-  .icon { width: 96px; height: 96px; display: grid; place-items: center; font-size: 44px; font-weight: 600; color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 26px; }
-  h3 { margin: 0; font-size: 20px; }
+  .icon { width: 72px; height: 72px; display: grid; place-items: center; font-size: 34px; font-weight: 600; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 20px; }
+  h3 { margin: 0; font-size: 17px; }
   p { margin: 0; max-width: 420px; line-height: 1.5; }
   .dots { display: flex; justify-content: center; gap: 7px; }
   .dot { all: unset; cursor: pointer; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--fg) 25%, transparent); }

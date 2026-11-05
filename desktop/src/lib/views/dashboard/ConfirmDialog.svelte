@@ -24,7 +24,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<Modal {title} {onClose}>
+<Modal icon={danger ? "trash" : "alert"} tone={danger ? "danger" : "default"} place="center" width={420} {title} {onClose}>
   {#if message}<div class="muted">{message}</div>{/if}
   {#if error}<div class="err">{error}</div>{/if}
   <div class="buttons">

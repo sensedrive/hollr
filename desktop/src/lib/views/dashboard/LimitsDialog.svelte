@@ -39,7 +39,7 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
 
-<Modal title={history ? t("Verlauf") : t("Nutzungslimits")} {onClose}>
+<Modal icon="activity" title={history ? t("Verlauf") : t("Nutzungslimits")} {onClose}>
   <button class="btn tab" onclick={() => (history = !history)}>
     {history ? `‹ ${t("Nutzungslimits")}` : t("Verlauf & Statistik")}
     {#if !history}<span class="beta">Beta</span>{/if}

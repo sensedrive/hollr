@@ -931,7 +931,7 @@
 {/if}
 
 {#if showCodex}
-  <Modal title={t("Modell wechseln")} onClose={() => (showCodex = false)}>
+  <Modal icon="cpu" width={460} title={t("Modell wechseln")} onClose={() => (showCodex = false)}>
     <p>{t("Codex wechselt das Modell nur über seine eigene Auswahl im Terminal.")}</p>
     <p class="muted small">{t("Danach mit >_ ↑ ↓ und Enter wählen.")}</p>
     <div class="mbuttons">
@@ -942,7 +942,7 @@
 {/if}
 
 {#if confirmClose}
-  <Modal title={t("Chat schließen?")} onClose={() => (confirmClose = false)}>
+  <Modal icon="trash" tone="danger" place="center" width={420} title={t("Chat schließen?")} onClose={() => (confirmClose = false)}>
     <p>{t("Das Pane „{title}“ wird in herdr auf {server} geschlossen und {agent} beendet.", { title, server: serverLabel, agent: agentName })}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmClose = false)}>{t("Abbrechen")}</button>
@@ -952,7 +952,7 @@
 {/if}
 
 {#if confirmLiveSwitch}
-  <Modal title={t("Live wechseln?")} onClose={() => (confirmLiveSwitch = false)}>
+  <Modal icon="mic" place="center" width={420} title={t("Live wechseln?")} onClose={() => (confirmLiveSwitch = false)}>
     <p>{t("Live läuft gerade mit „{other}“. Das Gespräch dort endet, wenn du hier startest.", { other: live.label || live.pane })}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmLiveSwitch = false)}>{t("Abbrechen")}</button>
@@ -963,7 +963,7 @@
 
 {#if linkUrl}
   {@const url = linkUrl}
-  <Modal title={url.host || "Link"} onClose={() => (linkUrl = null)}>
+  <Modal icon="globe" width={440} title={url.host || "Link"} onClose={() => (linkUrl = null)}>
     <div class="mono small sel linkurl">{url.href}</div>
     {#if isLoopback(url)}<div class="muted small">{t("localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.")}</div>{/if}
     <div class="choices">
@@ -1002,13 +1002,15 @@
   .menuwrap { position: relative; }
   .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 270px; background: var(--side); border: 1px solid var(--border);
     border-radius: 12px; padding: 6px; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38); }
-  .mi { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 9px; border-radius: 7px; font-size: 13px; }
-  .mi:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-  .mi.danger { color: var(--red); }
+  .mi { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 7px; font-size: 13px; }
+  .mi > :global(.icon) { color: var(--muted); }
+  .mi:hover, .mi:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .mi:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .mi.danger, .mi.danger > :global(.icon) { color: var(--red); }
   .mi kbd { margin-left: auto; }
   kbd { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
-  .msec { font-size: 11px; color: var(--muted); padding: 8px 9px 3px; border-top: 1px solid var(--border); margin-top: 4px; }
-  .msep { border-top: 1px solid var(--border); margin: 4px 0; }
+  .msec { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); padding: 9px 10px 3px; border-top: 1px solid var(--border); margin-top: 5px; }
+  .msep { border-top: 1px solid var(--border); margin: 5px 4px; }
   .mscroll { max-height: 200px; overflow-y: auto; }
 
   .body { flex: 1; min-height: 0; display: flex; position: relative; }

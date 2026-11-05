@@ -245,7 +245,7 @@
 <ReadAloud />
 
 {#if confirmReset}
-  <Modal title={t("Nebengespräch zurücksetzen?")} onClose={() => (confirmReset = false)}>
+  <Modal icon="undo" place="center" width={420} title={t("Nebengespräch zurücksetzen?")} onClose={() => (confirmReset = false)}>
     <p>{t("Was hier bisher besprochen wurde, wird verworfen. Das Nebengespräch beginnt neu – mit dem Hauptchat, wie er jetzt ist.")}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmReset = false)}>{t("Abbrechen")}</button>
@@ -255,7 +255,7 @@
 {/if}
 
 {#if confirmClose}
-  <Modal title={t("Live läuft noch")} onClose={() => (confirmClose = false)}>
+  <Modal icon="mic" place="center" width={420} title={t("Live läuft noch")} onClose={() => (confirmClose = false)}>
     <p>{t("Das Fenster schließen und auflegen? Das Nebengespräch bleibt als Tab im Hauptfenster.")}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmClose = false)}>{t("Abbrechen")}</button>

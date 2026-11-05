@@ -112,7 +112,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<Modal title={t("Modell")} {onClose}>
+<Modal icon="cpu" width={460} title={t("Modell")} {onClose}>
   {#if current}<div class="cur"><span class="muted">{t("Aktuell")}</span><span class="mono small">{current}</span></div>{/if}
   <div class="top">
     <!-- svelte-ignore a11y_autofocus -->
