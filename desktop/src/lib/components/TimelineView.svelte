@@ -16,8 +16,10 @@
   import ChatRuler from "./chat/ChatRuler.svelte";
   import { provideReveal } from "./chat/reveal";
 
-  let { timeline, root, onAnswer, onLink, onResend, scroller, overview = true, onFinding }: {
+  let { timeline, root, onAnswer, onLink, onResend, scroller, overview = true, onFinding, pinnedAsk }: {
     timeline: Timeline;
+    /** the open question's id: it hangs above the composer (AgentView), not in the scrolling log */
+    pinnedAsk?: string;
     /** the space folder (pane cwd): tool paths under it show relative */
     root?: string;
     /** answers omp's question (ask id, one pick per question); false = not sent */
@@ -114,7 +116,7 @@
       <div data-find={item.id} data-ov={itemKind(item)}>
         <ToolCalls pieces={view.pieces.get(item.id) ?? []} todo={view.todo} {root} {jobs} jobCalls={starts} {onLink} />
       </div>
-    {:else if item.k === "ask"}
+    {:else if item.k === "ask" && item.id !== pinnedAsk}
       <div class="msg" data-item={item.id} data-find={item.id} data-ov="ask">
         {@render stamp(item.at, item.id)}
         <AskCard {item} {onAnswer} agent={timeline.agent === "claude" ? "Claude" : "omp"} />

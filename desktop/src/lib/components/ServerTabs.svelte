@@ -12,10 +12,14 @@
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import type { MenuItem } from "$lib/views/dashboard/util";
   import LiveMark from "./LiveMark.svelte";
+  import Icon from "./git/Icon.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
   import { sortable } from "$lib/sortable";
   import { moveBefore, ordered } from "$lib/tabOrder";
   import { tabOrders } from "$lib/tabOrders.svelte";
+
+  /** `side`: the switcher at the top of the sidebar (the spaces below it belong to the chosen server) */
+  let { side = false }: { side?: boolean } = $props();
 
   const servers = $derived(ordered(app.servers, tabOrders.all.servers, (s) => s.id));
   const moveServer = (id: string, before: string | null) =>
@@ -70,7 +74,7 @@
 <svelte:window onkeydown={onKey} />
 
 {#if app.servers.length}
-  <div class="tabs" class:above={nav.route.view === "agent" || nav.route.view === "space"} role="tablist" aria-label={t("Server")}>
+  <div class="tabs" class:side class:above={nav.route.view === "agent" || nav.route.view === "space"} role="tablist" aria-label={t("Server")}>
     <div class="strip" use:sortable={{ onMove: moveServer }}>
       {#each servers as s, i (s.id)}
         {@const on = s.id === active}
@@ -79,7 +83,7 @@
         <button class="tab" class:on role="tab" aria-selected={on} data-sort-id={s.id}
           title="{s.label}{err ? ` · ⚠ ${err}` : ''}{i < 9 ? ` · ${mod}${i + 1}` : ''}"
           onclick={() => open(s.id)} oncontextmenu={(e) => tabMenu(e, s.id)}>
-          {#if i < 9}<span class="num">{i + 1}</span>{/if}
+          {#if i < 9 && !side}<span class="num">{i + 1}</span>{/if}
           <span class="conn" class:bad={!!err}></span>
           <span class="name ellipsis">{s.label}</span>
           <LiveMark server={s.id} />
@@ -87,7 +91,7 @@
         </button>
       {/each}
     </div>
-    <button class="add" title={t("Server koppeln")} aria-label={t("Server koppeln")} onclick={() => (dialogs.pair = true)}>＋</button>
+    <button class="add" title={t("Server koppeln")} aria-label={t("Server koppeln")} onclick={() => (dialogs.pair = true)}><Icon name="plus" size={14} /></button>
   </div>
 {/if}
 
@@ -115,4 +119,11 @@
   .add { all: unset; cursor: pointer; align-self: center; padding: 0 8px 4px; color: var(--muted); font-size: 14px; }
   .add:hover { color: var(--fg); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* in the sidebar: small chips that wrap, the chosen one raised */
+  .tabs.side { padding: 12px 8px 8px; border: 0; background: none; font-family: inherit; font-size: 12.5px; align-items: center; }
+  .side .strip { flex-wrap: wrap; overflow: visible; gap: 4px; }
+  .side .tab { height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; margin: 0; max-width: 100%; }
+  .side .tab.on { background: var(--card); border-color: var(--border); margin: 0; }
+  .side .add { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border-radius: 8px; color: var(--dim); }
+  .side .add:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
 </style>

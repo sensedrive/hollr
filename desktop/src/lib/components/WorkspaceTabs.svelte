@@ -6,7 +6,8 @@
   // side conversation (a write-guarded fork of another session, `fork` on the server) shows dimmed – a click opens its window.
   // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move"), the
   // numbers stay herdr's.
-  import { tick } from "svelte";
+  import { tick, type Snippet } from "svelte";
+  import Icon from "./git/Icon.svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
   import type { Workspace } from "$lib/api";
@@ -21,7 +22,8 @@
   import { tabOrders } from "$lib/tabOrders.svelte";
 
   /** `active`: the open session's pane – none in the space view, then the space tab is the active one */
-  let { server, workspace: ws, active }: { server: string; workspace: Workspace; active?: string } = $props();
+  /** `actions`: the open session's tools, right-aligned in the same bar (AgentView) */
+  let { server, workspace: ws, active, actions }: { server: string; workspace: Workspace; active?: string; actions?: Snippet } = $props();
   type Tab = (typeof ws.tabs)[number];
   type Pane = Tab["panes"][number];
 
@@ -126,7 +128,7 @@
 
 <div class="tabs" role="tablist" aria-label={ws.label}>
   <button class="tab home" class:on={!active} role="tab" aria-selected={!active} title={t("Space öffnen")}
-    onclick={() => go({ view: "space", server, ws: ws.id })}><span class="num">❒</span><span class="name ellipsis">{ws.label}</span></button>
+    onclick={() => go({ view: "space", server, ws: ws.id })}><span class="num"><Icon name="space" size={14} /></span><span class="name ellipsis">{ws.label}</span></button>
   <div class="strip" use:sortable={{ onMove: moveTab }}>
     {#each tabs as tab (tab.id)}
       {#each tab.panes as pane, i (pane.pane)}
@@ -144,20 +146,20 @@
               onclick={() => openTab(pane)}
               onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
               ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
-              <span class="num">{i === 0 ? tab.number : "┊"}</span>
-              <span class="dot {pane.status}"></span>
+              {#if pane.fork}<span class="num"><Icon name="corner" size={12} /></span>{:else}<span class="dot {pane.status}"></span>{/if}
               <span class="name ellipsis">{nameOf(tab, pane)}</span>
               <LiveMark {server} pane={pane.pane} />
             </button>
-            <button class="x" title={t("Schließen")} aria-label={t("Schließen")} onclick={() => askClose(tab, pane)}>✕</button>
+            <button class="x" title={t("Schließen")} aria-label={t("Schließen")} onclick={() => askClose(tab, pane)}><Icon name="x" size={11} /></button>
           </div>
         {/if}
       {/each}
     {/each}
   </div>
   <button class="add" title={t("Neue Sitzung hier")} aria-label={t("Neue Sitzung hier")}
-    onclick={() => (dialogs.newSession = { server, ws: ws.id })}>＋</button>
+    onclick={() => (dialogs.newSession = { server, ws: ws.id })}><Icon name="plus" size={15} /></button>
   {#if error}<span class="err ellipsis" title={error}>⚠ {error}</span>{/if}
+  {#if actions}<div class="tools">{@render actions()}</div>{/if}
 </div>
 
 {#if menu}
@@ -172,7 +174,9 @@
 
 <style>
   .tabs { display: flex; align-items: stretch; gap: 2px; padding: 5px 10px 0; border-bottom: 1px solid var(--border);
-    background: var(--side); font-family: var(--mono); font-size: 12px; min-width: 0; }
+    background: var(--side); font-size: 13px; min-width: 0; }
+  .tools { margin-left: auto; padding: 0 0 5px 12px; display: flex; align-items: center; flex: none; }
+  .num { display: grid; place-items: center; }
   .tab.home { padding-right: 12px; max-width: 180px; font-weight: 600; }
   .strip { position: relative; display: flex; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
   .strip::-webkit-scrollbar { display: none; }
@@ -184,8 +188,9 @@
   .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .tab.split { padding-left: 8px; }
   /* a side conversation: there, but quieter than the sessions it talks about */
-  .tab.fork { font-style: italic; opacity: 0.75; border-style: dashed; }
-  .tab.fork.on { opacity: 1; }
+  /* a side conversation: a small sub-item hanging off its session's tab */
+  .tab.fork { font-style: italic; font-size: 11.5px; color: var(--dim); padding-left: 4px; gap: 4px; margin-left: -6px; }
+  .tab.fork.on { color: var(--fg); }
   .x { all: unset; cursor: pointer; position: absolute; right: 6px; top: 50%; translate: 0 -45%; width: 16px; height: 16px;
     display: grid; place-items: center; border-radius: 4px; font-size: 9px; color: var(--muted); opacity: 0; }
   .tabwrap:hover .x, .tabwrap.on .x, .x:focus-visible { opacity: 1; }
@@ -194,12 +199,14 @@
   .tab.edit input { all: unset; width: 160px; padding: 2px 6px; border-radius: 5px; color: var(--fg); font: inherit;
     background: var(--card); box-shadow: 0 0 0 1px var(--accent); }
   .num { color: var(--dim); }
-  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; box-sizing: border-box; border: 1.5px solid var(--green); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; box-sizing: border-box; border: 1.5px solid var(--dim); }
   .dot.working { background: var(--purple); border-color: var(--purple); }
   .dot.blocked { background: var(--orange); border-color: var(--orange); }
-  .dot.done { background: var(--green); }
+  .dot.done { background: var(--accent); border-color: var(--accent); }
   .dot.unknown { width: 4px; height: 4px; border: none; background: var(--dim); }
-  .add { all: unset; cursor: pointer; align-self: center; padding: 0 8px 5px; color: var(--muted); font-size: 14px; }
+  .add { all: unset; cursor: pointer; align-self: center; display: grid; place-items: center; width: 26px; height: 26px; margin-bottom: 4px;
+    border-radius: 6px; color: var(--dim); }
+  .add:focus-visible { outline: 2px solid var(--accent); }
   .add:hover { color: var(--fg); }
   .err { align-self: center; max-width: 40%; padding: 0 6px 5px; color: var(--orange); font-family: var(--font, inherit); font-size: 11.5px; }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -5,10 +5,11 @@
 .chat-tools .hrow { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .chat-tools .hrow.mid { align-items: center; }
 .chat-tools .indent { padding-left: 14px; }
-.chat-tools .frame { position: relative; border: 1px solid color-mix(in srgb, var(--dim) 70%, transparent); border-radius: 10px;
-  padding: 10px 12px; background: var(--raised); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* quiet: a tool step is a line in the log, not a box – only running and failed ones are marked */
+.chat-tools .frame { position: relative; border: 1px solid color-mix(in srgb, var(--border) 55%, transparent); border-radius: 8px;
+  padding: 6px 10px; background: transparent; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .chat-tools .frame.soft { border-color: color-mix(in srgb, var(--border) 60%, transparent); }
-.chat-tools .frame.running { border-color: color-mix(in srgb, var(--orange) 70%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.chat-tools .frame.running { border-color: color-mix(in srgb, var(--purple) 55%, transparent); background: color-mix(in srgb, var(--purple) 5%, transparent); }
 .chat-tools .frame.error { border-color: color-mix(in srgb, var(--red) 80%, transparent); background: color-mix(in srgb, var(--red) 14%, transparent); }
 .chat-tools .frame.flush { padding: 0; gap: 0; overflow: clip; }
 .chat-tools .click { cursor: pointer; }

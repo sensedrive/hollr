@@ -42,7 +42,7 @@
 
   const key = $derived(draftKey(ref.server.id, ref.pane.pane));
   const color = $derived(
-    kind === "error" ? "var(--red)" : kind === "done" ? "var(--green)" : kind === "long" ? "var(--purple)" : "var(--orange)",
+    kind === "error" ? "var(--red)" : kind === "done" ? "var(--accent)" : kind === "long" ? "var(--purple)" : "var(--orange)",
   );
   const icon = $derived(kind === "done" ? "✓" : kind === "error" ? "⚠" : kind === "long" ? "◷" : "?");
   const agent = $derived(agentName(ref.pane));
@@ -56,6 +56,9 @@
   const title = $derived(refTitle(ref));
   /** one-tap options (a single question); several questions / multi-select go through the AskCard */
   const options = $derived(kind === "ask" ? (entry?.options ?? []) : []);
+  /** questions and errors want an answer – results and long runs only on request (one main action per card) */
+  let replying = $state(false);
+  $effect.pre(() => { if (kind === "ask" || kind === "waiting" || kind === "error") replying = true; });
   const fullAsk = $derived(kind === "ask" && !options.length && ctx?.ask ? ctx.ask : undefined);
   const body = $derived(
     kind === "ask" ? entry?.question
@@ -144,6 +147,7 @@
     </div>
   {/if}
 
+  {#if replying}
   <form class="reply" onsubmit={(e) => { e.preventDefault(); send(); }}>
     <textarea bind:this={input} rows="1" value={text} {placeholder} disabled={sending}
       oninput={(e) => drafts.setText(key, e.currentTarget.value)}
@@ -153,9 +157,11 @@
       }}></textarea>
     <button class="btn send" type="submit" disabled={!text.trim() || sending} title={t("Senden")} aria-label={t("Senden")}>↑</button>
   </form>
+  {/if}
 
   <div class="actions">
-    <button class="btn" onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)">↗ {t("Chat")}</button>
+    <button class="btn" class:primary={!replying} onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)">↗ {t("Chat öffnen")}</button>
+    {#if !replying}<button class="btn" onclick={() => (replying = true)}>↩ {t("Antworten")}</button>{/if}
     <button class="btn" onclick={() => onOpen("terminal")} title="{t('Terminal öffnen')} (T)">&gt;_ {t("Terminal")}</button>
     <button class="btn" onclick={() => onOpen("git")} title="{t('Git & Dateien')} (G)">⑂ {t("Git")}{#if project.dirty}<span class="dirty">{project.dirty}</span>{/if}</button>
     {#each ports.slice(0, 2) as p (p.port)}

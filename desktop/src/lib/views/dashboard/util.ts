@@ -27,7 +27,8 @@ export function badge(agent?: string): { short: string; color: string } {
 
 export function statusColor(status: string): string {
   switch (status) {
-    case "idle": case "done": return "var(--green)";
+    case "done": return "var(--accent)";
+    case "idle": return "var(--muted)";
     case "working": return "var(--purple)";
     case "blocked": return "var(--orange)";
     default: return "var(--dim)";

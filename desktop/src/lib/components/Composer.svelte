@@ -19,7 +19,7 @@
   import Icon from "./git/Icon.svelte";
 
   let {
-    placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, value = $bindable(""),
+    placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, meta, quick = true, value = $bindable(""),
     sent = $bindable([]), server, ws, dictationKey, micBlocked = false, vocabulary,
   }: {
     placeholder: string;
@@ -33,6 +33,10 @@
     top?: Snippet;
     /** extra buttons left of "send" (live button) */
     trailing?: Snippet;
+    /** quiet info left of the mic (model · context) */
+    meta?: Snippet;
+    /** the row of single keys (Esc ↑ ↓ …) – in the chat they wait behind >_ */
+    quick?: boolean;
     value?: string;
     /** ↑ history, newest first (bind it to keep it beyond this component) */
     sent?: string[];
@@ -389,7 +393,7 @@
   <div class="actions">
     <div class="keys">
       <div class="menuwrap">
-        <button class="term mono" title={keysTitle} aria-label={t("Tasten senden")} onclick={(e) => { e.stopPropagation(); menu = !menu; }}>&gt;_</button>
+        <button class="term" title={keysTitle} aria-label={t("Tasten senden")} onclick={(e) => { e.stopPropagation(); menu = !menu; }}><Icon name="terminal" size={16} /></button>
         {#if menu}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
           <div class="menu" onclick={(e) => e.stopPropagation()}>
@@ -409,13 +413,14 @@
           onchange={(e) => { upload([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ""; }} />
         {#if uploading}<span class="uploading">{t("Lädt hoch …")}</span>{/if}
       {/if}
-      <div class="quick">
+      <div class="quick" class:off={!quick}>
         {#each QUICK as [label, k]}
           <button class="key mono" title={k} onclick={() => onKeys([k])}>{label}</button>
         {/each}
       </div>
     </div>
     <div class="right">
+      {#if meta}<span class="meta">{@render meta()}</span>{/if}
       {#if dictationKey}
         {#if recordingHere}
           <button class="micx" title={t("Diktat verwerfen")} aria-label={t("Diktat verwerfen")} onclick={() => dictator.cancel()}>✕</button>
@@ -494,7 +499,10 @@
     padding: 5px 8px; border-radius: 7px; font-size: 13px; }
   .mitem:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
   .mitem .dim { font-size: 11px; color: var(--dim); }
-  .right { display: flex; align-items: center; gap: 8px; }
+  .right { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .meta { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 11.5px var(--mono); color: var(--dim); }
+  @container (max-width: 560px) { .meta { display: none; } }
+  .quick.off { display: none; }
   .send { all: unset; cursor: default; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
     background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--muted); }
   .send.on { cursor: pointer; background: var(--accent); color: #fff; }

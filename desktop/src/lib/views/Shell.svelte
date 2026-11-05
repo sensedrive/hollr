@@ -8,7 +8,7 @@
   import { appendDraft } from "$lib/sidetalk";
   import { draftKey } from "$lib/drafts";
   import {
-    app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName, type Route,
+    app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName,
   } from "$lib/store.svelte";
   import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
   import WorkspaceTabs from "$lib/components/WorkspaceTabs.svelte";
@@ -29,6 +29,8 @@
   import AppLock from "$lib/components/AppLock.svelte";
   import TipsTour from "$lib/components/TipsTour.svelte";
   import ReadAloud from "$lib/components/ReadAloud.svelte";
+  import CommandPalette from "$lib/components/CommandPalette.svelte";
+  import Icon from "$lib/components/git/Icon.svelte";
   import { pendingTips, tour } from "$lib/tips.svelte";
   import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
 
@@ -43,10 +45,9 @@
     else if (k === "-") zoomBy(-0.1);
     else if (k === "0") settings.zoom = 1;
     else if (k === "n" && app.servers.length) dialogs.newSession = {};
+    else if (k === "k") palette = !palette;
     else if (k === ",") go({ view: "settings" });
     else if (k === "1") go({ view: "dashboard" });
-    else if (k === "2") go({ view: "agents" });
-    else if (k === "3") go({ view: "spaces" });
     // ⌘[ while typing belongs to the text field (drafts keep the text on the other shortcuts)
     else if (k === "[" && !typing(e.target)) back();
     else return;
@@ -102,13 +103,9 @@
     if (document.visibilityState === "visible") untrack(() => markSeen(`${r.server}|${r.pane}`));
   });
 
-  const NAV: { route: Route; label: string; icon: string; key: string }[] = [
-    { route: { view: "dashboard" }, label: "Übersicht", icon: "▦", key: "1" },
-    { route: { view: "agents" }, label: "Agents", icon: "◉", key: "2" },
-    { route: { view: "spaces" }, label: "Spaces", icon: "❒", key: "3" },
-  ];
-  const isActive = (r: Route) =>
-    nav.route.view === r.view || (r.view === "spaces" && nav.route.view === "space");
+  // Übersicht and ⌘K are the whole navigation: sessions and spaces live in the sidebar below, the old "Agents" and
+  // "Spaces" lists stay reachable through the command palette
+  let palette = $state(false);
 
   const current = $derived(nav.route.view === "agent" ? findPane(nav.route.server, nav.route.pane) : undefined);
   /** the space view's herdr workspace, for its tab bar (none while the tree loads or nothing runs there) */
@@ -151,26 +148,26 @@
 <main style:grid-template-columns="{sideWidth}px 1fr">
   <aside>
     <div class="brand"><b>Hollr</b>
-      <button class="icon" title={`${t("Neue Sitzung")} (${mod}N)`} disabled={!app.servers.length}
-        onclick={() => (dialogs.newSession = {})}>＋</button>
+      <button class="icon" title={`${t("Neue Sitzung")} (${mod}N)`} aria-label={t("Neue Sitzung")} disabled={!app.servers.length}
+        onclick={() => (dialogs.newSession = {})}><Icon name="plus" size={15} /></button>
     </div>
     <nav>
-      {#each NAV as item}
-        <button class="nav" class:active={isActive(item.route)} onclick={() => go(item.route)} title={`${mod}${item.key}`}>
-          <span class="ico">{item.icon}</span><span class="grow">{t(item.label)}</span>
-          {#if item.route.view === "dashboard" && needsYou}
-            <span class="count" title={t("Braucht dich")}>{needsYou}</span>
-          {/if}
-        </button>
-      {/each}
+      <button class="nav" class:active={nav.route.view === "dashboard"} onclick={() => go({ view: "dashboard" })}>
+        <span class="ico"><Icon name="grid" size={15} /></span><span class="grow">{t("Übersicht")}</span>
+        {#if needsYou}<span class="count" title={t("Braucht dich")}>{needsYou}</span>{:else}<kbd>{mod}1</kbd>{/if}
+      </button>
+      <button class="nav" onclick={() => (palette = true)}>
+        <span class="ico"><Icon name="find" size={15} /></span><span class="grow">{t("Suchen …")}</span><kbd>{mod}K</kbd>
+      </button>
     </nav>
+    <ServerTabs side />
     <div class="list">
       <SpacesSidebar />
     </div>
     <div class="bottom">
       <LivePill />
-      <button class="nav" class:active={nav.route.view === "settings"} onclick={() => go({ view: "settings" })} title={`${mod},`}>
-        <span class="ico">⚙</span>{t("Einstellungen")}
+      <button class="nav" class:active={nav.route.view === "settings"} onclick={() => go({ view: "settings" })}>
+        <span class="ico"><Icon name="sliders" size={15} /></span><span class="grow">{t("Einstellungen")}</span><kbd>{mod},</kbd>
       </button>
     </div>
     <div class="sidegrip" role="separator" aria-orientation="vertical" aria-label={t("Seitenleiste breiter / schmaler")}
@@ -179,17 +176,14 @@
   </aside>
 
   <section class="main">
-    <ServerTabs />
     <div class="view">
       {#if nav.route.view === "agent"}
         {#if current}
-          <div class="agentwrap">
-            <WorkspaceTabs server={current.server.id} workspace={current.workspace} active={current.pane.pane} />
-            {#key `${nav.route.server}|${nav.route.pane}`}
-              <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
-                open={nav.route.open} url={nav.route.url} {onClosed} />
-            {/key}
-          </div>
+          <!-- the session renders its space's tab bar itself: its tools (Chat/Terminal, Git, Browser, Info) sit in it -->
+          {#key `${nav.route.server}|${nav.route.pane}`}
+            <AgentView server={nav.route.server} pane={current.pane} workspace={current.workspace} title={tabName(current.tab.label, current.workspace.label)}
+              open={nav.route.open} url={nav.route.url} {onClosed} />
+          {/key}
         {:else}
           <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>
         {/if}
@@ -228,6 +222,9 @@
 {#if dialogs.newSpace}
   <NewSpaceDialog preset={dialogs.newSpace} onClose={() => (dialogs.newSpace = null)} />
 {/if}
+{#if palette}
+  <CommandPalette onClose={() => (palette = false)} />
+{/if}
 {#if tour.tips}
   <TipsTour tips={tour.tips} onClose={() => (tour.tips = null)} />
 {/if}
@@ -235,24 +232,26 @@
 <AppLock />
 
 <style>
-  main { display: grid; grid-template-columns: 270px 1fr; height: 100vh; }
+  main { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
   aside { position: relative; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .sidegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 5; }
   .sidegrip:hover, .sidegrip:active { background: color-mix(in srgb, var(--accent) 60%, transparent); }
-  .brand { display: flex; justify-content: space-between; align-items: center; padding: 14px 14px 8px; font-size: 16px; }
-  .icon { all: unset; cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); font-size: 16px; }
+  .brand { display: flex; justify-content: space-between; align-items: center; padding: 14px 12px 10px 18px; font-size: 16px; }
+  .icon { all: unset; cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); }
+  .icon:focus-visible, .nav:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .icon:hover { background: var(--card); color: var(--fg); }
-  nav { padding: 0 8px 8px; display: grid; gap: 1px; border-bottom: 1px solid var(--border); }
-  .nav { all: unset; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; color: var(--muted); }
+  nav { padding: 0 8px 10px; display: grid; gap: 2px; border-bottom: 1px solid var(--border); }
+  .nav { all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; color: var(--muted); }
+  .nav kbd { font: 11px var(--mono); color: var(--dim); }
   .nav:hover { background: var(--card); color: var(--fg); }
   .nav.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg); }
   .count { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center;
     font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--orange); }
-  .ico { width: 16px; text-align: center; font-size: 13px; }
+  .ico { width: 16px; display: grid; place-items: center; }
   .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
-  .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
-  .view { grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; }
+  .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }
+  .view { min-width: 0; min-height: 0; overflow: hidden; }
   .agentwrap { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
   .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>

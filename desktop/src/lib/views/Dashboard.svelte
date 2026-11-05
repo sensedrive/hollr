@@ -93,6 +93,13 @@
       .sort((a, b) => order(a[0]!) - order(b[0]!) || (b[0]!.changed ?? 0) - (a[0]!.changed ?? 0));
   });
   const workCount = $derived(projects.reduce((n, p) => n + p.length, 0));
+  // "Läuft gerade" can be narrowed to the busy ones or the fresh results – this list replaces the old "Agents" page
+  let filter = $state<"all" | "busy" | "new">("all");
+  const FILTERS: [typeof filter, string][] = [["all", "Alle"], ["busy", "Arbeitet"], ["new", "Neu"]];
+  const shownProjects = $derived(
+    projects.map((rows) => rows.filter((w) => filter === "all" || (filter === "new" ? w.ref.pane.status === "done"
+      : w.ref.pane.status === "working" || w.ref.pane.status === "blocked"))).filter((rows) => rows.length > 0),
+  );
 
   // ------------------------------------------------------------ my sessions by machine (live previews)
 
@@ -311,11 +318,17 @@
     <!-- what you're working on, by project -->
     <section class="working">
       <div class="section head">
-        <span class="grow">{t("Woran ich arbeite")}</span>{#if workCount}<span class="dim">{workCount}</span>{/if}
+        <span class="grow">{t("Läuft gerade")}</span>{#if workCount}<span class="dim">{workCount}</span>{/if}
       </div>
       {#if projects.length}
+        <div class="seg" role="radiogroup" aria-label={t("Filter")}>
+          {#each FILTERS as [v, label] (v)}
+            <button role="radio" aria-checked={filter === v} class:on={filter === v} onclick={() => (filter = v)}>{t(label)}</button>
+          {/each}
+        </div>
         <div class="stack" use:arrowNav>
-          {#each projects as rows (rows[0]!.project.key)}
+          {#if !shownProjects.length}<div class="card muted small">{t("Nichts mit diesem Filter.")}</div>{/if}
+          {#each shownProjects as rows (rows[0]!.project.key)}
             <ProjectCard name={rows[0]!.project.name} server={several ? rows[0]!.ref.server.label : undefined} {rows}
               selectedId={sel?.startsWith("w:") ? sel.slice(2) : undefined}
               onOpen={open} onSelect={(r) => select(`w:${r.id}`, false)} onMenu={cardMenu} />
@@ -368,26 +381,6 @@
     </div>
   {/each}
 
-  <!-- connections -->
-  <div class="section">{t("Verbindungen")}</div>
-  <div class="servers" use:arrowNav>
-    {#each app.servers as s (s.id)}
-      <button class="srv card" data-nav onclick={() => go({ view: "serverinfo", server: s.id })} oncontextmenu={(e) => serverMenu(e, s)}
-        title={app.errors[s.id] ?? ""}>
-        <span class="rack">▤</span>
-        <span class="grow">
-          <span class="lbl ellipsis">{s.label}</span>
-          <span class="addr mono ellipsis">{address(s)}</span>
-          {#if app.errors[s.id]}<span class="small ellipsis" style="color:var(--orange)">{app.errors[s.id]}</span>{/if}
-        </span>
-        <span class="sdot big" class:bad={!!app.errors[s.id]} class:unknown={!app.loaded[s.id]}></span>
-        <span class="dim">›</span>
-      </button>
-    {/each}
-    <button class="srv card pair" data-nav onclick={() => (dialogs.pair = true)}>
-      <span class="rack">⌗</span><span class="grow">{t("Server koppeln")}</span>
-    </button>
-  </div>
 </div>
 
 {#if menu}
@@ -427,24 +420,15 @@
   .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
   .sdot.warn { background: var(--orange); }
   .sdot.quiet { background: var(--dim); }
-  .sdot.big { width: 9px; height: 9px; }
   .sdot.bad { background: var(--orange); }
-  .sdot.unknown { background: var(--dim); }
   .limits { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 16px; width: 100%;
     padding: 7px 12px; border-radius: 10px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
   .limits:hover, .limits:focus-visible { background: var(--card); }
   .lg { display: inline-flex; gap: 6px; }
   .empty { display: grid; gap: 12px; padding: 18px; max-width: 640px; }
   .row-buttons { display: flex; gap: 8px; }
-  .servers { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-  .srv { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px; transition: border-color .12s; }
-  .srv:hover, .srv:focus-visible { border-color: var(--accent); }
-  .srv .grow { display: grid; }
-  .rack { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 10px; font-size: 17px;
-    color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
-  .lbl { font-weight: 600; }
-  .addr { font-size: 11px; color: var(--muted); }
-  .pair { border-style: dashed; color: var(--muted); }
-  .pair .rack { color: var(--muted); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+  .seg { display: inline-flex; margin-bottom: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg button { all: unset; cursor: pointer; padding: 3px 10px; border-radius: 6px; font-size: 12px; color: var(--muted); }
+  .seg button.on { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); }
 </style>

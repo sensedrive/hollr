@@ -5,7 +5,10 @@
   import { onDestroy, onMount, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
-  import type { AskPick, Pane, Timeline } from "../api";
+  import type { AskPick, Pane, Timeline, Workspace } from "../api";
+  import WorkspaceTabs from "./WorkspaceTabs.svelte";
+  import AskCard from "./AskCard.svelte";
+  import Icon from "./git/Icon.svelte";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
@@ -37,8 +40,10 @@
   import { parsePathHref } from "../paths";
   import FilePreview from "./FilePreview.svelte";
 
-  let { server, pane, title, onClosed, open, url, inSideWindow = false, autoLive = false, onTimeline }: {
+  let { server, pane, workspace, title, onClosed, open, url, inSideWindow = false, autoLive = false, onTimeline }: {
     server: string; pane: Pane; title: string;
+    /** its space: the session shows the space's tab bar with its own tools in it (none in the side window) */
+    workspace?: Workspace;
     /** show this right away (from the dashboard's quick actions) */
     open?: "terminal" | "git" | "browser";
     /** address for open = "browser" */
@@ -491,7 +496,7 @@
       else if (c === "KeyT" && pane.agent) mode = mode === "chat" ? "terminal" : "chat";
       else if (c === "KeyL" && canTalk) openTalk();
       else return;
-    } else if (c === "KeyK") {
+    } else if (c === "KeyJ") {
       if (mode === "terminal") term?.focus();
       else composer?.focus();
     } else if (c === "Period") sendKeys(["esc"]);
@@ -567,11 +572,21 @@
   const phase = $derived(timeline ? openPhase(timeline) : undefined);
   /** background jobs with what they do (their starting call's intent) – HUD and info panel */
   const jobs = $derived(timeline ? jobViews(timeline) : []);
+  /** the HUD only shows what the log doesn't: thinking without a tool, the TODO task, background jobs */
+  const hudShown = $derived(!!timeline && (!!phase || jobs.length > 0 || (!!timeline.running && !waitingForUser && !runningActivity(timeline)?.call)));
 </script>
 
 <svelte:window onkeydown={onKey} onclick={() => (menu = false)} />
 
-{#snippet liveStrip()}<LiveBar {server} pane={pane.pane} />{/snippet}
+{#snippet liveStrip()}
+  <LiveBar {server} pane={pane.pane} />
+  {#if mode === "chat" && timeline && hudShown}<div class="inbox">{@render hud(timeline)}</div>{/if}
+{/snippet}
+
+{#snippet statusMeta()}
+  {#if timeline?.line?.model}<button class="metab" title={t("Modell wechseln")} onclick={openModels}>{timeline.line.model}</button>{/if}
+  {#if timeline?.line?.context}<span> · {timeline.line.context}</span>{/if}
+{/snippet}
 
 {#snippet liveButton()}
   {#if pane.live && !livePhase}
@@ -584,11 +599,11 @@
   {@const act = waitingForUser ? undefined : runningActivity(tl)}
   {@const since = workingSince(tl)}
   <div class="hud mono">
-    {#if waitingForUser}
+    {#if waitingForUser && !ask}
       <span class="ic waitc">⚠</span>
-      <span class="htxt ellipsis waitc">{t("Wartet auf dich")}{ask?.header ? ` · ${ask.header}` : ""}</span>
+      <span class="htxt ellipsis waitc">{t("Wartet auf dich")}</span>
       <span class="meta">{waitStart ? duration(now - waitStart) : ""}</span>
-    {:else if tl.running}
+    {:else if tl.running && !act?.call}
       {@const call = act?.call}
       {@const waits = call?.name === "wait" || (!call && tl.waiting)}
       {@const intent = call && call.label && call.label !== call.name ? call.label : undefined}
@@ -639,41 +654,11 @@
   <span class="clamp2" style:color={todoColor(task.status)} class:strike={task.status === "completed" || task.status === "abandoned"}>{task.content}{task.status === "blocked" ? " (blocked)" : ""}</span>
 {/snippet}
 
-{#snippet statusLine()}
-  {#if timeline?.line}
-    {@const l = timeline.line}
-    <div class="status mono">
-      {#if working}<span class="braille acc"></span>{:else if waitingForUser}<span class="waitc">⚠</span>{/if}
-      {#if l.model}<button class="model" title={t("Modell wechseln")} onclick={openModels}>⬢ {l.model}</button>{/if}
-      {#if l.folder}<span class="fg" title={shortPath(pane.cwd)}>{l.folder}</span>{/if}
-      {#if l.branch}<button class="branch" title={t("Git & Dateien")} onclick={() => togglePanel("git")}>⑂ {l.branch}{l.dirty ? ` *${l.dirty}` : ""}</button>{/if}
-      {#if l.context}<span class="muted">◔ {l.context}</span>{/if}
-      {#if l.cost}<span class="dim">${l.cost}</span>{/if}
-    </div>
-  {/if}
-{/snippet}
 
-<section class="agent" class:zen>
-  {#if !zen}
-    <header>
-      <div class="who">
-        <div class="title ellipsis">{title}</div>
-        <div class="sub ellipsis">
-          <span class="dot" class:working class:blocked={!working && status === "blocked"} class:ok={!working && (status === "idle" || status === "done")}></span>
-          {isShell ? `${t("Terminal")} · ${shortPath(pane.cwd)}` : `${agentName} · ${working ? t("arbeitet") : statusLabel(status)}`}
-          {#if livePhase === "live"}<span style:color={liveColor}> · Live: {ompStateLabel(ompState)}</span>{/if}
-          {#if !isShell}<span class="dim"> · {shortPath(pane.cwd)}</span>{/if}
-          <span class="dim"> · {serverLabel}</span>
-          {#if pane.fork && !inSideWindow}<span class="forkmark"> · 🎙 {t("Nebengespräch – ändert nichts ohne dich")}</span>{/if}
-        </div>
-      </div>
+{#snippet toolbar()}
       <div class="actions">
         {#if pane.fork && !inSideWindow}
           <button class="talkbtn" title={t("Das Nebengespräch in seinem eigenen Fenster")} onclick={openOwnWindow}>🎙 {t("Im eigenen Fenster")}</button>
-        {:else if canTalk}
-          <button class="talkbtn" class:on={!!treeFork} disabled={forking}
-            title={`${t("Nebengespräch: in einem zweiten Fenster über diese Sitzung reden, ohne sie zu stören")} (${mod}${shift}L)`} onclick={openTalk}>
-            {forking ? `🎙 ${t("Starte …")}` : `🎙 ${t("Nebengespräch")}`}</button>
         {/if}
         {#if pane.agent}
           <div class="seg">
@@ -681,12 +666,12 @@
             <button class:on={mode === "terminal"} onclick={() => (mode = "terminal")} title={`${mod}${shift}T`}>{t("Terminal")}</button>
           </div>
         {/if}
-        <button class="ib" class:on={panel === "git"} title={`${t("Git & Dateien")} (${mod}${shift}G)`} onclick={() => togglePanel("git")}>⑂</button>
-        <button class="ib" class:on={panel === "browser"} title={`${t("Browser")} (${mod}${shift}B)`} onclick={() => togglePanel("browser")}>◍</button>
-        <button class="ib" class:on={panel === "info"} title={`${t("Info")} (${mod}${shift}I)`} onclick={() => togglePanel("info")}>ⓘ</button>
-        <button class="ib" title={`${t("Zen-Modus")} (${mod}${shift}F)`} onclick={() => { zen = true; menu = false; }}>⤢</button>
+        <button class="ib" class:on={panel === "git"} title={`${t("Git & Dateien")} (${mod}${shift}G)`} onclick={() => togglePanel("git")}><Icon name="branch" size={16} /></button>
+        <button class="ib" class:on={panel === "browser"} title={`${t("Browser")} (${mod}${shift}B)`} onclick={() => togglePanel("browser")}><Icon name="globe" size={16} /></button>
+        <button class="ib" class:on={panel === "info"} title={`${t("Info")} (${mod}${shift}I)`} onclick={() => togglePanel("info")}><Icon name="info" size={16} /></button>
+        <button class="ib" title={`${t("Zen-Modus")} (${mod}${shift}F)`} onclick={() => { zen = true; menu = false; }}><Icon name="maximize" size={16} /></button>
         <div class="menuwrap">
-          <button class="ib" class:on={menu} title={t("Mehr")} onclick={(e) => { e.stopPropagation(); menu = !menu; }}>⋯</button>
+          <button class="ib" class:on={menu} title={t("Mehr")} onclick={(e) => { e.stopPropagation(); menu = !menu; }}><Icon name="more" size={16} /></button>
           {#if menu}
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div class="menu" onclick={(e) => e.stopPropagation()}>
@@ -724,7 +709,16 @@
           {/if}
         </div>
       </div>
-    </header>
+{/snippet}
+
+<section class="agent" class:zen>
+  {#if !zen}
+    <!-- one bar: the space's tabs, this session's tools on the right (name and status are in its tab) -->
+    {#if workspace}
+      <WorkspaceTabs {server} {workspace} active={pane.pane} actions={toolbar} />
+    {:else}
+      <header class="slim">{@render toolbar()}</header>
+    {/if}
   {/if}
 
   <div class="body">
@@ -735,7 +729,7 @@
             <div class="ttl">{transcriptTitle}</div>
             {#if chat && timeline}
               {#if !timeline.items.length && !pending.length}{@render emptyHint()}{/if}
-              <TimelineView bind:this={timelineView} {timeline} {onLink} onAnswer={answerAsk} onResend={askShown ? undefined : resend} root={pane.cwd}
+              <TimelineView bind:this={timelineView} {timeline} {onLink} onAnswer={answerAsk} pinnedAsk={ask?.id} onResend={askShown ? undefined : resend} root={pane.cwd}
                 {scroller} overview={settings.chatOverview} onFinding={(on) => { finding = on; if (on) stick = false; else onScroll(); }} />
             {:else if !hasTimeline}
               {#if !bubbles.length && !pending.length && (!screen || !showsScreen)}{@render emptyHint()}{/if}
@@ -783,14 +777,13 @@
 
       <!-- terminal mode: the TUI shows TODO, jobs and status itself – only the composer stays (live, typing) -->
       <div class="bottom" class:float={zen} class:term={mode === "terminal"}>
-        {#if mode === "chat" && timeline && (hudVisible(timeline) || waitingForUser)}
-          <div class="hudwrap" class:glass={zen}>{@render hud(timeline)}</div>
+        {#if mode === "chat" && ask}
+          <div class="pinned" class:glass={zen}><AskCard item={ask} onAnswer={answerAsk} agent={timeline?.agent === "claude" ? "Claude" : "omp"} /></div>
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
           bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
-          {server} {ws} top={liveStrip} trailing={liveButton} dictationKey={key} micBlocked={liveActive()}
+          {server} {ws} top={liveStrip} trailing={liveButton} meta={mode === "chat" && !zen ? statusMeta : undefined} quick={mode === "terminal"} dictationKey={key} micBlocked={liveActive()}
           vocabulary={() => sessionTerms([title, pane.cwd.split("/").pop() ?? "", timeline?.title ?? ""], timeline?.items ?? [])} />
-        {#if !zen && mode === "chat"}{@render statusLine()}{/if}
       </div>
 
       {#if zen}
@@ -881,7 +874,7 @@
     {/if}
     <div class="section">{t("Tastenkürzel")}</div>
     <div class="card small keys">
-      {#each [["⏎", t("Senden")], [`${shift}⏎`, t("Neue Zeile")], ["↑", t("Letzte Nachricht")], [`${mod}K`, t("Eingabe fokussieren")], [`${mod}.`, t("Unterbrechen (Esc)")], [`${mod}${shift}T`, t("Chat / Terminal")], [`${mod}${shift}F`, t("Zen-Modus")], ["Esc", t("Zen-Modus beenden")], [`${mod}${shift}G / B / I`, t("Git / Browser / Info")], [`${mod}${shift}L`, t("Nebengespräch")], [`${mod}${shift}M`, t("Modell wechseln")], [`${mod}+ / ${mod}-`, t("Textgröße")]] as [k, v]}
+      {#each [["⏎", t("Senden")], [`${shift}⏎`, t("Neue Zeile")], ["↑", t("Letzte Nachricht")], [`${mod}J`, t("Eingabe fokussieren")], [`${mod}K`, t("Alle Befehle")], [`${mod}.`, t("Unterbrechen (Esc)")], [`${mod}${shift}T`, t("Chat / Terminal")], [`${mod}${shift}F`, t("Zen-Modus")], ["Esc", t("Zen-Modus beenden")], [`${mod}${shift}G / B / I`, t("Git / Browser / Info")], [`${mod}${shift}L`, t("Nebengespräch")], [`${mod}${shift}M`, t("Modell wechseln")], [`${mod}+ / ${mod}-`, t("Textgröße")]] as [k, v]}
         <div class="hrow"><kbd>{k}</kbd><span class="muted">{v}</span></div>
       {/each}
     </div>
@@ -960,9 +953,6 @@
   .agent.zen { position: fixed; inset: 0; z-index: 5; }
   header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px 10px 18px;
     border-bottom: 1px solid var(--border); min-width: 0; }
-  .who { min-width: 0; }
-  .title { font-weight: 600; font-size: 15px; }
-  .sub { color: var(--muted); font-size: 12px; }
   .actions { display: flex; gap: 4px; align-items: center; flex: none; }
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); margin-right: 4px; flex: none; }
   .dot.ok { background: var(--green); }
@@ -999,13 +989,17 @@
   .bottom { padding: 6px 16px 8px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 952px; margin: 0 auto; }
   .bottom.term { padding: 2px 16px 6px; gap: 4px; }
   .bottom.float { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(880px, calc(100% - 32px)); padding: 0; }
-  .hudwrap.glass { background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-radius: 12px; padding: 6px 10px; }
+  .inbox { margin: -2px -2px 2px; padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+  .inbox .hud { background: none; border: 0; padding: 0 2px; }
+  .pinned { margin-bottom: 8px; max-height: min(52vh, 460px); overflow-y: auto; overscroll-behavior: contain; border-radius: 12px; }
+  .pinned.glass { background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 12px; }
+  .metab { all: unset; cursor: pointer; border-radius: 4px; padding: 0 2px; }
+  .metab:hover, .metab:focus-visible { color: var(--fg); background: var(--card); }
+  .slim { display: flex; justify-content: flex-end; padding: 6px 10px; border-bottom: 1px solid var(--border); }
   /* icon | text | time: every row's text and time line up; rows are the grid's cells (no row wrappers) */
   .hud { font-size: 12px; display: grid; grid-template-columns: 1.3em minmax(0, 1fr) auto; column-gap: 8px; row-gap: 4px;
     align-items: baseline; padding: 7px 12px; border-radius: 12px; line-height: 1.45;
     background: color-mix(in srgb, var(--raised) 55%, transparent); border: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
-  .hudwrap.glass .hud { background: none; border: 0; padding: 0 2px; }
   .hud .ic { text-align: center; }
   .hud .meta { color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .hud .job { color: var(--dim); }
@@ -1027,12 +1021,6 @@
   .strike { text-decoration: line-through; }
   .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .waitc { color: var(--yellow); }
-  .status { display: flex; align-items: center; gap: 14px; padding: 0 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .status button { all: unset; cursor: pointer; border-radius: 5px; padding: 1px 3px; margin: 0 -3px; }
-  .status button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
-  .model { color: var(--purple); }
-  .branch { color: var(--orange); }
-  .fg { color: color-mix(in srgb, var(--fg) 80%, transparent); }
 
   .bubble { align-self: flex-end; display: flex; align-items: flex-end; gap: 6px; max-width: 78%; }
   .bt { position: relative; background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; padding: 9px 14px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
@@ -1063,9 +1051,8 @@
   .livebtn:hover { background: color-mix(in srgb, var(--green) 30%, transparent); }
   .talkbtn { all: unset; cursor: pointer; height: 28px; padding: 0 11px; margin-right: 6px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
     color: var(--fg); background: color-mix(in srgb, var(--accent) 16%, transparent); white-space: nowrap; }
-  .talkbtn:hover, .talkbtn.on { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .talkbtn:hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
   .talkbtn:disabled { opacity: 0.5; cursor: default; }
-  .forkmark { color: var(--accent); }
 
   .readbar { position: absolute; top: 10px; right: 14px; z-index: 4; display: flex; align-items: center; gap: 2px; padding: 3px 6px;
     border-radius: 999px; background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px);

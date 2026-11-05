@@ -4,7 +4,8 @@
   // A click jumps straight into the session that needs you most; ✕ / right-click hides a space here and on the
   // dashboard (it comes back by itself as soon as it needs you). 〰 shows where a live call runs.
   import { onMount } from "svelte";
-  import { t } from "$lib/i18n";
+  import { statusLabel, t } from "$lib/i18n";
+  import Icon from "./git/Icon.svelte";
   import { allPanes, app, dialogs, go, nav, pollSpaces, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
@@ -105,12 +106,17 @@
 
 <div class="tree">
   {#each sections as sec (sec.server.id)}
-    <button class="server" data-server={sec.server.id} title={app.errors[sec.server.id] ?? t("Server-Info")} onclick={() => go({ view: "serverinfo", server: sec.server.id })}>
-      <span class="conn" class:bad={!!app.errors[sec.server.id]}></span><span class="ellipsis">{sec.server.label}</span><LiveMark server={sec.server.id} />
-    </button>
-    {#if !sec.loaded}
-      {#each [110, 80, 130] as w}<div class="skeleton" style="height:11px; width:{w}px; margin:7px 0 7px 22px"></div>{/each}
+    {#if app.errors[sec.server.id]}
+      <!-- the server's switcher above shows which one; here only what is wrong with it -->
+      <button class="note" title={t("Server-Info")} onclick={() => go({ view: "serverinfo", server: sec.server.id })}>
+        <span class="nhead"><Icon name="offline" size={14} />{t("Keine Verbindung zu {server}", { server: sec.server.label })}</span>
+        <span class="ntext">{app.errors[sec.server.id]}</span>
+      </button>
     {/if}
+    {#if !sec.loaded}
+      {#each [110, 80, 130] as w}<div class="skeleton" style="height:12px; width:{w}px; margin:10px 0 10px 29px"></div>{/each}
+    {/if}
+    <div class="spaces" class:stale={!!app.errors[sec.server.id]}>
     {#each sec.groups as g (g.key)}
       {@const repo = g.spaces[0]!}
       {@const trees = g.spaces.slice(1)}
@@ -119,28 +125,28 @@
       {#each open_ ? g.spaces : [repo] as sp, i (sp.id)}
         {@const st = statusOf(sec.server.id, sp)}
         {@const nested = i > 0}
-        <div class="srow" class:sel={currentWs === `${sec.server.id}|${sp.id}`}>
-          <button class="item" class:nested onclick={() => open(sec.server.id, sp)} oncontextmenu={(e) => rowMenu(e, sec.server.id, sp)}
-            title={sp.root}>
-            {#if nested}<span class="branchline">{i === trees.length ? "└─" : "├─"}</span>{/if}
-            <span class="dot {st}"></span>
-            <span class="text">
-              <span class="name ellipsis">{sp.label}</span>
-              {#if !nested && sp.git}
-                <span class="git ellipsis">{sp.git.branch}{#if sp.git.dirty > 0}<span class="dirty"> *{sp.git.dirty}</span>{/if}{#if sp.git.ahead > 0}<span class="ahead"> ↑{sp.git.ahead}</span>{/if}{#if sp.git.behind > 0}<span class="behind"> ↓{sp.git.behind}</span>{/if}</span>
-              {/if}
-            </span>
+        {@const busy = st === "working" || st === "blocked" || st === "done"}
+        <div class="srow" class:sel={currentWs === `${sec.server.id}|${sp.id}`} class:nested>
+          <button class="item" onclick={() => open(sec.server.id, sp)} oncontextmenu={(e) => rowMenu(e, sec.server.id, sp)}
+            title={[sp.label, sp.git?.branch, statusLabel(st), sp.root].filter(Boolean).join(" · ")}>
+            <span class="dotbox">{#if busy}<span class="dot {st}"></span>{/if}</span>
+            <span class="name ellipsis">{sp.label}</span>
+            {#if !nested && sp.git}
+              <span class="stats">{#if sp.git.dirty > 0}<span>*{sp.git.dirty}</span>{/if}{#if sp.git.ahead > 0}<span>↑{sp.git.ahead}</span>{/if}{#if sp.git.behind > 0}<span>↓{sp.git.behind}</span>{/if}</span>
+            {/if}
             <LiveMark server={sec.server.id} ws={sp.id} />
           </button>
           {#if !nested && trees.length}
             <button class="fold" title={open_ ? t("Worktrees einklappen") : t("Worktrees zeigen")} aria-label={open_ ? t("Worktrees einklappen") : t("Worktrees zeigen")}
-              onclick={() => (folded = toggle(folded, FOLDED, fkey, open_))}>{open_ ? "▾" : `▸ ${trees.length}`}</button>
+              aria-expanded={open_} onclick={() => (folded = toggle(folded, FOLDED, fkey, open_))}>
+              <Icon name={open_ ? "chevronD" : "chevronR"} size={13} />{#if !open_}<span>{trees.length}</span>{/if}</button>
           {/if}
           <button class="hide" title={t("Aus der Liste nehmen")} aria-label={t("Aus der Liste nehmen")}
-            onclick={() => hiddenSpaces.hide(sec.server.id, sp.id)}>✕</button>
+            onclick={() => hiddenSpaces.hide(sec.server.id, sp.id)}><Icon name="x" size={12} /></button>
         </div>
       {/each}
     {/each}
+    </div>
   {/each}
   {#if hiddenCount}
     <button class="restore" onclick={() => hiddenSpaces.showAll(currentServer())}>
@@ -154,44 +160,40 @@
 {/if}
 
 <style>
-  .tree { font-family: var(--mono); font-size: 12.5px; padding: 2px 0 8px; }
-  .server { all: unset; cursor: pointer; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 7px; color: var(--muted);
-    font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; padding: 12px 8px 4px; border-radius: 6px; }
-  .server:hover { color: var(--fg); }
-  .server:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .conn { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
-  .conn.bad { background: var(--red); }
-  .srow { position: relative; border-radius: 6px; }
+  .tree { font-size: 13.5px; padding: 0 0 8px; display: grid; gap: 6px; }
+  .spaces { display: grid; gap: 1px; }
+  .spaces.stale { opacity: .55; }
+  .note { all: unset; cursor: pointer; box-sizing: border-box; display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px;
+    background: var(--card); border: 1px solid var(--border); }
+  .note:focus-visible { outline: 2px solid var(--accent); }
+  .nhead { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--orange); }
+  .ntext { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .srow { position: relative; border-radius: 8px; }
   .srow:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
-  .srow.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-  .srow.sel .name { font-weight: 700; color: var(--fg); }
-  .item { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: flex-start; gap: 7px; width: 100%;
-    padding: 2px 44px 2px 8px; min-width: 0; }
-  .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
-  .item.nested { padding-left: 10px; gap: 5px; }
-  .item :global(.live) { align-self: flex-start; margin-top: 1.5px; }
-  .branchline { color: var(--border); flex: none; line-height: 18px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 4.5px; box-sizing: border-box;
-    border: 1.5px solid var(--green); }
-  .dot.working { background: var(--purple); border-color: var(--purple); }
-  .dot.blocked { background: var(--orange); border-color: var(--orange); }
-  .dot.done { background: var(--green); }
-  /* herdr's "·": nothing known about it (no agent) */
-  .dot.unknown { width: 4px; height: 4px; margin: 7px 2.5px 0; border: none; background: var(--dim); }
-  .text { display: grid; min-width: 0; line-height: 18px; }
-  .name { color: var(--fg); }
-  .git { color: var(--dim); }
-  .dirty, .ahead, .behind { margin-left: 6px; }
-  .dirty { color: var(--orange); }
-  .ahead { color: var(--green); }
-  .behind { color: var(--red); }
-  .fold, .hide { all: unset; cursor: pointer; position: absolute; top: 3px; height: 18px; display: grid; place-items: center;
-    border-radius: 5px; color: var(--muted); font-size: 10px; }
-  .fold { right: 26px; padding: 0 4px; color: var(--accent); }
-  .hide { right: 4px; width: 18px; opacity: 0; }
-  .srow:hover .hide, .hide:focus-visible { opacity: 1; }
+  .srow.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .srow.sel .name { font-weight: 600; color: var(--fg); }
+  .item { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 6px 48px 6px 10px; min-width: 0; }
+  .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
+  .nested .item { padding: 4px 48px 4px 29px; font-size: 13px; }
+  .nested .name { color: var(--muted); }
+  .dotbox { width: 9px; display: grid; place-items: center; flex: none; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .dot.working { background: var(--purple); animation: pulse 1.6s ease-in-out infinite; }
+  .dot.blocked { background: var(--orange); }
+  .dot.done { background: var(--accent); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } }
+  .name { color: var(--fg); min-width: 0; }
+  .stats { margin-left: auto; display: flex; gap: 6px; flex: none; font: 11.5px var(--mono); color: var(--dim); }
+  .fold, .hide { all: unset; cursor: pointer; position: absolute; top: 50%; translate: 0 -50%; height: 22px; display: flex; align-items: center; gap: 2px;
+    justify-content: center; border-radius: 5px; color: var(--dim); font-size: 11px; }
+  .fold { right: 26px; padding: 0 4px; }
+  .hide { right: 4px; width: 22px; opacity: 0; }
+  .srow:hover .hide, .srow:focus-within .hide { opacity: 1; }
   .hide:hover, .fold:hover { background: var(--border); color: var(--fg); }
+  .hide:focus-visible, .fold:focus-visible { outline: 2px solid var(--accent); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .restore { all: unset; cursor: pointer; display: block; margin: 10px 8px 0; font-size: 11px; color: var(--dim); }
-  .restore:hover { color: var(--fg); }
+  .restore { all: unset; cursor: pointer; display: block; margin: 10px 10px 0; font-size: 12px; color: var(--dim); }
+  .restore:hover, .restore:focus-visible { color: var(--fg); }
 </style>
