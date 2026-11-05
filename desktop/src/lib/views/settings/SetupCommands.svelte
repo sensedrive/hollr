@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Copy-paste commands to install Hollr on a server and get the pairing link (iOS: SetupCommands in PairView).
   import { t } from "$lib/i18n";
   import { copy } from "$lib/serverapi";
@@ -37,7 +38,7 @@
       <div class="cmd">
         <code class="mono">{step.cmd}</code>
         <button class="copy" title={t("Befehl kopieren")} aria-label={t("Befehl kopieren")} onclick={() => doCopy(step.cmd)}>
-          {copied === step.cmd ? "✓" : "⧉"}
+          <Icon name={copied === step.cmd ? "✓" : "⧉"} size={13} />
         </button>
       </div>
     </div>

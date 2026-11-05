@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings → Server & Geräte (iOS ServersView + the per-server links of SettingsView).
   import * as api from "$lib/api";
   import type { Server } from "$lib/api";
@@ -31,7 +32,7 @@
 <div class="page">
   <div class="page-head">
     <h1>{t("Server & Geräte")}</h1>
-    <button class="btn primary" onclick={() => (dialogs.pair = true)}>＋ {t("Server koppeln")}</button>
+    <button class="btn primary" onclick={() => (dialogs.pair = true)}><Icon name="＋" size={15} /> {t("Server koppeln")}</button>
   </div>
 
   {#if error}<div class="card err">{error}</div>{/if}
@@ -40,7 +41,7 @@
     <div class="rows">
       {#each app.servers as s (s.id)}
         <div class="srv">
-          <div class="icon">▤</div>
+          <div class="icon"><Icon name="▤" size={15} /></div>
           <div class="grow">
             <div class="name">{s.label}</div>
             <div class="small muted mono ellipsis" title={s.addresses.join(", ")}>{address(s)}</div>

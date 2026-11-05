@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // In-app browser (BrowserView.swift): web services on the server's localhost open through an SSH tunnel
   // (a local port on this computer → localhost:<port> on the server), public pages load directly.
   // Tunnels opened here are closed again when the panel goes away.
@@ -145,18 +146,18 @@
   <div class="bar">
     <button class="ib" title={t("Zurück")} disabled={index <= 0} onclick={() => go(-1)}>‹</button>
     <button class="ib" title={t("Vor")} disabled={index >= stack.length - 1} onclick={() => go(1)}>›</button>
-    <button class="ib" title={t("Neu laden")} disabled={!current} onclick={reload}>↻</button>
+    <button class="ib" title={t("Neu laden")} disabled={!current} onclick={reload}><Icon name="↻" size={15} /></button>
     <div class="addr" class:tunnel={tunneled}>
       {#if tunneled}<span class="via" title={t("Über {server}", { server: serverLabel })}>⇄</span>{/if}
       <input bind:value={address} placeholder={t("URL oder localhost:3000")} spellcheck="false" onkeydown={onAddressKey}
         onfocus={(e) => (e.currentTarget as HTMLInputElement).select()} />
     </div>
-    <button class="ib" title={t("Startseite")} onclick={home}>⌂</button>
-    <button class="ib" title={t("Im System-Browser öffnen")} disabled={!current} onclick={external}>↗</button>
-    <button class="ib" title={t("Schließen")} onclick={onClose}>✕</button>
+    <button class="ib" title={t("Startseite")} onclick={home}><Icon name="⌂" size={15} /></button>
+    <button class="ib" title={t("Im System-Browser öffnen")} disabled={!current} onclick={external}><Icon name="↗" size={15} /></button>
+    <button class="ib" title={t("Schließen")} onclick={onClose}><Icon name="✕" size={15} /></button>
   </div>
   {#if loading}<div class="progress"></div>{/if}
-  {#if error}<div class="error">⚠ {error}</div>{/if}
+  {#if error}<div class="error"><Icon name="⚠" size={15} /> {error}</div>{/if}
 
   {#if current && src}
     {#key nonce}
@@ -192,7 +193,7 @@
         <div class="section"><span>{t("Zuletzt")}</span></div>
         <div class="rows">
           {#each recent as url}
-            <button class="row" onclick={() => open(url)}><span class="ellipsis grow">🌐 {url}</span></button>
+            <button class="row" onclick={() => open(url)}><span class="ellipsis grow"><Icon name="🌐" size={15} /> {url}</span></button>
           {/each}
         </div>
       {/if}

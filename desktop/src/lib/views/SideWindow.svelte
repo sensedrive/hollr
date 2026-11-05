@@ -23,6 +23,7 @@
   import Modal from "$lib/components/Modal.svelte";
   import ReadAloud from "$lib/components/ReadAloud.svelte";
   import AppLock from "$lib/components/AppLock.svelte";
+  import Icon from "$lib/components/git/Icon.svelte";
 
   let { server, main, pane, live: startLive }: { server: string; main: string; pane: string; live: boolean } = $props();
 
@@ -182,47 +183,64 @@
   let confirmClose = $state(false);
 </script>
 
-<div class="win">
-  <header class="strip">
-    <div class="what">
-      <b>🎙 {t("Nebengespräch")}</b>
-      <span class="muted ellipsis">{t("zu „{title}“", { title: mainName || main })} · {t("ändert nichts ohne dich")}</span>
-    </div>
-    <div class="call"><LivePill onOpen={() => void focusMain()} /></div>
-    <div class="acts">
-      <button class="btn" title={t("Zum Hauptfenster")} onclick={() => void focusMain()}>↩ {t("Hauptchat")}</button>
-      <button class="btn" disabled={!transcript || summing || !forkRef} title={t("Fasst das Nebengespräch zusammen und legt es als Entwurf in den Hauptchat")}
-        onclick={result}>{summing ? t("Fasse zusammen …") : `↩ ${t("Ergebnis in den Hauptchat")}`}</button>
-      <button class="btn" disabled={resetting || !forkRef} title={t("Neu anfangen – vom jetzigen Stand des Hauptchats")} onclick={() => (confirmReset = true)}>
-        ↺ {t("Zurücksetzen")}</button>
-      <button class="btn danger" disabled={ending} onclick={end}>{t("Beenden")}</button>
-    </div>
-  </header>
-  {#if resultNote || error}
-    <div class="note small" class:err={!!error}>{error ? `⚠ ${error}` : resultNote}</div>
-  {/if}
+{#snippet what()}
+  <span class="badge"><Icon name="mic" size={14} /></span>
+  <span class="what"><b>{t("Nebengespräch")}</b><span class="muted ellipsis">{t("zu „{title}“", { title: mainName || main })} · {t("ändert nichts ohne dich")}</span></span>
+{/snippet}
 
+{#snippet sideActs()}
+  <div class="call"><LivePill onOpen={() => void focusMain()} /></div>
+  <button class="btn primary small" disabled={!transcript || summing || !forkRef} title={t("Fasst das Nebengespräch zusammen und legt es als Entwurf in den Hauptchat")}
+    onclick={result}>{summing ? t("Fasse zusammen …") : t("Ergebnis in den Hauptchat")}</button>
+  <button class="ib" title={t("Zum Hauptfenster")} aria-label={t("Zum Hauptfenster")} onclick={() => void focusMain()}><Icon name="back" size={16} /></button>
+  <button class="ib" disabled={resetting || !forkRef} title={t("Zurücksetzen – neu anfangen vom jetzigen Stand des Hauptchats")} aria-label={t("Zurücksetzen")}
+    onclick={() => (confirmReset = true)}><Icon name="reload" size={16} /></button>
+  <button class="ib end" disabled={ending} title={t("Beenden – Nebengespräch schließen")} aria-label={t("Beenden")} onclick={end}><Icon name="x" size={16} /></button>
+  <span class="sep"></span>
+{/snippet}
+
+{#snippet starting(label: string)}
+  <div class="empty">
+    <span class="badge big"><Icon name="mic" size={20} /></span>
+    <div class="title">{label}</div>
+    <div class="small muted">{t("Der Verlauf von „{title}“ wird kopiert – der Hauptchat läuft ungestört weiter.", { title: mainName || main })}</div>
+    <div class="sk">{#each [70, 45, 60] as w}<div class="skeleton" style:width="{w}%"></div>{/each}</div>
+  </div>
+{/snippet}
+
+<div class="win">
   <div class="view">
     {#if resetting}
-      <div class="empty"><div class="braille acc"></div><div>{t("Nebengespräch wird neu gestartet …")}</div>
-        <div class="small muted">{t("Der Verlauf des Hauptchats wird neu kopiert – der Hauptchat läuft ungestört weiter.")}</div></div>
+      {@render starting(t("Nebengespräch wird neu gestartet …"))}
     {:else if forkRef}
       {#key fork}
-        <AgentView {server} pane={forkRef.pane} title={forkTitle} onClosed={closeWindow} inSideWindow {autoLive} onTimeline={(tl) => (timeline = tl)} />
+        {#if forkRef.pane.agent}
+          <AgentView {server} pane={forkRef.pane} title={forkTitle} onClosed={closeWindow} inSideWindow {autoLive} onTimeline={(tl) => (timeline = tl)}
+            lead={what} extra={sideActs} />
+        {:else}
+          {@render starting(t("Nebengespräch startet …"))}
+        {/if}
       {/key}
     {:else if gone}
       <div class="empty">
         <div>{t("Das Nebengespräch wurde geschlossen.")}</div>
         <div class="row">
-          <button class="btn primary" onclick={restart}>🎙 {t("Neues Nebengespräch")}</button>
+          <button class="btn primary" onclick={restart}><Icon name="🎙" size={15} /> {t("Neues Nebengespräch")}</button>
           <button class="btn" onclick={closeWindow}>{t("Fenster schließen")}</button>
         </div>
       </div>
+    {:else if app.errors[server]}
+      <div class="empty"><Icon name="⚠" size={15} /> {app.errors[server]}</div>
     {:else}
-      <div class="empty">{app.errors[server] ? `⚠ ${app.errors[server]}` : t("Lädt …")}</div>
+      {@render starting(t("Nebengespräch startet …"))}
     {/if}
   </div>
 </div>
+
+{#if resultNote || error}
+  <div class="toast small" class:err={!!error} role="status">{error ? `⚠ ${error}` : resultNote}
+    <button class="ib" aria-label={t("Schließen")} onclick={() => (resultNote = error = "")}><Icon name="x" size={12} /></button></div>
+{/if}
 
 <ReadAloud />
 
@@ -231,7 +249,7 @@
     <p>{t("Was hier bisher besprochen wurde, wird verworfen. Das Nebengespräch beginnt neu – mit dem Hauptchat, wie er jetzt ist.")}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmReset = false)}>{t("Abbrechen")}</button>
-      <button class="btn primary" onclick={reset}>↺ {t("Zurücksetzen")}</button>
+      <button class="btn primary" onclick={reset}><Icon name="↺" size={15} /> {t("Zurücksetzen")}</button>
     </div>
   </Modal>
 {/if}
@@ -249,23 +267,37 @@
 <AppLock />
 
 <style>
-  .win { height: 100vh; display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--bg); }
-  .strip { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--side); min-width: 0; }
-  .what { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1; }
+  .win { height: 100vh; display: grid; grid-template-rows: minmax(0, 1fr); background: var(--bg); }
+  /* the session's bar is the window's only bar: what this is on the left, its actions and the tools on the right */
+  .what { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .what b { white-space: nowrap; font-size: 13.5px; }
-  .call { flex: none; max-width: 260px; }
+  .what .muted { font-size: 12.5px; }
+  .badge { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 8px; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .badge.big { width: 44px; height: 44px; border-radius: 50%; }
+  .call { flex: none; max-width: 240px; }
   .call :global(.pill) { margin-bottom: 0; }
-  .acts { display: flex; gap: 6px; flex: none; }
-  .acts .btn { font-size: 12.5px; padding: 4px 10px; white-space: nowrap; }
-  .note { padding: 5px 14px; color: var(--muted); border-bottom: 1px solid var(--border); }
-  .note.err { color: var(--orange); }
-  .view { min-height: 0; min-width: 0; }
-  .empty { height: 100%; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; color: var(--muted); text-align: center; }
+  .btn.small { font-size: 12.5px; padding: 4px 10px; white-space: nowrap; }
+  .ib { all: unset; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); flex: none; }
+  .ib:hover { background: var(--card); color: var(--fg); }
+  .ib:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .ib:disabled { opacity: .4; cursor: default; }
+  .ib.end:hover { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+  .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex: none; }
+  .toast { position: fixed; left: 50%; bottom: 20px; translate: -50% 0; z-index: 30; display: flex; align-items: center; gap: 6px; max-width: min(560px, 90vw);
+    padding: 6px 6px 6px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); color: var(--muted); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+  .toast.err { color: var(--orange); }
+  .toast .ib { width: 22px; height: 22px; }
+  /* a grid, so the session view fills the window (a percentage height alone doesn't in WebKit) */
+  .view { min-height: 0; min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
+  .empty { height: 100%; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 24px; }
+  .empty .title { color: var(--fg); font-weight: 600; font-size: 15px; margin-top: 4px; }
+  .sk { width: min(420px, 80%); display: grid; gap: 10px; margin-top: 18px; }
+  .sk .skeleton { height: 12px; }
   .row { display: flex; gap: 8px; }
   .mbuttons { display: flex; justify-content: flex-end; gap: 8px; }
   p { margin: 0; }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .small { font-size: 12px; }
   .muted { color: var(--muted); }
-  .acc { color: var(--orange); }
 </style>

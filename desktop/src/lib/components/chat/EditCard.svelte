@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // edit / write: file header (type tile, path relative to the space, +/-) and the change as diff hunks with line
   // numbers and syntax colors. Small diffs start open, big ones show their first lines and fold the rest.
   import type { ToolCall } from "../../api";
@@ -52,10 +53,10 @@
     {#if (c.add ?? 0) + (c.del ?? 0) > 0}
       <span class="nowrap pm">{#if c.add}<span class="ok">+{c.add}</span>{/if}{#if c.del}<span class="err">−{c.del}</span>{/if}</span>
     {/if}
-    {#if rows.length && view.foldable}<span class="dim chev">{view.isOpen ? "▾" : "▸"}</span>{/if}
+    {#if rows.length && view.foldable}<span class="dim chev"><Icon name={view.isOpen ? "▾" : "▸"} size={13} /></span>{/if}
     <span class="acts inline">
-      {#if full}<button class="act" title={t("Pfad kopieren")} onclick={(e) => { e.stopPropagation(); copy(full); }}>⧉ {t("Pfad")}</button>{/if}
-      {#if rows.length}<button class="act" title={t("Änderung als Diff kopieren")} onclick={(e) => { e.stopPropagation(); copy(unified()); }}>⧉ Diff</button>{/if}
+      {#if full}<button class="act" title={t("Pfad kopieren")} onclick={(e) => { e.stopPropagation(); copy(full); }}><Icon name="⧉" size={15} /> {t("Pfad")}</button>{/if}
+      {#if rows.length}<button class="act" title={t("Änderung als Diff kopieren")} onclick={(e) => { e.stopPropagation(); copy(unified()); }}><Icon name="⧉" size={15} /> Diff</button>{/if}
     </span>
   </div>
   {#if c.status === "error" && c.result}<div class="err clamp4 pad sel">{c.result}</div>{/if}

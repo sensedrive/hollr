@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Hover actions of one chat message (answer or own prompt): copy its text (markdown source) and, for
   // prompts, send it again. Sits in the parent's top corner – the parent needs `position: relative`.
   import { t } from "../i18n";
@@ -21,9 +22,9 @@
 </script>
 
 <div class="acts" class:start={side === "start"} class:shown={copied}>
-  <button title={t("Kopieren")} aria-label={t("Kopieren")} class:ok={copied} onclick={doCopy}>{copied ? "✓" : "⧉"}</button>
+  <button title={t("Kopieren")} aria-label={t("Kopieren")} class:ok={copied} onclick={doCopy}><Icon name={copied ? "✓" : "⧉"} size={13} /></button>
   {#if onResend}
-    <button title={t("Nochmal senden")} aria-label={t("Nochmal senden")} onclick={() => onResend(text)}>↻</button>
+    <button title={t("Nochmal senden")} aria-label={t("Nochmal senden")} onclick={() => onResend(text)}><Icon name="↻" size={15} /></button>
   {/if}
 </div>
 

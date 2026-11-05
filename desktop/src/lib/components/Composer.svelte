@@ -381,13 +381,13 @@
     onclick={checkMention} onfocus={() => (focused = true)} onblur={() => { focused = false; lastCaret = area?.selectionStart ?? null; closeMention(); }}
     onpaste={onPaste}></textarea>
   {#if uploadError}
-    <div class="uperr"><span class="grow">⚠ {uploadError}</span><button class="link" aria-label={t("Schließen")} onclick={() => (uploadError = "")}>✕</button></div>
+    <div class="uperr"><span class="grow"><Icon name="⚠" size={15} /> {uploadError}</span><button class="link" aria-label={t("Schließen")} onclick={() => (uploadError = "")}><Icon name="✕" size={15} /></button></div>
   {/if}
   {#if dictationNote}
     {@const failed = dictator.state === "failed"}
     <div class="dnote" class:uperr={failed}>
-      <span class="grow">{failed ? "⚠ " : ""}{dictationNote}</span>
-      <button class="link" aria-label={t("Schließen")} onclick={() => (dictator.noticeFor = null)}>✕</button>
+      <span class="grow">{#if failed}<Icon name="alert" size={14} /> {/if}{dictationNote}</span>
+      <button class="link" aria-label={t("Schließen")} onclick={() => (dictator.noticeFor = null)}><Icon name="✕" size={15} /></button>
     </div>
   {/if}
   <div class="actions">
@@ -423,7 +423,7 @@
       {#if meta}<span class="meta">{@render meta()}</span>{/if}
       {#if dictationKey}
         {#if recordingHere}
-          <button class="micx" title={t("Diktat verwerfen")} aria-label={t("Diktat verwerfen")} onclick={() => dictator.cancel()}>✕</button>
+          <button class="micx" title={t("Diktat verwerfen")} aria-label={t("Diktat verwerfen")} onclick={() => dictator.cancel()}><Icon name="✕" size={15} /></button>
         {/if}
         <button class="mic" class:rec={recordingHere} disabled={!micEnabled} style:--lvl={recordingHere ? Math.min(dictator.level * 8, 0.25) : 0}
           title={recordingHere ? t("Diktat beenden") : micBlocked ? t("Während Live hört omp direkt zu – Diktieren geht nach dem Gespräch wieder")

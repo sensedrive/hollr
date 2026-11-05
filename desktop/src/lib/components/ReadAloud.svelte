@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Read aloud, app-wide (mounted once in +page.svelte): next to text selected in a chat or in the terminal
   // (TerminalView offers its xterm selection) a small group – "Vorlesen" (⌘⇧S) reads the selection,
   // "Zusammenfassung" (⌘⌥⇧S) has the server's omp summarize it first. What is read shows in a panel at the
@@ -189,13 +190,13 @@
         <span class="num">{speech.speed.toFixed(2)}×</span>
         <button class="ic" aria-label={t("Schneller")} disabled={speech.speed >= SPEED.max} onclick={() => nudgeSpeed(SPEED.step)}>+</button>
       </span>
-      <button class="ic" title={t("Einstellungen › Vorlesen")} aria-label={t("Einstellungen › Vorlesen")} onclick={() => go({ view: "settings", page: "speech" })}>⚙</button>
+      <button class="ic" title={t("Einstellungen › Vorlesen")} aria-label={t("Einstellungen › Vorlesen")} onclick={() => go({ view: "settings", page: "speech" })}><Icon name="⚙" size={15} /></button>
       {#if speaker.busy}
         <button class="stop" title={t("Vorlesen stoppen (Esc)")} aria-label={t("Vorlesen stoppen (Esc)")} onclick={() => speaker.stop()}>
           <span class="sq"></span>
         </button>
       {:else}
-        <button class="ic" title={t("Schließen (Esc)")} aria-label={t("Schließen (Esc)")} onclick={() => speaker.close()}>✕</button>
+        <button class="ic" title={t("Schließen (Esc)")} aria-label={t("Schließen (Esc)")} onclick={() => speaker.close()}><Icon name="✕" size={15} /></button>
       {/if}
     </div>
     <div class="body">
@@ -214,7 +215,7 @@
         {:else if reading.summary || reading.server}
           <button class="act" onclick={() => speaker.readSummary()}>{t("Zusammenfassung vorlesen")}</button>
         {/if}
-        <button class="act" onclick={() => speaker.again()}>↻ {t("Nochmal")}</button>
+        <button class="act" onclick={() => speaker.again()}><Icon name="↻" size={15} /> {t("Nochmal")}</button>
       </div>
     {/if}
   </section>

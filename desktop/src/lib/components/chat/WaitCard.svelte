@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // wait: like omp's "ℹ waiting on 1 job" – the intent, which jobs it waits on (while running: the running jobs, they
   // are what a wait waits for) and, once back, how long it waited and how each reported job ended.
   import type { ToolCall } from "../../api";
@@ -49,8 +50,8 @@
       <span class="tree">{i === rows.length - 1 ? "└─" : "├─"}</span>
       {#if !hashId(r.id)}<span class="id">{r.id}</span>{/if}
       <span class="ellipsis grow"><span class="fgs">{r.title}</span>{#if r.command}<span class="dim gap">{r.command}</span>{/if}</span>
-      {#if r.outcome === "done"}<span class="ok nowrap">✓ {t("fertig")}</span>
-      {:else if r.outcome === "failed"}<span class="err nowrap">✘ {t("fehlgeschlagen")}</span>
+      {#if r.outcome === "done"}<span class="ok nowrap"><Icon name="✓" size={15} /> {t("fertig")}</span>
+      {:else if r.outcome === "failed"}<span class="err nowrap"><Icon name="✘" size={15} /> {t("fehlgeschlagen")}</span>
       {:else if r.outcome === "running"}<span class="warn nowrap">{t("läuft weiter")}</span>{/if}
       {#if r.ms !== undefined}<span class="dim nowrap">{duration(r.ms)}</span>
       {:else if running && r.startedAt}<span class="dim nowrap">{duration(now - r.startedAt)}</span>{/if}

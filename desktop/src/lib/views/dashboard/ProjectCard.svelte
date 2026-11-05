@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // "Woran ich arbeite": one project (repo/space) with its sessions – status, branch, the current step or last
   // words, TODO progress and last activity, so a glance is enough to be back in context. Quick actions on hover.
   import { identityColor } from "$lib/dashboard";
@@ -49,7 +50,7 @@
             <span class="dot" class:pulse={running} style:background={statusColor(r.pane.status)}></span>
             <span class="name ellipsis">{refTitle(r)}</span>
             {#if w.ctx?.title && w.ctx.title !== refTitle(r)}<span class="sub ellipsis">{w.ctx.title}</span>{/if}
-            {#if w.project.branch}<span class="branch mono ellipsis">⑂ {w.project.branch}{#if w.project.worktree} ⧉{/if}</span>{/if}
+            {#if w.project.branch}<span class="branch mono ellipsis"><Icon name="⑂" size={15} /> {w.project.branch}{#if w.project.worktree} <Icon name="⧉" size={15} />{/if}</span>{/if}
           </span>
           <span class="line ellipsis">
             <span style:color={statusColor(r.pane.status)}>{r.pane.agent ? statusLabel(r.pane.status) : t("Terminal")}</span>
@@ -65,10 +66,10 @@
         </span>
       </button>
       <div class="acts">
-        <button title="{t('Terminal öffnen')} (T)" aria-label={t("Terminal öffnen")} onclick={() => onOpen(r, "terminal")}>&gt;_</button>
-        <button title="{t('Git & Dateien')} (G)" aria-label={t("Git & Dateien")} onclick={() => onOpen(r, "git")}>⑂</button>
+        <button title="{t('Terminal öffnen')} (T)" aria-label={t("Terminal öffnen")} onclick={() => onOpen(r, "terminal")}><Icon name="terminal" size={14} /></button>
+        <button title="{t('Git & Dateien')} (G)" aria-label={t("Git & Dateien")} onclick={() => onOpen(r, "git")}><Icon name="⑂" size={15} /></button>
         {#each w.ports.slice(0, 1) as p (p.port)}
-          <button title="{t('Im Browser öffnen')} :{p.port}" onclick={() => onOpen(r, "browser", `http://localhost:${p.port}`)}>◍</button>
+          <button title="{t('Im Browser öffnen')} :{p.port}" onclick={() => onOpen(r, "browser", `http://localhost:${p.port}`)}><Icon name="◍" size={15} /></button>
         {/each}
         <button title={t("Mehr …")} aria-label={t("Mehr …")} onclick={(e) => onMenu(e, r)}>⋯</button>
       </div>

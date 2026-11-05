@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // bash / eval: the command (with its folder like a prompt when it ran outside the space), the last 8 output lines
   // (click for everything the server sent), a footer with wall time and exit code, or the background job while it
   // runs; copy buttons for command and output. Clicking only toggles when nothing is selected.
@@ -73,8 +74,8 @@
       {#if open && c.path}<span class="dim ellipsis">in {shortPath(c.path)}</span>{/if}
     {/if}
     <span class="acts inline">
-      {#if c.name !== "eval" && c.detail}<button class="act" title={t("Befehl kopieren")} onclick={(e) => { e.stopPropagation(); copy(c.detail ?? ""); }}>⧉ {t("Befehl")}</button>{/if}
-      {#if c.out?.length}<button class="act" title={t("Ausgabe kopieren")} onclick={(e) => { e.stopPropagation(); copy((c.out ?? []).join("\n")); }}>⧉ {t("Ausgabe")}</button>{/if}
+      {#if c.name !== "eval" && c.detail}<button class="act" title={t("Befehl kopieren")} onclick={(e) => { e.stopPropagation(); copy(c.detail ?? ""); }}><Icon name="⧉" size={15} /> {t("Befehl")}</button>{/if}
+      {#if c.out?.length}<button class="act" title={t("Ausgabe kopieren")} onclick={(e) => { e.stopPropagation(); copy((c.out ?? []).join("\n")); }}><Icon name="⧉" size={15} /> {t("Ausgabe")}</button>{/if}
     </span>
   </div>
 </div>

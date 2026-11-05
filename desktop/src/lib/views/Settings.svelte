@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings (iOS SettingsView) with a sub-navigation: general, design, servers, release notes, about.
   import { t } from "$lib/i18n";
   import { hasUnseen } from "$lib/releaseNotes";
@@ -15,13 +16,13 @@
   let { page }: { page?: Page } = $props();
 
   const PAGES: { page: Page; label: string; icon: string }[] = [
-    { page: undefined, label: "Allgemein", icon: "⚙" },
-    { page: "design", label: "Design", icon: "◐" },
-    { page: "dictation", label: "Diktat", icon: "🎙" },
-    { page: "speech", label: "Vorlesen", icon: "🔊" },
-    { page: "servers", label: "Server & Geräte", icon: "▤" },
-    { page: "notes", label: "Neuigkeiten", icon: "✦" },
-    { page: "about", label: "Über", icon: "ⓘ" },
+    { page: undefined, label: "Allgemein", icon: "sliders" },
+    { page: "design", label: "Design", icon: "sun" },
+    { page: "dictation", label: "Diktat", icon: "mic" },
+    { page: "speech", label: "Vorlesen", icon: "volume" },
+    { page: "servers", label: "Server & Geräte", icon: "server" },
+    { page: "notes", label: "Neuigkeiten", icon: "sparkle" },
+    { page: "about", label: "Über", icon: "info" },
   ];
 </script>
 
@@ -30,7 +31,7 @@
     <h1>{t("Einstellungen")}</h1>
     {#each PAGES as p (p.label)}
       <button class="item" class:active={page === p.page} onclick={() => go(p.page ? { view: "settings", page: p.page } : { view: "settings" })}>
-        <span class="ico">{p.icon}</span>
+        <span class="ico"><Icon name={p.icon} size={15} /></span>
         <span class="grow">{t(p.label)}</span>
         {#if p.page === "notes" && hasUnseen()}<span class="badge">{t("Neu")}</span>{/if}
       </button>

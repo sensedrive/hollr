@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings → general: the prompt snippets above the composer (add, remove, reorder).
   import { t } from "$lib/i18n";
   import { snippets } from "$lib/snippets.svelte";
@@ -18,7 +19,7 @@
       <span class="grow text">{s}</span>
       <button class="ic" disabled={i === 0} onclick={() => snippets.move(i, -1)} title={t("Nach oben")} aria-label={t("Nach oben")}>↑</button>
       <button class="ic" disabled={i === snippets.list.length - 1} onclick={() => snippets.move(i, 1)} title={t("Nach unten")} aria-label={t("Nach unten")}>↓</button>
-      <button class="ic del" onclick={() => snippets.remove(i)} title={t("Entfernen")} aria-label={t("Entfernen")}>✕</button>
+      <button class="ic del" onclick={() => snippets.remove(i)} title={t("Entfernen")} aria-label={t("Entfernen")}><Icon name="✕" size={15} /></button>
     </div>
   {:else}
     <div class="row small muted">{t("Keine Bausteine.")}</div>

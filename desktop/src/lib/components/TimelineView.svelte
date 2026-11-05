@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // The agent's transcript (omp or Claude Code), rendered like omp's TUI but richer (rules shared with the iPhone
   // app, TimelineViews.swift): messages, folded thinking, and tool calls as cards (components/chat/*). Given the
   // element it scrolls in, it brings the find bar (⌘F) and the overview ruler, floating over that element.
@@ -92,7 +93,7 @@
       <div class="msg" data-item={item.id} data-find={item.id} data-ov="user">
         {@render stamp(item.at, item.id)}
         <div class="user" class:voice={item.source === "voice"}>
-          {#if item.source === "voice"}<span class="src" title={t("gesprochen")}>🎙</span>{/if}{item.text}<MsgActions text={item.text} {onResend} side="start" />
+          {#if item.source === "voice"}<span class="src" title={t("gesprochen")}><Icon name="🎙" size={15} /></span>{/if}{item.text}<MsgActions text={item.text} {onResend} side="start" />
         </div>
       </div>
     {:else if item.k === "thinking"}
@@ -100,7 +101,7 @@
       {@render stamp(item.at, item.id, true)}
       {#if prose && (openThinking[item.id] || reveal.has(item.id))}
         <div class="thinking-open" data-find={item.id} data-ov="think">
-          <button class="th-head" onclick={() => (openThinking[item.id] = false)}>✻ {t("Gedanken")} <span class="dim">▴</span></button>
+          <button class="th-head" onclick={() => (openThinking[item.id] = false)}>✻ {t("Gedanken")} <span class="dim"><Icon name="▴" size={15} /></span></button>
           <div class="th-body">{prose}</div>
         </div>
       {:else if prose}
@@ -122,11 +123,11 @@
         <AskCard {item} {onAnswer} agent={timeline.agent === "claude" ? "Claude" : "omp"} />
       </div>
     {:else if item.k === "end"}
-      {#if item.status === "aborted"}<div class="mono small warn" data-find={item.id} data-ov="err">⏹ {t("Abgebrochen")}</div>
+      {#if item.status === "aborted"}<div class="mono small warn" data-find={item.id} data-ov="err"><Icon name="⏹" size={15} /> {t("Abgebrochen")}</div>
       {:else if item.status !== "done"}<div class="mono small err clamp8" data-find={item.id} data-ov="err">Error: {item.error ?? t("unbekannt")}</div>{/if}
     {:else if item.k === "info"}
       {@const done = finishedJobs(item.text, starts)}
-      {#if done}<div class="info" title={item.text} data-find={item.id} data-ov="info"><span class="ok">✓</span> {t("Hintergrund-Job fertig")} · {done.join(", ")}</div>
+      {#if done}<div class="info" title={item.text} data-find={item.id} data-ov="info"><span class="ok"><Icon name="✓" size={15} /></span> {t("Hintergrund-Job fertig")} · {done.join(", ")}</div>
       {:else}<div class="info" data-find={item.id} data-ov="info">{item.text}</div>{/if}
     {/if}
   {/each}

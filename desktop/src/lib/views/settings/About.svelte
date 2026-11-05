@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings → Über: version, source code, license.
   import { onMount } from "svelte";
   import { getTauriVersion, getVersion } from "@tauri-apps/api/app";
@@ -39,10 +40,10 @@
   <div class="section">{t("Quellcode")}</div>
   <div class="rows">
     <button class="row" onclick={() => open(REPO)}>
-      <span class="grow">GitHub · sensedrive/hollr</span><span class="muted">↗</span>
+      <span class="grow">GitHub · sensedrive/hollr</span><span class="muted"><Icon name="↗" size={15} /></span>
     </button>
     <button class="row" onclick={() => open(`${REPO}/issues`)}>
-      <span class="grow">{t("Fehler melden oder Wunsch äußern")}</span><span class="muted">↗</span>
+      <span class="grow">{t("Fehler melden oder Wunsch äußern")}</span><span class="muted"><Icon name="↗" size={15} /></span>
     </button>
   </div>
   <p class="foot">{t("Hollr ist Open Source (MIT) – github.com/sensedrive/hollr")}</p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // One agent / terminal pane in a list: badge, workspace, tab name, what it works on, status.
   import { statusLabel, t } from "$lib/i18n";
   import { go, type PaneRef } from "$lib/store.svelte";
@@ -30,13 +31,13 @@
       </span>
       <span class="title">
         <span class="ellipsis">{title}</span>
-        {#if ref.pane.live}<span class="wave" title={t("Live-Sprachmodus")}>〰</span>{/if}
+        {#if ref.pane.live}<span class="wave" title={t("Live-Sprachmodus")}><Icon name="〰" size={15} /></span>{/if}
       </span>
       <span class="sub ellipsis">{isShell ? `Shell · ${folderOf(ref.pane.cwd)}` : `${agentName(ref.pane)} · ${ref.pane.title}`}</span>
     </span>
   </button>
   {#if onClose}
-    <button class="close" title={t("Schließen")} aria-label={t("Schließen")} onclick={onClose}>✕</button>
+    <button class="close" title={t("Schließen")} aria-label={t("Schließen")} onclick={onClose}><Icon name="✕" size={15} /></button>
   {/if}
 </div>
 

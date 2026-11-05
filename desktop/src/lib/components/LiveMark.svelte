@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // "Live läuft hier": the small 〰 on the server tab, the session's tab and its space in the sidebar while an
   // omp /live call runs there – pulsing in the live color, dimmed while the microphone is muted.
   import { t } from "$lib/i18n";
@@ -20,7 +21,7 @@
 </script>
 
 {#if here}
-  <span class="live" class:muted class:connecting={live.phase !== "live"} {title} aria-label={title}>〰</span>
+  <span class="live" class:muted class:connecting={live.phase !== "live"} {title} aria-label={title}><Icon name="〰" size={15} /></span>
 {/if}
 
 <style>

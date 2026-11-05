@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Browse the server's folders (home and below) and pick one (iOS FolderPicker, `hollr gate dirs`).
   import { t } from "../i18n";
   import { dirs, errText, type DirListing } from "../serverapi";
@@ -66,7 +67,7 @@
       <button class="btn up" title={t("Übergeordneter Ordner")} onclick={() => load(listing!.parent!)}>↑</button>
     {/if}
     <span class="mono cur ellipsis" title={listing?.path ?? path}>{listing?.path ?? path}</span>
-    {#if listing?.repo}<span class="repo" title="git">⑂</span>{/if}
+    {#if listing?.repo}<span class="repo" title="git"><Icon name="⑂" size={15} /></span>{/if}
   </div>
   <!-- svelte-ignore a11y_autofocus -->
   <input bind:this={filterEl} placeholder={t("Ordner filtern")} bind:value={filter} autofocus autocomplete="off" spellcheck="false"
@@ -76,7 +77,7 @@
     <div class="section">{t("Projekt-Orte")}</div>
     <div class="places">
       {#each listing.places as place (place)}
-        <button class="pill mono" onclick={() => load(place)}>★ {place}</button>
+        <button class="pill mono" onclick={() => load(place)}><Icon name="★" size={15} /> {place}</button>
       {/each}
     </div>
   {/if}
@@ -92,7 +93,7 @@
     {#each shown as d (d.path)}
       <div class="item">
         <button class="open" onclick={() => load(d.path)}>
-          <span class="ico" class:git={d.repo}>{d.repo ? "⑂" : "▢"}</span>
+          <span class="ico" class:git={d.repo}><Icon name={d.repo ? "⑂" : "▢"} size={13} /></span>
           <span class="grow ellipsis">{d.name}{#if d.branch}<span class="mono small muted"> · {d.branch}</span>{/if}</span>
           <span class="muted">›</span>
         </button>

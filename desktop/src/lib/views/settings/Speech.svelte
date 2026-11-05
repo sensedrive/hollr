@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings → Vorlesen: what speaks which language (with a test per language), the engine, Phonon models
   // from Ollama's registry (download / choose / delete, licence and source), a voice per language, the
   // speed and the button next to selected text – all on this computer. The spoken summary is the one
@@ -114,7 +115,7 @@
         </span>
         <button class="ic" disabled={!status?.engines[l] && !!status} title={speaker.busy ? t("Vorlesen stoppen (Esc)") : t("Probe anhören")}
           aria-label={speaker.busy ? t("Vorlesen stoppen (Esc)") : t("Probe anhören")} onclick={() => test(l)}>
-          {speaker.busy ? "■" : "▶"}
+          <Icon name={speaker.busy ? "■" : "▶"} size={13} />
         </button>
       </div>
     {/each}
@@ -184,7 +185,7 @@
         </span>
         <button class="ic" title={speaker.busy ? t("Vorlesen stoppen (Esc)") : t("Vorlesen")} aria-label={speaker.busy ? t("Vorlesen stoppen (Esc)") : t("Vorlesen")}
           onclick={() => (speaker.busy ? speaker.stop() : speaker.speak(summaryTest.text ?? ""))}>
-          {speaker.busy ? "■" : "▶"}
+          <Icon name={speaker.busy ? "■" : "▶"} size={13} />
         </button>
       </div>
     {/if}
@@ -230,18 +231,18 @@
             <div class="small warn">{speechState.errors[m.id]} · {t("„Laden“ macht dort weiter.")}</div>
           {/if}
         </span>
-        <button class="ic" title={t("Modellseite in der Ollama-Registry")} aria-label={t("Modellseite in der Ollama-Registry")} onclick={() => open(modelPage(m.id))}>↗</button>
+        <button class="ic" title={t("Modellseite in der Ollama-Registry")} aria-label={t("Modellseite in der Ollama-Registry")} onclick={() => open(modelPage(m.id))}><Icon name="↗" size={15} /></button>
         {#if progress !== undefined}
           <progress value={progress} max="1"></progress>
           <span class="small muted pct">{Math.round(progress * 100)} %</span>
-          <button class="ic" title={t("Download abbrechen")} aria-label={t("Download abbrechen")} onclick={() => cancelPhonon(m.id)}>✕</button>
+          <button class="ic" title={t("Download abbrechen")} aria-label={t("Download abbrechen")} onclick={() => cancelPhonon(m.id)}><Icon name="✕" size={15} /></button>
         {:else if local}
           {#if selected}
-            <span class="ok" title={t("Gewählt")}>✓</span>
+            <span class="ok" title={t("Gewählt")}><Icon name="✓" size={15} /></span>
           {:else}
             <button class="btn" onclick={() => (speech.model = m.id)}>{t("Wählen")}</button>
           {/if}
-          <button class="ic del" title={t("Löschen")} aria-label={t("Löschen")} onclick={() => deletePhonon(m.id)}>🗑</button>
+          <button class="ic del" title={t("Löschen")} aria-label={t("Löschen")} onclick={() => deletePhonon(m.id)}><Icon name="🗑" size={15} /></button>
         {:else}
           <button class="btn" disabled={!status} onclick={() => { speech.model = m.id; void downloadPhonon(m.id); }}>↓ {t("Laden")}</button>
         {/if}

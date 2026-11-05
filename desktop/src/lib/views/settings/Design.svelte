@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings → Design (iOS DesignSettingsView): fixed palette, or dark/light following the system.
   import { t } from "$lib/i18n";
   import { settings } from "$lib/settings.svelte";
@@ -44,7 +45,7 @@
           <span class="dots">
             {#each preview(p) as c, i (i)}<span class="dot" style:background={c}></span>{/each}
           </span>
-          <span class="check" class:on={checked(p)}>✓</span>
+          <span class="check" class:on={checked(p)}><Icon name="✓" size={15} /></span>
         </button>
       {/each}
     </div>

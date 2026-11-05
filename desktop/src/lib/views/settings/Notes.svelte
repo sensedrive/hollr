@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Sym from "$lib/components/Sym.svelte";
   // Settings → Neuigkeiten (iOS ReleaseNotesView). Opening the page marks the notes as seen.
   import { onMount } from "svelte";
   import { getVersion } from "@tauri-apps/api/app";
@@ -25,7 +26,7 @@
     </div>
     <div class="rows">
       {#each note.items as item, i (i)}
-        <div class="row"><span class="ico">{item.icon}</span><span class="grow">{t(item.text)}</span></div>
+        <div class="row"><span class="ico"><Sym g={item.icon} /></span><span class="grow">{t(item.text)}</span></div>
       {/each}
     </div>
   {/each}

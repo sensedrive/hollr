@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // All agents of all servers (like Heeler's Agents tab): by status or by workspace, shells optional.
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
@@ -84,11 +85,11 @@
       <button role="radio" aria-checked={grouping === "workspace"} class:on={grouping === "workspace"} onclick={() => (grouping = "workspace")}>{t("Nach Workspace")}</button>
     </div>
     <label class="shells small"><input type="checkbox" class="toggle" bind:checked={settings.showShells} />{t("Shells anzeigen")}</label>
-    <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>
+    <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
   </div>
 
   {#each app.servers as s (s.id)}
-    {#if app.errors[s.id]}<div class="warn small">⚠ {s.label}: {app.errors[s.id]}</div>{/if}
+    {#if app.errors[s.id]}<div class="warn small"><Icon name="⚠" size={15} /> {s.label}: {app.errors[s.id]}</div>{/if}
   {/each}
 
   {#if !loaded && !visible.length}
@@ -103,10 +104,10 @@
     </div>
   {:else if !visible.length}
     <div class="empty">
-      <div class="big">▥</div>
+      <div class="big"><Icon name="▥" size={15} /></div>
       <b>{query ? t("Keine Treffer") : t("Keine Agents")}</b>
       {#if !query && !total}<div class="muted">{t("Starte in herdr eine omp-Session.")}</div>
-        <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>{/if}
+        <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>{/if}
     </div>
   {:else if grouping === "status"}
     <div class="rows" use:arrowNav>
@@ -120,7 +121,7 @@
         <div class="section ghead">
           <button class="link" onclick={() => go({ view: "space", server: g.server, ws: g.ws })}>{g.title}</button>
           <span class="grow"></span>
-          <button class="link plus" title={t("Neue Sitzung")} onclick={() => (dialogs.newSession = { server: g.server, ws: g.ws })}>＋</button>
+          <button class="link plus" title={t("Neue Sitzung")} onclick={() => (dialogs.newSession = { server: g.server, ws: g.ws })}><Icon name="＋" size={15} /></button>
         </div>
         <div class="rows">
           {#each g.refs as r (r.id)}

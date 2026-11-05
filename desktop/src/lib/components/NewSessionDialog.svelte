@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Open a new session: agent (omp / Claude / ChatGPT-Codex) or a plain terminal, model + level, and where it runs.
   // Missing agents can be installed on the server right here (`hollr gate tools`).
   import * as api from "../api";
@@ -169,7 +170,7 @@
           {:else}
             <button class="btn small installbtn" disabled={!!installing} onclick={() => install(a.kind)}>{t("Installieren")}</button>
           {/if}
-        {:else if kind === a.kind}<span class="check">✓</span>{/if}
+        {:else if kind === a.kind}<span class="check"><Icon name="✓" size={15} /></span>{/if}
       </div>
     {/each}
   </div>
@@ -208,7 +209,7 @@
   {#if error}<div class="err">{error}</div>{/if}
   <div class="buttons">
     {#if srv}<button class="btn link small" onclick={() => { onClose(); go({ view: "tools", server }); }}>{t("Werkzeuge …")}</button>{/if}
-    <span class="grow dim small">{mod}↩</span>
+    <span class="grow dim small">{mod}<Icon name="↩" size={15} /></span>
     <button class="btn" onclick={onClose}>{t("Abbrechen")}</button>
     <button class="btn primary" disabled={busy || !srv || !available(kind)} onclick={create}>{busy ? "…" : t("Öffnen")}</button>
   </div>

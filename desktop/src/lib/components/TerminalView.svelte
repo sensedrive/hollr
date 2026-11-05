@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // A real terminal on the pane (xterm.js, like iOS TerminalView): "Session" streams the pane's own
   // TUI sized to this panel (`hollr gate attach`), "Eigene Shell" an own shell in its folder
   // (`hollr gate shell`). Click into it and type: keys go straight in, Cmd shortcuts stay with the app.
@@ -338,7 +339,7 @@
 
 <div class="term" class:focused>
   <div class="bar">
-    <span class="mono">&gt;_</span>
+    <span class="mono"><Icon name="terminal" size={14} /></span>
     <div class="seg" role="tablist" aria-label={t("Terminal")}>
       <button role="tab" aria-selected={mode === "pane"} class:on={mode === "pane"} onclick={() => setMode("pane")}>{t("Session")}</button>
       <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => setMode("shell")}>{t("Eigene Shell")}</button>
@@ -349,12 +350,12 @@
   <div class="screen">
     <div class="xterm-host" bind:this={host}></div>
     {#if copied}
-      {#key copied}<div class="toast" role="status">✓ {t("Auswahl kopiert")}</div>{/key}
+      {#key copied}<div class="toast" role="status"><Icon name="✓" size={15} /> {t("Auswahl kopiert")}</div>{/key}
     {/if}
     {#if phase.kind === "connecting"}
       <div class="center"><span class="spin"></span>{t("Verbinde …")}</div>
     {:else if phase.kind === "reconnecting"}
-      <div class="pill">↻ {t("Verbinde neu …")}</div>
+      <div class="pill"><Icon name="↻" size={15} /> {t("Verbinde neu …")}</div>
     {:else if phase.kind === "closed"}
       <div class="center">
         <div class="closed">

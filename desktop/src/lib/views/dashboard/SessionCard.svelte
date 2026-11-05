@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Dashboard card with a tiny live preview of the pane's terminal screen.
   import * as api from "$lib/api";
   import { statusLabel, t } from "$lib/i18n";
@@ -45,14 +46,14 @@
         <pre>{preview}</pre>
       {/if}
       <span class="chip"><span class="dot" style="background:{statusColor(ref.pane.status)}"></span>{agentName(ref.pane)}
-        {#if ref.pane.live}<span class="wave">〰</span>{/if}</span>
+        {#if ref.pane.live}<span class="wave"><Icon name="〰" size={15} /></span>{/if}</span>
     </div>
     <div class="name ellipsis" style:--p={identityColor(ref.workspace.label)}>{title}</div>
     <div class="meta ellipsis" style="color:{statusColor(ref.pane.status)}">{title === ref.workspace.label ? status : `${ref.workspace.label} · ${status}`}</div>
   </button>
   <div class="actions">
-    <button title={t("Aus der Übersicht nehmen")} aria-label={t("Aus der Übersicht nehmen")} onclick={onHide}>◌</button>
-    <button class="end" title={t("Sitzung beenden")} aria-label={t("Sitzung beenden")} onclick={onEnd}>✕</button>
+    <button title={t("Aus der Übersicht nehmen")} aria-label={t("Aus der Übersicht nehmen")} onclick={onHide}><Icon name="◌" size={15} /></button>
+    <button class="end" title={t("Sitzung beenden")} aria-label={t("Sitzung beenden")} onclick={onEnd}><Icon name="✕" size={15} /></button>
   </div>
 </div>
 

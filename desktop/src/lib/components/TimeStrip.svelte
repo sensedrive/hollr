@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Above the terminal: omp's TUI shows no times, so the last few messages with time and who said them,
   // and since when the current turn runs. Folded it keeps the newest line; a click opens that message in the chat.
   import type { Timeline } from "../api";
@@ -35,7 +36,7 @@
       {#each shown as s (s.id)}
         <button class="row" title="{fullTime(s.at, lang())} · {t('Im Chat zeigen')}" onclick={() => onPick(s.id)}>
           <span class="time">{clock(s.at, lang())}</span>
-          <span class="who {s.who}">{who(s)}{#if s.voice} 🎙{/if}</span>
+          <span class="who {s.who}">{who(s)}{#if s.voice} <Icon name="🎙" size={15} />{/if}</span>
           <span class="text">{s.text}</span>
         </button>
       {/each}
@@ -44,7 +45,7 @@
       {#if since !== undefined}
         <span class="since" title={fullTime(since, lang())}><span class="braille"></span> {t("arbeitet seit {time}", { time: clock(since, lang()) })}</span>
       {/if}
-      <button class="tog" title={closed ? t("Verlauf mit Zeiten aufklappen") : t("Verlauf mit Zeiten einklappen")} onclick={toggle}>{closed ? "▾" : "▴"}</button>
+      <button class="tog" title={closed ? t("Verlauf mit Zeiten aufklappen") : t("Verlauf mit Zeiten einklappen")} onclick={toggle}><Icon name={closed ? "▾" : "▴"} size={13} /></button>
     </div>
   </div>
 {/if}

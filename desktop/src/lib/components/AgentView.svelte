@@ -7,6 +7,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
   import type { AskPick, Pane, Timeline, Workspace } from "../api";
+  import type { Snippet } from "svelte";
   import WorkspaceTabs from "./WorkspaceTabs.svelte";
   import AskCard from "./AskCard.svelte";
   import Icon from "./git/Icon.svelte";
@@ -41,10 +42,13 @@
   import { parsePathHref } from "../paths";
   import FilePreview from "./FilePreview.svelte";
 
-  let { server, pane, workspace, title, onClosed, open, url, inSideWindow = false, autoLive = false, onTimeline }: {
+  let { server, pane, workspace, title, onClosed, open, url, inSideWindow = false, autoLive = false, onTimeline, lead, extra }: {
     server: string; pane: Pane; title: string;
     /** its space: the session shows the space's tab bar with its own tools in it (none in the side window) */
     workspace?: Workspace;
+    /** without a workspace (side window): what the bar says on the left, and its own actions before the tools */
+    lead?: Snippet;
+    extra?: Snippet;
     /** show this right away (from the dashboard's quick actions) */
     open?: "terminal" | "git" | "browser";
     /** address for open = "browser" */
@@ -242,7 +246,9 @@
 
   // chat or terminal and zen as last left in this session (a dashboard "Terminal" click wins)
   const prefs = untrack(() => viewPrefsOf(`${server}|${pane.pane}`));
-  let mode = $state<ViewMode>(untrack(() => (!pane.agent || open === "terminal" ? "terminal" : (prefs.view ?? "chat"))));
+  // a side conversation always opens as a chat: it is a conversation, and a reused pane id may carry an old "terminal"
+  let mode = $state<ViewMode>(untrack(() => (open === "terminal" || !pane.agent ? (pane.fork && pane.agent !== "shell" ? "chat" : "terminal")
+    : pane.fork ? "chat" : (prefs.view ?? "chat"))));
   $effect(() => {
     if (pane.agent) rememberViewPrefs(`${server}|${pane.pane}`, { view: mode });
   });
@@ -588,7 +594,7 @@
 
 {#snippet liveButton()}
   {#if pane.live && !livePhase}
-    <button class="livebtn" title={t("Live mit omp sprechen")} onclick={startLive}>〰 Live</button>
+    <button class="livebtn" title={t("Live mit omp sprechen")} onclick={startLive}><Icon name="〰" size={15} /> Live</button>
   {/if}
 {/snippet}
 
@@ -598,7 +604,7 @@
   {@const since = workingSince(tl)}
   <div class="hud mono">
     {#if waitingForUser && !ask}
-      <span class="ic waitc">⚠</span>
+      <span class="ic waitc"><Icon name="⚠" size={15} /></span>
       <span class="htxt ellipsis waitc">{t("Wartet auf dich")}</span>
       <span class="meta">{waitStart ? duration(now - waitStart) : ""}</span>
     {:else if tl.running && !act?.call}
@@ -619,7 +625,7 @@
     {#if phase}
       {@const phases = tl.todo ?? []}
       {@const current = phase.tasks.find((x) => x.status === "in_progress") ?? phase.tasks.find((x) => x.status !== "completed" && x.status !== "abandoned")}
-      <span class="ic" style:color={todoColor(current?.status ?? "pending")}>{current?.status === "in_progress" ? "◐" : "☐"}</span>
+      <span class="ic" style:color={todoColor(current?.status ?? "pending")}><Icon name={current?.status === "in_progress" ? "◐" : "☐"} size={13} /></span>
       <span class="htxt ellipsis fgs" title={current?.content}>{current?.content ?? phaseName(phase, phases)}</span>
       <button class="meta fold" class:open={todoOpen} onclick={() => (todoOpen = !todoOpen)} title={todoOpen ? t("TODO zuklappen") : t("Ganze TODO-Liste")}
         aria-expanded={todoOpen}>{phaseName(phase, phases)} · {phaseDone(phase)}/{phase.tasks.length}<span class="chev">›</span></button>
@@ -638,7 +644,7 @@
       {/if}
     {/if}
     {#each jobs as job (job.id)}
-      <span class="ic job">⚙</span>
+      <span class="ic job"><Icon name="⚙" size={15} /></span>
       <span class="htxt ellipsis" title={[hashId(job.id) ? "" : job.id, job.title, job.full].filter(Boolean).join("\n")}>
         {#if !hashId(job.id)}<span class="jid">{job.id}</span>{" "}{/if}<span>{job.title}</span>{#if job.command}<span class="dim gap">{job.command}</span>{/if}
       </span>
@@ -648,17 +654,17 @@
 {/snippet}
 
 {#snippet todoRow(task: { content: string; status: string })}
-  <span style:color={todoColor(task.status)}>{task.status === "completed" ? "☑" : "☐"}</span>
+  <span style:color={todoColor(task.status)}><Icon name={task.status === "completed" ? "☑" : "☐"} size={13} /></span>
   <span class="clamp2" style:color={todoColor(task.status)} class:strike={task.status === "completed" || task.status === "abandoned"}>{task.content}{task.status === "blocked" ? " (blocked)" : ""}</span>
 {/snippet}
 
 {#snippet toolbar()}
       <div class="actions">
         {#if pane.fork && !inSideWindow}
-          <button class="talkbtn" title={t("Das Nebengespräch in seinem eigenen Fenster")} onclick={openOwnWindow}>🎙 {t("Im eigenen Fenster")}</button>
+          <button class="talkbtn" title={t("Das Nebengespräch in seinem eigenen Fenster")} onclick={openOwnWindow}><Icon name="🎙" size={15} /> {t("Im eigenen Fenster")}</button>
         {:else if forking}
           <!-- ⋯ › Nebengespräch / ⌘⇧L: starting the fork takes a few seconds, its window opens after -->
-          <button class="talkbtn" disabled>🎙 {t("Starte …")}</button>
+          <button class="talkbtn" disabled><Icon name="🎙" size={15} /> {t("Starte …")}</button>
         {/if}
         {#if pane.agent}
           <div class="seg">
@@ -675,23 +681,23 @@
           {#if menu}
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div class="menu" onclick={(e) => e.stopPropagation()}>
-              {#if pane.agent}<button class="mi" onclick={openModels}>⬢ {t("Modell wechseln")}<kbd>{mod}{shift}M</kbd></button>{/if}
-              {#if canTalk}<button class="mi" onclick={() => { menu = false; openTalk(); }}>🎙 {t("Nebengespräch")}<kbd>{mod}{shift}L</kbd></button>{/if}
-              <button class="mi" onclick={() => { menu = false; togglePanel("git"); }}>⑂ {t("Git & Dateien")}<kbd>{mod}{shift}G</kbd></button>
-              <button class="mi" onclick={() => { menu = false; togglePanel("browser"); }}>◍ {t("Browser")}<kbd>{mod}{shift}B</kbd></button>
-              <button class="mi" onclick={() => { menu = false; zen = true; }}>⤢ {t("Zen-Modus")}<kbd>{mod}{shift}F</kbd></button>
+              {#if pane.agent}<button class="mi" onclick={openModels}><Icon name="⬢" size={15} /> {t("Modell wechseln")}<kbd>{mod}{shift}M</kbd></button>{/if}
+              {#if canTalk}<button class="mi" onclick={() => { menu = false; openTalk(); }}><Icon name="🎙" size={15} /> {t("Nebengespräch")}<kbd>{mod}{shift}L</kbd></button>{/if}
+              <button class="mi" onclick={() => { menu = false; togglePanel("git"); }}><Icon name="⑂" size={15} /> {t("Git & Dateien")}<kbd>{mod}{shift}G</kbd></button>
+              <button class="mi" onclick={() => { menu = false; togglePanel("browser"); }}><Icon name="◍" size={15} /> {t("Browser")}<kbd>{mod}{shift}B</kbd></button>
+              <button class="mi" onclick={() => { menu = false; zen = true; }}><Icon name="⤢" size={15} /> {t("Zen-Modus")}<kbd>{mod}{shift}F</kbd></button>
               {#if mode === "chat" && chat && timeline}
-                <button class="mi" onclick={() => { menu = false; void timelineView?.openFind(); }}>⌕ {t("Im Chat suchen")}<kbd>{mod}F</kbd></button>
-                <button class="mi" onclick={() => (settings.chatOverview = !settings.chatOverview)}>▥ {t("Übersicht")}<kbd>{settings.chatOverview ? "✓" : ""}</kbd></button>
+                <button class="mi" onclick={() => { menu = false; void timelineView?.openFind(); }}><Icon name="⌕" size={15} /> {t("Im Chat suchen")}<kbd>{mod}F</kbd></button>
+                <button class="mi" onclick={() => (settings.chatOverview = !settings.chatOverview)}><Icon name="▥" size={15} /> {t("Übersicht")}<kbd>{settings.chatOverview ? "✓" : ""}</kbd></button>
               {/if}
               {#if pane.agent}
-                <button class="mi" onclick={() => { menu = false; mode = mode === "chat" ? "terminal" : "chat"; }}>&gt;_ {mode === "chat" ? t("Terminal zeigen") : t("Chat zeigen")}<kbd>{mod}{shift}T</kbd></button>
-                <button class="mi" onclick={() => { menu = false; sendKeys(["esc"]); }}>⏹ {t("Unterbrechen (Esc)")}<kbd>{mod}.</kbd></button>
+                <button class="mi" onclick={() => { menu = false; mode = mode === "chat" ? "terminal" : "chat"; }}><Icon name="terminal" size={14} /> {mode === "chat" ? t("Terminal zeigen") : t("Chat zeigen")}<kbd>{mod}{shift}T</kbd></button>
+                <button class="mi" onclick={() => { menu = false; sendKeys(["esc"]); }}><Icon name="⏹" size={15} /> {t("Unterbrechen (Esc)")}<kbd>{mod}.</kbd></button>
               {/if}
               <div class="msec">{t("Textgröße")} · {Math.round(settings.zoom * 100)} %</div>
-              <button class="mi" onclick={() => zoomBy(0.1)}>A⁺ {t("Größer")}<kbd>{mod}+</kbd></button>
-              <button class="mi" onclick={() => zoomBy(-0.1)}>A⁻ {t("Kleiner")}<kbd>{mod}-</kbd></button>
-              <button class="mi" onclick={() => zoomBy(0)}>↺ {t("Standardgröße")}<kbd>{mod}0</kbd></button>
+              <button class="mi" onclick={() => zoomBy(0.1)}><Icon name="zoom-in" size={15} /> {t("Größer")}<kbd>{mod}+</kbd></button>
+              <button class="mi" onclick={() => zoomBy(-0.1)}><Icon name="zoom-out" size={15} /> {t("Kleiner")}<kbd>{mod}-</kbd></button>
+              <button class="mi" onclick={() => zoomBy(0)}><Icon name="↺" size={15} /> {t("Standardgröße")}<kbd>{mod}0</kbd></button>
               {#if others.length}
                 <div class="msec">{t("Wechseln zu")}</div>
                 <div class="mscroll">
@@ -704,7 +710,7 @@
                 </div>
               {/if}
               <div class="msep"></div>
-              <button class="mi danger" onclick={() => { menu = false; confirmClose = true; }}>✕ {t("Chat schließen")}</button>
+              <button class="mi danger" onclick={() => { menu = false; confirmClose = true; }}><Icon name="✕" size={15} /> {t("Chat schließen")}</button>
             </div>
           {/if}
         </div>
@@ -717,7 +723,12 @@
     {#if workspace}
       <WorkspaceTabs {server} {workspace} active={pane.pane} actions={toolbar} />
     {:else}
-      <header class="slim">{@render toolbar()}</header>
+      <header class="slim">
+        {#if lead}<div class="lead">{@render lead()}</div>{/if}
+        <span class="grow"></span>
+        {#if extra}{@render extra()}{/if}
+        {@render toolbar()}
+      </header>
     {/if}
   {/if}
 
@@ -735,11 +746,11 @@
               {#if !bubbles.length && !pending.length && (!screen || !showsScreen)}{@render emptyHint()}{/if}
               {#each bubbles as b, i (i)}
                 {#if b.kind === "voice" || b.kind === "typed"}
-                  <div class="bubble"><span class="bi">{b.kind === "voice" ? "〰" : "⌨"}</span><div class="bt">{b.text}<MsgActions text={b.text} onResend={b.kind === "typed" && !askShown ? resend : undefined} /></div></div>
+                  <div class="bubble"><span class="bi"><Icon name={b.kind === "voice" ? "〰" : "⌨"} size={13} /></span><div class="bt">{b.text}<MsgActions text={b.text} onResend={b.kind === "typed" && !askShown ? resend : undefined} /></div></div>
                 {:else if b.kind === "agent"}
                   <Markdown text={b.text} dimmed={!b.final} {onLink} />
                 {:else if b.kind === "tool"}
-                  <div class="tool mono ellipsis">🔨 {b.text}</div>
+                  <div class="tool mono ellipsis"><Icon name="🔨" size={15} /> {b.text}</div>
                 {:else}
                   <div class="info">{b.text}</div>
                 {/if}
@@ -748,20 +759,20 @@
               {@render emptyHint()}
             {/if}
             {#each pending as p}
-              <div class="bubble pending"><span class="bi">⌨</span><div class="bt">{p.text}</div></div>
+              <div class="bubble pending"><span class="bi"><Icon name="⌨" size={15} /></span><div class="bt">{p.text}</div></div>
             {/each}
             {#if showsScreen && screen}
               {@const waiting = status === "blocked"}
               <div class="screencard" class:waiting>
                 <div class="sc-head">
-                  <span>{waiting ? `⚠ ${t("Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)")}` : `>_ ${t("Terminal")}`}</span>
-                  {#if chat}<button class="link" onclick={() => (screenOpen = !screenOpen)}>{screenOpen ? "▴" : "▾"}</button>{/if}
+                  <span><Icon name={waiting ? "alert" : "terminal"} size={14} /> {waiting ? t("Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)") : t("Terminal")}</span>
+                  {#if chat}<button class="link" onclick={() => (screenOpen = !screenOpen)}><Icon name={screenOpen ? "▴" : "▾"} size={13} /></button>{/if}
                   <button class="link" onclick={() => (mode = "terminal")}>{t("Interaktiv öffnen")}</button>
                 </div>
                 {#if !chat || screenOpen}<pre>{screen}</pre>{/if}
               </div>
             {/if}
-            {#if error}<div class="warnline">⚠ {error}</div>{/if}
+            {#if error}<div class="warnline"><Icon name="⚠" size={15} /> {error}</div>{/if}
           </div>
         </div>
         {#if !stick}
@@ -771,7 +782,7 @@
         <div class="termwrap">
           {#if chat && timeline}<TimeStrip {timeline} {working} agent={agentName} onPick={showMessage} />{/if}
           <TerminalView bind:this={term} {server} pane={pane.pane} {onLink} />
-          {#if error}<div class="warnline">⚠ {error}</div>{/if}
+          {#if error}<div class="warnline"><Icon name="⚠" size={15} /> {error}</div>{/if}
         </div>
       {/if}
 
@@ -791,7 +802,7 @@
           <button title={t("Text kleiner")} onclick={() => zoomBy(-0.1)}>A⁻</button>
           <button title={t("Text größer")} onclick={() => zoomBy(0.1)}>A⁺</button>
           <span class="vsep"></span>
-          <button title={`${t("Zen-Modus beenden")} (Esc)`} onclick={() => (zen = false)}>⤡</button>
+          <button title={`${t("Zen-Modus beenden")} (Esc)`} onclick={() => (zen = false)}><Icon name="⤡" size={15} /></button>
         </div>
       {/if}
       {#if toast}<div class="toast">Aa {toast}</div>{/if}
@@ -803,11 +814,11 @@
     <aside class="side" class:hidden={!panel || zen} style:width="{panelWidth}px">
       {#if panel || browserOpen}
         <div class="tabs">
-          <button class:on={panel === "git"} onclick={() => (panel = "git")}>⑂ Git</button>
-          <button class:on={panel === "browser"} onclick={() => { browserOpen = true; panel = "browser"; }}>◍ {t("Browser")}</button>
-          <button class:on={panel === "info"} onclick={() => (panel = "info")}>ⓘ {t("Info")}</button>
+          <button class:on={panel === "git"} onclick={() => (panel = "git")}><Icon name="⑂" size={15} /> Git</button>
+          <button class:on={panel === "browser"} onclick={() => { browserOpen = true; panel = "browser"; }}><Icon name="◍" size={15} /> {t("Browser")}</button>
+          <button class:on={panel === "info"} onclick={() => (panel = "info")}><Icon name="ⓘ" size={15} /> {t("Info")}</button>
           <span class="grow"></span>
-          <button class="x" title={t("Seitenleiste schließen")} onclick={() => (panel = "")}>✕</button>
+          <button class="x" title={t("Seitenleiste schließen")} onclick={() => (panel = "")}><Icon name="✕" size={15} /></button>
         </div>
         <div class="pbody">
           {#if panel === "git"}
@@ -855,7 +866,7 @@
       {/each}
     </div>
     {#if pane.agent && pane.agent !== "shell"}
-      <button class="btn wide" onclick={openModels}>⬢ {t("Modell wechseln")}</button>
+      <button class="btn wide" onclick={openModels}><Icon name="⬢" size={15} /> {t("Modell wechseln")}</button>
     {/if}
     {#if timeline?.todo?.length}
       <div class="section">TODO</div>
@@ -869,7 +880,7 @@
     {#if timeline?.jobs.length}
       <div class="section">{t("Hintergrund-Jobs")}</div>
       <div class="card mono small">
-        {#each timeline.jobs as job (job.id)}<div class="hrow"><span class="acc">⚙{hashId(job.id) ? "" : ` ${job.id}`}</span><span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>{/each}
+        {#each timeline.jobs as job (job.id)}<div class="hrow"><span class="acc"><Icon name="⚙" size={15} />{hashId(job.id) ? "" : ` ${job.id}`}</span><span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>{/each}
       </div>
     {/if}
     <div class="section">{t("Tastenkürzel")}</div>
@@ -933,9 +944,9 @@
     {#if isLoopback(url)}<div class="muted small">{t("localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.")}</div>{/if}
     <div class="choices">
       <!-- svelte-ignore a11y_autofocus -->
-      <button class="btn primary" autofocus onclick={() => linkInBrowser(url)}>◍ {t("Im Hollr-Browser")}</button>
-      <button class="btn" onclick={() => linkExternal(url)}>↗ {t("Im System-Browser")}</button>
-      <button class="btn" onclick={() => linkCopy(url)}>⧉ {t("Link kopieren")}</button>
+      <button class="btn primary" autofocus onclick={() => linkInBrowser(url)}><Icon name="◍" size={15} /> {t("Im Hollr-Browser")}</button>
+      <button class="btn" onclick={() => linkExternal(url)}><Icon name="↗" size={15} /> {t("Im System-Browser")}</button>
+      <button class="btn" onclick={() => linkCopy(url)}><Icon name="⧉" size={15} /> {t("Link kopieren")}</button>
       <button class="btn" onclick={() => (linkUrl = null)}>{t("Abbrechen")}</button>
     </div>
   </Modal>
@@ -995,7 +1006,8 @@
   .pinned.glass { background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 12px; }
   .metab { all: unset; cursor: pointer; border-radius: 4px; padding: 0 2px; }
   .metab:hover, .metab:focus-visible { color: var(--fg); background: var(--card); }
-  .slim { display: flex; justify-content: flex-end; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .slim { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--border); background: var(--side); min-width: 0; }
+  .slim .lead { min-width: 0; display: flex; align-items: center; gap: 8px; }
   /* icon | text | time: every row's text and time line up; rows are the grid's cells (no row wrappers) */
   .hud { font-size: 12px; display: grid; grid-template-columns: 1.3em minmax(0, 1fr) auto; column-gap: 8px; row-gap: 4px;
     align-items: baseline; padding: 7px 12px; border-radius: 12px; line-height: 1.45;

@@ -109,7 +109,7 @@
           <div class="mono small muted ellipsis" title={space.root}>{space.root}</div>
           {#if space.git}
             <div class="git mono small">
-              <span style="color:var(--purple)">⑂ {space.git.branch}</span>
+              <span style="color:var(--purple)"><Icon name="⑂" size={15} /> {space.git.branch}</span>
               {#if space.git.dirty > 0}<span style="color:var(--orange)">*{space.git.dirty}</span>{/if}
               {#if space.git.ahead > 0}<span style="color:var(--green)">↑{space.git.ahead}</span>{/if}
               {#if space.git.behind > 0}<span style="color:var(--red)">↓{space.git.behind}</span>{/if}
@@ -126,9 +126,9 @@
       </div>
 
       <div class="actions">
-        <button class="btn primary" onclick={() => (dialogs.newSession = { server, ws })}>＋ {t("Neue Sitzung")}</button>
+        <button class="btn primary" onclick={() => (dialogs.newSession = { server, ws })}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
         {#if space && !space.isWorktree && space.git}
-          <button class="btn" onclick={() => (newWorktree = true)}>⑂ {t("Neuer Worktree …")}</button>
+          <button class="btn" onclick={() => (newWorktree = true)}><Icon name="⑂" size={15} /> {t("Neuer Worktree …")}</button>
         {/if}
         {#if space?.git}
           <button class="btn" onclick={() => (showGit = !showGit)}>{showGit ? t("Git ausblenden") : t("Git anzeigen")}</button>

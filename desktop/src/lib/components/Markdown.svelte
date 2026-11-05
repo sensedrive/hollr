@@ -17,7 +17,7 @@
         const body = (name && highlight(text, name)) || esc(text);
         const label = lang?.trim().split(/\s+/)[0] ?? "";
         return `<div class="codeblock"><div class="codebar">${label ? `<span class="codelang">${esc(label)}</span>` : ""}`
-          + `<button type="button" class="codecopy" title="${esc(t("Code kopieren"))}" aria-label="${esc(t("Code kopieren"))}">⧉</button></div>`
+          + `<button type="button" class="codecopy" title="${esc(t("Code kopieren"))}" aria-label="${esc(t("Code kopieren"))}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h7v7.5h-7zM3.5 10.5V3h7"/></svg></button></div>`
           + `<pre><code class="hljs${name ? ` language-${name}` : ""}">${body}</code></pre></div>\n`;
       },
       table(token: Tokens.Table) {
@@ -63,6 +63,8 @@
 </script>
 
 <script lang="ts">
+  const COPY_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 5.5h7v7.5h-7zM3.5 10.5V3h7"/></svg>';
+  const CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>';
   // Agent answer as GitHub-flavoured Markdown (AgentMarkdown.swift). Long answers start folded unless `plain`
   // (omp transcript style). Link clicks go to `onLink` (the session view asks: Hollr browser or system browser);
   // with `onLink`, file paths in the text are clickable too and go there as path links (the file preview).
@@ -107,10 +109,10 @@
     if (button) {
       const code = button.closest(".codeblock")?.querySelector("code")?.textContent ?? "";
       if (await copy(code)) {
-        button.textContent = "✓";
+        button.innerHTML = CHECK_SVG;
         button.classList.add("done");
         setTimeout(() => {
-          button.textContent = "⧉";
+          button.innerHTML = COPY_SVG;
           button.classList.remove("done");
         }, 1200);
       }

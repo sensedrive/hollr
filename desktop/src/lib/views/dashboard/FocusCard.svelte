@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // One "Braucht dich" entry (InboxSection.swift, widened for the desktop): what it is at a glance – kind, project,
   // branch, session, the question or the agent's last words, TODO progress, since when – and everything you can do
   // without opening the chat: pick an option (1–9), answer the whole ask (AskCard), reply (shares the chat's
@@ -113,13 +114,13 @@
   <div class="head">
     <span class="kind"><b>{icon}</b> {label}</span>
     <span class="proj" style:--p={identityColor(project.name)} title={project.root ?? ""}>{project.name}</span>
-    {#if project.branch}<span class="branch mono" title={project.worktree ? t("Git-Worktree") : t("Branch")}>⑂ {project.branch}{#if project.worktree} ⧉{/if}</span>{/if}
+    {#if project.branch}<span class="branch mono" title={project.worktree ? t("Git-Worktree") : t("Branch")}><Icon name="⑂" size={15} /> {project.branch}{#if project.worktree} <Icon name="⧉" size={15} />{/if}</span>{/if}
     <span class="grow"></span>
     {#if kind !== "long"}<span class="dim small" title={new Date(since).toLocaleString()}>{relTime(since)}</span>{/if}
     {#if entry}
-      <button class="x" title="{t('Als gesehen markieren')} (E)" aria-label={t("Als gesehen markieren")} onclick={() => dismiss(entry)}>✓</button>
+      <button class="x" title="{t('Als gesehen markieren')} (E)" aria-label={t("Als gesehen markieren")} onclick={() => dismiss(entry)}><Icon name="✓" size={15} /></button>
     {:else if kind === "long"}
-      <button class="x" title="{t('Aus der Liste nehmen')} (E)" aria-label={t("Aus der Liste nehmen")} onclick={onHide}>✓</button>
+      <button class="x" title="{t('Aus der Liste nehmen')} (E)" aria-label={t("Aus der Liste nehmen")} onclick={onHide}><Icon name="✓" size={15} /></button>
     {/if}
   </div>
 
@@ -165,15 +166,15 @@
   {/if}
 
   <div class="actions">
-    <button class="btn" class:primary={!replying} onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)">↗ {t("Chat öffnen")}</button>
-    {#if !replying}<button class="btn" onclick={() => void focusReply()} title="{t('Antworten')} (R)">↩ {t("Antworten")}</button>{/if}
-    <button class="btn" onclick={() => onOpen("terminal")} title="{t('Terminal öffnen')} (T)">&gt;_ {t("Terminal")}</button>
-    <button class="btn" onclick={() => onOpen("git")} title="{t('Git & Dateien')} (G)">⑂ {t("Git")}{#if project.dirty}<span class="dirty">{project.dirty}</span>{/if}</button>
+    <button class="btn" class:primary={!replying} onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)"><Icon name="↗" size={15} /> {t("Chat öffnen")}</button>
+    {#if !replying}<button class="btn" onclick={() => void focusReply()} title="{t('Antworten')} (R)"><Icon name="↩" size={15} /> {t("Antworten")}</button>{/if}
+    <button class="btn" onclick={() => onOpen("terminal")} title="{t('Terminal öffnen')} (T)"><Icon name="terminal" size={14} /> {t("Terminal")}</button>
+    <button class="btn" onclick={() => onOpen("git")} title="{t('Git & Dateien')} (G)"><Icon name="⑂" size={15} /> {t("Git")}{#if project.dirty}<span class="dirty">{project.dirty}</span>{/if}</button>
     {#each ports.slice(0, 2) as p (p.port)}
-      <button class="btn" onclick={() => onOpen("browser", `http://localhost:${p.port}`)} title={p.title ?? p.process ?? ""}>◍ :{p.port}</button>
+      <button class="btn" onclick={() => onOpen("browser", `http://localhost:${p.port}`)} title={p.title ?? p.process ?? ""}><Icon name="◍" size={15} /> :{p.port}</button>
     {/each}
     <span class="grow"></span>
-    <button class="btn danger" onclick={onEnd} title={t("Sitzung beenden")}>✕</button>
+    <button class="btn danger" onclick={onEnd} title={t("Sitzung beenden")}><Icon name="✕" size={15} /></button>
   </div>
   {#if error}<div class="small err">{t("Senden fehlgeschlagen: {e}", { e: error })}</div>{/if}
 </div>
