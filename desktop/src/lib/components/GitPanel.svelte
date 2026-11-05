@@ -15,8 +15,10 @@
   import Icon from "./git/Icon.svelte";
   import { detailKey, type Detail, type Tab } from "./git/nav";
 
-  let { server, ws, title = "", initialTab = "changes", place = "side" }:
-    { server: string; ws: string; title?: string; initialTab?: Tab; place?: GitPlace } = $props();
+  /** `openFile`: a file (or folder) to show in the files tab – the file preview's "Im Git-Panel öffnen"; a new `n` opens it again */
+  let { server, ws, title = "", initialTab = "changes", place = "side", openFile }:
+    { server: string; ws: string; title?: string; initialTab?: Tab; place?: GitPlace;
+      openFile?: { path: string; dir: boolean; n: number } | null } = $props();
 
   // svelte-ignore state_referenced_locally
   let tab = $state<Tab>(initialTab);
@@ -66,6 +68,16 @@
   let lastWs = "";
   $effect(() => {
     if (ws !== lastWs) { lastWs = ws; details = { files: [], changes: [], history: [], branches: [] }; }
+  });
+  let lastOpen = 0;
+  /** the files tab goes to the opened file's folder */
+  let folder = $state<{ path: string; n: number } | null>(null);
+  $effect(() => {
+    if (!openFile || openFile.n === lastOpen) return;
+    lastOpen = openFile.n;
+    tab = "files";
+    folder = { path: openFile.dir ? openFile.path : openFile.path.split("/").slice(0, -1).join("/"), n: openFile.n };
+    details.files = openFile.dir ? [] : [{ k: "file", path: openFile.path }];
   });
 
   const tabs: { k: Tab; icon: string; label: () => string }[] = [
@@ -126,7 +138,7 @@
     <div class="list" class:hidden={listHidden} bind:clientWidth={listWidth}
       style:flex-basis={showSplit ? `${wide ? listW : listH}px` : null}>
       {#if tab === "files"}
-        <FilesTab {server} {ws} {rev} {title} {openKey} preview={wide || !!top} onOpen={open} />
+        <FilesTab {server} {ws} {rev} {title} {openKey} {folder} preview={wide || !!top} onOpen={open} />
       {:else if tab === "changes"}
         <ChangesTab {server} {ws} {rev} {openKey} preview={wide || !!top} onOpen={open} onStaged={staged} />
       {:else if tab === "history"}

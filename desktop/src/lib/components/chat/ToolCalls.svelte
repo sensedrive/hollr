@@ -5,11 +5,13 @@
   import { duration, shortPath, toolIcon, toolTitle } from "../../agent";
   import { cardKind, parseRange, searchScopes, toolTip, underRoot, type JobView, type Piece, type TodoMark } from "../../chatTools";
   import { t } from "../../i18n";
+  import { splitLine } from "../../paths";
   import "./tools.css";
   import BashCard from "./BashCard.svelte";
   import EditCard from "./EditCard.svelte";
   import Glyph from "./Glyph.svelte";
   import LinksCard from "./LinksCard.svelte";
+  import PathText from "./PathText.svelte";
   import SearchCard from "./SearchCard.svelte";
   import TaskCard from "./TaskCard.svelte";
   import TodoCard from "./TodoCard.svelte";
@@ -38,6 +40,12 @@
     if (r.whole) return { p, r: ` · ${t("{n} Zeilen", { n: r.total ?? r.to })}` };
     return { p, r: `:${r.from}-${r.to}${r.total !== undefined ? ` / ${r.total}` : ""}` };
   }
+  /** what a read's path opens: the file (omp's ":50-80" selector off), at the first line read when it was a part */
+  function readTarget(c: ToolCall) {
+    const s = splitLine(c.file ?? c.detail ?? "");
+    const r = c.range ? parseRange(c.range) : undefined;
+    return { path: s.path, line: s.line ?? (r && !r.whole && r.from > 1 ? r.from : undefined) };
+  }
 </script>
 
 <div class="chat-tools">
@@ -48,7 +56,8 @@
         {#if reads.length === 1}
           {@const r = reads[0]!}
           {@const rp = readPath(r)}
-          <div class="hrow" title={tip(r)}><Glyph status={r.status} ok="●" /> <b>Read</b> <span class="ellipsis sel"><span class="acc">{rp.p}</span><span class="dim">{rp.r}</span></span></div>
+          {@const rt = readTarget(r)}
+          <div class="hrow" title={tip(r)}><Glyph status={r.status} ok="●" /> <b>Read</b> <span class="ellipsis sel"><PathText path={rt.path} line={rt.line} {onLink} class="acc">{rp.p}</PathText><span class="dim">{rp.r}</span></span></div>
           {#if r.status === "error" && r.result}<div class="err indent clamp3 sel">{r.result}</div>{/if}
         {:else}
           {@const running = reads.find((r) => r.status === "running")}
@@ -58,9 +67,10 @@
           </div>
           {#each reads as r, i (r.id)}
             {@const rp = readPath(r)}
+            {@const rt = readTarget(r)}
             <div class="hrow indent" title={tip(r)}>
               <span class="tree">{i === reads.length - 1 ? "└─" : "├─"}</span>
-              <span class="ellipsis sel"><span class:acc={r.status !== "error"} class:err={r.status === "error"}>{rp.p}</span><span class="dim">{rp.r}</span></span>
+              <span class="ellipsis sel"><PathText path={rt.path} line={rt.line} {onLink} class={r.status === "error" ? "err" : "acc"}>{rp.p}</PathText><span class="dim">{rp.r}</span></span>
             </div>
             {#if r.status === "error" && r.result}<div class="err indent clamp3 sel">{r.result}</div>{/if}
           {/each}
@@ -75,9 +85,9 @@
       {#if k === "bash"}
         <BashCard {c} {root} tip={tip(c)} {copy} job={c.bg ? jobs.find((j) => j.id === c.bg) : undefined} />
       {:else if k === "edit"}
-        <EditCard {c} {root} tip={tip(c)} {copy} />
+        <EditCard {c} {root} tip={tip(c)} {copy} {onLink} />
       {:else if k === "search"}
-        <SearchCard {c} {root} tip={tip(c)} />
+        <SearchCard {c} {root} tip={tip(c)} {onLink} />
       {:else if k === "task"}
         <TaskCard {c} tip={tip(c)} {onLink} {copy} />
       {:else if k === "links"}

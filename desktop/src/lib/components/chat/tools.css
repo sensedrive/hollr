@@ -12,6 +12,9 @@
 .chat-tools .frame.error { border-color: color-mix(in srgb, var(--red) 80%, transparent); background: color-mix(in srgb, var(--red) 14%, transparent); }
 .chat-tools .frame.flush { padding: 0; gap: 0; overflow: clip; }
 .chat-tools .click { cursor: pointer; }
+/* a file path: click opens the preview (PathText) */
+.chat-tools .fpath { cursor: pointer; }
+.chat-tools .fpath:hover, .chat-tools .fpath:focus-visible { text-decoration: underline; text-underline-offset: 2px; outline: none; }
 .chat-tools hr { border: 0; border-top: 1px solid var(--border); margin: 0; width: 100%; }
 .chat-tools pre { margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--muted); font-family: var(--mono); font-size: inherit; user-select: text; }
 .chat-tools .sel { user-select: text; }

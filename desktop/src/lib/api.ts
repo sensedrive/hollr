@@ -231,6 +231,25 @@ export const upload = (s: string, name: string, data: string) =>
 export const switchModel = (s: string, pane: string, model: string, level?: string) =>
   gate(s, `model ${pane}`, { model, level });
 
+/** `hollr gate file` (newer servers): a path from the agent's output, resolved on the server – `~/…`, absolute, or
+ *  relative to the pane's folder. Errors: not_found / outside (not in home or /tmp) / secret (keys, .env …) /
+ *  unreadable; older servers "not_allowed". Images come along as base64 (≤ 15 MB) – the long path. */
+export interface FileInfo {
+  path: string;
+  name: string;
+  size: number;
+  mtime: number;
+  kind: "image" | "text" | "binary" | "dir";
+  mime: string;
+  text?: string;
+  data?: string;
+  truncated: boolean;
+  /** relative to the pane's space root ("" = the root) when inside it */
+  inSpace?: string;
+  entries?: { name: string; dir: boolean; size: number }[];
+}
+export const file = (s: string, pane: string, path: string) => gate<FileInfo>(s, `file ${pane}`, { path }, true);
+
 // ---- localhost tunnel: a local port on this computer forwarded to `localhost:<port>` on the server
 export const tunnelOpen = (server: string, port: number) => invoke<number>("tunnel_open", { server, port });
 export const tunnelClose = (localPort: number) => invoke<void>("tunnel_close", { localPort });

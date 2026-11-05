@@ -2,6 +2,7 @@
   import { Marked, Renderer, type Tokens } from "marked";
   import { t } from "../i18n";
   import { highlight, langOf } from "../highlight.svelte";
+  import { findPaths, looksLikePath, pathHref, splitLine } from "../paths";
 
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const plainRenderer = new Renderer();
@@ -28,11 +29,43 @@
       },
     },
   });
+
+  /** File paths in text and inline code become clickable spans (not inside code blocks or links). */
+  function linkPaths(html: string): string {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = html;
+    const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement?.closest("pre, a") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
+    const nodes: Text[] = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+    for (const node of nodes) {
+      const text = node.data;
+      const found = findPaths(text);
+      if (!found.length) continue;
+      const frag = document.createDocumentFragment();
+      let at = 0;
+      for (const p of found) {
+        frag.append(text.slice(at, p.start));
+        const span = document.createElement("span");
+        span.className = "fpath";
+        span.dataset.path = p.path;
+        if (p.line) span.dataset.line = String(p.line);
+        span.textContent = text.slice(p.start, p.end);
+        frag.append(span);
+        at = p.end;
+      }
+      frag.append(text.slice(at));
+      node.replaceWith(frag);
+    }
+    return tpl.innerHTML;
+  }
 </script>
 
 <script lang="ts">
   // Agent answer as GitHub-flavoured Markdown (AgentMarkdown.swift). Long answers start folded unless `plain`
-  // (omp transcript style). Link clicks go to `onLink` (the session view asks: Hollr browser or system browser).
+  // (omp transcript style). Link clicks go to `onLink` (the session view asks: Hollr browser or system browser);
+  // with `onLink`, file paths in the text are clickable too and go there as path links (the file preview).
   import DOMPurify from "dompurify";
   import { highlighter } from "../highlight.svelte";
   import { copy } from "../serverapi";
@@ -64,7 +97,8 @@
   const html = $derived.by(() => {
     // a language that finished loading renders its blocks again, now highlighted
     void highlighter.version;
-    return DOMPurify.sanitize(md.parse(long && !expanded ? preview(text) : text, { async: false }) as string);
+    const clean = DOMPurify.sanitize(md.parse(long && !expanded ? preview(text) : text, { async: false }) as string);
+    return onLink ? linkPaths(clean) : clean;
   });
 
   async function click(e: MouseEvent) {
@@ -82,11 +116,24 @@
       }
       return;
     }
+    const path = el?.closest<HTMLElement>(".fpath");
+    if (path?.dataset.path) {
+      // selecting a path to copy it is not a click on it
+      if (window.getSelection()?.toString()) return;
+      onLink?.(pathHref(path.dataset.path, Number(path.dataset.line) || undefined));
+      return;
+    }
     const a = el?.closest("a");
     if (!a) return;
     e.preventDefault();
     const href = a.getAttribute("href");
-    if (href && !href.startsWith("#")) onLink?.(a.href || href);
+    if (!href || href.startsWith("#")) return;
+    // [shot](test-results/a.png): a relative link to a file the agent made, not a page
+    let plainHref = href;
+    try { plainHref = decodeURI(href); } catch {}
+    const file = /^[a-z][a-z0-9+.-]*:/i.test(href) ? undefined : splitLine(plainHref);
+    if (file && looksLikePath(file.path)) onLink?.(pathHref(file.path, file.line));
+    else onLink?.(a.href || href);
   }
 </script>
 
@@ -105,6 +152,8 @@
   .md.dimmed { opacity: 0.75; }
   .md > :global(:first-child) { margin-top: 0; }
   .md :global(p) { margin: 0 0 10px; }
+  .md :global(.fpath) { cursor: pointer; }
+  .md :global(.fpath:hover) { text-decoration: underline; text-underline-offset: 2px; color: var(--accent); }
   .md :global(:is(p, ul, ol, pre, blockquote, .codeblock, .tablewrap):last-child) { margin-bottom: 0; }
   .md :global(h1), .md :global(h2), .md :global(h3), .md :global(h4), .md :global(h5), .md :global(h6) { line-height: 1.3; font-weight: 650; }
   .md :global(h1) { font-size: 1.3em; margin: 18px 0 8px; }

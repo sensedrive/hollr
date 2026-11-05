@@ -2,7 +2,7 @@
   // A real terminal on the pane (xterm.js, like iOS TerminalView): "Session" streams the pane's own
   // TUI sized to this panel (`hollr gate attach`), "Eigene Shell" an own shell in its folder
   // (`hollr gate shell`). Click into it and type: keys go straight in, Cmd shortcuts stay with the app.
-  // A dropped connection comes back by itself; Cmd+click opens links.
+  // A dropped connection comes back by itself; Cmd+click opens links and file paths (the preview).
   import { untrack } from "svelte";
   import { Terminal, type IBufferCell, type ILink } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
@@ -11,6 +11,7 @@
   import { t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { findLinks, keySequence, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
+  import { findPaths, pathHref } from "../paths";
   import { rememberViewPrefs, viewPrefsOf } from "../viewPrefs";
   import { cleanSelection, ScrollSelection } from "../scrollSelection";
   import { offerSelection, withdrawSelection } from "../speech.svelte";
@@ -61,7 +62,7 @@
     copiedTimer = setTimeout(() => (copied = 0), 1400);
   }
 
-  /** Links in the (wrapped) line at buffer row `y` (1-based), mapped back to their cells. */
+  /** Links and file paths in the (wrapped) line at buffer row `y` (1-based), mapped back to their cells. */
   function linksAt(y: number): ILink[] {
     if (!term) return [];
     const buf = term.buffer.active;
@@ -81,12 +82,16 @@
         for (let i = 0; i < chars.length; i++) cells.push({ x: x + 1, y: row + 1 });
       }
     }
-    return findLinks(text)
-      .map((l) => ({ start: cells[l.start], end: cells[l.end - 1], url: l.url }))
+    const found = [
+      ...findLinks(text),
+      ...findPaths(text).map((p) => ({ start: p.start, end: p.end, url: pathHref(p.path, p.line) })),
+    ];
+    return found
+      .map((l) => ({ start: cells[l.start], end: cells[l.end - 1], url: l.url, label: text.slice(l.start, l.end) }))
       .filter((l) => l.start && l.end && l.start.y <= y && l.end.y >= y)
       .map((l) => ({
         range: { start: l.start, end: l.end },
-        text: l.url,
+        text: l.label,
         activate: (e: MouseEvent) => {
           openLink(e, l.url);
         },
@@ -339,7 +344,7 @@
       <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => setMode("shell")}>{t("Eigene Shell")}</button>
     </div>
     <span class="grow">{focused ? t("Tippen geht direkt ans Terminal – Esc, Pfeile und Ctrl-Tasten inklusive") : t("Ins Terminal klicken, um direkt zu tippen")}</span>
-    <span class="hint" title={mac ? t("Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal") : t("Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links") : t("Strg-Klick öffnet Links")}</span>
+    <span class="hint" title={mac ? t("Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal") : t("Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links und Dateien") : t("Strg-Klick öffnet Links und Dateien")}</span>
   </div>
   <div class="screen">
     <div class="xterm-host" bind:this={host}></div>

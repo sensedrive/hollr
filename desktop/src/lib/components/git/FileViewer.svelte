@@ -1,5 +1,6 @@
 <script lang="ts">
   // File content: line numbers + syntax colors; Markdown rendered (toggle source/preview); wrap toggle.
+  // The file preview hands in content it already has (`loaded`, read outside the space) and a `line` to show.
   import { marked } from "marked";
   import DOMPurify from "dompurify";
   import * as git from "../../git";
@@ -7,20 +8,34 @@
   import Icon from "./Icon.svelte";
   import Skeleton from "./Skeleton.svelte";
 
-  let { server, ws, path, rev = 0 }: { server: string; ws: string; path: string; rev?: number } = $props();
+  let { server, ws, path, rev = 0, loaded, line }: {
+    server: string; ws: string; path: string; rev?: number; loaded?: git.FileContent; line?: number;
+  } = $props();
 
   let content = $state<git.FileContent | null>(null);
   let error = $state("");
-  let rendered = $state(true);
+  // a line to jump to is a source line: Markdown starts as source then
+  // svelte-ignore state_referenced_locally
+  let rendered = $state(!line);
   let wrap = $state(git.pref("wrap", false));
+  let body: HTMLDivElement | undefined = $state();
 
   let seq = 0;
   $effect(() => {
     void rev;
     const p = path;
     const n = ++seq;
-    content = null; error = "";
+    error = "";
+    if (loaded) { content = loaded; return; }
+    content = null;
     git.read(server, ws, p).then((c) => { if (n === seq) content = c; }, (e) => { if (n === seq) error = String(e); });
+  });
+
+  // once the lines are there: the wanted one in the middle of the view
+  $effect(() => {
+    if (!line || !content || !body) return;
+    void rendered;
+    body.querySelector(`.ln[data-n="${line}"]`)?.scrollIntoView({ block: "center" });
   });
 
   const isMarkdown = $derived(/\.(md|mdx|markdown)$/i.test(path));
@@ -47,7 +62,7 @@
     </span>
   </header>
 
-  <div class="body">
+  <div class="body" bind:this={body}>
     {#if error}
       <div class="empty"><Icon name="x" size={22} /><b>{t("Fehler")}</b><span class="err">{error}</span></div>
     {:else if !content}
@@ -58,8 +73,8 @@
       <article class="md">{@html html}</article>
     {:else}
       <div class="code" class:wrap style="--digits:{digits}">
-        {#each lines as line, i}
-          <div class="ln"><span class="no">{i + 1}</span><code>{@html git.highlight(line, ext) || " "}</code></div>
+        {#each lines as text, i}
+          <div class="ln" class:at={i + 1 === line} data-n={i + 1}><span class="no">{i + 1}</span><code>{@html git.highlight(text, ext) || " "}</code></div>
         {/each}
       </div>
     {/if}
@@ -85,6 +100,7 @@
   .code.wrap { min-width: 0; }
   .ln { display: flex; }
   .ln:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+  .ln.at { background: color-mix(in srgb, var(--accent) 16%, transparent); }
   .no { width: calc(var(--digits) * 1ch + 22px); text-align: right; padding-right: 14px; color: var(--dim); flex: none; user-select: none; }
   code { white-space: pre; padding-right: 16px; tab-size: 4; }
   .wrap code { white-space: pre-wrap; word-break: break-word; }

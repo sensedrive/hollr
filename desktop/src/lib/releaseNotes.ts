@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 26,
+    version: "0.38.0",
+    date: "05.11.2026",
+    items: [
+      { icon: "📂", text: "Pfade öffnen: Dateipfade im Chat (Klick) und im Terminal (⌘-Klick) öffnen eine Vorschau – Bilder mit Zoom, Code an der richtigen Zeile, Ordner zum Durchklicken; mit „Pfad kopieren“ und „Im Git-Panel öffnen“" },
+    ],
+  },
+  {
     build: 25,
     version: "0.37.0",
     date: "04.11.2026",

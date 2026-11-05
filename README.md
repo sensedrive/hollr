@@ -23,6 +23,7 @@
 - **Start and steer.** New sessions with model and thinking/effort level, switch models in running sessions,
   send prompts and keys, answer agent questions, open terminals in your home directory.
 - **Git and files.** Uncommitted changes with full-context diffs, stage/unstage, history graph, branches with PR checks, file browser.
+  File paths the agent prints – in the chat or the terminal (⌘-click) – open a preview: images, code at the line, folders.
 - **Spaces.** herdr workspaces grouped by repo and worktree – create worktrees, close them, delete the branch (also on origin).
 - **Push notifications** when an agent waits for you, finishes or fails – sent from your own server straight to Apple.
 - **On-device dictation** (iPhone) with Parakeet, Whisper or Apple – multilingual, with your technical vocabulary.

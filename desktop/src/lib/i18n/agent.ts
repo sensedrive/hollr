@@ -135,8 +135,8 @@ export default {
   "Die Session gibt es nicht mehr.": "The session no longer exists.",
   "Die Sitzung wurde geschlossen.": "The session was closed.",
   "Verbindung beendet.": "Connection ended.",
-  "⌘-Klick öffnet Links": "⌘-click opens links",
-  "Strg-Klick öffnet Links": "Ctrl-click opens links",
+  "⌘-Klick öffnet Links und Dateien": "⌘-click opens links and files",
+  "Strg-Klick öffnet Links und Dateien": "Ctrl-click opens links and files",
   "Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal":
     "Selecting copies right away · ⌥-click goes to the program in the terminal",
   "Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal":

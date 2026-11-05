@@ -9,10 +9,15 @@
   import FileGlyph from "../git/FileGlyph.svelte";
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
+  import PathText from "./PathText.svelte";
 
-  let { c, root, tip, copy }: { c: ToolCall; root?: string; tip: string; copy: (s: string) => void } = $props();
+  let { c, root, tip, copy, onLink }: {
+    c: ToolCall; root?: string; tip: string; copy: (s: string) => void; onLink?: (url: string) => void;
+  } = $props();
 
   const full = $derived(c.file ?? c.detail ?? "");
+  /** the path opens where the change starts */
+  const firstLine = $derived(c.diff?.[0]?.lines.find((l) => l.t !== " " && l.n)?.n);
   const path = $derived(underRoot(full, root) ?? shortPath(full));
   const rows = $derived(diffRows(c.diff ?? []));
   /** a write to a device, not a file (omp's `agent://x` message, `xd://` tool call): one quiet line, no file card */
@@ -40,7 +45,7 @@
     onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
     role={rows.length ? "button" : undefined} tabindex={rows.length ? 0 : undefined} aria-expanded={rows.length ? view.isOpen : undefined}>
     {#if c.status === "ok" && path && !device}<FileGlyph name={path} />{:else}<Glyph status={c.status} ok={device ? "→" : toolIcon(c.name)} color="var(--orange)" />{/if}
-    <span class="grow clamp2 sel"><b>{toolTitle(c.name)}</b>{#if path}<span class={device ? "muted" : "acc"}>{` ${path}`}</span>{/if}</span>
+    <span class="grow clamp2 sel"><b>{toolTitle(c.name)}</b>{#if path}{" "}<PathText path={device ? "" : full} line={firstLine} {onLink} class={device ? "muted" : "acc"}>{path}</PathText>{/if}</span>
     {#if (c.add ?? 0) + (c.del ?? 0) > 0}
       <span class="nowrap pm">{#if c.add}<span class="ok">+{c.add}</span>{/if}{#if c.del}<span class="err">−{c.del}</span>{/if}</span>
     {/if}
@@ -57,7 +62,7 @@
         {#if "gap" in r}
           <div class="dl gap"><span class="no"></span><span class="sign"></span><code>⋯</code></div>
         {:else if "file" in r}
-          <div class="fileRow hrow mid"><FileGlyph name={r.file} /><span class="acc sel">{underRoot(r.file, root) ?? shortPath(r.file)}</span></div>
+          <div class="fileRow hrow mid"><FileGlyph name={r.file} /><span class="sel"><PathText path={r.file} {onLink} class="acc">{underRoot(r.file, root) ?? shortPath(r.file)}</PathText></span></div>
         {:else}
           <div class="dl" class:add={r.t === "+"} class:del={r.t === "-"}>
             <span class="no">{r.t === "-" ? (r.o ?? "") : (r.n ?? r.o ?? "")}</span>

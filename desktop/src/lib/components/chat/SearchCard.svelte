@@ -6,20 +6,22 @@
   import { markHits, searchScopes, underRoot, type Seg } from "../../chatTools";
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
+  import PathText from "./PathText.svelte";
 
-  let { c, root, tip }: { c: ToolCall; root?: string; tip: string } = $props();
+  let { c, root, tip, onLink }: { c: ToolCall; root?: string; tip: string; onLink?: (url: string) => void } = $props();
 
-  type Row = { file: string; last: boolean } | { n: number; segs: Seg[]; lastFile: boolean };
+  /** `path`: the file as the agent gave it (what a click opens), `file` how it shows */
+  type Row = { path: string; file: string; last: boolean } | { path: string; n: number; segs: Seg[]; lastFile: boolean };
   const rel = (p: string) => underRoot(p, root) ?? shortPath(p);
   const rows = $derived.by((): Row[] => {
     if (c.matches?.length) {
       const pattern = c.name === "grep" ? c.detail : undefined;
       return c.matches.flatMap((m, i, all) => {
         const last = i === all.length - 1;
-        return [{ file: rel(m.file), last }, ...m.lines.map((l) => ({ n: l.n, segs: markHits(l.text, pattern), lastFile: last }))];
+        return [{ path: m.file, file: rel(m.file), last }, ...m.lines.map((l) => ({ path: m.file, n: l.n, segs: markHits(l.text, pattern), lastFile: last }))];
       });
     }
-    return (c.files ?? []).map((f, i, all) => ({ file: rel(f), last: i === all.length - 1 }));
+    return (c.files ?? []).map((f, i, all) => ({ path: f, file: rel(f), last: i === all.length - 1 }));
   });
   const SMALL = 14;
   const PREVIEW = 8;
@@ -47,11 +49,11 @@
     <div class="hits sel">
       {#each shown as r, i (i)}
         {#if "file" in r}
-          <div class="hrow"><span class="tree">{r.last ? "└─" : "├─"}</span><span class="acc ellipsis">{r.file}</span></div>
+          <div class="hrow"><span class="tree">{r.last ? "└─" : "├─"}</span><span class="ellipsis"><PathText path={r.path} {onLink} class="acc">{r.file}</PathText></span></div>
         {:else}
           <div class="hrow hit">
             <span class="tree">{r.lastFile ? "  " : "│ "}</span>
-            <span class="no">{r.n}</span>
+            <span class="no"><PathText path={r.path} line={r.n} {onLink}>{r.n}</PathText></span>
             <span class="txt">{#each r.segs as s, j (j)}{#if s.hit}<mark>{s.s}</mark>{:else}{s.s}{/if}{/each}</span>
           </div>
         {/if}

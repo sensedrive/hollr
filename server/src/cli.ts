@@ -21,6 +21,7 @@ import { type AskPick, answerAsk, answerWithText } from "./ask";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { runEvents } from "./events";
+import { paneContext, readPath } from "./file";
 import { closeFork, type ForkRequest, forkPane } from "./fork";
 import {
   execHerdr,
@@ -98,7 +99,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.37.0";
+export const VERSION = "0.38.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -170,6 +171,7 @@ async function gate(): Promise<number> {
       "timeline",
       "spaces",
       "fs",
+      "file",
       "usage",
       "ports",
       "tools",
@@ -445,6 +447,17 @@ async function gate(): Promise<number> {
       try {
         json(await spaceFs(req));
       } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "file": {
+      // a path the agent mentioned, for the app's preview: {"path"} → file.ts (a gone pane: relative to home)
+      const req = JSON.parse((await readStdinLine()) || "{}") as { path?: string };
+      try {
+        json(readPath(req.path ?? "", await paneContext(pane).catch(() => ({}))));
+      } catch (err) {
+        // FileRefused's message is its code (not_found / outside / secret / unreadable)
         json({ error: err instanceof Error ? err.message : String(err) });
       }
       return 0;

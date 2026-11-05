@@ -8,8 +8,10 @@
   import Skeleton from "./Skeleton.svelte";
   import { navKey, reveal, type Detail } from "./nav";
 
-  let { server, ws, rev, title = "", openKey = "", preview = false, onOpen }:
-    { server: string; ws: string; rev: number; title?: string; openKey?: string; preview?: boolean; onOpen: (d: Detail) => void } = $props();
+  /** `folder`: go to this folder (GitPanel's openFile); a new `n` goes there again */
+  let { server, ws, rev, title = "", openKey = "", preview = false, onOpen, folder }:
+    { server: string; ws: string; rev: number; title?: string; openKey?: string; preview?: boolean; onOpen: (d: Detail) => void;
+      folder?: { path: string; n: number } | null } = $props();
 
   let path = $state("");
   let entries = $state<git.DirEntry[] | null>(null);
@@ -49,6 +51,12 @@
     const i = shown.findIndex((e) => e.name === pendingSelect);
     pendingSelect = "";
     if (i !== -1) { sel = i; queueMicrotask(() => reveal(list, i)); }
+  });
+  let lastFolder = 0;
+  $effect(() => {
+    if (!folder || folder.n === lastFolder) return;
+    lastFolder = folder.n;
+    goTo(folder.path);
   });
 
   function open(i: number) {

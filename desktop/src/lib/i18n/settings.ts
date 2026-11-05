@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Pfade öffnen: Dateipfade im Chat (Klick) und im Terminal (⌘-Klick) öffnen eine Vorschau – Bilder mit Zoom, Code an der richtigen Zeile, Ordner zum Durchklicken; mit „Pfad kopieren“ und „Im Git-Panel öffnen“":
+    "Open paths: file paths in the chat (click) and terminal (⌘-click) open a preview – images with zoom, code at the right line, folders to browse; with “Copy path” and “Open in the git panel”",
   "Nebengespräch: neben einer Session über sie reden (Live mit omp, ⌘⇧L), ohne sie zu stören – eine schreibgeschützte Abzweigung im Seitenbereich, das Ergebnis auf Wunsch als Entwurf zurück in den Hauptchat":
     "Side conversation: talk about a session next to it (live with omp, ⌘⇧L) without disturbing it – a read-only fork in the side panel, the result optionally as a draft back in the main chat",
   "Vorlesen: Die Leiste zeigt den gelesenen Text (Zusammenfassung oder Original) und bleibt offen, bis du sie schließt – mit Tempo (0,7–1,6×), „Nochmal“, Wechsel zwischen Original und Zusammenfassung und ⚙ zu den Einstellungen":

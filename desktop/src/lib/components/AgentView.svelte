@@ -34,6 +34,8 @@
   import LiveBar from "./LiveBar.svelte";
   import SideTalk from "./SideTalk.svelte";
   import { rememberViewPrefs, viewPrefsOf, type ViewMode } from "../viewPrefs";
+  import { parsePathHref } from "../paths";
+  import FilePreview from "./FilePreview.svelte";
 
   let { server, pane, title, onClosed, open, url }: {
     server: string; pane: Pane; title: string;
@@ -252,6 +254,11 @@
   let showCodex = $state(false);
   let confirmClose = $state(false);
   let linkUrl = $state<URL | null>(null);
+  /** a path from the chat or terminal in the preview; `n` makes a second click on the same path a fresh open */
+  let filePreview = $state<{ path: string; line?: number; n: number } | null>(null);
+  /** the preview's "Im Git-Panel öffnen" (space-relative) */
+  let gitOpen = $state<{ path: string; dir: boolean; n: number } | null>(null);
+  let opens = 0;
   let todoOpen = $state(false);
   let toast = $state("");
   let composer: Composer | undefined = $state();
@@ -404,8 +411,13 @@
     }
   }
 
-  // ---- links: ask like iOS (Hollr browser / system browser / copy)
+  // ---- links: ask like iOS (Hollr browser / system browser / copy); file paths open the preview
   function onLink(href: string) {
+    const file = parsePathHref(href);
+    if (file) {
+      filePreview = { ...file, n: ++opens };
+      return;
+    }
     let url: URL;
     try {
       url = new URL(href);
@@ -417,6 +429,12 @@
       return;
     }
     linkUrl = url;
+  }
+  function openInGit(path: string, dir: boolean) {
+    filePreview = null;
+    gitOpen = { path, dir, n: ++opens };
+    panel = "git";
+    zen = false;
   }
   function linkInBrowser(url: URL) {
     linkUrl = null;
@@ -844,7 +862,7 @@
         </div>
         <div class="pbody">
           {#if panel === "git"}
-            <div class="fill"><GitPanel {server} {ws} /></div>
+            <div class="fill"><GitPanel {server} {ws} openFile={gitOpen} /></div>
           {:else if panel === "info"}
             {@render info()}
           {:else if panel === "talk"}
@@ -979,6 +997,13 @@
       <button class="btn" onclick={() => (linkUrl = null)}>{t("Abbrechen")}</button>
     </div>
   </Modal>
+{/if}
+
+{#if filePreview}
+  {#key filePreview.n}
+    <FilePreview {server} pane={pane.pane} path={filePreview.path} line={filePreview.line}
+      onClose={() => (filePreview = null)} onGit={openInGit} />
+  {/key}
 {/if}
 
 <style>
