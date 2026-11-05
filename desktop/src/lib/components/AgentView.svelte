@@ -6,6 +6,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
   import type { AskPick, Pane, Timeline, Workspace } from "../api";
+  import type { Snippet } from "svelte";
   import WorkspaceTabs from "./WorkspaceTabs.svelte";
   import AskCard from "./AskCard.svelte";
   import Icon from "./git/Icon.svelte";
@@ -40,10 +41,13 @@
   import { parsePathHref } from "../paths";
   import FilePreview from "./FilePreview.svelte";
 
-  let { server, pane, workspace, title, onClosed, open, url, inSideWindow = false, autoLive = false, onTimeline }: {
+  let { server, pane, workspace, title, onClosed, open, url, inSideWindow = false, autoLive = false, onTimeline, lead, extra }: {
     server: string; pane: Pane; title: string;
     /** its space: the session shows the space's tab bar with its own tools in it (none in the side window) */
     workspace?: Workspace;
+    /** without a workspace (side window): what the bar says on the left, and its own actions before the tools */
+    lead?: Snippet;
+    extra?: Snippet;
     /** show this right away (from the dashboard's quick actions) */
     open?: "terminal" | "git" | "browser";
     /** address for open = "browser" */
@@ -241,7 +245,9 @@
 
   // chat or terminal and zen as last left in this session (a dashboard "Terminal" click wins)
   const prefs = untrack(() => viewPrefsOf(`${server}|${pane.pane}`));
-  let mode = $state<ViewMode>(untrack(() => (!pane.agent || open === "terminal" ? "terminal" : (prefs.view ?? "chat"))));
+  // a side conversation always opens as a chat: it is a conversation, and a reused pane id may carry an old "terminal"
+  let mode = $state<ViewMode>(untrack(() => (open === "terminal" || !pane.agent ? (pane.fork && pane.agent !== "shell" ? "chat" : "terminal")
+    : pane.fork ? "chat" : (prefs.view ?? "chat"))));
   $effect(() => {
     if (pane.agent) rememberViewPrefs(`${server}|${pane.pane}`, { view: mode });
   });
@@ -717,7 +723,12 @@
     {#if workspace}
       <WorkspaceTabs {server} {workspace} active={pane.pane} actions={toolbar} />
     {:else}
-      <header class="slim">{@render toolbar()}</header>
+      <header class="slim">
+        {#if lead}<div class="lead">{@render lead()}</div>{/if}
+        <span class="grow"></span>
+        {#if extra}{@render extra()}{/if}
+        {@render toolbar()}
+      </header>
     {/if}
   {/if}
 
@@ -995,7 +1006,8 @@
   .pinned.glass { background: color-mix(in srgb, var(--raised) 70%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 12px; }
   .metab { all: unset; cursor: pointer; border-radius: 4px; padding: 0 2px; }
   .metab:hover, .metab:focus-visible { color: var(--fg); background: var(--card); }
-  .slim { display: flex; justify-content: flex-end; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .slim { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; border-bottom: 1px solid var(--border); background: var(--side); min-width: 0; }
+  .slim .lead { min-width: 0; display: flex; align-items: center; gap: 8px; }
   /* icon | text | time: every row's text and time line up; rows are the grid's cells (no row wrappers) */
   .hud { font-size: 12px; display: grid; grid-template-columns: 1.3em minmax(0, 1fr) auto; column-gap: 8px; row-gap: 4px;
     align-items: baseline; padding: 7px 12px; border-radius: 12px; line-height: 1.45;

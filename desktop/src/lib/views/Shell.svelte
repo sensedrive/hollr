@@ -251,7 +251,7 @@
   .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
   .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }
-  .view { min-width: 0; min-height: 0; overflow: hidden; }
+  .view { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }
   .agentwrap { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
   .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>
