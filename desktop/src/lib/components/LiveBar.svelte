@@ -2,7 +2,7 @@
   import Icon from "$lib/components/git/Icon.svelte";
   // The live call's bar for one pane (omp /live, live.svelte.ts): level bars, what omp does, speaker / mic /
   // hang up – or "Neu verbinden" after a lost connection – plus the call's error or last note. Nothing while
-  // the app-wide call isn't about this pane. Shown in the session's composer and in the side conversation panel.
+  // the app-wide call isn't about this pane. Shown in the session's composer.
   import { t } from "../i18n";
   import {
     live, liveAbout, liveActive, liveColor, liveDetail, liveTitle, reconnectLive, stopLive, toggleLiveMic, toggleLiveSpeaker,

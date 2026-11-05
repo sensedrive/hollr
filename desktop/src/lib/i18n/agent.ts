@@ -159,48 +159,30 @@ export default {
   "Hier starten": "Start here",
   "Zur Sitzung „{name}“ ({server})": "Go to session “{name}” ({server})",
   "Live beendet": "Live ended",
-  // side conversation (SideWindow, AgentView, WorkspaceTabs, LivePill)
-  Nebengespräch: "Side conversation",
-  "Nebengespräch – ändert nichts ohne dich": "Side conversation – changes nothing without you",
-  "Nebengespräch: in einem zweiten Fenster über diese Sitzung reden, ohne sie zu stören":
-    "Side conversation: talk about this session in a second window, without disturbing it",
-  "Das Nebengespräch in seinem eigenen Fenster": "The side conversation in its own window",
-  "Im eigenen Fenster": "In its own window",
+  // chat with context (contextChat.svelte.ts, AgentView, WorkspaceTabs, CommandPalette)
+  "Neuer Chat mit Kontext": "New chat with context",
+  "Chat mit dem Verlauf von „{name}“": "Chat with the history of “{name}”",
+  "Kennt den Verlauf von „{name}“": "Knows the history of “{name}”",
+  "Kennt den bisherigen Verlauf": "Knows the earlier history",
+  anzeigen: "show",
+  ausblenden: "hide",
   "Starte …": "Starting …",
-  Hauptchat: "Main chat",
-  "Zum Hauptfenster": "To the main window",
-  "Hollr auf dem Server ist zu alt für Nebengespräche – unter Server › Werkzeuge aktualisieren.":
-    "Hollr on the server is too old for side conversations – update it under Server › Tools.",
+  "Hollr auf dem Server ist zu alt dafür – unter Server › Werkzeuge aktualisieren.":
+    "Hollr on the server is too old for this – update it under Server › Tools.",
   "Diese Sitzung gibt es nicht mehr.": "This session no longer exists.",
-  "Diese Sitzung hat noch keinen Verlauf – erst etwas schreiben, dann nebenbei darüber reden.":
-    "This session has no history yet – write something first, then talk about it on the side.",
-  "Nebengespräche gibt es für omp und Claude Code.": "Side conversations work with omp and Claude Code.",
-  "Das Nebengespräch gibt es nicht mehr – bitte neu starten.": "The side conversation is gone – please start a new one.",
-  "Nebengespräch nicht gestartet: {e}": "Side conversation didn't start: {e}",
-  "zu „{title}“": "about “{title}”",
-  "ändert nichts ohne dich": "changes nothing without you",
-  "Das Nebengespräch wurde geschlossen.": "The side conversation was closed.",
-  "Neues Nebengespräch": "New side conversation",
-  "Fenster schließen": "Close window",
-  "Fasst das Nebengespräch zusammen und legt es als Entwurf in den Hauptchat":
-    "Summarizes the side conversation and puts it into the main chat as a draft",
+  "Diese Sitzung hat noch keinen Verlauf – erst etwas schreiben, dann einen Chat mit Kontext starten.":
+    "This session has no history yet – write something first, then start a chat with context.",
+  "Chats mit Kontext gibt es für omp und Claude Code.": "Chats with context work with omp and Claude Code.",
+  "Dieser Chat ist keine Abzweigung (mehr) – bitte neu starten.": "This chat is no longer a fork – please start a new one.",
+  "Chat mit Kontext nicht gestartet: {e}": "Chat with context didn't start: {e}",
+  "Fasst diesen Chat zusammen und legt das Ergebnis als Entwurf in „{name}“ – nichts wird gesendet":
+    "Summarizes this chat and puts the result into “{name}” as a draft – nothing is sent",
+  "In diesem Chat wurde noch nichts gesagt.": "Nothing has been said in this chat yet.",
   "Fasse zusammen …": "Summarizing …",
   "Ergebnis in den Hauptchat": "Result to the main chat",
-  "Steht als Entwurf im Hauptchat – nichts gesendet.": "It's in the main chat as a draft – nothing was sent.",
-  "Das Hauptfenster ist zu – das Ergebnis steht dort als Entwurf, sobald es wieder offen ist.":
-    "The main window is closed – the result is there as a draft once it's open again.",
   "Zusammenfassen fehlgeschlagen: {e}": "Summarizing failed: {e}",
   Zurücksetzen: "Reset",
-  "Neu anfangen – vom jetzigen Stand des Hauptchats": "Start over – from the main chat as it is now",
-  "Nebengespräch zurücksetzen?": "Reset the side conversation?",
-  "Was hier bisher besprochen wurde, wird verworfen. Das Nebengespräch beginnt neu – mit dem Hauptchat, wie er jetzt ist.":
-    "What was discussed here so far is dropped. The side conversation starts over – with the main chat as it is now.",
-  "Nebengespräch wird neu gestartet …": "Restarting the side conversation …",
-  "Der Verlauf des Hauptchats wird neu kopiert – der Hauptchat läuft ungestört weiter.":
-    "The main chat's history is copied again – the main chat carries on undisturbed.",
-  "Live läuft noch": "Live is still on",
-  "Das Fenster schließen und auflegen? Das Nebengespräch bleibt als Tab im Hauptfenster.":
-    "Close the window and hang up? The side conversation stays as a tab in the main window.",
-  "Auflegen und schließen": "Hang up and close",
-  Beenden: "End",
+  "Chat zurücksetzen?": "Reset the chat?",
+  "Was in diesem Chat gesagt wurde, wird verworfen. Er beginnt neu – mit dem Verlauf von „{name}“, wie er jetzt ist.":
+    "What was said in this chat is dropped. It starts over – with the history of “{name}” as it is now.",
 };

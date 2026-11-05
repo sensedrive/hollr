@@ -5,7 +5,8 @@
   // choose, ↩ runs, Esc closes.
   import { tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
-  import { allPanes, app, dialogs, go, tabName } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, findPane, go, nav, tabName } from "$lib/store.svelte";
+  import { canFork, startContextChat } from "$lib/contextChat.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
   import { statusRank } from "$lib/views/dashboard/util";
   import { matchItems } from "$lib/palette";
@@ -32,8 +33,18 @@
       run: () => go({ view: "space", server: currentServer(), ws: sp.id }),
     })),
   );
+  /** the session on screen, when a chat with its context can be started */
+  const forkable = $derived.by(() => {
+    const r = nav.route;
+    const p = r.view === "agent" ? findPane(r.server, r.pane) : undefined;
+    return p && canFork(p.pane) ? p : undefined;
+  });
   const commands = $derived<Item[]>([
     { id: "c:new", label: t("Neue Sitzung"), icon: "plus", kbd: `${mod}N`, run: () => (dialogs.newSession = {}) },
+    ...(forkable
+      ? [{ id: "c:fork", label: t("Neuer Chat mit Kontext"), sub: tabName(forkable.tab.label, forkable.workspace.label), icon: "chat-plus", kbd: `${mod}${mod === "⌘" ? "⇧" : "Shift+"}L`,
+          run: () => void startContextChat(forkable.server.id, forkable.pane.pane) }]
+      : []),
     { id: "c:dash", label: t("Übersicht"), icon: "grid", kbd: `${mod}1`, run: () => go({ view: "dashboard" }) },
     // the server's page; ⌘⌥1…9 switches to the server itself (its last session), so no shortcut here
     ...app.servers.map((s): Item => ({

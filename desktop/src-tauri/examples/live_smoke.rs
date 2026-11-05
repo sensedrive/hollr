@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hollr_desktop_lib::hollr::Hollr;
-use hollr_desktop_lib::live::{Call, Emit, Lives, Options};
+use hollr_desktop_lib::live::{Emit, Lives, Options};
 use serde_json::Value;
 use tokio::sync::mpsc;
 
@@ -26,8 +26,7 @@ async fn main() -> anyhow::Result<()> {
     });
     let lives = Lives::default();
     let handle = hollr.handle_for(&server).await?;
-    let call = Call { server: server.clone(), pane, label: String::new(), owner: "smoke".into() };
-    let id = lives.start(emit, handle, call, Options { headphones: false, audio: false }).await?;
+    let id = lives.start(emit, handle, pane, Options { headphones: false, audio: false }).await?;
     println!("{:>5.1}s started session {id}", t0.elapsed().as_secs_f32());
     let show = |v: &Value| {
         let t = v["t"].as_str().unwrap_or_default();

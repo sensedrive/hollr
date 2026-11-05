@@ -1,4 +1,4 @@
-// Theme (a fixed palette or following the system) and the app zoom ("Ansicht skalieren") – for every window.
+// Theme (a fixed palette or following the system) and the app zoom ("Ansicht skalieren").
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { settings } from "./settings.svelte";
 import * as theme from "./theme";

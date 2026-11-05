@@ -86,40 +86,12 @@ pub struct Options {
     pub audio: bool,
 }
 
-/// What every window needs to know about the running call (each window shows it: live pill, the session's bar).
-#[derive(Clone, Default, serde::Serialize)]
-pub struct Call {
-    pub server: String,
-    pub pane: String,
-    /// the session's title for the live pill
-    pub label: String,
-    /// the webview that started it: its reload leaves nobody to end the call there – the call ends
-    #[serde(skip)]
-    pub owner: String,
-}
-
-/// The running call as a window that opens later picks it up (`live_current`).
-#[derive(serde::Serialize)]
-pub struct CallState {
-    pub session: u64,
-    #[serde(flatten)]
-    pub call: Call,
-    /// omp is live (not still connecting)
-    pub live: bool,
-    /// omp's last live state (listening, speaking, muted …)
-    pub omp: Option<String>,
-    pub speaker_muted: bool,
-}
-
 struct LiveSession {
     id: u64,
-    call: Call,
     control: mpsc::UnboundedSender<Vec<u8>>,
     speaker_muted: Arc<AtomicBool>,
     headphones: Arc<AtomicBool>,
     stop_audio: Arc<AtomicBool>,
-    live: Arc<AtomicBool>,
-    omp: Arc<Mutex<Option<String>>>,
 }
 
 impl LiveSession {
@@ -136,8 +108,8 @@ impl Drop for LiveSession {
     }
 }
 
-/// The app's one live call (one microphone, whichever window starts it). Every call has an id; the UI
-/// passes it back so a late stop from an old view can't hang up a newer call.
+/// The app's one live call (one microphone). Every call has an id; the UI passes it back so a
+/// late stop from an old view can't hang up a newer call.
 #[derive(Default)]
 pub struct Lives {
     current: tokio::sync::Mutex<Option<LiveSession>>,
@@ -145,18 +117,18 @@ pub struct Lives {
 }
 
 impl Lives {
-    /// Ends a running call and starts `call`; returns its id (carried by every event).
+    /// Ends a running call and starts one on `pane`; returns its id (carried by every event).
     pub async fn start<H: russh::client::Handler + 'static>(
         &self,
         emit: Emit,
         handle: Arc<russh::client::Handle<H>>,
-        call: Call,
+        pane: String,
         options: Options,
     ) -> Result<u64> {
         let mut current = self.current.lock().await;
         current.take();
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
-        *current = Some(start(emit, handle, call, id, options).await?);
+        *current = Some(start(emit, handle, pane, id, options).await?);
         Ok(id)
     }
 
@@ -171,23 +143,9 @@ impl Lives {
         }
     }
 
-    /// Webview `owner` reloaded: the call it started has nobody left to show or end it there.
-    pub async fn stop_owned(&self, owner: &str) {
-        let mut current = self.current.lock().await;
-        if current.as_ref().is_some_and(|s| s.call.owner == owner) {
-            current.take();
-        }
-    }
-
-    /// The running call, for a window that opens while it runs.
-    pub async fn current(&self) -> Option<CallState> {
-        self.current.lock().await.as_ref().map(|s| CallState {
-            session: s.id,
-            call: s.call.clone(),
-            live: s.live.load(Ordering::Relaxed),
-            omp: s.omp.lock().unwrap().clone(),
-            speaker_muted: s.speaker_muted.load(Ordering::Relaxed),
-        })
+    /// The webview reloaded: nobody is left to show or end the call.
+    pub async fn stop_all(&self) {
+        self.current.lock().await.take();
     }
 
     /// Mic mute = omp's own mute (Space): you keep hearing the answer.
@@ -197,13 +155,10 @@ impl Lives {
         }
     }
 
-    /// True if `id` is the current call (then every window gets told).
-    pub async fn speaker(&self, id: u64, muted: bool) -> bool {
+    pub async fn speaker(&self, id: u64, muted: bool) {
         if let Some(s) = self.current.lock().await.as_ref().filter(|s| s.id == id) {
             s.speaker_muted.store(muted, Ordering::Relaxed);
-            return true;
         }
-        false
     }
 
     /// The headphones setting, applied to a running call at once.
@@ -222,12 +177,12 @@ async fn until(closed: &mut watch::Receiver<bool>) {
 async fn start<H: russh::client::Handler + 'static>(
     emit: Emit,
     handle: Arc<russh::client::Handle<H>>,
-    call: Call,
+    pane: String,
     session: u64,
     options: Options,
 ) -> Result<LiveSession> {
     let channel = handle.channel_open_session().await.map_err(|e| anyhow!("{e}"))?;
-    channel.exec(true, format!("live {}", call.pane)).await.map_err(|e| anyhow!("{e}"))?;
+    channel.exec(true, format!("live {pane}")).await.map_err(|e| anyhow!("{e}"))?;
     let (mut reader, writer) = channel.split();
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
@@ -241,7 +196,6 @@ async fn start<H: russh::client::Handler + 'static>(
     let out_level = Arc::new(AtomicU32::new(0));
     let in_level = Arc::new(AtomicU32::new(0));
     let live = Arc::new(AtomicBool::new(false));
-    let omp: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let heard = Arc::new(Mutex::new(Instant::now()));
 
     // writer: everything for the server goes through one queue
@@ -314,7 +268,6 @@ async fn start<H: russh::client::Handler + 'static>(
         let emit = emit.clone();
         let playback = playback.clone();
         let live = live.clone();
-        let omp = omp.clone();
         let stop = stop_audio.clone();
         let device_rate = device_rate.clone();
         let mut closed = closed_rx.clone();
@@ -369,10 +322,6 @@ async fn start<H: russh::client::Handler + 'static>(
                         if v["t"] == "phase" && v["phase"] == "live" {
                             live.store(true, Ordering::Relaxed);
                         }
-                        // a window opening later shows omp's state right away (live_current)
-                        if v["t"] == "omp" {
-                            *omp.lock().unwrap() = v["state"].as_str().map(str::to_string);
-                        }
                         // the UI ignores events of an older session (e.g. its late "closed")
                         if let Some(o) = v.as_object_mut() {
                             o.insert("session".into(), session.into());
@@ -400,7 +349,7 @@ async fn start<H: russh::client::Handler + 'static>(
         });
     }
 
-    Ok(LiveSession { id: session, call, control: tx, speaker_muted, headphones, stop_audio, live, omp })
+    Ok(LiveSession { id: session, control: tx, speaker_muted, headphones, stop_audio })
 }
 
 /// What the audio thread shares with the connection.

@@ -63,11 +63,6 @@ $effect.root(() => {
     } catch {}
   });
 });
-// changed in the other window (side conversation): the same values here, so this one never writes back an old copy
-if (typeof window !== "undefined")
-  window.addEventListener("storage", (e) => {
-    if (e.key === KEY) Object.assign(dictation, load());
-  });
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 

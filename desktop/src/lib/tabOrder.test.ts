@@ -28,7 +28,7 @@ describe("moveBefore", () => {
 describe("forksAfterParents", () => {
   const sort = (parents: Record<string, string>, ...order: string[]) =>
     ids(forksAfterParents(tabs(...order), (x) => x.id, (x) => parents[x.id]));
-  test("a side conversation follows its session's tab, several in their order", () => {
+  test("a chat with context follows its session's tab, several in their order", () => {
     expect(sort({ f1: "a", f2: "a" }, "a", "b", "f1", "f2", "c")).toEqual(["a", "f1", "f2", "b", "c"]);
     expect(sort({ f1: "c" }, "f1", "a", "c")).toEqual(["a", "c", "f1"]);
   });

@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 29,
+    version: "0.41.0",
+    date: "05.11.2026",
+    items: [
+      { icon: "⑂", text: "Neuer Chat mit Kontext (⌘⇧L, ⋯, ⌘K): ein leerer Chat im Tab neben der Session, der ihren Verlauf im Hintergrund kennt – ein normaler Chat ohne Sonderfenster; ⋯ › Zurücksetzen und Ergebnis in den Hauptchat" },
+      { icon: "✎", text: "Linien-Icons überall statt Emoji-Zeichen" },
+    ],
+  },
+  {
     build: 28,
     version: "0.40.0",
     date: "05.11.2026",

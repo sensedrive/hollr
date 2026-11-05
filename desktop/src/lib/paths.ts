@@ -82,7 +82,7 @@ export function findPaths(text: string): FoundPath[] {
   return out;
 }
 
-// Paths travel through the existing `onLink(href)` plumbing (chat, terminal, side conversation) as
+// Paths travel through the existing `onLink(href)` plumbing (chat, terminal) as
 // "hollr-file:<encoded path>#<line>" – the session view opens the preview instead of asking about a link.
 const SCHEME = "hollr-file:";
 

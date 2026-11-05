@@ -18,7 +18,7 @@ export function moveBefore(ids: readonly string[], id: string, before: string | 
   return [...rest.slice(0, at), id, ...rest.slice(at)];
 }
 
-/** Side conversations right behind the tab of the session they talk about (`parent`: that tab's id), whatever
+/** Chats with context right behind the tab of the session they continue (`parent`: that tab's id), whatever
  *  order the tabs have otherwise – so a fork tab hangs off its own session, not off whichever came before it. */
 export function forksAfterParents<T>(items: readonly T[], id: (item: T) => string, parent: (item: T) => string | undefined): T[] {
   const ids = new Set(items.map(id));

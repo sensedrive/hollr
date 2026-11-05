@@ -2,9 +2,9 @@
   // herdr's tab bar for a workspace, above its sessions and its space view: the space itself as the first tab
   // (its overview), then every tab (and every pane of a split tab) with its status dot and name – one click
   // switches, double-click (or right-click › Umbenennen) renames the tab in herdr, ✕ / middle click closes it
-  // (agents after asking), ＋ starts a new session in the same space. 〰 marks the tab a live call runs on, a
-  // side conversation (a write-guarded fork of another session, `fork` on the server) hangs dimmed right behind
-  // its session's tab – a click opens its window. In a session the bar also carries its tools (`actions`).
+  // (agents after asking), ＋ starts a new session in the same space. 〰 marks the tab a live call runs on, ↳ a chat
+  // with context (a fork of another session, `fork` on the server) – it sits right behind its session's tab. In a
+  // session the bar also carries its tools (`actions`).
   // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move").
   import { tick, type Snippet } from "svelte";
   import Icon from "./git/Icon.svelte";
@@ -18,7 +18,8 @@
   import LiveMark from "./LiveMark.svelte";
   import { sortable } from "$lib/sortable";
   import { forksAfterParents, moveBefore, ordered } from "$lib/tabOrder";
-  import { openSide, sideTitle } from "$lib/sideWindow";
+  import { chatLabel } from "$lib/contextChatText";
+  import { canFork, contextChat, startContextChat } from "$lib/contextChat.svelte";
   import { tabOrders } from "$lib/tabOrders.svelte";
 
   /** `active`: the open session's pane – none in the space view, then the space tab is the active one */
@@ -28,7 +29,7 @@
   type Pane = Tab["panes"][number];
 
   const orderKey = $derived(`${server}|${ws.id}`);
-  // a side conversation's tab sits right behind its session's tab (it hangs off it, see .tab.fork)
+  // a chat with context sits right behind its session's tab
   const tabs = $derived.by(() => {
     const tabOf = new Map(ws.tabs.flatMap((tb) => tb.panes.map((p) => [p.pane, tb.id] as const)));
     return forksAfterParents(ordered(ws.tabs, tabOrders.all[orderKey], (tb) => tb.id), (tb) => tb.id, (tb) => {
@@ -56,7 +57,7 @@
   /** herdr numbers unnamed tabs: show what runs in them instead */
   const unnamed = (tab: Tab) => /^(Tab )?\d+$/.test(tab.label);
   function nameOf(tab: Tab, pane: Pane) {
-    if (!unnamed(tab)) return tab.label;
+    if (!unnamed(tab)) return chatLabel(tab.label);
     return pane.agent ?? (pane.title && !/^\d+$/.test(pane.title) ? pane.title : t("Terminal"));
   }
 
@@ -98,14 +99,14 @@
     else if (e.key === "Escape") { e.preventDefault(); editing = null; }
   }
 
-  /** a side conversation's tab brings up its window (or opens it again); any other tab shows its session here */
-  function openTab(pane: Pane) {
+  const openTab = (pane: Pane) => go({ view: "agent", server, pane: pane.pane });
+
+  /** the session a chat with context continues (its tab's name) */
+  function sourceName(pane: Pane) {
     const of = pane.fork?.of;
-    if (!of) return go({ view: "agent", server, pane: pane.pane });
-    const mainTab = ws.tabs.find((tb) => tb.panes.some((p) => p.pane === of));
-    const mainPane = mainTab?.panes.find((p) => p.pane === of);
-    const main = mainTab && mainPane ? nameOf(mainTab, mainPane) : pane.title;
-    openSide(server, of, pane.pane, sideTitle(main), false).catch((e) => (error = e instanceof Error ? e.message : String(e)));
+    const tab = of ? ws.tabs.find((tb) => tb.panes.some((p) => p.pane === of)) : undefined;
+    const src = tab?.panes.find((p) => p.pane === of);
+    return tab && src ? nameOf(tab, src) : "";
   }
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -117,6 +118,9 @@
         { label: t("Öffnen"), icon: "↗", action: () => openTab(pane) },
         { label: t("Umbenennen …"), icon: "✎", action: () => startRename(tab) },
         { label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: ws.id }) },
+        ...(canFork(pane) && !contextChat.busy
+          ? [{ label: t("Neuer Chat mit Kontext"), icon: "chat-plus", action: () => void startContextChat(server, pane.pane) }]
+          : []),
         { label: t("Schließen"), icon: "✕", danger: true, action: () => askClose(tab, pane) },
       ],
     };
@@ -162,12 +166,13 @@
           </div>
         {:else}
           <div class="tabwrap" class:on data-sort-id={tab.id}>
-            <button class="tab" class:on class:split={i > 0} class:fork={!!pane.fork} role="tab" aria-selected={on}
-              title="{pane.fork ? `${t('Nebengespräch – ändert nichts ohne dich')} · ` : ''}{pane.title || nameOf(tab, pane)} · {t('Doppelklick: umbenennen · Mittelklick: schließen')}"
+            <button class="tab" class:on class:split={i > 0} role="tab" aria-selected={on}
+              title="{pane.fork ? `${t('Chat mit dem Verlauf von „{name}“', { name: sourceName(pane) || pane.title })} · ` : ''}{pane.title || nameOf(tab, pane)} · {t('Doppelklick: umbenennen · Mittelklick: schließen')}"
               onclick={() => openTab(pane)}
               onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
               ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
-              {#if pane.fork}<span class="num"><Icon name="corner" size={12} /></span>{:else}<span class="dot {pane.status}"></span>{/if}
+              <span class="dot {pane.status}"></span>
+              {#if pane.fork}<span class="derived"><Icon name="corner" size={12} /></span>{/if}
               <span class="name ellipsis">{nameOf(tab, pane)}</span>
               <LiveMark {server} pane={pane.pane} />
             </button>
@@ -208,10 +213,8 @@
   .tab.on { color: var(--fg); background: var(--bg); border-color: var(--border); margin-bottom: -1px; }
   .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .tab.split { padding-left: 8px; }
-  /* a side conversation: there, but quieter than the sessions it talks about */
-  /* a side conversation: a small sub-item hanging off its session's tab */
-  .tab.fork { font-style: italic; font-size: 11.5px; color: var(--dim); padding-left: 4px; gap: 4px; margin-left: -6px; }
-  .tab.fork.on { color: var(--fg); }
+  /* a chat with context: the session's name, marked as derived */
+  .derived { display: grid; place-items: center; color: var(--dim); margin-right: -2px; }
   .x { all: unset; cursor: pointer; position: absolute; right: 6px; top: 50%; translate: 0 -45%; width: 16px; height: 16px;
     display: grid; place-items: center; border-radius: 4px; font-size: 9px; color: var(--muted); opacity: 0; }
   .tabwrap:hover .x, .tabwrap.on .x, .x:focus-visible { opacity: 1; }
