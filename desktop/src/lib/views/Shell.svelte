@@ -1,0 +1,258 @@
+<script lang="ts">
+  // Hollr desktop shell (the main window): sidebar (navigation + my sessions) and the current view on the right.
+  import { onMount, untrack } from "svelte";
+  import { listen } from "@tauri-apps/api/event";
+  import { t } from "$lib/i18n";
+  import { settings } from "$lib/settings.svelte";
+  import { joinLive } from "$lib/live.svelte";
+  import { appendDraft } from "$lib/sidetalk";
+  import { draftKey } from "$lib/drafts";
+  import {
+    app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName, type Route,
+  } from "$lib/store.svelte";
+  import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
+  import WorkspaceTabs from "$lib/components/WorkspaceTabs.svelte";
+  import ServerTabs from "$lib/components/ServerTabs.svelte";
+  import LivePill from "$lib/components/LivePill.svelte";
+  import AgentView from "$lib/components/AgentView.svelte";
+  import PairDialog from "$lib/components/PairDialog.svelte";
+  import NewSessionDialog from "$lib/components/NewSessionDialog.svelte";
+  import Dashboard from "$lib/views/Dashboard.svelte";
+  import Agents from "$lib/views/Agents.svelte";
+  import Spaces from "$lib/views/Spaces.svelte";
+  import SpaceDetail from "$lib/views/SpaceDetail.svelte";
+  import Settings from "$lib/views/Settings.svelte";
+  import ServerInfo from "$lib/views/ServerInfo.svelte";
+  import Tools from "$lib/views/Tools.svelte";
+  import NewSpaceDialog from "$lib/views/NewSpaceDialog.svelte";
+  import Notifier from "$lib/views/Notifier.svelte";
+  import AppLock from "$lib/components/AppLock.svelte";
+  import TipsTour from "$lib/components/TipsTour.svelte";
+  import ReadAloud from "$lib/components/ReadAloud.svelte";
+  import { pendingTips, tour } from "$lib/tips.svelte";
+  import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
+
+  const zoomBy = (d: number) => (settings.zoom = Math.round(Math.min(1.6, Math.max(0.7, settings.zoom + d)) * 100) / 100);
+
+  function onKey(e: KeyboardEvent) {
+    const mod = e.metaKey || e.ctrlKey;
+    // ⌘⌥1…9 switch servers (ServerTabs)
+    if (!mod || e.altKey) return;
+    const k = e.key;
+    if (k === "=" || k === "+") zoomBy(0.1);
+    else if (k === "-") zoomBy(-0.1);
+    else if (k === "0") settings.zoom = 1;
+    else if (k === "n" && app.servers.length) dialogs.newSession = {};
+    else if (k === ",") go({ view: "settings" });
+    else if (k === "1") go({ view: "dashboard" });
+    else if (k === "2") go({ view: "agents" });
+    else if (k === "3") go({ view: "spaces" });
+    // ⌘[ while typing belongs to the text field (drafts keep the text on the other shortcuts)
+    else if (k === "[" && !typing(e.target)) back();
+    else return;
+    e.preventDefault();
+  }
+
+  const typing = (el: EventTarget | null) =>
+    el instanceof HTMLElement && (el.matches("input, textarea, select") || el.isContentEditable);
+
+  /** a closed session: forget it, and leave its view if it is still showing */
+  function onClosed(id: string) {
+    mySessions.remove(id);
+    const r = nav.route;
+    if (r.view === "agent" && `${r.server}|${r.pane}` === id) back();
+    refresh();
+  }
+
+  onMount(() => {
+    loadServers().then(() => refreshSpaces());
+    tour.tips = pendingTips();
+    // a call already running in the side conversation's window shows here too (live pill, tab markers)
+    void joinLive();
+    let unlisten = () => {};
+    listenFeeds().then((off) => (unlisten = off)).catch(() => {});
+    // "Ergebnis in den Hauptchat" from a side window: below the session's draft, the session in front – never sent
+    const offResult = listen<{ server: string; pane: string; text: string }>("hollr-side-result", ({ payload: r }) => {
+      const key = draftKey(r.server, r.pane);
+      drafts.setText(key, appendDraft(drafts.text(key), r.text));
+      go({ view: "agent", server: r.server, pane: r.pane });
+    });
+    const timer = setInterval(poll, 5000);
+    return () => {
+      clearInterval(timer);
+      unlisten();
+      void offResult.then((off) => off());
+    };
+  });
+
+  // "Braucht dich": note when agents start waiting (on every tree refresh); the count goes on the Übersicht item
+  $effect(() => {
+    for (const s of app.servers) void app.trees[s.id];
+    untrack(() => trackInbox());
+  });
+  const needsYou = $derived(inboxEntries().length);
+
+  // the session in front of the user: its result counts as seen ("Braucht dich" drops it). Re-run on every
+  // tree refresh and inbox tick, so a result that comes in while it's open is seen too.
+  $effect(() => {
+    const r = nav.route;
+    void inbox.now;
+    if (r.view !== "agent") return;
+    void app.trees[r.server];
+    if (document.visibilityState === "visible") untrack(() => markSeen(`${r.server}|${r.pane}`));
+  });
+
+  const NAV: { route: Route; label: string; icon: string; key: string }[] = [
+    { route: { view: "dashboard" }, label: "Übersicht", icon: "▦", key: "1" },
+    { route: { view: "agents" }, label: "Agents", icon: "◉", key: "2" },
+    { route: { view: "spaces" }, label: "Spaces", icon: "❒", key: "3" },
+  ];
+  const isActive = (r: Route) =>
+    nav.route.view === r.view || (r.view === "spaces" && nav.route.view === "space");
+
+  const current = $derived(nav.route.view === "agent" ? findPane(nav.route.server, nav.route.pane) : undefined);
+  /** the space view's herdr workspace, for its tab bar (none while the tree loads or nothing runs there) */
+  const spaceWs = $derived.by(() => {
+    const r = nav.route;
+    return r.view === "space" ? app.trees[r.server]?.find((w) => w.id === r.ws) : undefined;
+  });
+  const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl+";
+
+  // ---- sidebar width: drag its right edge (double-click resets), remembered per computer
+  const SW = "hollr.sidebarWidth";
+  const SIDE_DEFAULT = 270;
+  let sideWidth = $state(Number(localStorage.getItem(SW)) || SIDE_DEFAULT);
+  const clampSide = (w: number) => Math.round(Math.min(Math.max(w, 200), Math.min(640, window.innerWidth * 0.5)));
+  const saveSide = () => {
+    try {
+      localStorage.setItem(SW, String(sideWidth));
+    } catch {}
+  };
+  function startSideResize(e: PointerEvent) {
+    const startX = e.clientX;
+    const start = sideWidth;
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => (sideWidth = clampSide(start + ev.clientX - startX));
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      saveSide();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  }
+</script>
+
+<!-- files dropped next to the composer must not replace the app with the file (drop target: Composer) -->
+<svelte:window onkeydown={onKey} ondragover={(e) => e.dataTransfer?.types.includes("Files") && e.preventDefault()}
+  ondrop={(e) => e.dataTransfer?.types.includes("Files") && e.preventDefault()} />
+
+<main style:grid-template-columns="{sideWidth}px 1fr">
+  <aside>
+    <div class="brand"><b>Hollr</b>
+      <button class="icon" title={`${t("Neue Sitzung")} (${mod}N)`} disabled={!app.servers.length}
+        onclick={() => (dialogs.newSession = {})}>＋</button>
+    </div>
+    <nav>
+      {#each NAV as item}
+        <button class="nav" class:active={isActive(item.route)} onclick={() => go(item.route)} title={`${mod}${item.key}`}>
+          <span class="ico">{item.icon}</span><span class="grow">{t(item.label)}</span>
+          {#if item.route.view === "dashboard" && needsYou}
+            <span class="count" title={t("Braucht dich")}>{needsYou}</span>
+          {/if}
+        </button>
+      {/each}
+    </nav>
+    <div class="list">
+      <SpacesSidebar />
+    </div>
+    <div class="bottom">
+      <LivePill />
+      <button class="nav" class:active={nav.route.view === "settings"} onclick={() => go({ view: "settings" })} title={`${mod},`}>
+        <span class="ico">⚙</span>{t("Einstellungen")}
+      </button>
+    </div>
+    <div class="sidegrip" role="separator" aria-orientation="vertical" aria-label={t("Seitenleiste breiter / schmaler")}
+      title={t("Ziehen: Breite ändern · Doppelklick: zurücksetzen")} onpointerdown={startSideResize}
+      ondblclick={() => { sideWidth = SIDE_DEFAULT; saveSide(); }}></div>
+  </aside>
+
+  <section class="main">
+    <ServerTabs />
+    <div class="view">
+      {#if nav.route.view === "agent"}
+        {#if current}
+          <div class="agentwrap">
+            <WorkspaceTabs server={current.server.id} workspace={current.workspace} active={current.pane.pane} />
+            {#key `${nav.route.server}|${nav.route.pane}`}
+              <AgentView server={nav.route.server} pane={current.pane} title={tabName(current.tab.label, current.workspace.label)}
+                open={nav.route.open} url={nav.route.url} {onClosed} />
+            {/key}
+          </div>
+        {:else}
+          <div class="empty">{app.loaded[nav.route.server] ? t("Sitzung nicht mehr vorhanden.") : t("Lädt …")}</div>
+        {/if}
+      {:else if nav.route.view === "agents"}
+        <Agents />
+      {:else if nav.route.view === "spaces"}
+        <Spaces />
+      {:else if nav.route.view === "space"}
+        <div class="agentwrap">
+          <div>{#if spaceWs}<WorkspaceTabs server={nav.route.server} workspace={spaceWs} />{/if}</div>
+          <SpaceDetail server={nav.route.server} ws={nav.route.ws} />
+        </div>
+      {:else if nav.route.view === "settings"}
+        <Settings page={nav.route.page} />
+      {:else if nav.route.view === "serverinfo"}
+        <ServerInfo server={nav.route.server} />
+      {:else if nav.route.view === "tools"}
+        <Tools server={nav.route.server} />
+      {:else}
+        <Dashboard />
+      {/if}
+    </div>
+  </section>
+</main>
+
+<Notifier />
+<!-- read aloud: the button next to selected chat / terminal text, ⌘⇧S, the stop pill -->
+<ReadAloud />
+{#if dialogs.pair}
+  <PairDialog onClose={() => (dialogs.pair = false)} onPaired={() => { dialogs.pair = false; loadServers(); }} />
+{/if}
+{#if dialogs.newSession}
+  <NewSessionDialog servers={app.servers} trees={app.trees} onClose={() => (dialogs.newSession = null)}
+    onCreated={async (server, pane) => { dialogs.newSession = null; await refresh(); go({ view: "agent", server, pane }); }} />
+{/if}
+{#if dialogs.newSpace}
+  <NewSpaceDialog preset={dialogs.newSpace} onClose={() => (dialogs.newSpace = null)} />
+{/if}
+{#if tour.tips}
+  <TipsTour tips={tour.tips} onClose={() => (tour.tips = null)} />
+{/if}
+<!-- last: covers everything above while locked -->
+<AppLock />
+
+<style>
+  main { display: grid; grid-template-columns: 270px 1fr; height: 100vh; }
+  aside { position: relative; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .sidegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 5; }
+  .sidegrip:hover, .sidegrip:active { background: color-mix(in srgb, var(--accent) 60%, transparent); }
+  .brand { display: flex; justify-content: space-between; align-items: center; padding: 14px 14px 8px; font-size: 16px; }
+  .icon { all: unset; cursor: pointer; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); font-size: 16px; }
+  .icon:hover { background: var(--card); color: var(--fg); }
+  nav { padding: 0 8px 8px; display: grid; gap: 1px; border-bottom: 1px solid var(--border); }
+  .nav { all: unset; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; color: var(--muted); }
+  .nav:hover { background: var(--card); color: var(--fg); }
+  .nav.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--orange); }
+  .ico { width: 16px; text-align: center; font-size: 13px; }
+  .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
+  .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .view { grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; }
+  .agentwrap { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
+  .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
+</style>

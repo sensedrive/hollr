@@ -61,6 +61,11 @@ $effect.root(() => {
     } catch {}
   });
 });
+// changed in the other window (side conversation): the same values here, so this one never writes back an old copy
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (e) => {
+    if (e.key === KEY) Object.assign(speech, load());
+  });
 
 export interface PhononModel {
   id: string;

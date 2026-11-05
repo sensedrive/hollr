@@ -24,6 +24,8 @@ export interface Settings {
   terminalMode: "pane" | "shell";
   /** omp /live with headphones: no echo gate, the mic stays open while omp speaks */
   liveHeadphones: boolean;
+  /** the chat's overview ruler at its right edge (⋯ menu "Übersicht") */
+  chatOverview: boolean;
 }
 
 const defaults: Settings = {
@@ -39,6 +41,7 @@ const defaults: Settings = {
   appLock: false,
   terminalMode: "pane",
   liveHeadphones: false,
+  chatOverview: true,
 };
 
 function load(): Settings {
@@ -59,3 +62,8 @@ $effect.root(() => {
     } catch {}
   });
 });
+// changed in the other window (side conversation): the same values here, so this one never writes back an old copy
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (e) => {
+    if (e.key === KEY) Object.assign(settings, load());
+  });

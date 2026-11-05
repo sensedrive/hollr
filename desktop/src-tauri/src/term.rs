@@ -223,7 +223,8 @@ pub async fn run_stream(
 #[derive(Default)]
 pub struct Terms {
     next: AtomicU64,
-    running: Mutex<HashMap<u64, mpsc::UnboundedSender<Cmd>>>,
+    /// stream id → (the webview that started it, its input)
+    running: Mutex<HashMap<u64, (String, mpsc::UnboundedSender<Cmd>)>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -234,14 +235,14 @@ struct Envelope {
 }
 
 impl Terms {
-    /// Starts a stream; its `hollr-term` events carry the returned id.
-    pub async fn start(&self, app: AppHandle, server: String, command: String) -> u64 {
+    /// Starts a stream for webview `owner`; its `hollr-term` events carry the returned id.
+    pub async fn start(&self, app: AppHandle, owner: String, server: String, command: String) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = mpsc::unbounded_channel();
         let mut running = self.running.lock().await;
         // finished streams leave a closed sender behind
-        running.retain(|_, s| !s.is_closed());
-        running.insert(id, tx);
+        running.retain(|_, (_, s)| !s.is_closed());
+        running.insert(id, (owner, tx));
         tokio::spawn(async move {
             let hollr = app.state::<Hollr>();
             run_stream(&hollr, &server, command, rx, |event| {
@@ -253,7 +254,7 @@ impl Terms {
     }
 
     async fn send(&self, id: u64, cmd: Cmd) {
-        if let Some(tx) = self.running.lock().await.get(&id) {
+        if let Some((_, tx)) = self.running.lock().await.get(&id) {
             let _ = tx.send(cmd);
         }
     }
@@ -271,9 +272,10 @@ impl Terms {
         self.running.lock().await.remove(&id);
     }
 
-    /// The webview (re)loaded: no view is left to stop its terminals, so their shells would stay open.
-    pub async fn stop_all(&self) {
-        self.running.lock().await.clear();
+    /// Webview `owner` (re)loaded or closed: no view is left to stop its terminals, so their shells would stay open.
+    /// Another window's terminals keep running.
+    pub async fn stop_owned(&self, owner: &str) {
+        self.running.lock().await.retain(|_, (o, _)| o != owner);
     }
 }
 

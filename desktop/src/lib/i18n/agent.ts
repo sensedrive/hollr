@@ -159,45 +159,48 @@ export default {
   "Hier starten": "Start here",
   "Zur Sitzung „{name}“ ({server})": "Go to session “{name}” ({server})",
   "Live beendet": "Live ended",
-  // side conversation (SideTalk, AgentView, WorkspaceTabs)
+  // side conversation (SideWindow, AgentView, WorkspaceTabs, LivePill)
   Nebengespräch: "Side conversation",
   "Nebengespräch – ändert nichts ohne dich": "Side conversation – changes nothing without you",
-  "Nebengespräch: daneben über diese Sitzung reden, ohne sie zu stören": "Side conversation: talk about this session next to it, without disturbing it",
-  "Zur Sitzung, aus der dieses Nebengespräch kommt": "To the session this side conversation is about",
+  "Nebengespräch: in einem zweiten Fenster über diese Sitzung reden, ohne sie zu stören":
+    "Side conversation: talk about this session in a second window, without disturbing it",
+  "Das Nebengespräch in seinem eigenen Fenster": "The side conversation in its own window",
+  "Im eigenen Fenster": "In its own window",
+  "Starte …": "Starting …",
   Hauptchat: "Main chat",
+  "Zum Hauptfenster": "To the main window",
   "Hollr auf dem Server ist zu alt für Nebengespräche – unter Server › Werkzeuge aktualisieren.":
     "Hollr on the server is too old for side conversations – update it under Server › Tools.",
   "Diese Sitzung gibt es nicht mehr.": "This session no longer exists.",
   "Diese Sitzung hat noch keinen Verlauf – erst etwas schreiben, dann nebenbei darüber reden.":
     "This session has no history yet – write something first, then talk about it on the side.",
   "Nebengespräche gibt es für omp und Claude Code.": "Side conversations work with omp and Claude Code.",
+  "Das Nebengespräch gibt es nicht mehr – bitte neu starten.": "The side conversation is gone – please start a new one.",
   "Nebengespräch nicht gestartet: {e}": "Side conversation didn't start: {e}",
   "zu „{title}“": "about “{title}”",
   "ändert nichts ohne dich": "changes nothing without you",
-  "Als eigenen Tab öffnen": "Open as its own tab",
-  "Nebengespräch wird gestartet …": "Starting the side conversation …",
-  "Der bisherige Verlauf wird kopiert – der Hauptchat läuft ungestört weiter.":
-    "The history so far is copied – the main chat carries on undisturbed.",
   "Das Nebengespräch wurde geschlossen.": "The side conversation was closed.",
   "Neues Nebengespräch": "New side conversation",
-  "Verlauf davor ausblenden": "Hide the history before",
-  "Verlauf davor zeigen ({n} Einträge aus dem Hauptchat)": "Show the history before ({n} entries from the main chat)",
-  "Frag, was du zur Sitzung wissen willst.": "Ask what you want to know about the session.",
-  "Es kennt den ganzen Verlauf bis jetzt und liest bei Bedarf Dateien – ändern darf es nur mit deiner Freigabe.":
-    "It knows the whole history so far and reads files when needed – it may only change things with your approval.",
-  "Sprechen geht bisher nur mit omp – hier tippen oder diktieren.": "Talking only works with omp so far – type or dictate here.",
-  "Wartet auf dich – z. B. eine Freigabe zum Schreiben": "Waiting for you – e.g. an approval to write",
-  "Ablehnen (Esc)": "Deny (Esc)",
-  "Im Terminal antworten": "Answer in the terminal",
-  "Sprich oder tippe – das Nebengespräch ändert nichts ohne dich …": "Talk or type – the side conversation changes nothing without you …",
-  "Frag nach – das Nebengespräch ändert nichts ohne dich …": "Ask – the side conversation changes nothing without you …",
-  "Tasten ans Nebengespräch senden": "Send keys to the side conversation",
-  "Live mit dem Nebengespräch sprechen": "Talk live with the side conversation",
+  "Fenster schließen": "Close window",
   "Fasst das Nebengespräch zusammen und legt es als Entwurf in den Hauptchat":
     "Summarizes the side conversation and puts it into the main chat as a draft",
   "Fasse zusammen …": "Summarizing …",
   "Ergebnis in den Hauptchat": "Result to the main chat",
   "Steht als Entwurf im Hauptchat – nichts gesendet.": "It's in the main chat as a draft – nothing was sent.",
+  "Das Hauptfenster ist zu – das Ergebnis steht dort als Entwurf, sobald es wieder offen ist.":
+    "The main window is closed – the result is there as a draft once it's open again.",
   "Zusammenfassen fehlgeschlagen: {e}": "Summarizing failed: {e}",
+  Zurücksetzen: "Reset",
+  "Neu anfangen – vom jetzigen Stand des Hauptchats": "Start over – from the main chat as it is now",
+  "Nebengespräch zurücksetzen?": "Reset the side conversation?",
+  "Was hier bisher besprochen wurde, wird verworfen. Das Nebengespräch beginnt neu – mit dem Hauptchat, wie er jetzt ist.":
+    "What was discussed here so far is dropped. The side conversation starts over – with the main chat as it is now.",
+  "Nebengespräch wird neu gestartet …": "Restarting the side conversation …",
+  "Der Verlauf des Hauptchats wird neu kopiert – der Hauptchat läuft ungestört weiter.":
+    "The main chat's history is copied again – the main chat carries on undisturbed.",
+  "Live läuft noch": "Live is still on",
+  "Das Fenster schließen und auflegen? Das Nebengespräch bleibt als Tab im Hauptfenster.":
+    "Close the window and hang up? The side conversation stays as a tab in the main window.",
+  "Auflegen und schließen": "Hang up and close",
   Beenden: "End",
 };

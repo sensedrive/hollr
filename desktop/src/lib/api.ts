@@ -213,9 +213,10 @@ export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
 export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
 /** A side conversation about `pane`'s session: its agent session copied into a new tab, write-guarded.
- *  Older servers answer "not_allowed". Loading a big session takes the agent a while – the long path. */
-export const fork = (s: string, pane: string, label: string) =>
-  gate<{ pane: string; tab?: string; kind: string; at: number }>(s, `fork ${pane}`, { label, readOnly: true }, true);
+ *  Older servers answer "not_allowed". Loading a big session takes the agent a while – the long path.
+ *  `replace` (reset): that earlier fork of `pane` makes way – the new one takes its tab (servers before this ignore it). */
+export const fork = (s: string, pane: string, label: string, replace?: string) =>
+  gate<{ pane: string; tab?: string; kind: string; at: number }>(s, `fork ${pane}`, { label, readOnly: true, replace }, true);
 /** Closes a side conversation's pane (the server refuses any pane that isn't one). */
 export const closeFork = (s: string, pane: string) => gate(s, `fork-close ${pane}`);
 /** herdr tab name (`rename <tab id>`, server 0.32.5+) */

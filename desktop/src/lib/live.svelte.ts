@@ -73,12 +73,25 @@ let early: Record<string, unknown>[] = [];
 let cancelled = false;
 let starts = 0;
 
+/** Shows a call another window started (or one running when this window opened) as this window's call:
+ *  the app has one call – every window's pill and bar follow it, and its buttons work from here too. */
+function adopt(c: { session: number; server: string; pane: string; label?: string; live?: boolean; omp?: string | null; speaker_muted?: boolean }) {
+  early = [];
+  Object.assign(live, {
+    server: c.server, pane: c.pane, label: c.label ?? "", phase: c.live ? "live" : "connecting", ompState: c.omp ?? undefined,
+    speakerMuted: c.speaker_muted ?? false, levels: { input: 0, output: 0 }, error: "", note: "", audioError: "", devices: "", session: c.session,
+  });
+}
+
 function listenOnce() {
   listening ??= Promise.all([
     listen<Record<string, unknown>>("live", (e) => {
-      if (live.session === null) {
-        if (live.phase === "connecting" || live.phase === "ending") early.push(e.payload);
-      } else if (e.payload.session === live.session) onEvent(e.payload);
+      const m = e.payload;
+      const starting = live.session === null && (live.phase === "connecting" || live.phase === "ending");
+      // a call started in another window (its own start in this one is waiting for its id: sorted out there)
+      if (m.t === "call" && !starting && m.session !== live.session) return adopt(m as Parameters<typeof adopt>[0]);
+      if (starting) early.push(m);
+      else if (m.session === live.session) onEvent(m);
     }),
     listen<{ input: number; output: number; session?: number }>("live-levels", (e) => {
       if (e.payload.session === live.session) live.levels = { input: e.payload.input, output: e.payload.output };
@@ -87,7 +100,14 @@ function listenOnce() {
   return listening;
 }
 
-/** Starts Live on a pane; a call on another pane ends (the computer has one microphone). */
+/** At a window's start: a call that already runs (started in another window) shows here too. */
+export async function joinLive() {
+  await listenOnce();
+  const c = await invoke<Parameters<typeof adopt>[0] | null>("live_current").catch(() => null);
+  if (c && live.session === null && !liveActive()) adopt(c);
+}
+
+/** Starts Live on a pane; a call on another pane ends (the computer has one microphone), in any window. */
 export async function startLive(server: string, pane: string, label: string) {
   Object.assign(live, {
     server, pane, label, phase: "connecting", ompState: undefined, speakerMuted: false, levels: { input: 0, output: 0 },
@@ -98,7 +118,7 @@ export async function startLive(server: string, pane: string, label: string) {
   const mine = ++starts;
   await listenOnce();
   try {
-    const id = await invoke<number>("live_start", { server, pane, headphones: settings.liveHeadphones });
+    const id = await invoke<number>("live_start", { server, pane, label, headphones: settings.liveHeadphones });
     if (mine !== starts) return; // a newer start already replaced this call
     if (cancelled) {
       await invoke("live_stop", { session: id }).catch(() => {});
@@ -133,6 +153,10 @@ function onEvent(m: Record<string, unknown>) {
       break;
     case "omp":
       live.ompState = String(m.state);
+      break;
+    case "speaker":
+      // set in another window (or here – then it's already so)
+      live.speakerMuted = m.muted === true;
       break;
     case "error":
       live.error = String(m.message ?? m.code);

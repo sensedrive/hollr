@@ -4,7 +4,7 @@
 // Live runs without microphone / speakers here: only the connection, phases and omp's state.
 //   cargo run --example bridge -- "<app data dir>" [port]
 use hollr_desktop_lib::hollr::Hollr;
-use hollr_desktop_lib::live::{Emit, Lives, Options};
+use hollr_desktop_lib::live::{Call, Emit, Lives, Options};
 use hollr_desktop_lib::term::{self, Cmd};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -90,16 +90,32 @@ async fn main() -> anyhow::Result<()> {
                     "live_start" => match hollr.handle_for(&s("server")).await {
                         Ok(handle) => {
                             let events = events.clone();
+                            let send = events.clone();
                             let emit: Emit = Arc::new(move |name: &str, v: Value| {
                                 let _ = events.send(json!({ "event": name, "payload": v }).to_string());
                             });
-                            lives.start(emit, handle, s("pane"), Options { headphones: false, audio: false }).await.map(|id| json!(id))
+                            // like the app: every page hears of the new call
+                            let call = Call { server: s("server"), pane: s("pane"), label: s("label"), owner: "bridge".into() };
+                            let shown = json!({ "t": "call", "server": call.server, "pane": call.pane, "label": call.label });
+                            lives.start(emit, handle, call, Options { headphones: false, audio: false }).await.map(|id| {
+                                let mut shown = shown;
+                                shown["session"] = json!(id);
+                                let _ = send.send(json!({ "event": "live", "payload": shown }).to_string());
+                                json!(id)
+                            })
                         }
                         Err(e) => Err(e),
                     },
+                    "live_current" => Ok(serde_json::to_value(lives.current().await).unwrap_or_default()),
                     "live_stop" => Ok(json!(lives.stop(a["session"].as_u64().unwrap_or_default()).await)),
                     "live_mute" => { lives.mute(a["session"].as_u64().unwrap_or_default(), a["on"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
-                    "live_speaker" => { lives.speaker(a["session"].as_u64().unwrap_or_default(), a["muted"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
+                    "live_speaker" => {
+                        let (session, muted) = (a["session"].as_u64().unwrap_or_default(), a["muted"].as_bool().unwrap_or_default());
+                        if lives.speaker(session, muted).await {
+                            let _ = events.send(json!({ "event": "live", "payload": { "t": "speaker", "muted": muted, "session": session } }).to_string());
+                        }
+                        Ok(json!(null))
+                    }
                     "live_headphones" => { lives.headphones(a["on"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
                     other => Err(anyhow::anyhow!("bridge: {other} not available")),
                 };

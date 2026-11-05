@@ -9,6 +9,7 @@ pub mod term;
 pub mod dictation;
 pub mod speech;
 mod notice;
+mod window;
 
 use hollr::{Hollr, Server};
 use tauri::Manager;
@@ -56,14 +57,24 @@ async fn gate_long(state: tauri::State<'_, Hollr>, server: String, command: Stri
     state.gate_with(&server, &command, stdin, hollr::LONG_TIMEOUT).await.map_err(err)
 }
 
-/// Starts omp /live (ending a call on another pane); returns the session id that every `live` /
-/// `live-levels` event carries and `live_stop` / `live_mute` / `live_speaker` take.
+/// Starts omp /live (ending a call on another pane, in any window); returns the session id that every
+/// `live` / `live-levels` event carries and `live_stop` / `live_mute` / `live_speaker` take. Every window
+/// hears of the new call (`{"t":"call"}`), so each shows it and none starts a second one.
 #[tauri::command]
-async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live: tauri::State<'_, live::Lives>, server: String, pane: String, headphones: bool) -> R<u64> {
+async fn live_start(
+    app: tauri::AppHandle,
+    webview: tauri::Webview,
+    state: tauri::State<'_, Hollr>,
+    live: tauri::State<'_, live::Lives>,
+    server: String,
+    pane: String,
+    label: Option<String>,
+    headphones: bool,
+) -> R<u64> {
     use tauri::Emitter;
     let handle = state.handle_for(&server).await.map_err(err)?;
     let emit: live::Emit = {
-        let handle = handle.clone();
+        let (app, server, handle) = (app.clone(), server.clone(), handle.clone());
         std::sync::Arc::new(move |name: &str, v: serde_json::Value| {
             // connection lost: "Neu verbinden" should get a fresh SSH connection
             if v["t"] == "lost" {
@@ -73,7 +84,17 @@ async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live:
             let _ = app.emit(name, v);
         })
     };
-    live.start(emit, handle, pane, live::Options { headphones, audio: true }).await.map_err(err)
+    let call = live::Call { server, pane, label: label.unwrap_or_default(), owner: webview.label().to_string() };
+    let shown = call.clone();
+    let id = live.start(emit, handle, call, live::Options { headphones, audio: true }).await.map_err(err)?;
+    let _ = app.emit("live", serde_json::json!({ "t": "call", "session": id, "server": shown.server, "pane": shown.pane, "label": shown.label }));
+    Ok(id)
+}
+
+/// The running call (or null), for a window that opens while it runs.
+#[tauri::command]
+async fn live_current(live: tauri::State<'_, live::Lives>) -> R<Option<live::CallState>> {
+    Ok(live.current().await)
 }
 
 /// Hangs up call `session` only – a stale stop can't end a newer call.
@@ -89,9 +110,13 @@ async fn live_mute(live: tauri::State<'_, live::Lives>, session: u64, on: bool) 
     Ok(())
 }
 
+/// Speaker off for the call – every window's live bar shows it.
 #[tauri::command]
-async fn live_speaker(live: tauri::State<'_, live::Lives>, session: u64, muted: bool) -> R<()> {
-    live.speaker(session, muted).await;
+async fn live_speaker(app: tauri::AppHandle, live: tauri::State<'_, live::Lives>, session: u64, muted: bool) -> R<()> {
+    use tauri::Emitter;
+    if live.speaker(session, muted).await {
+        let _ = app.emit("live", serde_json::json!({ "t": "speaker", "muted": muted, "session": session }));
+    }
     Ok(())
 }
 
@@ -135,8 +160,8 @@ async fn follow_stop(follows: tauri::State<'_, follow::Follows>, id: u64) -> R<(
 
 /// A live terminal on a pane (`hollr gate attach` / `shell`) as `hollr-term` events; returns the stream id.
 #[tauri::command]
-async fn term_start(app: tauri::AppHandle, terms: tauri::State<'_, term::Terms>, server: String, pane: String, mode: String, cols: u16, rows: u16) -> R<u64> {
-    Ok(terms.start(app, server, term::command(&mode, &pane, cols, rows)).await)
+async fn term_start(app: tauri::AppHandle, webview: tauri::Webview, terms: tauri::State<'_, term::Terms>, server: String, pane: String, mode: String, cols: u16, rows: u16) -> R<u64> {
+    Ok(terms.start(app, webview.label().to_string(), server, term::command(&mode, &pane, cols, rows)).await)
 }
 
 #[tauri::command]
@@ -169,21 +194,48 @@ async fn applock_authenticate(reason: String) -> bool {
     tokio::task::spawn_blocking(move || applock::authenticate(&reason)).await.unwrap_or(false)
 }
 
+/// "🎙 Nebengespräch": opens (or brings to the front) the side conversation's window for session `main`.
+#[tauri::command]
+fn side_window(app: tauri::AppHandle, server: String, main: String, pane: String, title: String, live: bool) -> R<()> {
+    window::open_side(&app, &server, &main, &pane, &title, live).map_err(err)
+}
+
+/// The side conversation's result as a draft in the main window; false when there is no main window.
+#[tauri::command]
+fn side_result(app: tauri::AppHandle, server: String, main: String, text: String) -> bool {
+    window::send_result(&app, &server, &main, &text)
+}
+
+#[tauri::command]
+fn main_window_focus(app: tauri::AppHandle) -> bool {
+    window::focus_main(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        // a reloaded webview leaves its terminals and its live call behind: hang them up
+        // a reloaded webview leaves its terminals, its live call and its read-aloud behind: hang them up –
+        // only its own, another window's keep running
         .on_page_load(|webview, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
                 let app = webview.app_handle().clone();
+                let label = webview.label().to_string();
                 tauri::async_runtime::spawn(async move {
-                    app.state::<term::Terms>().stop_all().await;
-                    app.state::<live::Lives>().stop_all().await;
-                    app.state::<speech::Speech>().stop();
+                    app.state::<term::Terms>().stop_owned(&label).await;
+                    app.state::<live::Lives>().stop_owned(&label).await;
+                    app.state::<speech::Speech>().stop_owned(&label);
                 });
+            }
+        })
+        // a closed window's terminals go with it (its call doesn't: the other window shows it and can end it)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let app = window.app_handle().clone();
+                let label = window.label().to_string();
+                tauri::async_runtime::spawn(async move { app.state::<term::Terms>().stop_owned(&label).await });
             }
         })
         .setup(|app| {
@@ -199,7 +251,7 @@ pub fn run() {
             notice::init(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
+        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_current, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm, side_window, side_result, main_window_focus])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

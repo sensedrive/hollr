@@ -6,10 +6,14 @@
   import { t } from "../../i18n";
   import Markdown from "../Markdown.svelte";
   import Glyph from "./Glyph.svelte";
+  import { revealed } from "./reveal";
 
   let { c, tip, onLink, copy }: { c: ToolCall; tip: string; onLink?: (url: string) => void; copy: (s: string) => void } = $props();
 
-  let open = $state(false);
+  let own = $state(false);
+  const reveal = revealed();
+  /** clicked open, or opened by the find bar for a hit in the answer */
+  const open = $derived(own || reveal.has(c.id));
   const answer = $derived(c.sub?.answer?.trim() ?? "");
   /** first prose line of the answer (headings only as fallback), Markdown marks stripped – the folded preview */
   const preview = $derived.by(() => {
@@ -18,7 +22,7 @@
     return line.replace(/^[#>*\-\s|`]+/, "").replace(/\*\*|`/g, "").trim();
   });
   const toggle = () => {
-    if (answer && !window.getSelection()?.toString()) open = !open;
+    if (answer && !window.getSelection()?.toString()) own = !open;
   };
 </script>
 

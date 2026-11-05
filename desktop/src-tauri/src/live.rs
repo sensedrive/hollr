@@ -7,7 +7,10 @@
 //! Like the iPhone: a `ping` every 5 s (also while muted; the server answers `pong` and ends a
 //! pinging call it hasn't heard from for 20 s). Nothing from the server for 20 s → `lost`.
 //! Audio follows the system's default input/output (AirPods, monitor, wake from sleep) by
-//! rebuilding the streams; the server connection stays.
+//! rebuilding the streams; the server connection stays. Never onto hollr's own call devices, though:
+//! a hollr server on this same Mac points the defaults at its BlackHole loopbacks for the call
+//! (server/src/macaudio.ts) – following them looped the call into itself (mic = our own upload,
+//! speaker = the capture omp's voice is read from), nothing was heard either way.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -83,12 +86,40 @@ pub struct Options {
     pub audio: bool,
 }
 
+/// What every window needs to know about the running call (each window shows it: live pill, the session's bar).
+#[derive(Clone, Default, serde::Serialize)]
+pub struct Call {
+    pub server: String,
+    pub pane: String,
+    /// the session's title for the live pill
+    pub label: String,
+    /// the webview that started it: its reload leaves nobody to end the call there – the call ends
+    #[serde(skip)]
+    pub owner: String,
+}
+
+/// The running call as a window that opens later picks it up (`live_current`).
+#[derive(serde::Serialize)]
+pub struct CallState {
+    pub session: u64,
+    #[serde(flatten)]
+    pub call: Call,
+    /// omp is live (not still connecting)
+    pub live: bool,
+    /// omp's last live state (listening, speaking, muted …)
+    pub omp: Option<String>,
+    pub speaker_muted: bool,
+}
+
 struct LiveSession {
     id: u64,
+    call: Call,
     control: mpsc::UnboundedSender<Vec<u8>>,
     speaker_muted: Arc<AtomicBool>,
     headphones: Arc<AtomicBool>,
     stop_audio: Arc<AtomicBool>,
+    live: Arc<AtomicBool>,
+    omp: Arc<Mutex<Option<String>>>,
 }
 
 impl LiveSession {
@@ -105,8 +136,8 @@ impl Drop for LiveSession {
     }
 }
 
-/// The app's one live call (one microphone). Every call has an id; the UI passes it back so a
-/// late stop from an old view can't hang up a newer call.
+/// The app's one live call (one microphone, whichever window starts it). Every call has an id; the UI
+/// passes it back so a late stop from an old view can't hang up a newer call.
 #[derive(Default)]
 pub struct Lives {
     current: tokio::sync::Mutex<Option<LiveSession>>,
@@ -114,18 +145,18 @@ pub struct Lives {
 }
 
 impl Lives {
-    /// Ends a running call and starts one on `pane`; returns its id (carried by every event).
+    /// Ends a running call and starts `call`; returns its id (carried by every event).
     pub async fn start<H: russh::client::Handler + 'static>(
         &self,
         emit: Emit,
         handle: Arc<russh::client::Handle<H>>,
-        pane: String,
+        call: Call,
         options: Options,
     ) -> Result<u64> {
         let mut current = self.current.lock().await;
         current.take();
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
-        *current = Some(start(emit, handle, pane, id, options).await?);
+        *current = Some(start(emit, handle, call, id, options).await?);
         Ok(id)
     }
 
@@ -140,9 +171,23 @@ impl Lives {
         }
     }
 
-    /// The webview reloaded: nobody is left to show or end the call.
-    pub async fn stop_all(&self) {
-        self.current.lock().await.take();
+    /// Webview `owner` reloaded: the call it started has nobody left to show or end it there.
+    pub async fn stop_owned(&self, owner: &str) {
+        let mut current = self.current.lock().await;
+        if current.as_ref().is_some_and(|s| s.call.owner == owner) {
+            current.take();
+        }
+    }
+
+    /// The running call, for a window that opens while it runs.
+    pub async fn current(&self) -> Option<CallState> {
+        self.current.lock().await.as_ref().map(|s| CallState {
+            session: s.id,
+            call: s.call.clone(),
+            live: s.live.load(Ordering::Relaxed),
+            omp: s.omp.lock().unwrap().clone(),
+            speaker_muted: s.speaker_muted.load(Ordering::Relaxed),
+        })
     }
 
     /// Mic mute = omp's own mute (Space): you keep hearing the answer.
@@ -152,10 +197,13 @@ impl Lives {
         }
     }
 
-    pub async fn speaker(&self, id: u64, muted: bool) {
+    /// True if `id` is the current call (then every window gets told).
+    pub async fn speaker(&self, id: u64, muted: bool) -> bool {
         if let Some(s) = self.current.lock().await.as_ref().filter(|s| s.id == id) {
             s.speaker_muted.store(muted, Ordering::Relaxed);
+            return true;
         }
+        false
     }
 
     /// The headphones setting, applied to a running call at once.
@@ -174,12 +222,12 @@ async fn until(closed: &mut watch::Receiver<bool>) {
 async fn start<H: russh::client::Handler + 'static>(
     emit: Emit,
     handle: Arc<russh::client::Handle<H>>,
-    pane: String,
+    call: Call,
     session: u64,
     options: Options,
 ) -> Result<LiveSession> {
     let channel = handle.channel_open_session().await.map_err(|e| anyhow!("{e}"))?;
-    channel.exec(true, format!("live {pane}")).await.map_err(|e| anyhow!("{e}"))?;
+    channel.exec(true, format!("live {}", call.pane)).await.map_err(|e| anyhow!("{e}"))?;
     let (mut reader, writer) = channel.split();
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
@@ -193,6 +241,7 @@ async fn start<H: russh::client::Handler + 'static>(
     let out_level = Arc::new(AtomicU32::new(0));
     let in_level = Arc::new(AtomicU32::new(0));
     let live = Arc::new(AtomicBool::new(false));
+    let omp: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let heard = Arc::new(Mutex::new(Instant::now()));
 
     // writer: everything for the server goes through one queue
@@ -265,6 +314,7 @@ async fn start<H: russh::client::Handler + 'static>(
         let emit = emit.clone();
         let playback = playback.clone();
         let live = live.clone();
+        let omp = omp.clone();
         let stop = stop_audio.clone();
         let device_rate = device_rate.clone();
         let mut closed = closed_rx.clone();
@@ -319,6 +369,10 @@ async fn start<H: russh::client::Handler + 'static>(
                         if v["t"] == "phase" && v["phase"] == "live" {
                             live.store(true, Ordering::Relaxed);
                         }
+                        // a window opening later shows omp's state right away (live_current)
+                        if v["t"] == "omp" {
+                            *omp.lock().unwrap() = v["state"].as_str().map(str::to_string);
+                        }
                         // the UI ignores events of an older session (e.g. its late "closed")
                         if let Some(o) = v.as_object_mut() {
                             o.insert("session".into(), session.into());
@@ -346,7 +400,7 @@ async fn start<H: russh::client::Handler + 'static>(
         });
     }
 
-    Ok(LiveSession { id: session, control: tx, speaker_muted, headphones, stop_audio })
+    Ok(LiveSession { id: session, call, control: tx, speaker_muted, headphones, stop_audio, live, omp })
 }
 
 /// What the audio thread shares with the connection.
@@ -364,12 +418,46 @@ struct Audio {
     session: u64,
 }
 
-type DeviceIds = (Option<cpal::DeviceId>, Option<cpal::DeviceId>);
+/// hollr's loopback devices on a Mac that runs the server (server/src/macaudio.ts MIC_DEVICE / SPEAKER_DEVICE):
+/// the server makes them the defaults for the length of a call.
+const CALL_DEVICES: [&str; 2] = ["BlackHole 2ch", "BlackHole 16ch"];
 
-fn default_ids(host: &cpal::Host) -> DeviceIds {
+/// The device to use: the system default – unless that is one of the call devices, then the one in use so
+/// far, else the real default the server saved before switching, else any other device. `all` is only
+/// asked for in that case (listing devices every poll would be wasted work).
+fn pick(default: Option<String>, using: &str, saved: Option<&str>, all: impl FnOnce() -> Vec<String>) -> Option<String> {
+    let call = |n: &str| CALL_DEVICES.contains(&n);
+    if let Some(d) = default.filter(|d| !call(d)) {
+        return Some(d);
+    }
+    let all = all();
+    let present = |n: &&str| !n.is_empty() && !call(n) && all.iter().any(|a| a == n);
+    [Some(using), saved].into_iter().flatten().find(present).map(str::to_string).or_else(|| all.into_iter().find(|n| !call(n)))
+}
+
+/// The defaults a hollr server on this Mac saved before pointing them at its call devices (macaudio.ts).
+fn saved_defaults() -> (Option<String>, Option<String>) {
+    let file = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state/hollr/mac-audio-defaults.json"));
+    let saved: Value = file.and_then(|f| std::fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let get = |k: &str| saved[k].as_str().map(str::to_string);
+    (get("input"), get("output"))
+}
+
+fn device_name(d: &cpal::Device) -> String {
+    d.description().map(|d| d.name().to_string()).unwrap_or_default()
+}
+
+/// Names of the input / output the call should use now (`using`: the ones it uses so far).
+fn wanted(host: &cpal::Host, using: &(String, String)) -> (Option<String>, Option<String>) {
+    let saved = saved_defaults();
+    let names = |list: Option<Vec<cpal::Device>>| list.unwrap_or_default().iter().map(device_name).collect::<Vec<_>>();
     (
-        host.default_input_device().and_then(|d| d.id().ok()),
-        host.default_output_device().and_then(|d| d.id().ok()),
+        pick(host.default_input_device().map(|d| device_name(&d)), &using.0, saved.0.as_deref(), || {
+            names(host.input_devices().ok().map(|d| d.collect()))
+        }),
+        pick(host.default_output_device().map(|d| device_name(&d)), &using.1, saved.1.as_deref(), || {
+            names(host.output_devices().ok().map(|d| d.collect()))
+        }),
     )
 }
 
@@ -380,9 +468,9 @@ fn run_audio(a: Audio) {
     let mut shown_error = String::new();
     let mut shown_devices = (String::new(), String::new());
     while !a.stop.load(Ordering::Relaxed) {
-        let ids = default_ids(&host);
+        let want = wanted(&host, &shown_devices);
         let fault: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-        match open_streams(&host, &a, &fault) {
+        match open_streams(&host, &want, &a, &fault) {
             Ok((streams, devices)) => {
                 if !shown_error.is_empty() || devices != shown_devices {
                     (a.emit)("live", json!({ "t": "audio", "input": devices.0, "output": devices.1, "session": a.session }));
@@ -399,7 +487,7 @@ fn run_audio(a: Audio) {
                     }
                     if polled.elapsed() >= DEVICE_POLL {
                         polled = Instant::now();
-                        if default_ids(&host) != ids {
+                        if wanted(&host, &shown_devices) != want {
                             break;
                         }
                     }
@@ -437,18 +525,34 @@ fn on_stream_error(fault: &Arc<Mutex<Option<String>>>, what: &'static str) -> im
     }
 }
 
-/// Opens and starts speaker + microphone; returns them with the devices' names.
+/// The device named `name` (the default when it is that one – no listing needed).
+fn device_named(default: Option<cpal::Device>, list: impl FnOnce() -> Option<Vec<cpal::Device>>, name: &str) -> Option<cpal::Device> {
+    match default {
+        Some(d) if device_name(&d) == name => Some(d),
+        _ => list()?.into_iter().find(|d| device_name(d) == name),
+    }
+}
+
+/// Opens and starts speaker + microphone (`want`: their names, see `wanted`); returns them with the names.
 fn open_streams(
     host: &cpal::Host,
+    want: &(Option<String>, Option<String>),
     a: &Audio,
     fault: &Arc<Mutex<Option<String>>>,
 ) -> Result<([cpal::Stream; 2], (String, String))> {
-    let input = host.default_input_device().context("Kein Mikrofon gefunden")?;
-    let output = host.default_output_device().context("Kein Lautsprecher gefunden")?;
+    let input = want
+        .0
+        .as_deref()
+        .and_then(|n| device_named(host.default_input_device(), || host.input_devices().ok().map(|d| d.collect()), n))
+        .context("Kein Mikrofon gefunden")?;
+    let output = want
+        .1
+        .as_deref()
+        .and_then(|n| device_named(host.default_output_device(), || host.output_devices().ok().map(|d| d.collect()), n))
+        .context("Kein Lautsprecher gefunden")?;
     let in_cfg = input.default_input_config().context("Mikrofon-Format")?;
     let out_cfg = output.default_output_config().context("Lautsprecher-Format")?;
-    let name = |d: &cpal::Device| d.description().map(|d| d.name().to_string()).unwrap_or_default();
-    let names = (name(&input), name(&output));
+    let names = (device_name(&input), device_name(&output));
     a.device_rate.store(out_cfg.sample_rate(), Ordering::Relaxed);
 
     // ---- speaker
@@ -565,4 +669,26 @@ fn open_streams(
     out_stream.play()?;
     in_stream.play()?;
     Ok(([in_stream, out_stream], names))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn all() -> Vec<String> {
+        ["MacBook Pro-Mikrofon", "AirPods", "BlackHole 2ch", "BlackHole 16ch"].map(String::from).to_vec()
+    }
+
+    #[test]
+    fn follows_the_default_but_never_onto_the_call_devices() {
+        // an ordinary default change (AirPods): followed, no device listing needed
+        assert_eq!(pick(Some("AirPods".into()), "MacBook Pro-Mikrofon", None, || unreachable!()), Some("AirPods".into()));
+        // the server on this Mac switched the default to its loopback: stay on what the call uses
+        assert_eq!(pick(Some("BlackHole 2ch".into()), "AirPods", None, all), Some("AirPods".into()));
+        // first open after the switch: the real default the server saved
+        assert_eq!(pick(Some("BlackHole 16ch".into()), "", Some("MacBook Pro-Mikrofon"), all), Some("MacBook Pro-Mikrofon".into()));
+        // nothing known (or the saved one is gone): any device but the loopbacks
+        assert_eq!(pick(Some("BlackHole 2ch".into()), "", Some("USB headset"), all), Some("MacBook Pro-Mikrofon".into()));
+        assert_eq!(pick(None, "", None, || ["BlackHole 2ch".to_string()].to_vec()), None);
+    }
 }

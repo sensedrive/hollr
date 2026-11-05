@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Pane, TimelineItem } from "./api";
-import { appendDraft, forkOf, sideItems, sideTranscript } from "./sidetalk";
+import { type Drafts, mergeDrafts, storedDrafts } from "./drafts";
+import { appendDraft, forkOf, sideItems, sideParams, sideTranscript } from "./sidetalk";
 
 const pane = (id: string, fork?: Pane["fork"]): { pane: Pane } => ({
   pane: { pane: id, agent: "omp", status: "idle", title: id, cwd: "/p", focused: false, live: true, fork },
@@ -31,5 +32,26 @@ describe("side conversation", () => {
   test("the result goes below the main chat's draft", () => {
     expect(appendDraft("", "Ergebnis")).toBe("Ergebnis");
     expect(appendDraft("Mein Text  \n", "Ergebnis")).toBe("Mein Text\n\nErgebnis");
+  });
+});
+
+describe("side window", () => {
+  test("page parameters (window.rs side_url)", () => {
+    expect(sideParams("?window=side&server=s1&main=w1:p1&pane=w1:p9&live=1")).toEqual({ server: "s1", main: "w1:p1", pane: "w1:p9", live: true });
+    expect(sideParams("?window=side&server=s1&main=w1:p1&pane=w1:p9")?.live).toBe(false);
+    expect(sideParams("?bridge=7419")).toBe(null);
+    expect(sideParams("?window=side&server=s1&main=w1:p1")).toBe(null);
+  });
+
+  test("two windows never write back each other's old drafts", () => {
+    const at = 1;
+    const stored: Drafts = { "s|w1:p1": { text: "main typed later", at }, "s|w1:p2": { text: "other", at } };
+    // the side window's copy of the main draft is old; it only changed its own fork's draft
+    const mine: Drafts = { "s|w1:p1": { text: "old", at }, "s|w1:p9": { text: "fork draft", at } };
+    expect(mergeDrafts(stored, mine, ["s|w1:p9"])).toEqual({ ...stored, "s|w1:p9": { text: "fork draft", at } });
+    // a draft cleared here goes, the others stay
+    expect(mergeDrafts(stored, {}, ["s|w1:p2"])).toEqual({ "s|w1:p1": { text: "main typed later", at } });
+    // another window's send in flight stays in flight
+    expect(storedDrafts(JSON.stringify({ k: { text: "", at, sending: ["hi"] }, bad: { text: 1 } }))).toEqual({ k: { text: "", at, sending: ["hi"] } });
   });
 });

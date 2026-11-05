@@ -99,7 +99,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.38.0";
+export const VERSION = "0.39.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -256,7 +256,7 @@ async function gate(): Promise<number> {
       if (!agent) return 0;
       try {
         const fork = await forkPane(execHerdr, agent, req);
-        log("gate", `fork ${pane} → ${fork.pane} (${fork.kind})`);
+        log("gate", `fork ${pane} → ${fork.pane} (${fork.kind})${req.replace ? ` replacing ${req.replace}` : ""}`);
         json({ pane: fork.pane, tab: fork.tab, kind: fork.kind, at: fork.at });
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });

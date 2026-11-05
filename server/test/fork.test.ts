@@ -161,6 +161,10 @@ function fakeHerdr(panes: Array<{ pane_id: string; terminal_id: string }>) {
       panes.push({ pane_id: "w1:p9", terminal_id: "term_fork" });
       return { tab: { tab_id: "w1:t9" }, root_pane: { pane_id: "w1:p9", terminal_id: "term_fork" } };
     }
+    if (a === "pane" && b === "split") {
+      panes.push({ pane_id: "w1:pA", terminal_id: "term_reset" });
+      return { pane: { pane_id: "w1:pA", terminal_id: "term_reset", tab_id: "w1:t9" } };
+    }
     if (a === "pane" && b === "list") return { panes };
     if (a === "pane" && b === "close") {
       panes.splice(panes.findIndex((p) => p.pane_id === args[2]), 1);
@@ -252,6 +256,43 @@ describe("fork registry", () => {
       `2026-10-30T13-44-02-998Z_${PARENT}.jsonl`,
     ]);
     expect(loadForks()).toEqual([]);
+  });
+
+  test("reset: a fresh fork in the old one's tab, the old pane goes once the new one runs", async () => {
+    const h = fakeHerdr([{ pane_id: "w1:p1", terminal_id: "term_main" }]);
+    const main = agent();
+    const first = await forkPane(h.exec, main, {}, { promptDir: dir });
+    // the main session went on meanwhile: the reset copies it as it is now
+    writeFileSync(main.sessionFile ?? "", `${readFileSync(main.sessionFile ?? "", "utf8")}${JSON.stringify({ type: "message", id: "later" })}\n`);
+    h.calls.length = 0;
+    const second = await forkPane(h.exec, main, { replace: first.pane }, { promptDir: dir });
+    expect(h.calls[0]).toEqual(["pane", "list"]);
+    expect(h.calls[1]).toEqual(["pane", "split", "w1:p9", "--direction", "right", "--no-focus", "--cwd", "/home/u/proj"]);
+    const start = h.calls.findIndex((c) => c[0] === "agent" && c[1] === "start");
+    const close = h.calls.findIndex((c) => c[0] === "pane" && c[1] === "close");
+    expect(h.calls[start]).toContain("w1:pA");
+    expect(h.calls[close]).toEqual(["pane", "close", "w1:p9"]);
+    expect(close).toBeGreaterThan(start);
+    expect(second).toMatchObject({ pane: "w1:pA", tab: "w1:t9", of: "w1:p1" });
+    expect(second.session).not.toBe(first.session);
+    expect(readFileSync(second.session ?? "", "utf8")).toContain('"id":"later"');
+    expect(readFileSync(first.session ?? "", "utf8")).not.toContain('"id":"later"');
+    expect(loadForks().map((e) => e.pane)).toEqual(["w1:pA"]);
+  });
+
+  test("reset refuses the main pane and other sessions' forks; a gone old fork gets a new tab", async () => {
+    const h = fakeHerdr([{ pane_id: "w1:p1", terminal_id: "term_main" }]);
+    const main = agent();
+    await expect(forkPane(h.exec, main, { replace: "w1:p1" }, { promptDir: dir })).rejects.toThrow("not_a_fork");
+    saveForks([{ pane: "w1:p7", terminal: "t7", of: "w1:p5", kind: "omp", at: 1 }]);
+    await expect(forkPane(h.exec, main, { replace: "w1:p7" }, { promptDir: dir })).rejects.toThrow("not_a_fork");
+    expect(h.calls.every((c) => c[1] === "list")).toBe(true);
+    // closed in herdr meanwhile: no split possible – a new tab, and the stale entry goes
+    saveForks([{ pane: "w1:p7", terminal: "t7", of: "w1:p1", kind: "omp", at: 1 }]);
+    const fresh = await forkPane(h.exec, main, { replace: "w1:p7" }, { promptDir: dir });
+    expect(h.calls.some((c) => c[0] === "tab" && c[1] === "create")).toBe(true);
+    expect(h.calls.some((c) => c[1] === "close")).toBe(false);
+    expect(loadForks().map((e) => e.pane)).toEqual([fresh.pane]);
   });
 
   test("gone forks leave the registry; a reused pane id is not the fork; fresh ones wait", () => {

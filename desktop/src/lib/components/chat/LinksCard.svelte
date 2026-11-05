@@ -5,11 +5,15 @@
   import { toolIcon, toolTitle } from "../../agent";
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
+  import { revealed } from "./reveal";
 
   let { c, tip, onLink }: { c: ToolCall; tip: string; onLink?: (url: string) => void } = $props();
 
   const PREVIEW = 5;
-  let open = $state(false);
+  let own = $state(false);
+  const reveal = revealed();
+  /** clicked open, or opened by the find bar for a hit in the folded links */
+  const open = $derived(own || reveal.has(c.id));
   const links = $derived(
     (c.links?.length ? c.links : c.name === "fetch" && c.detail && /^https?:\/\//.test(c.detail) ? [{ title: "", url: c.detail }] : [])
       .map((l) => {
@@ -44,7 +48,7 @@
       {/each}
     </div>
     {#if links.length > PREVIEW}
-      <div class="indent"><More {open} hidden={links.length - shown.length} unit="links" ontoggle={() => (open = !open)} /></div>
+      <div class="indent"><More {open} hidden={links.length - shown.length} unit="links" ontoggle={() => (own = !open)} /></div>
     {/if}
   {/if}
 </div>

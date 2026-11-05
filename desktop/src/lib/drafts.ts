@@ -52,6 +52,31 @@ export function serializeDrafts(drafts: Drafts): string {
   return JSON.stringify(out);
 }
 
+/** Stored drafts as they are (another window's sends still in flight stay in flight). */
+export function storedDrafts(raw: string | null): Drafts {
+  try {
+    const data = JSON.parse(raw ?? "{}") as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+    const out: Drafts = {};
+    for (const [key, v] of Object.entries(data as Record<string, Partial<Draft>>))
+      if (v && typeof v.text === "string" && typeof v.at === "number") out[key] = v as Draft;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Two windows share the stored drafts: what is written is the stored set with only `dirty` (the keys this
+ *  window changed) taken from `mine` – the other window's drafts are never overwritten with an old copy. */
+export function mergeDrafts(stored: Drafts, mine: Drafts, dirty: Iterable<string>): Drafts {
+  const out = { ...stored };
+  for (const key of dirty) {
+    if (mine[key]) out[key] = mine[key];
+    else delete out[key];
+  }
+  return out;
+}
+
 /** Sets the typed text (empty text and nothing in flight removes the draft). */
 export function setText(drafts: Drafts, key: string, text: string, now = Date.now()) {
   const d = drafts[key];

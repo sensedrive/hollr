@@ -10,6 +10,7 @@
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
   import PathText from "./PathText.svelte";
+  import { revealed } from "./reveal";
 
   let { c, root, tip, copy, onLink }: {
     c: ToolCall; root?: string; tip: string; copy: (s: string) => void; onLink?: (url: string) => void;
@@ -29,7 +30,9 @@
     return rows.map((r) => ("file" in r ? (ext = extOf(r.file)) : ext));
   });
   let open = $state<boolean | undefined>(undefined);
-  const view = $derived(diffSlice(rows, open));
+  const reveal = revealed();
+  // the find bar opens a diff with a hit in its folded rows
+  const view = $derived(diffSlice(rows, reveal.has(c.id) || open));
 
   const toggle = () => {
     if (rows.length && !window.getSelection()?.toString()) open = !view.isOpen;

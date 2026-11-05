@@ -32,7 +32,7 @@ if (port && !("__TAURI_INTERNALS__" in window)) {
           events ??= subscribe();
           return handler;
         }
-        const bridged = ["servers", "gate", "gate_long", "term_start", "term_write", "term_resize", "term_stop", "live_start", "live_stop", "live_mute", "live_speaker", "live_headphones"];
+        const bridged = ["servers", "gate", "gate_long", "term_start", "term_write", "term_resize", "term_stop", "live_start", "live_current", "live_stop", "live_mute", "live_speaker", "live_headphones"];
         if (!bridged.includes(cmd)) return null;
         // the bridge has no long variant: its gate waits the normal reply time (uploads, summaries)
         const body = JSON.stringify({ cmd: cmd === "gate_long" ? "gate" : cmd, args });

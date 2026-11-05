@@ -8,6 +8,7 @@
   import { t } from "../../i18n";
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
+  import { revealed } from "./reveal";
 
   let { c, root, tip, copy, job }: {
     c: ToolCall;
@@ -27,12 +28,15 @@
     return () => clearInterval(id);
   });
 
-  let open = $state(false);
+  let own = $state(false);
+  const reveal = revealed();
+  /** clicked open, or opened by the find bar for a hit in the hidden output */
+  const open = $derived(own || reveal.has(c.id));
   const tail = $derived(outTail(c, open));
   /** lines the server didn't send at all (it keeps the last 60) */
   const unsent = $derived(tail.earlier - tail.more);
   const toggle = () => {
-    if (!window.getSelection()?.toString()) open = !open;
+    if (!window.getSelection()?.toString()) own = !open;
   };
 </script>
 
@@ -47,7 +51,7 @@
     <hr />
     <!-- the hidden lines are the earlier ones (output is a tail), so their switch sits on top like omp's -->
     {#if tail.more > 0 || (open && (c.out?.length ?? 0) > 8)}
-      <More {open} hidden={tail.more} unit="earlier" ontoggle={() => (open = !open)} />
+      <More {open} hidden={tail.more} unit="earlier" ontoggle={() => (own = !open)} />
     {/if}
     {#if unsent > 0 && (open || tail.more === 0)}
       <div class="dim">{t("… {n} frühere Zeilen nicht übertragen", { n: unsent })}</div>

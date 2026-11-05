@@ -1,22 +1,35 @@
 <script lang="ts">
-  // The running omp /live call while its session isn't on screen (sidebar, above Einstellungen): state,
-  // mic, hang up – a click leads back to the session.
+  // The running omp /live call while its session isn't on screen (sidebar, above Einstellungen; the side
+  // conversation's window): state, mic, hang up – a click leads back to the session, a side conversation's
+  // call to its window.
   import { t } from "../i18n";
-  import { nav, openAgent, serverById } from "../store.svelte";
+  import { findPane, nav, openAgent, serverById, tabName } from "../store.svelte";
   import {
     live, liveActive, liveColor, liveDetail, liveTitle, micMuted, reconnectLive, stopLive, toggleLiveMic,
   } from "../live.svelte";
+  import { openSide, sideTitle } from "../sideWindow";
+
+  /** `onOpen`: instead of showing the session in this window (the side window brings the main window up) */
+  let { onOpen }: { onOpen?: () => void } = $props();
 
   const viewing = $derived(nav.route.view === "agent" && nav.route.server === live.server && nav.route.pane === live.pane);
   const shown = $derived(!!live.server && !viewing && (liveActive() || live.phase === "lost" || !!live.error));
   const serverLabel = $derived(serverById(live.server)?.label ?? live.server);
   const detail = $derived(live.phase === "" ? live.error : live.audioError ? `⚠ ${live.audioError}` : liveDetail());
+
+  function open() {
+    if (onOpen) return onOpen();
+    const fork = findPane(live.server, live.pane)?.pane.fork;
+    const main = fork && findPane(live.server, fork.of);
+    if (fork && main) void openSide(live.server, fork.of, live.pane, sideTitle(tabName(main.tab.label, main.workspace.label)), false).catch(() => {});
+    else openAgent(live.server, live.pane);
+  }
 </script>
 
 {#if shown}
   <div class="pill" style:--live={live.phase === "" ? "var(--red)" : liveColor()}>
     <button class="go" title={t("Zur Sitzung „{name}“ ({server})", { name: live.label || live.pane, server: serverLabel })}
-      onclick={() => openAgent(live.server, live.pane)}>
+      onclick={open}>
       <span class="dot" class:pulse={live.phase === "live" && !micMuted()}></span>
       <span class="text">
         <b>{live.phase ? liveTitle() : t("Live beendet")} · {live.label || live.pane}</b>

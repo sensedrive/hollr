@@ -67,12 +67,16 @@ export const dialogMemory = {
 
 // ------------------------------------------------------------ drafts (unsent composer text)
 
-/** Composer text per session ("serverId|pane"), saved shortly after each change and when the window goes. */
+/** Composer text per session ("serverId|pane"), saved shortly after each change and when the window goes.
+ *  The side conversation's window shares the stored drafts: each window writes back only the drafts it
+ *  changed and picks up the other's changes (`storage` events). */
 class DraftStore {
   all = $state<d.Drafts>(this.load());
   /** ↑ history per session (memory only) */
   #recall: Record<string, string[]> = {};
   #timer: ReturnType<typeof setTimeout> | undefined;
+  /** keys changed here since the last write */
+  #dirty = new Set<string>();
 
   load(): d.Drafts {
     try {
@@ -84,30 +88,40 @@ class DraftStore {
   text = (key: string) => this.all[key]?.text ?? "";
   setText(key: string, text: string) {
     d.setText(this.all, key, text);
-    this.save();
+    this.save(key);
   }
   beginSend(key: string, msg: string) {
     d.beginSend(this.all, key, msg);
-    this.save();
+    this.save(key);
   }
   endSend(key: string, msg: string, ok: boolean) {
     d.endSend(this.all, key, msg, ok);
-    this.save();
+    this.save(key);
   }
   recall = (key: string) => this.#recall[key] ?? [];
   setRecall(key: string, list: string[]) {
     this.#recall[key] = list.slice(0, d.RECALL_MAX);
   }
-  save() {
+  save(key: string) {
+    this.#dirty.add(key);
     clearTimeout(this.#timer);
     this.#timer = setTimeout(() => this.flush(), 300);
   }
   flush() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
+    if (!this.#dirty.size) return;
     try {
-      localStorage.setItem(d.DRAFTS_KEY, d.serializeDrafts($state.snapshot(this.all)));
+      const stored = d.storedDrafts(localStorage.getItem(d.DRAFTS_KEY));
+      localStorage.setItem(d.DRAFTS_KEY, d.serializeDrafts(d.mergeDrafts(stored, $state.snapshot(this.all), this.#dirty)));
+      this.#dirty.clear();
     } catch {}
+  }
+  /** the other window wrote: take its drafts, keep the ones changed here and not yet written */
+  pickUp(raw: string | null) {
+    const stored = d.storedDrafts(raw);
+    for (const key of Object.keys(this.all)) if (!this.#dirty.has(key) && !stored[key]) delete this.all[key];
+    for (const [key, draft] of Object.entries(stored)) if (!this.#dirty.has(key)) this.all[key] = draft;
   }
 }
 
@@ -115,6 +129,10 @@ export const drafts = new DraftStore();
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => drafts.flush());
   window.addEventListener("pagehide", () => drafts.flush());
+  window.addEventListener("storage", (e) => {
+    if (e.key === d.DRAFTS_KEY) drafts.pickUp(e.newValue);
+    else if (e.key === MY) mySessions.ids = loadMy();
+  });
 }
 
 // ------------------------------------------------------------ my sessions
@@ -129,21 +147,28 @@ function loadMy(): string[] {
   }
 }
 
-/** Sessions opened or started in Hollr ("serverId|pane", most recent first) – the dashboard shows these. */
+/** Sessions opened or started in Hollr ("serverId|pane", most recent first) – the dashboard shows these.
+ *  Every change starts from what is stored: the side window must not write back an old list. */
 class MySessions {
   ids = $state<string[]>(loadMy());
   touch(id: string) {
-    if (this.ids[0] === id) return;
-    this.ids = [id, ...this.ids.filter((x) => x !== id)];
-    this.save();
+    const ids = loadMy();
+    if (ids[0] === id) return void (this.ids = ids);
+    this.set([id, ...ids.filter((x) => x !== id)]);
   }
   remove(id: string) {
-    this.ids = this.ids.filter((x) => x !== id);
-    this.save();
+    this.set(loadMy().filter((x) => x !== id));
   }
-  save() {
+  /** keeps only the ids `keep` accepts */
+  prune(keep: (id: string) => boolean) {
+    const ids = loadMy();
+    const kept = ids.filter(keep);
+    if (kept.length !== ids.length) this.set(kept);
+  }
+  set(ids: string[]) {
+    this.ids = ids;
     try {
-      localStorage.setItem(MY, JSON.stringify(this.ids));
+      localStorage.setItem(MY, JSON.stringify(ids));
     } catch {}
   }
 }
@@ -238,11 +263,7 @@ export async function refresh(...only: string[]) {
   // forget my sessions whose pane is gone on a server that just answered
   const alive = new Set(allPanes().map((r) => r.id));
   const answered = new Set(app.servers.filter((s) => !app.errors[s.id]).map((s) => s.id));
-  const kept = mySessions.ids.filter((id) => !answered.has(id.split("|")[0] ?? "") || alive.has(id));
-  if (kept.length !== mySessions.ids.length) {
-    mySessions.ids = kept;
-    mySessions.save();
-  }
+  mySessions.prune((id) => !answered.has(id.split("|")[0] ?? "") || alive.has(id));
 }
 
 /** when each server's spaces (with their git state) were last loaded */

@@ -3,7 +3,7 @@
   // (its overview), then every tab (and every pane of a split tab) with its number, name and status – one click
   // switches, double-click (or right-click › Umbenennen) renames the tab in herdr, ✕ / middle click closes it
   // (agents after asking), ＋ starts a new session in the same space. 〰 marks the tab a live call runs on, a
-  // side conversation (a write-guarded fork of another session, `fork` on the server) shows dimmed with 🎙.
+  // side conversation (a write-guarded fork of another session, `fork` on the server) shows dimmed – a click opens its window.
   // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move"), the
   // numbers stay herdr's.
   import { tick } from "svelte";
@@ -17,6 +17,7 @@
   import LiveMark from "./LiveMark.svelte";
   import { sortable } from "$lib/sortable";
   import { moveBefore, ordered } from "$lib/tabOrder";
+  import { openSide, sideTitle } from "$lib/sideWindow";
   import { tabOrders } from "$lib/tabOrders.svelte";
 
   /** `active`: the open session's pane – none in the space view, then the space tab is the active one */
@@ -74,13 +75,23 @@
     else if (e.key === "Escape") { e.preventDefault(); editing = null; }
   }
 
+  /** a side conversation's tab brings up its window (or opens it again); any other tab shows its session here */
+  function openTab(pane: Pane) {
+    const of = pane.fork?.of;
+    if (!of) return go({ view: "agent", server, pane: pane.pane });
+    const mainTab = ws.tabs.find((tb) => tb.panes.some((p) => p.pane === of));
+    const mainPane = mainTab?.panes.find((p) => p.pane === of);
+    const main = mainTab && mainPane ? nameOf(mainTab, mainPane) : pane.title;
+    openSide(server, of, pane.pane, sideTitle(main), false).catch((e) => (error = e instanceof Error ? e.message : String(e)));
+  }
+
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   function tabMenu(e: MouseEvent, tab: Tab, pane: Pane) {
     e.preventDefault();
     menu = {
       x: e.clientX, y: e.clientY,
       items: [
-        { label: t("Öffnen"), icon: "↗", action: () => go({ view: "agent", server, pane: pane.pane }) },
+        { label: t("Öffnen"), icon: "↗", action: () => openTab(pane) },
         { label: t("Umbenennen …"), icon: "✎", action: () => startRename(tab) },
         { label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: ws.id }) },
         { label: t("Schließen"), icon: "✕", danger: true, action: () => askClose(tab, pane) },
@@ -130,7 +141,7 @@
           <div class="tabwrap" class:on data-sort-id={tab.id}>
             <button class="tab" class:on class:split={i > 0} class:fork={!!pane.fork} role="tab" aria-selected={on}
               title="{pane.fork ? `${t('Nebengespräch – ändert nichts ohne dich')} · ` : ''}{pane.title || nameOf(tab, pane)} · {t('Doppelklick: umbenennen · Mittelklick: schließen')}"
-              onclick={() => go({ view: "agent", server, pane: pane.pane })}
+              onclick={() => openTab(pane)}
               onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
               ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
               <span class="num">{i === 0 ? tab.number : "┊"}</span>

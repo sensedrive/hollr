@@ -19,6 +19,8 @@ export interface ForkRequest {
   label?: string;
   /** start with the write guard (default) */
   readOnly?: boolean;
+  /** reset: this earlier fork of the same pane is replaced by a fresh one – in its tab, which keeps its place */
+  replace?: string;
 }
 
 export interface ForkEntry {
@@ -217,6 +219,8 @@ interface HerdrPane {
 interface TabCreated {
   tab?: { tab_id?: string };
   root_pane?: HerdrPane;
+  /** `pane split` answers with the new pane here */
+  pane?: HerdrPane & { tab_id?: string };
 }
 
 /** Every pane herdr has, with its terminal id ("" when herdr doesn't report one). */
@@ -226,8 +230,11 @@ export async function paneTerminals(exec: Exec): Promise<Map<string, string>> {
 }
 
 /**
- * Forks `agent`'s session into a new tab of its workspace and registers it. Errors: `unsupported` (not omp /
- * Claude), `no_session` (nothing said yet – nothing to refer to), herdr's own (tab, start).
+ * Forks `agent`'s session into a new tab of its workspace and registers it. With `replace` (reset), the
+ * earlier fork of the same pane makes way: the new one opens as a split in its tab, then the old pane closes –
+ * the tab keeps its place and name, the conversation starts over from the session as it is now.
+ * Errors: `unsupported` (not omp / Claude), `no_session` (nothing said yet – nothing to refer to),
+ * `not_a_fork` (`replace` is no fork of this pane), herdr's own (tab, start).
  */
 export async function forkPane(
   exec: Exec,
@@ -237,6 +244,15 @@ export async function forkPane(
 ): Promise<ForkEntry & { tab?: string }> {
   if (agent.kind !== "omp" && agent.kind !== "claude") throw new Error("unsupported");
   if (!agent.sessionFile) throw new Error("no_session");
+  const file = opts.file ?? forksFile();
+  let old: ForkEntry | undefined;
+  let oldAlive = false;
+  if (req.replace) {
+    const panes = await paneTerminals(exec);
+    old = findFork(loadForks(file), req.replace, panes.get(req.replace) || undefined);
+    if (!old || old.of !== agent.pane) throw new Error("not_a_fork");
+    oldAlive = panes.has(old.pane);
+  }
   const readOnly = req.readOnly !== false;
   const at = Date.now();
   // the prompt as a file: no quoting through herdr's shell, and it stays readable for whoever wonders
@@ -265,13 +281,17 @@ export async function forkPane(
 
   let created: TabCreated;
   try {
-    const label = forkLabel(agent.title, req.label);
-    created = (await exec(["tab", "create", "--workspace", agent.workspace, "--no-focus", "--cwd", agent.cwd, "--label", label])) as TabCreated;
+    created = (await exec(
+      old && oldAlive
+        ? ["pane", "split", old.pane, "--direction", "right", "--no-focus", "--cwd", agent.cwd]
+        : ["tab", "create", "--workspace", agent.workspace, "--no-focus", "--cwd", agent.cwd, "--label", forkLabel(agent.title, req.label)],
+    )) as TabCreated;
   } catch (err) {
     dropCopy();
     throw err;
   }
-  const pane = created.root_pane?.pane_id;
+  const made = created.root_pane ?? created.pane;
+  const pane = made?.pane_id;
   if (!pane) {
     dropCopy();
     throw new Error("herdr hat kein Pane geliefert");
@@ -289,11 +309,12 @@ export async function forkPane(
       throw err;
     }
   }
-  const terminal = created.root_pane?.terminal_id ?? (await paneTerminals(exec).catch(() => undefined))?.get(pane);
+  // the reset's old conversation goes only once the new one runs (a failed start keeps it)
+  if (old && oldAlive) await exec(["pane", "close", old.pane]).catch(() => {});
+  const terminal = made?.terminal_id ?? (await paneTerminals(exec).catch(() => undefined))?.get(pane);
   const entry: ForkEntry = { pane, terminal: terminal || undefined, of: agent.pane, kind: agent.kind, at, session };
-  const file = opts.file ?? forksFile();
-  saveForks([...loadForks(file).filter((e) => e.pane !== pane), entry], file);
-  return { ...entry, tab: created.tab?.tab_id };
+  saveForks([...loadForks(file).filter((e) => e.pane !== pane && e.pane !== old?.pane), entry], file);
+  return { ...entry, tab: created.tab?.tab_id ?? created.pane?.tab_id };
 }
 
 /** Closes a registered fork's pane (refuses any other pane: `not_a_fork`); one already gone is just forgotten. */

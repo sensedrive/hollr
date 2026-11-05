@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 27,
+    version: "0.39.0",
+    date: "05.11.2026",
+    items: [
+      { icon: "🎙", text: "Nebengespräch im eigenen Fenster: Chat, Terminal, Live und alles andere – bezogen auf die Haupt-Session, ohne sie zu stören; „↺ Zurücksetzen“ startet es neu vom aktuellen Stand, das Ergebnis geht als Entwurf in den Hauptchat" },
+      { icon: "🔈", text: "Live auf demselben Mac wie der Server hört und spricht wieder – die App hängte sich an die BlackHole-Geräte des Servers" },
+      { icon: "⌕", text: "Im Chat suchen (⌘F): alle Treffer markiert, ↑/↓ bzw. ⌘G, auch in zugeklappten Karten; rechts eine Übersicht des Chats mit den Fundstellen – klicken oder ziehen zum Scrollen (⋯ › Übersicht)" },
+    ],
+  },
+  {
     build: 26,
     version: "0.38.0",
     date: "05.11.2026",

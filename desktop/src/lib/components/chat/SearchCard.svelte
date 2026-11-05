@@ -7,6 +7,7 @@
   import Glyph from "./Glyph.svelte";
   import More from "./More.svelte";
   import PathText from "./PathText.svelte";
+  import { revealed } from "./reveal";
 
   let { c, root, tip, onLink }: { c: ToolCall; root?: string; tip: string; onLink?: (url: string) => void } = $props();
 
@@ -26,7 +27,9 @@
   const SMALL = 14;
   const PREVIEW = 8;
   let open = $state<boolean | undefined>(undefined);
-  const isOpen = $derived(open ?? rows.length <= SMALL);
+  const reveal = revealed();
+  // the find bar opens a long list with a hit in its folded rows
+  const isOpen = $derived(reveal.has(c.id) || (open ?? rows.length <= SMALL));
   const shown = $derived(isOpen ? rows : rows.slice(0, PREVIEW));
   /** omp searches several paths at once ("a;b;c") – listed readably, each relative to the space */
   const where = $derived.by(() => {

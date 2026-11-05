@@ -5,6 +5,7 @@
   import { phaseName } from "../../agent";
   import { phaseFolded, todoChanges, todoCounts, type TodoMark } from "../../chatTools";
   import { t } from "../../i18n";
+  import { revealed } from "./reveal";
 
   let { calls, mark, tip }: { calls: ToolCall[]; mark: TodoMark; tip: string } = $props();
 
@@ -12,7 +13,10 @@
   const counts = $derived(todoCounts(phases));
   const changed = $derived(todoChanges(mark.prev, phases));
   let open = $state<boolean | undefined>(undefined);
-  const isOpen = $derived(open ?? mark.latest);
+  const reveal = revealed();
+  /** the find bar opens an older state (and its folded phases) with a hit */
+  const forced = $derived(reveal.has(calls[0]?.id ?? ""));
+  const isOpen = $derived(forced || (open ?? mark.latest));
   let openPhase = $state<Record<string, boolean>>({});
 
   const toggle = () => {
@@ -42,7 +46,7 @@
       {#each phases as p (p.name)}
         {@const done = p.tasks.filter((x) => x.status === "completed").length}
         {@const foldable = phaseFolded(p, changed)}
-        {@const folded = foldable && !openPhase[p.name]}
+        {@const folded = foldable && !openPhase[p.name] && !forced}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
         <div class="phase hrow" class:click={foldable} onclick={() => { if (foldable && !window.getSelection()?.toString()) openPhase[p.name] = folded; }}>
           <b>{phaseName(p, phases)}</b>

@@ -708,6 +708,8 @@ pub struct Speech {
     loaded: Loaded,
     /// stop flag of what is speaking now
     current: Mutex<Option<Arc<AtomicBool>>>,
+    /// the webview that asked for it (its reload stops it, another window's doesn't)
+    owner: Mutex<String>,
     sessions: AtomicU64,
     downloads: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
@@ -715,13 +717,27 @@ pub struct Speech {
 impl Speech {
     /// `dir`: `<app data>/speech`.
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, loaded: Loaded::default(), current: Default::default(), sessions: AtomicU64::new(0), downloads: Default::default() }
+        Self {
+            dir,
+            loaded: Loaded::default(),
+            current: Default::default(),
+            owner: Default::default(),
+            sessions: AtomicU64::new(0),
+            downloads: Default::default(),
+        }
     }
 
     /// Silences whatever speaks (a reloaded webview, the stop button, Esc, a deleted model).
     pub fn stop(&self) {
         if let Some(stop) = self.current.lock().unwrap().take() {
             stop.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Webview `owner` reloaded: what it was reading aloud stops.
+    pub fn stop_owned(&self, owner: &str) {
+        if *self.owner.lock().unwrap() == owner {
+            self.stop();
         }
     }
 
@@ -881,12 +897,13 @@ fn choice_for(state: &Speech, r: &SpeakRequest) -> Result<Choice> {
 
 /// Speaks `text` (stopping what speaks now); returns at once, `speech` events follow.
 #[tauri::command]
-pub async fn speech_speak(app: AppHandle, state: tauri::State<'_, Speech>, request: SpeakRequest) -> Result<Started, String> {
+pub async fn speech_speak(app: AppHandle, webview: tauri::Webview, state: tauri::State<'_, Speech>, request: SpeakRequest) -> Result<Started, String> {
     // swapped in one step: two quick requests must not both keep speaking
     let stop = Arc::new(AtomicBool::new(false));
     if let Some(old) = state.current.lock().unwrap().replace(stop.clone()) {
         old.store(true, Ordering::Relaxed);
     }
+    *state.owner.lock().unwrap() = webview.label().to_string();
     let choice = choice_for(&state, &request).inspect_err(|_| state.release(&stop)).map_err(err)?;
     let session = state.sessions.fetch_add(1, Ordering::Relaxed) + 1;
     let started = Started { session, engine: describe(&choice, &request.lang) };

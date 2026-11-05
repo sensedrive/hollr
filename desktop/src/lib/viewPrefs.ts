@@ -44,12 +44,14 @@ function load(): Map<string, ViewPrefs> {
   }
 }
 
-const prefs = load();
+let prefs = load();
 
 export const viewPrefsOf = (id: string): ViewPrefs => prefs.get(id) ?? {};
 
-/** Merges `patch` into the session's prefs; the session becomes the most recently used. */
+/** Merges `patch` into the session's prefs; the session becomes the most recently used. Starts from what is
+ *  stored: the other window (side conversation) may have remembered its sessions meanwhile. */
 export function rememberViewPrefs(id: string, patch: ViewPrefs) {
+  prefs = load();
   const cur = prefs.get(id) ?? {};
   if ((Object.keys(patch) as (keyof ViewPrefs)[]).every((k) => cur[k] === patch[k])) return;
   prefs.delete(id);

@@ -161,6 +161,12 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Nebengespräch im eigenen Fenster: Chat, Terminal, Live und alles andere – bezogen auf die Haupt-Session, ohne sie zu stören; „↺ Zurücksetzen“ startet es neu vom aktuellen Stand, das Ergebnis geht als Entwurf in den Hauptchat":
+    "Side conversation in its own window: chat, terminal, live and everything else – about the main session without disturbing it; “↺ Reset” restarts it from the current state, the result goes into the main chat as a draft",
+  "Live auf demselben Mac wie der Server hört und spricht wieder – die App hängte sich an die BlackHole-Geräte des Servers":
+    "Live on the same Mac as the server hears and speaks again – the app attached itself to the server's BlackHole devices",
+  "Im Chat suchen (⌘F): alle Treffer markiert, ↑/↓ bzw. ⌘G, auch in zugeklappten Karten; rechts eine Übersicht des Chats mit den Fundstellen – klicken oder ziehen zum Scrollen (⋯ › Übersicht)":
+    "Search the chat (⌘F): all hits highlighted, ↑/↓ or ⌘G, also inside folded cards; on the right an overview of the chat with the hits – click or drag to scroll (⋯ › Overview)",
   "Pfade öffnen: Dateipfade im Chat (Klick) und im Terminal (⌘-Klick) öffnen eine Vorschau – Bilder mit Zoom, Code an der richtigen Zeile, Ordner zum Durchklicken; mit „Pfad kopieren“ und „Im Git-Panel öffnen“":
     "Open paths: file paths in the chat (click) and terminal (⌘-click) open a preview – images with zoom, code at the right line, folders to browse; with “Copy path” and “Open in the git panel”",
   "Nebengespräch: neben einer Session über sie reden (Live mit omp, ⌘⇧L), ohne sie zu stören – eine schreibgeschützte Abzweigung im Seitenbereich, das Ergebnis auf Wunsch als Entwurf zurück in den Hauptchat":
