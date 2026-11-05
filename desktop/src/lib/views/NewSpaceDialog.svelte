@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Create a herdr space: a git worktree (new branch) of a repo space, or a folder.
   import FolderPicker from "$lib/components/FolderPicker.svelte";
   import Modal from "$lib/components/Modal.svelte";
@@ -74,8 +75,8 @@
 <Modal title={t("Neuer Space")} {onClose}>
   <div class="seg" role="radiogroup" aria-label={t("Art")}>
     <button role="radio" aria-checked={kind === "worktree"} class:on={kind === "worktree"} disabled={loaded && !repos.length}
-      onclick={() => (kind = "worktree")}>⑂ {t("Worktree")}</button>
-    <button role="radio" aria-checked={kind === "folder"} class:on={kind === "folder"} onclick={() => (kind = "folder")}>▢ {t("Ordner")}</button>
+      onclick={() => (kind = "worktree")}><Icon name="⑂" size={15} /> {t("Worktree")}</button>
+    <button role="radio" aria-checked={kind === "folder"} class:on={kind === "folder"} onclick={() => (kind = "folder")}><Icon name="▢" size={15} /> {t("Ordner")}</button>
   </div>
 
   {#if app.servers.length > 1}
@@ -119,7 +120,7 @@
 
   {#if error}<div class="err">{error}</div>{/if}
   <div class="buttons">
-    <span class="dim small grow">{mod}↩</span>
+    <span class="dim small grow">{mod}<Icon name="↩" size={15} /></span>
     <button class="btn" onclick={onClose}>{t("Abbrechen")}</button>
     <button class="btn primary" disabled={!valid || busy} onclick={create}>{busy ? "…" : t("Anlegen")}</button>
   </div>

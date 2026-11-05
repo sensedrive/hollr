@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
+  import { GLYPHS } from "$lib/components/git/glyphs";
   // Right-click menu (like the iOS context menus on cards and rows).
   import { onMount } from "svelte";
   import type { MenuItem } from "./util";
@@ -30,7 +32,7 @@
 <div class="menu" role="menu" bind:this={el} style="left:{pos.left}px; top:{pos.top}px">
   {#each items as item}
     <button role="menuitem" class:danger={item.danger} onclick={() => { onClose(); item.action(); }}>
-      <span class="ico">{item.icon ?? ""}</span>{item.label}
+      <span class="ico">{#if item.icon && GLYPHS[item.icon]}<Icon name={item.icon} size={14} />{:else}{item.icon ?? ""}{/if}</span>{item.label}
     </button>
   {/each}
 </div>
@@ -42,6 +44,6 @@
   button { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
   button:hover, button:focus-visible { background: color-mix(in srgb, var(--accent) 22%, transparent); }
   .danger { color: var(--red); }
-  .ico { width: 14px; text-align: center; color: var(--muted); }
+  .ico { width: 14px; display: grid; place-items: center; color: var(--muted); flex: none; }
   .danger .ico { color: var(--red); }
 </style>

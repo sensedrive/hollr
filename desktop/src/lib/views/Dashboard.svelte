@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Übersicht (DashboardView.swift, laid out for a wide window): usage limits, "Braucht dich" ordered by urgency
   // with everything answerable in place, "Woran ich arbeite" grouped by project, the sessions you opened in Hollr
   // (grouped by machine, live previews) and the paired servers. j/k + ↩ and single keys switch fast.
@@ -269,7 +270,7 @@
     <button class="btn" class:on={showKeys} onclick={() => (showKeys = !showKeys)} title="{t('Tastenkürzel')} (?)">?</button>
     <button class="btn" disabled={reloading} onclick={reload} title={t("Aktualisieren")}>{reloading ? "…" : "↻"}</button>
     <button class="btn" disabled={!app.servers.length} onclick={() => (showBrowser = true)} title={t("Browser")}>{t("Browser")}</button>
-    <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>
+    <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
   </div>
 
   {#if showKeys}
@@ -308,7 +309,7 @@
         </div>
       {:else}
         <div class="quiet card">
-          <span class="ok">✓</span>
+          <span class="ok"><Icon name="✓" size={15} /></span>
           <span>{anyLoaded ? t("Nichts wartet auf dich.") : t("Lädt …")}
             {#if anyLoaded}<span class="muted small">{t("Fragen, fertige und lange laufende Agents erscheinen hier.")}</span>{/if}</span>
         </div>
@@ -340,7 +341,7 @@
         <div class="empty card">
           <div class="muted">{t("Gerade arbeitet kein Agent. Starte eine Sitzung oder öffne eine aus „Alle Agents“.")}</div>
           <div class="row-buttons">
-            <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>
+            <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
             <button class="btn" onclick={() => go({ view: "agents" })}>{t("Alle Agents")}</button>
           </div>
         </div>
@@ -362,7 +363,7 @@
     <div class="empty card">
       <div class="muted">{t("Hier erscheinen die Sitzungen, die du in Hollr öffnest oder startest – Agents und Terminals, nach Maschine sortiert.")}</div>
       <div class="row-buttons">
-        <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}>＋ {t("Neue Sitzung")}</button>
+        <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSession = {})}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
         <button class="btn" onclick={() => go({ view: "agents" })}>{t("Alle Agents")}</button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // The running omp /live call while its session isn't on screen (sidebar, above Einstellungen; the side
   // conversation's window): state, mic, hang up – a click leads back to the session, a side conversation's
   // call to its window.
@@ -15,7 +16,7 @@
   const viewing = $derived(nav.route.view === "agent" && nav.route.server === live.server && nav.route.pane === live.pane);
   const shown = $derived(!!live.server && !viewing && (liveActive() || live.phase === "lost" || !!live.error));
   const serverLabel = $derived(serverById(live.server)?.label ?? live.server);
-  const detail = $derived(live.phase === "" ? live.error : live.audioError ? `⚠ ${live.audioError}` : liveDetail());
+  const detail = $derived(live.phase === "" ? live.error : live.audioError ? live.audioError : liveDetail());
 
   function open() {
     if (onOpen) return onOpen();
@@ -38,12 +39,12 @@
     </button>
     {#if live.phase === "live"}
       <button class="b" class:warn={micMuted()} title={micMuted() ? t("Mikrofon an") : t("Mikrofon aus (wie Leertaste) – du hörst weiter zu")}
-        onclick={toggleLiveMic}>{micMuted() ? "🎙̸" : "🎙"}</button>
+        onclick={toggleLiveMic}><Icon name={micMuted() ? "mic-off" : "mic"} size={14} /></button>
     {:else if live.phase === "lost"}
-      <button class="b" title={t("Neu verbinden")} aria-label={t("Neu verbinden")} onclick={reconnectLive}>↻</button>
+      <button class="b" title={t("Neu verbinden")} aria-label={t("Neu verbinden")} onclick={reconnectLive}><Icon name="↻" size={15} /></button>
     {/if}
     <button class="b" class:hang={liveActive()} title={liveActive() ? t("Live beenden") : t("Schließen")}
-      aria-label={liveActive() ? t("Live beenden") : t("Schließen")} onclick={stopLive}>✕</button>
+      aria-label={liveActive() ? t("Live beenden") : t("Schließen")} onclick={stopLive}><Icon name="✕" size={15} /></button>
   </div>
 {/if}
 

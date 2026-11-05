@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Install / update herdr, omp, Claude Code, Codex and the Hollr server (iOS ToolsView, `tools` gate).
   import { onDestroy } from "svelte";
   import { t } from "$lib/i18n";
@@ -103,7 +104,7 @@
     <button class="btn" onclick={check} disabled={checking || !tools}>{checking ? t("Suche …") : t("Nach Updates suchen")}</button>
   </div>
 
-  {#if error}<div class="card warn">⚠ {error}</div>{/if}
+  {#if error}<div class="card warn"><Icon name="⚠" size={15} /> {error}</div>{/if}
 
   <div class="rows">
     {#if tools}
@@ -134,8 +135,8 @@
               <button class="btn" onclick={() => (confirmReinstall = "")}>{t("Abbrechen")}</button>
               <button class="btn primary" onclick={() => run(tool.name)}>{t("Trotzdem neu installieren")}</button>
             {:else}
-              <span class="current">✓ {t("Aktuell")}</span>
-              <button class="btn small" title={t("Trotzdem neu installieren")} onclick={() => (confirmReinstall = tool.name)}>↻</button>
+              <span class="current"><Icon name="✓" size={15} /> {t("Aktuell")}</span>
+              <button class="btn small" title={t("Trotzdem neu installieren")} onclick={() => (confirmReinstall = tool.name)}><Icon name="↻" size={15} /></button>
             {/if}
           </div>
           {#if tool.running}

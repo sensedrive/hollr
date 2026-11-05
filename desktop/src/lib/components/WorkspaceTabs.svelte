@@ -158,7 +158,7 @@
   </div>
   <button class="add" title={t("Neue Sitzung hier")} aria-label={t("Neue Sitzung hier")}
     onclick={() => (dialogs.newSession = { server, ws: ws.id })}><Icon name="plus" size={15} /></button>
-  {#if error}<span class="err ellipsis" title={error}>⚠ {error}</span>{/if}
+  {#if error}<span class="err ellipsis" title={error}><Icon name="⚠" size={15} /> {error}</span>{/if}
   {#if actions}<div class="tools">{@render actions()}</div>{/if}
 </div>
 

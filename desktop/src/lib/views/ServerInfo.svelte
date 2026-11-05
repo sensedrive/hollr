@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Server check (iOS ServerInfoView): load, memory, disks, processes and whether the setup is correct.
   import { onDestroy } from "svelte";
   import { t } from "$lib/i18n";
@@ -127,10 +128,10 @@
   </div>
 
   {#if error}
-    <div class="card warn">⚠ {error}</div>
+    <div class="card warn"><Icon name="⚠" size={15} /> {error}</div>
   {/if}
   {#if app.errors[server] && !error}
-    <div class="card warn small">⚠ {app.errors[server]}</div>
+    <div class="card warn small"><Icon name="⚠" size={15} /> {app.errors[server]}</div>
   {/if}
 
   {#if info}

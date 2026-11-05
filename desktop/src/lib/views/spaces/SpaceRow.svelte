@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // One space in the list: status ring, name, branch / dirty / ahead / behind, last commit.
   import { t } from "$lib/i18n";
   import { relTime, statusColor } from "../dashboard/util";
@@ -21,7 +22,7 @@
       </span>
       {#if space.git}
         <span class="git mono small">
-          <span class="branch">⑂ {space.git.branch}</span>
+          <span class="branch"><Icon name="⑂" size={15} /> {space.git.branch}</span>
           {#if space.git.dirty > 0}<span style="color:var(--orange)">*{space.git.dirty}</span>{/if}
           {#if space.git.ahead > 0}<span style="color:var(--green)">↑{space.git.ahead}</span>{/if}
           {#if space.git.behind > 0}<span style="color:var(--red)">↓{space.git.behind}</span>{/if}
@@ -35,7 +36,7 @@
     </span>
     <span class="root mono small dim ellipsis">{space.root}</span>
   </button>
-  <button class="close" title={t("Schließen …")} aria-label={t("Schließen …")} onclick={onClose}>✕</button>
+  <button class="close" title={t("Schließen …")} aria-label={t("Schließen …")} onclick={onClose}><Icon name="✕" size={15} /></button>
 </div>
 
 <style>

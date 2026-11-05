@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { t } from "./i18n";
 
 /** Window and tab title of `main`'s side conversation. */
-export const sideTitle = (main: string) => `🎙 ${t("Nebengespräch")} · ${main}`;
+export const sideTitle = (main: string) => `${t("Nebengespräch")} · ${main}`;
 
 /** Opens `main`'s side window on fork `pane` (or brings it to the front); `live`: start Live once the fork is ready. */
 export const openSide = (server: string, main: string, pane: string, title: string, live: boolean) =>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // The chat's find bar (⌘F): search the loaded chat, all hits highlighted, the current one stronger, ↑/↓ (Enter /
   // ⇧Enter, ⌘G / ⇧⌘G) walk them. The data (chatFind.ts) says which items may hold a hit and which folded cards to
   // open; their rendered text is what is counted and highlighted – via the CSS Custom Highlight API, so Svelte's
@@ -318,7 +319,7 @@
     <button class="fb tog" class:on={caseSensitive} aria-pressed={caseSensitive} title={t("Groß-/Kleinschreibung beachten")}
       onclick={() => (caseSensitive = !caseSensitive)}>Aa</button>
     <button class="fb tog scope" class:on={scope !== "all"} title={t(SCOPES[scope].title)} onclick={() => (scope = NEXT[scope])}>{t(SCOPES[scope].label)}</button>
-    <button class="fb" title={`${t("Suche schließen")} (Esc)`} onclick={close}>✕</button>
+    <button class="fb" title={`${t("Suche schließen")} (Esc)`} onclick={close}><Icon name="✕" size={15} /></button>
   </div>
 {/if}
 

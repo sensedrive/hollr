@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Sym from "$lib/components/Sym.svelte";
   // "Neu und praktisch" pager (iOS TipsTour): one tip per page, ← → or the dots to move, closing marks it seen.
   import { t } from "../i18n";
   import { markTourSeen, type Tip } from "../tips.svelte";
@@ -28,7 +29,7 @@
 <Modal title={t("Neu und praktisch")} onClose={close}>
   {#if tip}
     <div class="page">
-      <div class="icon">{tip.icon}</div>
+      <div class="icon"><Sym g={tip.icon} size={26} /></div>
       <h3>{t(tip.title)}</h3>
       <p class="muted">{t(tip.text, { mod })}</p>
     </div>

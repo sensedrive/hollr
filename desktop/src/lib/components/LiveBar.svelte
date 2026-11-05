@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // The live call's bar for one pane (omp /live, live.svelte.ts): level bars, what omp does, speaker / mic /
   // hang up – or "Neu verbinden" after a lost connection – plus the call's error or last note. Nothing while
   // the app-wide call isn't about this pane. Shown in the session's composer and in the side conversation panel.
@@ -27,14 +28,14 @@
     </div>
     {#if phase === "lost"}
       <button class="relive" onclick={reconnectLive}>{t("Neu verbinden")}</button>
-      <button class="round" title={t("Schließen")} aria-label={t("Schließen")} onclick={stopLive}>✕</button>
+      <button class="round" title={t("Schließen")} aria-label={t("Schließen")} onclick={stopLive}><Icon name="✕" size={15} /></button>
     {:else}
-      <button class="round" class:warn={speakerMuted} disabled={phase !== "live"} title={speakerMuted ? t("Ton an") : t("Ton aus (Antwort nicht hören)")} onclick={toggleLiveSpeaker}>{speakerMuted ? "🔇" : "🔊"}</button>
+      <button class="round" class:warn={speakerMuted} disabled={phase !== "live"} title={speakerMuted ? t("Ton an") : t("Ton aus (Antwort nicht hören)")} onclick={toggleLiveSpeaker}><Icon name={speakerMuted ? "🔇" : "🔊"} size={13} /></button>
       <button class="round" class:warn={micMuted} disabled={phase !== "live"} title={micMuted ? t("Mikrofon an") : t("Mikrofon aus (wie Leertaste) – du hörst weiter zu")} onclick={toggleLiveMic}>{micMuted ? "🎙̸" : "🎙"}</button>
-      <button class="round hang" title={t("Live beenden")} onclick={stopLive}>✕</button>
+      <button class="round hang" title={t("Live beenden")} onclick={stopLive}><Icon name="✕" size={15} /></button>
     {/if}
   </div>
-  {#if mine && liveActive() && live.audioError}<div class="err small">⚠ {live.audioError}</div>{/if}
+  {#if mine && liveActive() && live.audioError}<div class="err small"><Icon name="⚠" size={15} /> {live.audioError}</div>{/if}
 {/if}
 {#if mine && live.error && phase !== "lost"}<div class="err small">{live.error}</div>{/if}
 {#if mine && live.note && !phase}<div class="muted small">{live.note}</div>{/if}

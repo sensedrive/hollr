@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Server › Einrichtung (iOS SetupChecklist): what is still missing on this computer, each with a fix –
   // install with a click, restart the watcher, or a command to copy. Push keys live in the iPhone app.
   import { t } from "../i18n";
@@ -47,7 +48,7 @@
 <div class="section">{t("Einrichtung · {ok}/{n} bereit", { ok: checks.length - problems.length, n: checks.length })}</div>
 <div class="rows">
   {#if !problems.length}
-    <div class="row allok">✓ {t("Alles eingerichtet")}</div>
+    <div class="row allok"><Icon name="✓" size={15} /> {t("Alles eingerichtet")}</div>
   {/if}
   {#each problems as c (c.name)}
     {@const action = c.action ?? ""}
@@ -61,12 +62,12 @@
             {busy === c.name ? "…" : "↓"} {t("Installieren")}</button>
         {:else if action === "watch"}
           <button class="btn small act" disabled={!!busy} onclick={() => restart(c)}>
-            {busy === c.name ? "…" : "↻"} {t("Neu starten")}</button>
+            {#if busy === c.name}…{:else}<Icon name="reload" size={14} />{/if} {t("Neu starten")}</button>
         {:else if action === "push"}
           <div class="small dim act">{t("Push richtest du in der Hollr-App auf dem iPhone ein: Server › Einrichtung › „Push einrichten“.")}</div>
         {:else if c.fix}
           <button class="fix mono" title={t("Befehl kopieren")} onclick={() => copyFix(c)}>
-            <span class="ellipsis">{c.fix}</span><span>{copied === c.name ? "✓" : "⧉"}</span>
+            <span class="ellipsis">{c.fix}</span><span><Icon name={copied === c.name ? "✓" : "⧉"} size={13} /></span>
           </button>
         {/if}
       </div>

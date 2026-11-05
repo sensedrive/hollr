@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Pair a server with a link from `hollr pair --link` or the one-time code `hollr pair` shows
   // (desktop counterpart of iOS PairView).
   import * as api from "../api";
@@ -94,13 +95,13 @@
 <Modal title={t("Server koppeln")} onClose={phase.k === "done" ? onPaired : onClose}>
   {#if phase.k === "done"}
     <div class="result">
-      <div class="big ok">✓</div>
+      <div class="big ok"><Icon name="✓" size={15} /></div>
       <b>{t("{label} ist gekoppelt", { label: phase.label })}</b>
     </div>
     <div class="actions"><button class="btn primary" onclick={onPaired}>{t("Fertig")}</button></div>
   {:else if phase.k === "failed"}
     <div class="result">
-      <div class="big bad">✕</div>
+      <div class="big bad"><Icon name="✕" size={15} /></div>
       <div class="msg">{phase.message}</div>
     </div>
     <div class="actions">

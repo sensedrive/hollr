@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Settings → Diktat (iOS SpeechSettingsView): test recording, engine, Whisper models (download / choose /
   // delete), language and sending, text cleanup, vocabulary and fixed replacements. Everything runs locally.
   import { onDestroy, onMount } from "svelte";
@@ -66,7 +67,7 @@
         <b>Whisper</b> <span class="pill">whisper.cpp</span>
         <div class="small muted">{t("OpenAI, 99 Sprachen, läuft auf diesem Computer (auf dem Mac mit Metal-GPU)")}</div>
       </span>
-      <span class="ok">✓</span>
+      <span class="ok"><Icon name="✓" size={15} /></span>
     </div>
     <div class="row dimmed">
       <span class="grow">
@@ -93,14 +94,14 @@
         {#if progress !== undefined}
           <progress value={progress} max="1"></progress>
           <span class="small muted pct">{Math.round(progress * 100)} %</span>
-          <button class="ic" title={t("Download abbrechen")} aria-label={t("Download abbrechen")} onclick={() => cancelDownload(m.id)}>✕</button>
+          <button class="ic" title={t("Download abbrechen")} aria-label={t("Download abbrechen")} onclick={() => cancelDownload(m.id)}><Icon name="✕" size={15} /></button>
         {:else if downloaded}
           {#if selected}
-            <span class="ok" title={t("Gewählt")}>✓</span>
+            <span class="ok" title={t("Gewählt")}><Icon name="✓" size={15} /></span>
           {:else}
             <button class="btn" onclick={() => (dictation.whisperModel = m.id)}>{t("Wählen")}</button>
           {/if}
-          <button class="ic del" title={t("Löschen")} aria-label={t("Löschen")} onclick={() => deleteModel(m.id)}>🗑</button>
+          <button class="ic del" title={t("Löschen")} aria-label={t("Löschen")} onclick={() => deleteModel(m.id)}><Icon name="🗑" size={15} /></button>
         {:else}
           <button class="btn" onclick={() => downloadModel(m.id)}>↓ {t("Laden")}</button>
         {/if}
@@ -177,10 +178,10 @@
         <input class="grow" bind:value={r.from} placeholder={t("gehört")} spellcheck="false" />
         <span class="muted">→</span>
         <input class="grow" bind:value={r.to} placeholder={t("ersetzen durch")} spellcheck="false" />
-        <button class="ic del" title={t("Entfernen")} aria-label={t("Entfernen")} onclick={() => dictation.replacements.splice(i, 1)}>✕</button>
+        <button class="ic del" title={t("Entfernen")} aria-label={t("Entfernen")} onclick={() => dictation.replacements.splice(i, 1)}><Icon name="✕" size={15} /></button>
       </div>
     {/each}
-    <button class="row" onclick={addReplacement}><span class="grow">＋ {t("Ersetzung hinzufügen")}</span></button>
+    <button class="row" onclick={addReplacement}><span class="grow"><Icon name="＋" size={15} /> {t("Ersetzung hinzufügen")}</span></button>
   </div>
   <p class="foot">{t("Feste Ersetzungen nach der Erkennung, z. B. „Komma“ → „,“.")}</p>
 </div>

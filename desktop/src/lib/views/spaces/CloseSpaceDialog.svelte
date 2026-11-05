@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Close a space with all options: keep files, remove the worktree (with or without its branch,
   // locally and on origin) or delete a plain folder – showing first what would be lost.
   // "Änderungen ansehen" opens the git panel right next to the options.
@@ -81,16 +82,16 @@
         {#if info}
           {#if info.changed > 0}
             <button class="fact link warn" onclick={() => (showGit = true)}>
-              <span>⚠ {t("{n} ungespeicherte Änderung(en)", { n: info.changed })}</span>
+              <span><Icon name="⚠" size={15} /> {t("{n} ungespeicherte Änderung(en)", { n: info.changed })}</span>
               <span class="mono small"><span style="color:var(--green)">+{info.add}</span> <span style="color:var(--red)">−{info.del}</span></span>
             </button>
           {/if}
           {#if info.unpushed > 0}
             <button class="fact link warn" onclick={() => (showGit = true)}>↑ {t("{n} Commit(s) nicht gepusht", { n: info.unpushed })}</button>
           {/if}
-          {#if info.agents > 0}<div class="fact muted">〰 {t("{n} Sitzung(en) werden beendet", { n: info.agents })}</div>{/if}
+          {#if info.agents > 0}<div class="fact muted"><Icon name="〰" size={15} /> {t("{n} Sitzung(en) werden beendet", { n: info.agents })}</div>{/if}
           {#if info.git}
-            <button class="fact link" onclick={() => (showGit = !showGit)}>⑂ {showGit ? t("Git-Ansicht schließen") : t("Änderungen, Verlauf und Branches ansehen")}</button>
+            <button class="fact link" onclick={() => (showGit = !showGit)}><Icon name="⑂" size={15} /> {showGit ? t("Git-Ansicht schließen") : t("Änderungen, Verlauf und Branches ansehen")}</button>
           {/if}
         {:else if infoError}
           <div class="err small">{infoError}</div>

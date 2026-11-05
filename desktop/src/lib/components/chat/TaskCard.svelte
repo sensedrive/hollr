@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // task / subagent: who ran it, how many tool calls it made and how long, its final answer as Markdown
   // (folded to its first line until opened).
   import type { ToolCall } from "../../api";
@@ -35,7 +36,7 @@
     {#if c.sub?.agent}<span class="chip">{c.sub.agent}</span>{/if}
     {#if c.sub?.calls !== undefined}<span class="dim nowrap">{t("{n} Aufrufe", { n: c.sub.calls })}</span>{/if}
     {#if c.ms !== undefined}<span class="dim nowrap">{duration(c.ms)}</span>{/if}
-    {#if answer}<span class="dim">{open ? "▾" : "▸"}</span>{/if}
+    {#if answer}<span class="dim"><Icon name={open ? "▾" : "▸"} size={13} /></span>{/if}
   </div>
   {#if c.label && c.label !== c.detail}<div class="muted clamp2 sel">{c.label}</div>{/if}
   {#if c.status === "error" && c.result}<div class="err clamp4 sel">{c.result}</div>{/if}
@@ -43,7 +44,7 @@
     {#if open}
       <div class="answer">
         <Markdown text={answer} plain {onLink} />
-        <div class="hrow"><button class="act" onclick={() => copy(answer)}>⧉ {t("Antwort kopieren")}</button></div>
+        <div class="hrow"><button class="act" onclick={() => copy(answer)}><Icon name="⧉" size={15} /> {t("Antwort kopieren")}</button></div>
       </div>
     {:else}
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->

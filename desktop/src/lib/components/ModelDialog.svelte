@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // Searchable model list with thinking / effort level and recently used models.
   // Two modes: switch a running session (pick, then confirm) or choose for a new session (`instant`: a click picks).
   import { tick } from "svelte";
@@ -121,7 +122,7 @@
         <select bind:value={level}><option value="">{t("Standard")}</option>{#each list.levels as l}<option value={l}>{l}</option>{/each}</select>
       </label>
     {/if}
-    <button class="btn" title={t("Liste neu laden")} disabled={reloading} onclick={reload}>{reloading ? "…" : "↻"}</button>
+    <button class="btn" title={t("Liste neu laden")} disabled={reloading} onclick={reload}>{#if reloading}…{:else}<Icon name="reload" size={15} />{/if}</button>
   </div>
   <div class="list" bind:this={listEl}>
     {#if !list && !error}
@@ -138,7 +139,7 @@
           onmouseenter={() => (active = idx)} onclick={() => pick(item)} ondblclick={() => !instant && item.id && confirm()}>
           <span class="grow"><span class="name">{item.name}</span>
             {#if item.detail}<span class="mono dim small ellipsis det">{item.detail}</span>{/if}</span>
-          {#if item.id ? model === item.id : !model && !!onPickDefault}<span class="check">✓</span>{/if}
+          {#if item.id ? model === item.id : !model && !!onPickDefault}<span class="check"><Icon name="✓" size={15} /></span>{/if}
         </button>
       {/each}
     {/each}

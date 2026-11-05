@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // omp's todo card, but only where the list changed: the newest state in full (phases, counts, ☐/☑, done struck
   // through, in progress highlighted, what just changed marked), older states fold to "Todo 3/8 · ✓ …".
   import type { ToolCall, TodoTask } from "../../api";
@@ -31,7 +32,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="hrow mid click" onclick={toggle} onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
     role="button" tabindex="0" aria-expanded={isOpen}>
-    <span class="acc">☑</span>
+    <span class="acc"><Icon name="☑" size={15} /></span>
     <b>Todo</b>
     <span class="nowrap" class:ok={counts.done === counts.total}>{t("{done}/{total} erledigt", counts)}</span>
     {#if changed.length}
@@ -39,7 +40,7 @@
         {#each changed as x, i (i)}<span class="chg {x.status}">{verb(x)} {x.content}</span>{/each}
       </span>
     {:else}<span class="grow"></span>{/if}
-    <span class="dim">{isOpen ? "▾" : "▸"}</span>
+    <span class="dim"><Icon name={isOpen ? "▾" : "▸"} size={13} /></span>
   </div>
   {#if isOpen}
     <div class="phases sel">
@@ -51,7 +52,7 @@
         <div class="phase hrow" class:click={foldable} onclick={() => { if (foldable && !window.getSelection()?.toString()) openPhase[p.name] = folded; }}>
           <b>{phaseName(p, phases)}</b>
           <span class="dim" class:ok={done === p.tasks.length}>{done}/{p.tasks.length}</span>
-          {#if folded}<span class="dim">▸</span>{/if}
+          {#if folded}<span class="dim"><Icon name="▸" size={15} /></span>{/if}
         </div>
         {#if !folded}
           {#each p.tasks as x, i (i)}

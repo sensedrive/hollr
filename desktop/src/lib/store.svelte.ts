@@ -187,7 +187,8 @@ export interface PaneRef {
 }
 
 /** herdr numbers unnamed tabs: show the workspace name instead of "1" */
-export const tabName = (tab: string, workspace: string) => (/^(Tab )?\d+$/.test(tab) ? workspace : tab);
+/** shown name of a herdr tab: unnamed ones by their workspace; side conversations named before 0.40 lose their 🎙 */
+export const tabName = (tab: string, workspace: string) => (/^(Tab )?\d+$/.test(tab) ? workspace : tab.replace(/^🎙\uFE0F?\s*/u, ""));
 
 export function allPanes(serverId?: string): PaneRef[] {
   const out: PaneRef[] = [];

@@ -26,8 +26,34 @@
     space: "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z",
     pencil: "M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z",
     stop: "M6 6h12v12H6z",
+    "chevron-up": "m18 15-6-6-6 6",
+    "zoom-in": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3M11 8v6M8 11h6",
+    "zoom-out": "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3M8 11h6",
+    sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z",
+    "mic-off": "M2 2l20 20M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7M19 10v2a7 7 0 0 1-1 3.6M5 10v2a7 7 0 0 0 11.5 5.4M12 19v3",
+    volume: "M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14",
+    mute: "M11 5 6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6",
+    trash: "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6",
+    tool: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z",
+    external: "M7 17 17 7M8 7h9v9",
+    undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
+    circle: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
+    sidebar: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v18",
+    play: "M7 4l13 8-13 8z",
+    star: "M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z",
+    home: "M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+    minimize: "M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7",
+    square: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+    "square-check": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 12l3 3 5-6",
+    "square-x": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 9l6 6M15 9l-6 6",
+    keyboard: "M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10",
+    target: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   };
-  const big = $derived(name in paths24);
+
+  import { GLYPHS } from "./glyphs";
+  /** a glyph like "⑂" or "🎙" stands for its line icon */
+  const key = $derived(GLYPHS[name] ?? name);
+  const big = $derived(key in paths24);
   const paths: Record<string, string> = {
     files: "M3 3.5h4M3 8h10M3 12.5h10M6 5.75h7",
     changes: "M4 2.5h5.5L12.5 5.5V13.5H4zM9.5 2.5v3h3M8.25 7.25v4M6.25 9.25h4",
@@ -65,10 +91,11 @@
 </script>
 
 <svg class="icon" class:spin width={size} height={size} viewBox={big ? "0 0 24 24" : "0 0 16 16"} fill="none" stroke="currentColor"
-  stroke-width={big ? 2 : 1.4} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={big ? paths24[name] : (paths[name] ?? "")} /></svg>
+  stroke-width={big ? 2 : 1.4} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={big ? paths24[key] : (paths[key] ?? "")} /></svg>
 
 <style>
-  .icon { flex: none; display: block; }
+  /* inline, centred on the text: works in flex rows (buttons, tabs) and inside running text ("⚠ Fehler …") */
+  .icon { flex: none; display: inline-block; vertical-align: -0.18em; }
   .spin { animation: icon-spin 1s linear infinite; }
   @keyframes icon-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

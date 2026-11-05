@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // The fold switch under a clipped list: "N weitere Zeilen" ↔ "weniger anzeigen".
   import { t } from "../../i18n";
   let { open, hidden, unit = "lines", ontoggle }: {
@@ -13,4 +14,4 @@
   const label = $derived(open ? t("weniger anzeigen") : t(LABELS[unit], { n: hidden }));
 </script>
 
-<button class="more" onclick={(e) => { e.stopPropagation(); ontoggle(); }}>{open ? "▴" : "▾"} {label}</button>
+<button class="more" onclick={(e) => { e.stopPropagation(); ontoggle(); }}><Icon name={open ? "▴" : "▾"} size={13} /> {label}</button>

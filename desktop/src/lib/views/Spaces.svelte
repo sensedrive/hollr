@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // herdr's "spaces" sidebar: repos with main checkout + worktrees, standalone workspaces.
   import { onMount } from "svelte";
   import { t } from "$lib/i18n";
@@ -50,7 +51,7 @@
   <div class="page-head">
     <h1>{t("Spaces")}</h1>
     <button class="btn" disabled={reloading} onclick={reload} title={t("Aktualisieren")}>{reloading ? "…" : "↻"}</button>
-    <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSpace = {})}>＋ {t("Neuer Space")}</button>
+    <button class="btn primary" disabled={!app.servers.length} onclick={() => (dialogs.newSpace = {})}><Icon name="＋" size={15} /> {t("Neuer Space")}</button>
   </div>
 
   <div use:arrowNav>
@@ -59,7 +60,7 @@
         <div class="section">{sec.server.label}</div>
       {/if}
       {#if app.errors[sec.server.id] && !sec.loaded}
-        <div class="small" style="color:var(--orange)">⚠ {app.errors[sec.server.id]}</div>
+        <div class="small" style="color:var(--orange)"><Icon name="⚠" size={15} /> {app.errors[sec.server.id]}</div>
       {:else if !sec.loaded}
         <div class="rows">
           {#each [170, 220, 140, 200, 160] as w, i}

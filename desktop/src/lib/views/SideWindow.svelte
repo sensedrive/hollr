@@ -225,12 +225,12 @@
       <div class="empty">
         <div>{t("Das Nebengespräch wurde geschlossen.")}</div>
         <div class="row">
-          <button class="btn primary" onclick={restart}>🎙 {t("Neues Nebengespräch")}</button>
+          <button class="btn primary" onclick={restart}><Icon name="🎙" size={15} /> {t("Neues Nebengespräch")}</button>
           <button class="btn" onclick={closeWindow}>{t("Fenster schließen")}</button>
         </div>
       </div>
     {:else if app.errors[server]}
-      <div class="empty">⚠ {app.errors[server]}</div>
+      <div class="empty"><Icon name="⚠" size={15} /> {app.errors[server]}</div>
     {:else}
       {@render starting(t("Nebengespräch startet …"))}
     {/if}
@@ -249,7 +249,7 @@
     <p>{t("Was hier bisher besprochen wurde, wird verworfen. Das Nebengespräch beginnt neu – mit dem Hauptchat, wie er jetzt ist.")}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmReset = false)}>{t("Abbrechen")}</button>
-      <button class="btn primary" onclick={reset}>↺ {t("Zurücksetzen")}</button>
+      <button class="btn primary" onclick={reset}><Icon name="↺" size={15} /> {t("Zurücksetzen")}</button>
     </div>
   </Modal>
 {/if}

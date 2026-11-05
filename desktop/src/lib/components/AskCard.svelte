@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/git/Icon.svelte";
   // The agent's question (AskCard in TimelineViews.swift) – omp's ask, Claude's question, permission prompt or
   // trust dialog: one question with one choice answers on click, several questions or multi-select are filled
   // in here and sent together. The server types the keys.
@@ -70,7 +71,7 @@
     <div class="q">{q.question}</div>
     {#each q.options as opt, i}
       <button class="opt" class:live={open} disabled={!open} onclick={() => tap(qi, i)}>
-        <span class="acc">{q.multi ? (chosen(qi, i, opt) ? "☑" : "☐") : chosen(qi, i, opt) ? "◉" : "○"}</span>
+        <span class="acc"><Icon name={q.multi ? (chosen(qi, i, opt) ? "☑" : "☐") : chosen(qi, i, opt) ? "◉" : "○"} size={13} /></span>
         <span class="optbody">
           <span>{opt}{#if i === q.recommended}<span class="rec">{t("Empfohlen")}</span>{/if}</span>
           {#if open && q.descriptions?.[i]}<span class="desc">{q.descriptions[i]}</span>{/if}
@@ -84,12 +85,12 @@
   {/each}
   {#if item.pending && !sent}
     {#if byClick}
-      <div class="small muted">✎ {t("Eigene Antwort? Einfach unten eintippen.")}</div>
+      <div class="small muted"><Icon name="✎" size={15} /> {t("Eigene Antwort? Einfach unten eintippen.")}</div>
     {:else}
       <button class="btn send" disabled={!complete || sending} onclick={submit}>{sending ? "…" : t("Antworten senden")}</button>
     {/if}
   {/if}
-  {#if item.answer}<div class="mono small" class:ok={item.answer !== "abgebrochen"} class:warn={item.answer === "abgebrochen"}>✔ {item.answer}</div>{/if}
+  {#if item.answer}<div class="mono small" class:ok={item.answer !== "abgebrochen"} class:warn={item.answer === "abgebrochen"}><Icon name="✔" size={15} /> {item.answer}</div>{/if}
 </div>
 
 <style>
