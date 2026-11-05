@@ -1,5 +1,6 @@
 // App-wide state: paired servers, herdr trees and spaces (refreshed every 5 s), "my sessions",
 // navigation and the global dialogs. Views read from here instead of loading on their own.
+import { isSideChatLabel } from "./sidechats.svelte";
 import * as api from "./api";
 import type { Pane, Server, Workspace } from "./api";
 import { type Space, spaces as loadSpaces } from "./git";
@@ -196,7 +197,11 @@ export function allPanes(serverId?: string): PaneRef[] {
     if (serverId && server.id !== serverId) continue;
     for (const workspace of app.trees[server.id] ?? [])
       for (const tab of workspace.tabs)
-        for (const pane of tab.panes) out.push({ server, workspace, tab, pane, id: `${server.id}|${pane.pane}` });
+        for (const pane of tab.panes) {
+          // a sidechat's fork lives in its session's "Nachfragen" panel, not in lists, tabs or the inbox
+          if (pane.fork && isSideChatLabel(tab.label)) continue;
+          out.push({ server, workspace, tab, pane, id: `${server.id}|${pane.pane}` });
+        }
   }
   return out;
 }

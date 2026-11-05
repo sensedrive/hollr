@@ -8,6 +8,7 @@
   // numbers stay herdr's.
   import { tick, type Snippet } from "svelte";
   import Icon from "./git/Icon.svelte";
+  import { isSideChatLabel } from "$lib/sidechats.svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
   import type { Workspace } from "$lib/api";
@@ -28,7 +29,8 @@
   type Pane = Tab["panes"][number];
 
   const orderKey = $derived(`${server}|${ws.id}`);
-  const tabs = $derived(ordered(ws.tabs, tabOrders.all[orderKey], (tb) => tb.id));
+  // sidechats ("Nachfragen") are forks too – they live in the session's panel, not here
+  const tabs = $derived(ordered(ws.tabs.filter((tb) => !isSideChatLabel(tb.label)), tabOrders.all[orderKey], (tb) => tb.id));
   const moveTab = (id: string, before: string | null) =>
     tabOrders.set(orderKey, moveBefore(tabs.map((tb) => tb.id), id, before));
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sidechats } from "$lib/sidechats.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   // Read aloud, app-wide (mounted once in +page.svelte): next to text selected in a chat or in the terminal
   // (TerminalView offers its xterm selection) a small group – "Vorlesen" (⌘⇧S) reads the selection,
@@ -20,6 +21,7 @@
   const mac = navigator.platform.includes("Mac");
   const shortcut = mac ? "⌘⇧S" : "Ctrl+Shift+S";
   const summaryShortcut = mac ? "⌘⌥⇧S" : "Ctrl+Alt+Shift+S";
+  const askShortcut = mac ? "⌘⇧K" : "Ctrl+Shift+K";
 
   /** The rendered text of a chat selection. In a selection with prose, code blocks (and the code of tool
    *  cards) are left out; a selection of only code is read as it is. */
@@ -87,6 +89,17 @@
     if (offer) void speaker.speak(offer.text, offer.server);
   }
 
+  /** a chat selection in a session: it can become a sidechat ("Nachfragen") about that session */
+  const canAsk = $derived(selection.offer?.source === "chat" && nav.route.view === "agent");
+  function ask() {
+    const offer = current();
+    const r = nav.route;
+    if (!offer || r.view !== "agent") return;
+    sidechats.start(r.server, r.pane, offer.text);
+    document.getSelection()?.removeAllRanges();
+    withdrawSelection("chat");
+  }
+
   function summarize() {
     const offer = current();
     if (offer) void speaker.summarize(offer.text, offer.server);
@@ -100,6 +113,11 @@
       e.stopPropagation();
       if (speaker.busy) speaker.stop();
       else speaker.close();
+    } else if ((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && e.code === "KeyK" && chatSelection() && nav.route.view === "agent") {
+      // ⌘⇧K with a chat selection: a sidechat about it (without one, the session toggles its panel)
+      e.preventDefault();
+      e.stopPropagation();
+      ask();
     } else if ((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && e.code === "KeyS") {
       e.preventDefault();
       e.stopPropagation();
@@ -144,7 +162,7 @@
     const o = selection.offer;
     if (!o) return null;
     const below = o.y + 40 < innerHeight;
-    return { left: Math.max(8, Math.min(o.x - 20, innerWidth - 270)), top: below ? o.y + 6 : Math.max(8, o.y - 40) };
+    return { left: Math.max(8, Math.min(o.x - 20, innerWidth - 390)), top: below ? o.y + 6 : Math.max(8, o.y - 40) };
   });
   const engineLabel = $derived.by(() => {
     const e = speaker.engine;
@@ -168,6 +186,11 @@
       </svg>
       {t("Vorlesen")}
     </button>
+    {#if canAsk}
+      <span class="sep" aria-hidden="true"></span>
+      <button class="ask" title={t("Dazu nachfragen – kleiner Sidechat, kennt den ganzen Verlauf ({key})", { key: askShortcut })}
+        onmousedown={(e) => e.preventDefault()} onclick={ask}><Icon name="message" size={13} /> {t("Nachfragen")}</button>
+    {/if}
     {#if selection.offer?.server}
       <span class="sep" aria-hidden="true"></span>
       <button title={t("Zusammenfassung vorlesen ({key})", { key: summaryShortcut })} onmousedown={(e) => e.preventDefault()} onclick={summarize}>
@@ -228,6 +251,7 @@
     background: var(--raised, var(--card)); color: var(--fg); border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
   .offer button { all: unset; display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 10px; border-radius: 99px; }
   .offer button:hover { color: var(--accent); }
+  .offer .ask { color: var(--accent); }
   .offer .sep { width: 1px; align-self: stretch; margin: 5px 0; background: var(--border); }
   .panel, .pill { position: fixed; z-index: 60; left: 50%; top: 12px; transform: translateX(-50%); font-size: 12.5px;
     background: var(--raised, var(--card)); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }

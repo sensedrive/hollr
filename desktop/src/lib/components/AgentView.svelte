@@ -9,6 +9,8 @@
   import type { Snippet } from "svelte";
   import WorkspaceTabs from "./WorkspaceTabs.svelte";
   import AskCard from "./AskCard.svelte";
+  import SideChats from "./SideChats.svelte";
+  import { sidechats } from "../sidechats.svelte";
   import Icon from "./git/Icon.svelte";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
@@ -256,7 +258,7 @@
     // only "on" is kept: every session opened once would otherwise take a slot
     rememberViewPrefs(`${server}|${pane.pane}`, { zen: zen || undefined });
   });
-  let panel = $state<"" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
+  let panel = $state<"" | "chats" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
   /** browser stays mounted (tunnels open) until its ✕, even while another panel tab shows */
   let browserOpen = $state(untrack(() => open === "browser"));
   let browserRequest = $state<{ url: string } | null>(untrack(() => (open === "browser" && url ? { url } : null)));
@@ -278,7 +280,21 @@
   const PW = "hollr.agent.panelWidth";
   let panelWidth = $state(Number(localStorage.getItem(PW)) || 460);
 
-  function togglePanel(p: "git" | "browser" | "info") {
+  // ---- sidechats ("Nachfragen"): the selection's "Nachfragen" asks to open one here
+  let chatOpen = $state<string | undefined>();
+  const chatCount = $derived(sidechats.of(server, pane.pane).length);
+  $effect(() => {
+    const r = sidechats.request;
+    if (!r || r.server !== server || r.main !== pane.pane) return;
+    untrack(() => {
+      sidechats.request = null;
+      chatOpen = r.id;
+      panel = "chats";
+      zen = false;
+    });
+  });
+
+  function togglePanel(p: "chats" | "git" | "browser" | "info") {
     if (p === "browser") browserOpen = true;
     panel = panel === p ? "" : p;
     zen = false;
@@ -496,6 +512,7 @@
     if (e.shiftKey) {
       if (c === "KeyF") zen = !zen;
       else if (c === "KeyG") togglePanel("git");
+      else if (c === "KeyK" && !pane.fork) togglePanel("chats");
       else if (c === "KeyB") togglePanel("browser");
       else if (c === "KeyI") togglePanel("info");
       else if (c === "KeyM") openModels();
@@ -672,6 +689,10 @@
             <button class:on={mode === "terminal"} onclick={() => (mode = "terminal")} title={`${mod}${shift}T`}>{t("Terminal")}</button>
           </div>
         {/if}
+        {#if !pane.fork}
+          <button class="ib" class:on={panel === "chats"} title={`${t("Nachfragen")}${chatCount ? ` · ${chatCount}` : ""} (${mod}${shift}K)`}
+            onclick={() => togglePanel("chats")}><Icon name="message" size={16} /></button>
+        {/if}
         <button class="ib" class:on={panel === "git"} title={`${t("Git & Dateien")} (${mod}${shift}G)`} onclick={() => togglePanel("git")}><Icon name="branch" size={16} /></button>
         <button class="ib" class:on={panel === "browser"} title={`${t("Browser")} (${mod}${shift}B)`} onclick={() => togglePanel("browser")}><Icon name="globe" size={16} /></button>
         <button class="ib" class:on={panel === "info"} title={`${t("Info")} (${mod}${shift}I)`} onclick={() => togglePanel("info")}><Icon name="info" size={16} /></button>
@@ -814,6 +835,7 @@
     <aside class="side" class:hidden={!panel || zen} style:width="{panelWidth}px">
       {#if panel || browserOpen}
         <div class="tabs">
+          {#if !pane.fork}<button class:on={panel === "chats"} onclick={() => (panel = "chats")}><Icon name="message" size={15} /> {t("Nachfragen")}</button>{/if}
           <button class:on={panel === "git"} onclick={() => (panel = "git")}><Icon name="⑂" size={15} /> Git</button>
           <button class:on={panel === "browser"} onclick={() => { browserOpen = true; panel = "browser"; }}><Icon name="◍" size={15} /> {t("Browser")}</button>
           <button class:on={panel === "info"} onclick={() => (panel = "info")}><Icon name="ⓘ" size={15} /> {t("Info")}</button>
@@ -821,7 +843,9 @@
           <button class="x" title={t("Seitenleiste schließen")} onclick={() => (panel = "")}><Icon name="✕" size={15} /></button>
         </div>
         <div class="pbody">
-          {#if panel === "git"}
+          {#if panel === "chats"}
+            <div class="fill"><SideChats {server} main={pane.pane} {title} bind:active={chatOpen} /></div>
+          {:else if panel === "git"}
             <div class="fill"><GitPanel {server} {ws} openFile={gitOpen} /></div>
           {:else if panel === "info"}
             {@render info()}
