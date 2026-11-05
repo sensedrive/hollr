@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 28,
+    version: "0.40.0",
+    date: "05.11.2026",
+    items: [
+      { icon: "🧭", text: "Ruhigere Oberfläche: Server-Wechsel in der Seitenleiste, ⌘K sucht Sessions, Spaces und Befehle (Eingabe fokussieren jetzt ⌘J); keine Kopfzeile mehr – die Werkzeuge sitzen in der Tab-Leiste, Modell und Kontext im Eingabefeld, eine offene Frage hängt über dem Eingabefeld" },
+      { icon: "🔵", text: "Status: „neues Ergebnis“ in Blau statt „fertig“, die Übersicht zeigt „Läuft gerade“ mit Filter Alle / Arbeitet / Neu; Linien-Icons und besser lesbarer gedimmter Text" },
+    ],
+  },
+  {
     build: 27,
     version: "0.39.0",
     date: "05.11.2026",

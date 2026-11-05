@@ -160,8 +160,9 @@
 {/if}
 
 <style>
-  .tree { font-size: 13.5px; padding: 0 0 8px; display: grid; gap: 6px; }
-  .spaces { display: grid; gap: 1px; }
+  /* minmax(0, 1fr): a long space name ellipsizes instead of widening the column past the sidebar */
+  .tree { font-size: 13.5px; padding: 0 0 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .spaces { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
   .spaces.stale { opacity: .55; }
   .note { all: unset; cursor: pointer; box-sizing: border-box; display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px;
     background: var(--card); border: 1px solid var(--border); }

@@ -160,7 +160,7 @@
         <span class="ico"><Icon name="find" size={15} /></span><span class="grow">{t("Suchen …")}</span><kbd>{mod}K</kbd>
       </button>
     </nav>
-    <ServerTabs side />
+    <ServerTabs />
     <div class="list">
       <SpacesSidebar />
     </div>

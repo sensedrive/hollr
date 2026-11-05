@@ -1,11 +1,11 @@
 <script lang="ts">
   // herdr's tab bar for a workspace, above its sessions and its space view: the space itself as the first tab
-  // (its overview), then every tab (and every pane of a split tab) with its number, name and status – one click
+  // (its overview), then every tab (and every pane of a split tab) with its status dot and name – one click
   // switches, double-click (or right-click › Umbenennen) renames the tab in herdr, ✕ / middle click closes it
   // (agents after asking), ＋ starts a new session in the same space. 〰 marks the tab a live call runs on, a
-  // side conversation (a write-guarded fork of another session, `fork` on the server) shows dimmed – a click opens its window.
-  // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move"), the
-  // numbers stay herdr's.
+  // side conversation (a write-guarded fork of another session, `fork` on the server) hangs dimmed right behind
+  // its session's tab – a click opens its window. In a session the bar also carries its tools (`actions`).
+  // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move").
   import { tick, type Snippet } from "svelte";
   import Icon from "./git/Icon.svelte";
   import * as api from "$lib/api";
@@ -17,7 +17,7 @@
   import type { MenuItem } from "$lib/views/dashboard/util";
   import LiveMark from "./LiveMark.svelte";
   import { sortable } from "$lib/sortable";
-  import { moveBefore, ordered } from "$lib/tabOrder";
+  import { forksAfterParents, moveBefore, ordered } from "$lib/tabOrder";
   import { openSide, sideTitle } from "$lib/sideWindow";
   import { tabOrders } from "$lib/tabOrders.svelte";
 
@@ -28,9 +28,30 @@
   type Pane = Tab["panes"][number];
 
   const orderKey = $derived(`${server}|${ws.id}`);
-  const tabs = $derived(ordered(ws.tabs, tabOrders.all[orderKey], (tb) => tb.id));
+  // a side conversation's tab sits right behind its session's tab (it hangs off it, see .tab.fork)
+  const tabs = $derived.by(() => {
+    const tabOf = new Map(ws.tabs.flatMap((tb) => tb.panes.map((p) => [p.pane, tb.id] as const)));
+    return forksAfterParents(ordered(ws.tabs, tabOrders.all[orderKey], (tb) => tb.id), (tb) => tb.id, (tb) => {
+      const of = tb.panes[0]?.fork?.of;
+      return of ? tabOf.get(of) : undefined;
+    });
+  });
   const moveTab = (id: string, before: string | null) =>
     tabOrders.set(orderKey, moveBefore(tabs.map((tb) => tb.id), id, before));
+
+  // the open session's tab stays in sight: with its tools in the same bar the strip is narrow, and the tab is the
+  // only place that names the session (no header)
+  let strip = $state<HTMLElement>();
+  $effect(() => {
+    if (!strip || !active) return;
+    const el = strip.querySelector<HTMLElement>(".tabwrap.on");
+    if (!el) return;
+    const s = strip.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    // a tab wider than the strip shows its start (dot and name)
+    if (r.right > s.right) strip.scrollLeft += Math.min(r.right - s.right, r.left - s.left);
+    else if (r.left < s.left) strip.scrollLeft += r.left - s.left;
+  });
 
   /** herdr numbers unnamed tabs: show what runs in them instead */
   const unnamed = (tab: Tab) => /^(Tab )?\d+$/.test(tab.label);
@@ -129,7 +150,7 @@
 <div class="tabs" role="tablist" aria-label={ws.label}>
   <button class="tab home" class:on={!active} role="tab" aria-selected={!active} title={t("Space öffnen")}
     onclick={() => go({ view: "space", server, ws: ws.id })}><span class="num"><Icon name="space" size={14} /></span><span class="name ellipsis">{ws.label}</span></button>
-  <div class="strip" use:sortable={{ onMove: moveTab }}>
+  <div class="strip" bind:this={strip} use:sortable={{ onMove: moveTab }}>
     {#each tabs as tab (tab.id)}
       {#each tab.panes as pane, i (pane.pane)}
         {@const on = pane.pane === active}

@@ -1,6 +1,7 @@
 <script lang="ts">
-  // One session (AgentDetailView.swift): omp/Claude transcript (else chat history + screen) / terminal, pinned HUD
-  // (TODO, jobs, working or waiting-for-you row), composer with keys and live voice, the status line, ⋯ menu, zen mode and a right side
+  // One session (AgentDetailView.swift): its space's tab bar with the session's tools (Chat/Terminal, Git, Browser, Info, ⋯),
+  // omp/Claude transcript (else chat history + screen) / terminal, HUD in the composer (TODO, jobs, thinking), the open
+  // question pinned above the composer, model · context in it, live voice, zen mode and a right side
   // panel (git / in-app browser / info). "🎙 Nebengespräch" opens a write-guarded fork of the session in its own window.
   import { onDestroy, onMount, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -13,7 +14,7 @@
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
   import {
-    live, liveAbout, liveActive, liveColor as liveColorNow, liveStateLabel, startLive as startLiveOn, stopLiveOn,
+    live, liveAbout, liveActive, startLive as startLiveOn, stopLiveOn,
   } from "../live.svelte";
   import { forkOf } from "../sidetalk";
   import { forkError, openSide, sideTitle } from "../sideWindow";
@@ -21,7 +22,7 @@
   import { followTimeline } from "../follow";
   import { sessionTerms } from "../dictationText";
   import {
-    cleanScreen, cleanTitle, duration, hashId, history as loadHistory, hudVisible, isLoopback, openPhase, pendingAsk, phaseDone, phaseName,
+    cleanScreen, cleanTitle, duration, hashId, history as loadHistory, isLoopback, openPhase, pendingAsk, phaseDone, phaseName,
     runningActivity, shortPath, todoColor, toolTitle, urlPort, viaTunnel, waitingSince, type HistoryEvent,
   } from "../agent";
   import { jobViews, shortCommand } from "../chatTools";
@@ -511,15 +512,12 @@
   const livePhase = $derived(liveMine ? live.phase : "");
   /** a call is running here (not lost) */
   const liveHere = $derived(liveMine && liveActive());
-  const ompState = $derived(liveMine ? live.ompState : undefined);
-  const liveColor = $derived(liveMine ? liveColorNow() : "var(--accent)");
   /** Live runs on another pane: starting here ends that call (one microphone, in any window) – asked first */
   let confirmLiveSwitch = $state(false);
   function startLive() {
     if (liveActive() && !liveMine) confirmLiveSwitch = true;
     else void startLiveOn(server, pane.pane, title);
   }
-  const ompStateLabel = liveStateLabel;
 
   // A fresh side conversation talks right away – once omp is ready for /live (idle after loading its session).
   let autoLiveDone = false;
@@ -654,11 +652,13 @@
   <span class="clamp2" style:color={todoColor(task.status)} class:strike={task.status === "completed" || task.status === "abandoned"}>{task.content}{task.status === "blocked" ? " (blocked)" : ""}</span>
 {/snippet}
 
-
 {#snippet toolbar()}
       <div class="actions">
         {#if pane.fork && !inSideWindow}
           <button class="talkbtn" title={t("Das Nebengespräch in seinem eigenen Fenster")} onclick={openOwnWindow}>🎙 {t("Im eigenen Fenster")}</button>
+        {:else if forking}
+          <!-- ⋯ › Nebengespräch / ⌘⇧L: starting the fork takes a few seconds, its window opens after -->
+          <button class="talkbtn" disabled>🎙 {t("Starte …")}</button>
         {/if}
         {#if pane.agent}
           <div class="seg">
@@ -697,7 +697,7 @@
                 <div class="mscroll">
                   {#each others as r (r.id)}
                     <button class="mi" onclick={() => { menu = false; go({ view: "agent", server: r.server.id, pane: r.pane.pane }); }}>
-                      <span class="dot" class:working={r.pane.status === "working"} class:blocked={r.pane.status === "blocked"} class:ok={r.pane.status === "idle" || r.pane.status === "done"}></span>
+                      <span class="dot" class:working={r.pane.status === "working"} class:blocked={r.pane.status === "blocked"} class:done={r.pane.status === "done"}></span>
                       <span class="ellipsis">{tabName(r.tab.label, r.workspace.label)}</span><span class="dim small">{r.pane.agent ?? t("Terminal")}</span>
                     </button>
                   {/each}
@@ -874,7 +874,7 @@
     {/if}
     <div class="section">{t("Tastenkürzel")}</div>
     <div class="card small keys">
-      {#each [["⏎", t("Senden")], [`${shift}⏎`, t("Neue Zeile")], ["↑", t("Letzte Nachricht")], [`${mod}J`, t("Eingabe fokussieren")], [`${mod}K`, t("Alle Befehle")], [`${mod}.`, t("Unterbrechen (Esc)")], [`${mod}${shift}T`, t("Chat / Terminal")], [`${mod}${shift}F`, t("Zen-Modus")], ["Esc", t("Zen-Modus beenden")], [`${mod}${shift}G / B / I`, t("Git / Browser / Info")], [`${mod}${shift}L`, t("Nebengespräch")], [`${mod}${shift}M`, t("Modell wechseln")], [`${mod}+ / ${mod}-`, t("Textgröße")]] as [k, v]}
+      {#each [["⏎", t("Senden")], [`${shift}⏎`, t("Neue Zeile")], ["↑", t("Letzte Nachricht")], [`${mod}J`, t("Eingabe fokussieren")], ...(inSideWindow ? [] : [[`${mod}K`, t("Alle Befehle")]]), [`${mod}F`, t("Im Chat suchen")], [`${mod}.`, t("Unterbrechen (Esc)")], [`${mod}${shift}T`, t("Chat / Terminal")], [`${mod}${shift}F`, t("Zen-Modus")], ["Esc", t("Zen-Modus beenden")], [`${mod}${shift}G / B / I`, t("Git / Browser / Info")], [`${mod}${shift}L`, t("Nebengespräch")], [`${mod}${shift}M`, t("Modell wechseln")], [`${mod}+ / ${mod}-`, t("Textgröße")]] as [k, v]}
         <div class="hrow"><kbd>{k}</kbd><span class="muted">{v}</span></div>
       {/each}
     </div>
@@ -955,7 +955,7 @@
     border-bottom: 1px solid var(--border); min-width: 0; }
   .actions { display: flex; gap: 4px; align-items: center; flex: none; }
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); margin-right: 4px; flex: none; }
-  .dot.ok { background: var(--green); }
+  .dot.done { background: var(--accent); }
   .dot.working { background: var(--purple); }
   .dot.blocked { background: var(--orange); }
   .seg { display: flex; background: var(--card); border-radius: 999px; padding: 2px; margin-right: 6px; }

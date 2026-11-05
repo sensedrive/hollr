@@ -23,7 +23,7 @@
     return [
       [n("working"), t("{n} arbeitet", { n: n("working") }), "var(--purple)"],
       [n("blocked"), t("{n} wartet", { n: n("blocked") }), "var(--orange)"],
-      [n("done"), t("{n} fertig", { n: n("done") }), "var(--green)"],
+      [n("done"), t("{n} neu", { n: n("done") }), "var(--accent)"],
     ].filter(([c]) => c) as [number, string, string][];
   });
 </script>

@@ -3,6 +3,7 @@
   // branch, session, the question or the agent's last words, TODO progress, since when – and everything you can do
   // without opening the chat: pick an option (1–9), answer the whole ask (AskCard), reply (shares the chat's
   // draft), open chat / terminal / git / a dev server, mark as seen, end the session.
+  import { tick } from "svelte";
   import type { AskPick } from "$lib/api";
   import { draftKey } from "$lib/drafts";
   import { duration, type WebPort } from "$lib/agent";
@@ -56,9 +57,6 @@
   const title = $derived(refTitle(ref));
   /** one-tap options (a single question); several questions / multi-select go through the AskCard */
   const options = $derived(kind === "ask" ? (entry?.options ?? []) : []);
-  /** questions and errors want an answer – results and long runs only on request (one main action per card) */
-  let replying = $state(false);
-  $effect.pre(() => { if (kind === "ask" || kind === "waiting" || kind === "error") replying = true; });
   const fullAsk = $derived(kind === "ask" && !options.length && ctx?.ask ? ctx.ask : undefined);
   const body = $derived(
     kind === "ask" ? entry?.question
@@ -70,8 +68,15 @@
   );
   const text = $derived(drafts.text(key));
   const error = $derived(sendError || (entry ? inbox.errors[entry.key] : undefined));
+  /** questions and errors want an answer – results and long runs only on request (one main action per card) */
+  let replying = $state(false);
+  // a draft waiting for this session (typed earlier here or in the chat) keeps the field open too
+  $effect.pre(() => { if (kind === "ask" || kind === "waiting" || kind === "error" || text) replying = true; });
 
-  export function focusReply() {
+  /** opens the reply field when it waits behind "Antworten" (r on the dashboard, the button) */
+  export async function focusReply() {
+    replying = true;
+    await tick();
     input?.focus();
   }
 
@@ -161,7 +166,7 @@
 
   <div class="actions">
     <button class="btn" class:primary={!replying} onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)">↗ {t("Chat öffnen")}</button>
-    {#if !replying}<button class="btn" onclick={() => (replying = true)}>↩ {t("Antworten")}</button>{/if}
+    {#if !replying}<button class="btn" onclick={() => void focusReply()} title="{t('Antworten')} (R)">↩ {t("Antworten")}</button>{/if}
     <button class="btn" onclick={() => onOpen("terminal")} title="{t('Terminal öffnen')} (T)">&gt;_ {t("Terminal")}</button>
     <button class="btn" onclick={() => onOpen("git")} title="{t('Git & Dateien')} (G)">⑂ {t("Git")}{#if project.dirty}<span class="dirty">{project.dirty}</span>{/if}</button>
     {#each ports.slice(0, 2) as p (p.port)}

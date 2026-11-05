@@ -161,6 +161,10 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Ruhigere Oberfläche: Server-Wechsel in der Seitenleiste, ⌘K sucht Sessions, Spaces und Befehle (Eingabe fokussieren jetzt ⌘J); keine Kopfzeile mehr – die Werkzeuge sitzen in der Tab-Leiste, Modell und Kontext im Eingabefeld, eine offene Frage hängt über dem Eingabefeld":
+    "Calmer interface: server switch in the sidebar, ⌘K searches sessions, spaces and commands (focus input is now ⌘J); no header any more – the tools sit in the tab bar, model and context in the composer, an open question hangs above the composer",
+  "Status: „neues Ergebnis“ in Blau statt „fertig“, die Übersicht zeigt „Läuft gerade“ mit Filter Alle / Arbeitet / Neu; Linien-Icons und besser lesbarer gedimmter Text":
+    "Status: “new result” in blue instead of “done”, the overview shows “Running now” with an All / Working / New filter; line icons and more legible dim text",
   "Nebengespräch im eigenen Fenster: Chat, Terminal, Live und alles andere – bezogen auf die Haupt-Session, ohne sie zu stören; „↺ Zurücksetzen“ startet es neu vom aktuellen Stand, das Ergebnis geht als Entwurf in den Hauptchat":
     "Side conversation in its own window: chat, terminal, live and everything else – about the main session without disturbing it; “↺ Reset” restarts it from the current state, the result goes into the main chat as a draft",
   "Live auf demselben Mac wie der Server hört und spricht wieder – die App hängte sich an die BlackHole-Geräte des Servers":
@@ -338,7 +342,7 @@ export default {
   "Tipps & Tricks": "Tips & tricks",
   "Oben auf der Startseite: Fragen von omp mit einem Klick beantworten, wartenden oder fertigen Agents direkt antworten.": "At the top of the home screen: answer omp's questions with a click, reply directly to waiting or finished agents.",
   "Wartet ein Agent auf dich oder ist fertig, meldet sich Hollr mit einer Mitteilung – ein Klick öffnet den Chat. Abschaltbar unter Einstellungen › Allgemein.": "When an agent waits for you or is done, Hollr sends a notification – a click opens the chat. Turn off under Settings › General.",
-  "Im Chat: {mod}K Eingabe, {mod}⇧G Git & Dateien, {mod}⇧B Browser, {mod}⇧I Info, {mod}⇧M Modell, {mod}. bricht ab.": "In a chat: {mod}K input, {mod}⇧G Git & files, {mod}⇧B browser, {mod}⇧I info, {mod}⇧M model, {mod}. interrupts.",
+  "{mod}K findet jede Sitzung und jeden Befehl. Im Chat: {mod}J Eingabe, {mod}⇧G Git & Dateien, {mod}⇧B Browser, {mod}⇧I Info, {mod}⇧M Modell, {mod}. bricht ab.": "{mod}K finds every session and command. In a chat: {mod}J input, {mod}⇧G Git & files, {mod}⇧B browser, {mod}⇧I info, {mod}⇧M model, {mod}. interrupts.",
   "{mod}⇧T wechselt zwischen Chat und dem Terminal der Session – derselbe Bildschirm wie am Rechner.": "{mod}⇧T switches between the chat and the session's terminal – the same screen as on the computer.",
   "Bausteine und @": "Snippets and @",
   "Über dem Eingabefeld stehen deine Prompt-Bausteine. „@“ schlägt Dateien aus dem Repo vor.": "Your prompt snippets sit above the input field. “@” suggests files from the repo.",

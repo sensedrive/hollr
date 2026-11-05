@@ -17,3 +17,28 @@ export function moveBefore(ids: readonly string[], id: string, before: string | 
   if (at < 0) return [...rest, id];
   return [...rest.slice(0, at), id, ...rest.slice(at)];
 }
+
+/** Side conversations right behind the tab of the session they talk about (`parent`: that tab's id), whatever
+ *  order the tabs have otherwise – so a fork tab hangs off its own session, not off whichever came before it. */
+export function forksAfterParents<T>(items: readonly T[], id: (item: T) => string, parent: (item: T) => string | undefined): T[] {
+  const ids = new Set(items.map(id));
+  const forks = new Map<string, T[]>();
+  const roots: T[] = [];
+  for (const x of items) {
+    const p = parent(x);
+    if (p !== undefined && p !== id(x) && ids.has(p)) forks.set(p, [...(forks.get(p) ?? []), x]);
+    else roots.push(x);
+  }
+  const out: T[] = [];
+  const seen = new Set<string>();
+  const add = (x: T) => {
+    if (seen.has(id(x))) return;
+    seen.add(id(x));
+    out.push(x);
+    for (const f of forks.get(id(x)) ?? []) add(f);
+  };
+  roots.forEach(add);
+  // a cycle of parents (not expected from the server): those keep their place at the end
+  items.forEach(add);
+  return out;
+}

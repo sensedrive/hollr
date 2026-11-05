@@ -1,15 +1,14 @@
 <script lang="ts">
   // Übersicht (DashboardView.swift, laid out for a wide window): usage limits, "Braucht dich" ordered by urgency
-  // with everything answerable in place, "Woran ich arbeite" grouped by project, the sessions you opened in Hollr
-  // (grouped by machine, live previews) and the paired servers. j/k + ↩ and single keys switch fast.
+  // with everything answerable in place, "Läuft gerade" grouped by project (Alle / Arbeitet / Neu), the sessions you
+  // opened in Hollr (grouped by machine, live previews). j/k + ↩ and single keys switch fast.
   import { onMount } from "svelte";
   import * as api from "$lib/api";
-  import type { Server } from "$lib/api";
   import { byUrgency, isLong, mainCaps, pooled, projectOf, portsIn, type FocusKind } from "$lib/dashboard";
   import { hiddenLong, hideLong } from "./dashboard/hiddenLong.svelte";
   import { t } from "$lib/i18n";
   import {
-    allPanes, app, dialogs, findPane, go, loadServers, mySessions, refresh, type AgentOpen, type PaneRef,
+    allPanes, app, dialogs, findPane, go, mySessions, refresh, type AgentOpen, type PaneRef,
   } from "$lib/store.svelte";
   import { answer, dismiss, fetchInbox, inboxEntries, type InboxEntry } from "$lib/inbox.svelte";
   import { hiddenSpaces, isHidden } from "$lib/hiddenSpaces.svelte";
@@ -126,7 +125,6 @@
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   let ending = $state<PaneRef | null>(null);
-  let removing = $state<Server | null>(null);
   let showLimits = $state(false);
   let showBrowser = $state(false);
   let showKeys = $state(false);
@@ -151,29 +149,11 @@
     };
   }
 
-  function serverMenu(e: MouseEvent, s: Server) {
-    e.preventDefault();
-    menu = {
-      x: e.clientX, y: e.clientY,
-      items: [
-        { label: t("Server-Info"), icon: "ⓘ", action: () => go({ view: "serverinfo", server: s.id }) },
-        { label: t("Werkzeuge"), icon: "⚒", action: () => go({ view: "tools", server: s.id }) },
-        { label: t("Entfernen"), icon: "✕", danger: true, action: () => (removing = s) },
-      ],
-    };
-  }
-
   async function endSession(r: PaneRef) {
     await api.closePane(r.server.id, r.pane.pane);
     mySessions.remove(r.id);
     ending = null;
     await refresh();
-  }
-
-  async function removeServer(s: Server) {
-    await api.removeServer(s.id);
-    removing = null;
-    await loadServers();
   }
 
   async function reload() {
@@ -182,14 +162,12 @@
     reloading = false;
   }
 
-  const address = (s: Server) => `${s.user}@${s.addresses[0] ?? "?"}`;
-
   // ------------------------------------------------------------ keyboard: j/k ↩ 1–9 r t g b e x ?
 
   /** "f:<id>" (Braucht dich) or "w:<id>" (Woran ich arbeite) */
   let sel = $state<string | null>(null);
   const cards: Record<string, FocusCard | undefined> = $state({});
-  const navKeys = $derived([...focus.map((f) => `f:${f.ref.id}`), ...projects.flat().map((w) => `w:${w.ref.id}`)]);
+  const navKeys = $derived([...focus.map((f) => `f:${f.ref.id}`), ...shownProjects.flat().map((w) => `w:${w.ref.id}`)]);
   const selRef = $derived.by(() => {
     if (!sel) return undefined;
     const id = sel.slice(2);
@@ -206,7 +184,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.metaKey || e.ctrlKey || e.altKey || menu || ending || removing || showLimits || showBrowser) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || menu || ending || showLimits || showBrowser) return;
     const el = e.target as HTMLElement | null;
     if (el?.matches?.("input, textarea, select") || el?.isContentEditable || document.querySelector("dialog[open], .modal")) return;
     const k = e.key;
@@ -391,12 +369,6 @@
   <ConfirmDialog title={t("Sitzung beenden?")} confirmLabel={t("Sitzung beenden")}
     message={t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: r.pane.agent ?? "Shell" })}
     onConfirm={() => endSession(r)} onClose={() => (ending = null)} />
-{/if}
-{#if removing}
-  {@const s = removing}
-  <ConfirmDialog title={t("Server aus Hollr entfernen?")} confirmLabel={t("Entfernen")}
-    message={t("Auf dem Server bleibt der Schlüssel bis `hollr revoke {id}`.", { id: s.deviceId })}
-    onConfirm={() => removeServer(s)} onClose={() => (removing = null)} />
 {/if}
 {#if showLimits}
   <LimitsDialog onClose={() => (showLimits = false)} />

@@ -1,7 +1,7 @@
 <script lang="ts">
   // Line icons for the whole app (stroke = currentColor). The git views' set is drawn on a 16px grid, the app-wide
   // set (sidebar, tabs, chat, palette) on Lucide's 24px grid – both render at the same stroke weight.
-  let { name, size = 16, spin = false }: { name: string; size?: number; spin?: boolean } = $props();
+  let { name, size = 16 }: { name: string; size?: number } = $props();
   const paths24: Record<string, string> = {
     grid: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
     find: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
@@ -11,21 +11,11 @@
     maximize: "M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3",
     more: "M5 12h.01M12 12h.01M19 12h.01",
     terminal: "M4 17l6-6-6-6M12 19h8",
-    mic: "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3",
-    alert: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
-    message: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-    reply: "M9 17l-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4",
-    activity: "M22 12h-4l-3 9L9 3l-3 9H2",
     server: "M4 3h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM4 13h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2zM6 7h.01M6 17h.01",
-    cpu: "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3",
-    help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
     offline: "M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M2 8.8a15 15 0 0 1 4.2-2.8M10.7 5.1A15 15 0 0 1 22 8.8M5 12.9a10 10 0 0 1 5.2-2.8M19 12.9a10 10 0 0 0-2.4-1.7M12 20h.01",
-    loader: "M21 12a9 9 0 1 1-6.2-8.6",
     corner: "M15 10l5 5-5 5M4 4v7a4 4 0 0 0 4 4h12",
     list: "M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13",
     space: "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z",
-    pencil: "M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z",
-    stop: "M6 6h12v12H6z",
   };
   const big = $derived(name in paths24);
   const paths: Record<string, string> = {
@@ -64,12 +54,9 @@
   };
 </script>
 
-<svg class="icon" class:spin width={size} height={size} viewBox={big ? "0 0 24 24" : "0 0 16 16"} fill="none" stroke="currentColor"
+<svg class="icon" width={size} height={size} viewBox={big ? "0 0 24 24" : "0 0 16 16"} fill="none" stroke="currentColor"
   stroke-width={big ? 2 : 1.4} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={big ? paths24[name] : (paths[name] ?? "")} /></svg>
 
 <style>
   .icon { flex: none; display: block; }
-  .spin { animation: icon-spin 1s linear infinite; }
-  @keyframes icon-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
 </style>

@@ -1,9 +1,9 @@
 <script lang="ts">
-  // The remotes like a terminal multiplexer's session bar, above every view: one tab per paired server with its
-  // connection, how many sessions need you there and a running live call. A click returns to the session last
-  // opened on that server (else the one that needs you most, else Server-Info); ⌘⌥1…9 does the same,
-  // right-click has Server-Info, Werkzeuge and a new session there, ＋ pairs another server. Tabs can be
-  // dragged into another order (kept per computer; numbers and ⌘⌥ follow it).
+  // The server switcher at the top of the sidebar (the spaces below it belong to the chosen server): one chip per
+  // paired server with its connection, how many sessions need you there and a running live call. A click returns to
+  // the session last opened on that server (else the one that needs you most, else Server-Info); ⌘⌥1…9 does the
+  // same, right-click has Server-Info, Werkzeuge and a new session there, ＋ pairs another server. Chips can be
+  // dragged into another order (kept per computer; ⌘⌥ follows it).
   import { untrack } from "svelte";
   import { t } from "$lib/i18n";
   import { allPanes, app, dialogs, go, nav } from "$lib/store.svelte";
@@ -17,9 +17,6 @@
   import { sortable } from "$lib/sortable";
   import { moveBefore, ordered } from "$lib/tabOrder";
   import { tabOrders } from "$lib/tabOrders.svelte";
-
-  /** `side`: the switcher at the top of the sidebar (the spaces below it belong to the chosen server) */
-  let { side = false }: { side?: boolean } = $props();
 
   const servers = $derived(ordered(app.servers, tabOrders.all.servers, (s) => s.id));
   const moveServer = (id: string, before: string | null) =>
@@ -74,7 +71,7 @@
 <svelte:window onkeydown={onKey} />
 
 {#if app.servers.length}
-  <div class="tabs" class:side class:above={nav.route.view === "agent" || nav.route.view === "space"} role="tablist" aria-label={t("Server")}>
+  <div class="tabs" role="tablist" aria-label={t("Server")}>
     <div class="strip" use:sortable={{ onMove: moveServer }}>
       {#each servers as s, i (s.id)}
         {@const on = s.id === active}
@@ -83,7 +80,6 @@
         <button class="tab" class:on role="tab" aria-selected={on} data-sort-id={s.id}
           title="{s.label}{err ? ` · ⚠ ${err}` : ''}{i < 9 ? ` · ${mod}${i + 1}` : ''}"
           onclick={() => open(s.id)} oncontextmenu={(e) => tabMenu(e, s.id)}>
-          {#if i < 9 && !side}<span class="num">{i + 1}</span>{/if}
           <span class="conn" class:bad={!!err}></span>
           <span class="name ellipsis">{s.label}</span>
           <LiveMark server={s.id} />
@@ -100,30 +96,20 @@
 {/if}
 
 <style>
-  .tabs { display: flex; align-items: stretch; gap: 2px; padding: 5px 10px 0; border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--side) 70%, var(--bg)); font-family: var(--mono); font-size: 12px; min-width: 0; }
-  .strip { position: relative; display: flex; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
-  .strip::-webkit-scrollbar { display: none; }
-  .tab { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 12px 5px; max-width: 240px;
-    border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; color: var(--muted); flex: none; }
+  /* at the top of the sidebar: small chips that wrap, the chosen one raised */
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 12px 8px 8px; font-size: 12.5px; min-width: 0; }
+  .strip { position: relative; display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+  .tab { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; max-width: 100%;
+    border: 1px solid transparent; border-radius: 8px; color: var(--muted); flex: none; }
   .tab:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 5%, transparent); }
-  /* the active tab opens into what is below: the session's tab bar, else the view itself */
-  .tab.on { color: var(--fg); background: var(--bg); border-color: var(--border); margin-bottom: -1px; font-weight: 600; }
-  .above .tab.on { background: var(--side); }
+  .tab.on { color: var(--fg); background: var(--card); border-color: var(--border); font-weight: 600; }
   .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .num { color: var(--dim); font-weight: 400; }
   .conn { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
   .conn.bad { background: var(--red); }
   .count { min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; display: grid; place-items: center;
     font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--orange); }
-  .add { all: unset; cursor: pointer; align-self: center; padding: 0 8px 4px; color: var(--muted); font-size: 14px; }
-  .add:hover { color: var(--fg); }
+  .add { all: unset; cursor: pointer; align-self: center; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--dim); }
+  .add:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+  .add:focus-visible { outline: 2px solid var(--accent); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* in the sidebar: small chips that wrap, the chosen one raised */
-  .tabs.side { padding: 12px 8px 8px; border: 0; background: none; font-family: inherit; font-size: 12.5px; align-items: center; }
-  .side .strip { flex-wrap: wrap; overflow: visible; gap: 4px; }
-  .side .tab { height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; margin: 0; max-width: 100%; }
-  .side .tab.on { background: var(--card); border-color: var(--border); margin: 0; }
-  .side .add { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border-radius: 8px; color: var(--dim); }
-  .side .add:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
 </style>
