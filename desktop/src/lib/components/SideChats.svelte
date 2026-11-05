@@ -189,15 +189,16 @@
   .active { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 14px; }
   .quote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: color-mix(in srgb, var(--accent) 7%, transparent);
-    font-size: 13px; line-height: 1.55; color: var(--muted); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 8; line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+    font-size: 13px; line-height: 1.55; color: var(--muted); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 6; line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
   .ctx { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--dim); margin-top: -6px; }
-  .mine { align-self: flex-end; max-width: 88%; margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--card); font-size: 13.5px; opacity: 0.7; white-space: pre-wrap; }
+  .mine { align-self: flex-end; max-width: 88%; margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--card); font-size: 13.5px; line-height: 1.5; opacity: 0.7; white-space: pre-wrap; }
   .thinking { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--dim); }
   .err { color: var(--orange); display: flex; gap: 6px; align-items: center; }
   .small { font-size: 12px; }
   .compose { display: flex; gap: 6px; align-items: flex-end; padding: 10px 12px 12px; border-top: 1px solid var(--border); flex: none; }
   .compose textarea { flex: 1; min-width: 0; resize: none; field-sizing: content; min-height: 38px; max-height: 160px; padding: 8px 12px; font: inherit; font-size: 13.5px;
-    border-radius: 12px; }
+    border-radius: 12px; color: var(--fg); background: var(--raised, var(--card)); border: 1px solid var(--border); outline: none; }
+  .compose textarea:focus { border-color: var(--accent); }
   .send { all: unset; cursor: pointer; width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 50%;
     background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--dim); }
   .send.ready { background: var(--accent); color: #fff; }

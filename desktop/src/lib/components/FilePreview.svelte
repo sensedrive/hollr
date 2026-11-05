@@ -70,6 +70,8 @@
   const parent = $derived(info?.kind === "dir" && info.path !== "/" ? info.path.split("/").slice(0, -1).join("/") || "/" : "");
   const src = $derived(info?.kind === "image" && info.data ? `data:${info.mime};base64,${info.data}` : "");
   const shownPath = $derived(info?.path ?? cur.path);
+  const nameOf = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
+  const dirOf = (p: string) => p.slice(0, p.replace(/\/+$/, "").length - nameOf(p).length);
 
   function flash(what: "path" | "content") {
     copied = what;
@@ -161,13 +163,9 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div class="preview" role="dialog" aria-label={info?.name ?? cur.path} tabindex="-1" bind:this={dialog}>
     <header>
-      {#if stack.length > 1}
-        <button class="ib" onclick={back} title={t("Zurück")} aria-label={t("Zurück")}><Icon name="back" size={15} /></button>
-      {/if}
-      <div class="who">
-        <div class="name">{info?.name ?? cur.path.split("/").filter(Boolean).pop() ?? cur.path}</div>
-        <div class="path mono" title={shownPath}><bdi>{shownPath}{cur.line ? `:${cur.line}` : ""}</bdi></div>
-      </div>
+      <button class="tb back" onclick={() => (stack.length > 1 ? back() : onClose())} title={stack.length > 1 ? t("Zurück") : `${t("Schließen")} (Esc)`}>
+        <Icon name="back" size={14} /><span>{t("Zurück")}</span></button>
+      <div class="path mono" title={shownPath}><bdi>{dirOf(shownPath)}<b>{nameOf(shownPath)}</b>{cur.line ? `:${cur.line}` : ""}</bdi></div>
       {#if info}
         <span class="meta">{[
           info.kind === "dir" ? "" : git.bytes(info.size),
@@ -177,19 +175,21 @@
       {/if}
       <span class="tools">
         {#if info?.kind === "image" && src}
-          <button class="tb" class:on={zoom === "full"} onclick={() => toggleZoom()} title={t("Einpassen / 100 %")}>
+          <button class="tb bordered" class:on={zoom === "full"} onclick={() => toggleZoom()} title={t("Einpassen / 100 %")}>
             {zoom === "fit" ? t("Einpassen") : "100 %"}</button>
         {/if}
-        <button class="tb" onclick={copyPath}><Icon name={copied === "path" ? "check" : "copy"} size={14} /><span>{t("Pfad kopieren")}</span></button>
+        <button class="ib" onclick={copyPath} title={t("Pfad kopieren")} aria-label={t("Pfad kopieren")}>
+          <Icon name={copied === "path" ? "check" : "copy"} size={15} /></button>
         {#if (info?.kind === "image" && src) || info?.kind === "text"}
-          <button class="tb" onclick={copyContent}>
-            <Icon name={copied === "content" ? "check" : "copy"} size={14} /><span>{info.kind === "image" ? t("Bild kopieren") : t("Text kopieren")}</span>
-          </button>
+          {@const label = info.kind === "image" ? t("Bild kopieren") : t("Text kopieren")}
+          <button class="ib" onclick={copyContent} title={label} aria-label={label}>
+            <Icon name={copied === "content" ? "check" : info.kind === "image" ? "image" : "doc"} size={15} /></button>
         {/if}
         {#if info && info.inSpace !== undefined && onGit}
           {@const rel = info.inSpace}
           {@const dir = info.kind === "dir"}
-          <button class="tb" onclick={() => onGit(rel, dir)}><Icon name="branch" size={14} /><span>{t("Im Git-Panel öffnen")}</span></button>
+          <button class="ib" onclick={() => onGit(rel, dir)} title={t("Im Git-Panel öffnen")} aria-label={t("Im Git-Panel öffnen")}>
+            <Icon name="branch" size={15} /></button>
         {/if}
         <button class="ib" onclick={onClose} title={`${t("Schließen")} (Esc)`} aria-label={t("Schließen")}><Icon name="x" size={15} /></button>
       </span>
@@ -240,32 +240,36 @@
 </div>
 
 <style>
-  .backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; z-index: 10; }
-  .preview { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; width: min(1100px, 94vw); height: 86vh;
-    display: flex; flex-direction: column; overflow: hidden; outline: none; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4); }
-  header { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); min-width: 0; }
-  .who { min-width: 0; flex: 1; }
-  .name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .path { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
-  .meta { font-size: 11.5px; color: var(--dim); white-space: nowrap; }
-  .tools { display: flex; gap: 4px; align-items: center; flex: none; }
+  /* the whole window, like a page of its own (design: Magic Fink "FilePreview") */
+  .backdrop { position: fixed; inset: 0; z-index: 50; display: flex; background: var(--bg); animation: fade 0.12s ease-out; }
+  .preview { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; outline: none; background: var(--bg); }
+  header { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px; border-bottom: 1px solid var(--border); min-width: 0; flex: none; }
+  .path { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+  .path b { color: var(--fg); font-weight: 600; }
+  .meta { font-size: 11.5px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tools { display: flex; gap: 2px; align-items: center; flex: none; }
   .tb { display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid transparent; border-radius: 7px; padding: 4px 8px;
-    color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .tb:hover { border-color: var(--border); color: var(--fg); }
-  .tb.on { background: var(--card); border-color: var(--border); color: var(--fg); }
-  .ib { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--muted); }
+    color: var(--muted); font-size: 12.5px; white-space: nowrap; flex: none; }
+  .tb:hover { background: var(--card); color: var(--fg); }
+  .tb.bordered { border-color: var(--border); margin-right: 4px; }
+  .tb.on { background: var(--card); color: var(--fg); }
+  .tb:focus-visible, .ib:focus-visible { outline: 2px solid var(--accent); }
+  .ib { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); }
   .ib:hover { background: var(--card); color: var(--fg); }
+  @keyframes fade { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .backdrop { animation: none; } }
   .copyerr { padding: 6px 16px; font-size: 12px; color: var(--red); border-bottom: 1px solid var(--border); }
   .body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   .empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 60px 20px; color: var(--muted); text-align: center; }
   .empty b { color: var(--fg); font-size: 15px; }
   .err { color: var(--red); max-width: 520px; }
-  .imgbox { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; padding: 12px; cursor: zoom-in;
-    background: repeating-conic-gradient(color-mix(in srgb, var(--fg) 6%, transparent) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
-  .imgbox img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; }
+  .imgbox { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; padding: 24px; cursor: zoom-in;
+    background: repeating-conic-gradient(color-mix(in srgb, var(--fg) 4%, transparent) 0 25%, transparent 0 50%) 0 0 / 20px 20px; }
+  .imgbox img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; border-radius: 10px; border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); }
   .imgbox.full { display: block; overflow: auto; cursor: grab; padding: 0; }
   .imgbox.full:active { cursor: grabbing; }
-  .imgbox.full img { max-width: none; max-height: none; display: block; margin: auto; }
+  .imgbox.full img { max-width: none; max-height: none; display: block; margin: auto; border: 0; border-radius: 0; box-shadow: none; }
   .list { overflow: auto; padding: 6px 0; }
   .item { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 16px; font-size: 13px; }
   .item:hover, .item:focus-visible { background: color-mix(in srgb, var(--fg) 6%, transparent); }

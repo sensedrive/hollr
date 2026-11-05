@@ -4,7 +4,7 @@
   // Read aloud, app-wide (mounted once in +page.svelte): next to text selected in a chat or in the terminal
   // (TerminalView offers its xterm selection) a small group – "Vorlesen" (⌘⇧S) reads the selection,
   // "Zusammenfassung" (⌘⌥⇧S) has the server's omp summarize it first. What is read shows in a panel at the
-  // top – the summary (and its model) or the cleaned-up original, selectable – with stop, replay, the speed
+  // bottom centre, above the composer – the summary (and its model) or the cleaned-up original, selectable – with stop, replay, the speed
   // and a way to the settings; it stays after reading until closed (Esc stops, a second Esc closes). The
   // chat's own components stay untouched: its selection is read from the document, its server from the route.
   // ⌘⇧Y would be the obvious key, but macOS' "Make Sticky" service owns it (⌘⇧L/A/F/M/B too); the app's
@@ -206,7 +206,7 @@
 {#if reading}
   <section class="panel" aria-label={t("Vorlesen")}>
     <div class="head" role="status">
-      <span class="bars" class:on={speaker.state === "speaking"} class:wait={speaker.state === "summarizing" || speaker.state === "loading"} aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="rico" aria-hidden="true"><span class="bars" class:on={speaker.state === "speaking"} class:wait={speaker.state === "summarizing" || speaker.state === "loading"}><i></i><i></i><i></i></span></span>
       <span class="grow title">{status}{#if detail}<span class="muted detail">· {detail}</span>{/if}</span>
       <span class="speed" title={speedTitle}>
         <button class="ic" aria-label={t("Langsamer")} disabled={speech.speed <= SPEED.min} onclick={() => nudgeSpeed(-SPEED.step)}>−</button>
@@ -253,32 +253,35 @@
   .offer button:hover { color: var(--accent); }
   .offer .ask { color: var(--accent); }
   .offer .sep { width: 1px; align-self: stretch; margin: 5px 0; background: var(--border); }
-  .panel, .pill { position: fixed; z-index: 60; left: 50%; top: 12px; transform: translateX(-50%); font-size: 12.5px;
-    background: var(--raised, var(--card)); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
+  /* design: Magic Fink "ReadAloudPanel" – a card at the bottom centre, above the composer */
+  .panel, .pill { position: fixed; z-index: 45; left: 50%; bottom: 96px; translate: -50% 0; font-size: 12.5px;
+    background: var(--side); border: 1px solid var(--border); box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38); animation: rise 0.14s ease-out; }
   .pill { max-width: min(520px, 80vw); padding: 7px 14px; border-radius: 99px; }
   .pill.warn, .warn { color: var(--red); }
-  .panel { width: min(640px, calc(100vw - 32px)); border-radius: 12px; display: flex; flex-direction: column; }
-  .head { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; }
-  .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .detail { margin-left: 5px; }
-  .speed { display: flex; align-items: center; flex: none; }
+  .panel { width: min(560px, calc(100vw - 32px)); border-radius: 14px; display: flex; flex-direction: column; padding: 10px 10px 10px 12px; gap: 8px; }
+  .head { display: flex; align-items: center; gap: 8px; }
+  .rico { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--accent); }
+  .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-size: 13px; margin-left: 2px; }
+  .detail { margin-left: 5px; font-weight: 400; }
+  .speed { display: flex; align-items: center; flex: none; border-radius: 7px; background: color-mix(in srgb, var(--fg) 6%, transparent); }
   .num { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
-  .ic { all: unset; cursor: pointer; flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px;
+  .ic { all: unset; cursor: pointer; flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px;
     color: var(--muted); font-size: 13px; }
-  .ic:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); }
+  .ic:hover:not(:disabled) { background: var(--card); color: var(--fg); }
+  .ic:focus-visible, .stop:focus-visible, .act:focus-visible { outline: 2px solid var(--accent); }
   .ic:disabled { opacity: .3; cursor: default; }
-  .body { max-height: 40vh; overflow-y: auto; padding: 2px 14px 8px; border-top: 1px solid var(--border); user-select: text; cursor: text; }
-  .body p { margin: 8px 0 0; }
-  .text { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
+  .body { max-height: 32vh; overflow-y: auto; padding: 0 2px; user-select: text; cursor: text; color: var(--muted); }
+  .body p { margin: 0; }
+  .body p + p { margin-top: 6px; }
+  .text { white-space: pre-wrap; line-height: 1.55; font-size: 13px; }
   .small { font-size: 12px; }
-  .actions { display: flex; gap: 6px; padding: 0 10px 10px; }
-  .act { all: unset; cursor: pointer; padding: 3px 10px; border-radius: 99px; font-size: 12px; color: var(--fg);
-    background: color-mix(in srgb, var(--fg) 7%, transparent); }
-  .act:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); }
-  .act:first-child { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-  .act:first-child:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .actions { display: flex; gap: 6px; }
+  .act { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 7px; font-size: 12px; color: var(--muted); }
+  .act:hover { background: var(--card); color: var(--fg); }
+  .act:first-child { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .act:first-child:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
   .bars { display: flex; align-items: flex-end; gap: 2px; height: 12px; flex: none; }
-  .bars i { width: 3px; height: 4px; border-radius: 1px; background: var(--accent); }
+  .bars i { width: 3px; height: 4px; border-radius: 1px; background: #fff; }
   .bars.on i { animation: bar .9s ease-in-out infinite; }
   .bars.on i:nth-child(2) { animation-delay: .15s; }
   .bars.on i:nth-child(3) { animation-delay: .3s; }
@@ -287,6 +290,8 @@
   .bars.wait i:nth-child(2) { animation-delay: .2s; }
   .bars.wait i:nth-child(3) { animation-delay: .4s; }
   @keyframes wait { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; translate: -50% 6px; } }
+  @media (prefers-reduced-motion: reduce) { .panel, .pill { animation: none; } }
   .stop { all: unset; cursor: pointer; flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
     background: var(--red); }
   .stop:hover { filter: brightness(1.1); }
