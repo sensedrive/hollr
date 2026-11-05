@@ -63,7 +63,6 @@ export const cleanTitle = (title?: string) => title?.replace(/^[^\p{L}\p{N}]+/u,
 const closed = (s: string) => s === "completed" || s === "abandoned";
 /** omp clears the TODO once everything is closed. */
 export const openPhase = (tl: Timeline): TodoPhase | undefined => tl.todo?.find((p) => p.tasks.some((x) => !closed(x.status)));
-export const hudVisible = (tl: Timeline) => tl.running || tl.jobs.length > 0 || !!openPhase(tl);
 export const phaseDone = (p: TodoPhase) => p.tasks.filter((x) => x.status === "completed").length;
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];

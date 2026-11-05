@@ -26,7 +26,7 @@ export interface TreePane {
   focused: boolean;
   /** omp panes can do /live */
   live: boolean;
-  /** a side conversation (`hollr gate fork`): the pane it was forked from and when */
+  /** a fork (`hollr gate fork`): the pane it was forked from and when */
   fork?: ForkMark;
 }
 
@@ -148,7 +148,7 @@ export class Herdr {
     const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
     const num = (v: unknown) => (typeof v === "number" ? v : 0);
     const rawPanes = panes.panes ?? [];
-    // side conversations (fork.ts); forks whose pane is gone leave the registry here
+    // forks (fork.ts); forks whose pane is gone leave the registry here
     const forks = forkMarks(new Map(rawPanes.map((p) => [str(p.pane_id), str(p.terminal_id)])));
     const treePanes = rawPanes.map((p) => {
       const agent = typeof p.agent === "string" && p.agent ? p.agent : undefined;

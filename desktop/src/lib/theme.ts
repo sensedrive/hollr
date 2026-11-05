@@ -42,7 +42,8 @@ export function apply(x: Palette) {
   set("raised", x.raised);
   set("fg", x.fg);
   set("muted", x.muted);
-  set("dim", x.dim);
+  // dim text a bit closer to muted than the palettes have it: hints, times and shortcuts stay readable
+  set("dim", mix(x.dim, x.muted, 0.6));
   set("border", x.border);
   set("accent", x.accent);
   for (const k of ["red", "green", "yellow", "orange", "purple", "cyan", "pink", "blue"] as const) set(k, x[k]);

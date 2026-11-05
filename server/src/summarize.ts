@@ -1,5 +1,5 @@
 /**
- * Spoken summaries for the app's "Zusammenfassung" (read aloud) – and a side conversation's result as a draft
+ * Spoken summaries for the app's "Zusammenfassung" (read aloud) – and a fork's result as a draft
  * for the main session ("handoff") – in one non-interactive model call through
  * omp (any provider/account omp is logged in to), or Claude Code when only `claude` is installed.
  * No session is saved, no tools, no project context; the text is never logged.
@@ -15,7 +15,7 @@ export interface SummarizeRequest {
   /** the text's language as the app detected it (de, en, fr, es, pt …) */
   lang?: string;
   length?: string;
-  /** "handoff": the outcome of a side conversation as a draft for the main session (fork.ts), not for speech */
+  /** "handoff": the outcome of a fork (fork.ts) as a draft for the main session, not for speech */
   style?: string;
 }
 
@@ -58,11 +58,11 @@ export function summaryPrompt(lang?: string, length: SummaryLength = "kurz"): st
   ].join("\n");
 }
 
-/** The result of a side conversation, written as a message the user can send to the main session's agent. */
+/** The result of a fork, written as a message the user can send to the main session's agent. */
 export function handoffPrompt(lang?: string): string {
   const language = (lang && LANGS[lang]) || "the same language as the conversation";
   return [
-    "You get the transcript of a side conversation between a user and a coding agent about an ongoing coding session.",
+    "You get the transcript of a chat between a user and a coding agent that continued from an ongoing coding session's history (a fork).",
     `Write in ${language} what came out of it, as a short message from the user to the agent of the main session.`,
     "Keep it brief: the decisions, findings, open questions and what the main session should do – a few sentences or a short list.",
     "Keep file names, commands and code identifiers exactly as they were; leave out small talk and anything already settled without consequence.",
@@ -73,7 +73,7 @@ export function handoffPrompt(lang?: string): string {
 
 export function summaryMessage(text: string, style?: string): string {
   return style === "handoff"
-    ? `Write the message for this side conversation:\n\n<conversation>\n${capText(text)}\n</conversation>`
+    ? `Write the message for this chat:\n\n<conversation>\n${capText(text)}\n</conversation>`
     : `Summarize this text:\n\n<text>\n${capText(text)}\n</text>`;
 }
 

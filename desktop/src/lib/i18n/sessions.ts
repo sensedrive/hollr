@@ -176,7 +176,7 @@ export default {
     "No agent is working right now. Start a session or open one from “All agents”.",
   "{n} arbeitet": "{n} working",
   "{n} wartet": "{n} waiting",
-  "{n} fertig": "{n} done",
+  "{n} neu": "{n} new",
   "Stand {time}": "As of {time}",
   "Nächster / vorheriger Eintrag": "Next / previous entry",
   "Option der Frage wählen": "Pick the question's option",

@@ -23,7 +23,7 @@ export interface Pane {
   cwd: string;
   focused: boolean;
   live: boolean;
-  /** a side conversation (server 0.36.1+ `fork`): the pane it was forked from, and when (epoch ms) */
+  /** a chat with context (server 0.36.1+ `fork`): the pane whose history it continues, and when (epoch ms) */
   fork?: { of: string; at: number };
 }
 export interface Tab {
@@ -212,13 +212,11 @@ export const kinds = (s: string) => gate<{ kinds: string[] }>(s, "kinds").then((
 export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
 export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
-/** A side conversation about `pane`'s session: its agent session copied into a new tab, write-guarded.
+/** A new chat that continues with `pane`'s session history (its agent session copied into a new tab next to it).
  *  Older servers answer "not_allowed". Loading a big session takes the agent a while – the long path.
- *  `replace` (reset): that earlier fork of `pane` makes way – the new one takes its tab (servers before this ignore it). */
+ *  `replace` (reset): that earlier fork of `pane` makes way – the new one takes its tab. */
 export const fork = (s: string, pane: string, label: string, replace?: string) =>
-  gate<{ pane: string; tab?: string; kind: string; at: number }>(s, `fork ${pane}`, { label, readOnly: true, replace }, true);
-/** Closes a side conversation's pane (the server refuses any pane that isn't one). */
-export const closeFork = (s: string, pane: string) => gate(s, `fork-close ${pane}`);
+  gate<{ pane: string; tab?: string; kind: string; at: number }>(s, `fork ${pane}`, { label, replace }, true);
 /** herdr tab name (`rename <tab id>`, server 0.32.5+) */
 export const renameTab = (s: string, tab: string, label: string) => gate(s, `rename ${tab}`, { label });
 export const models = (s: string, kind: string) => gate<ModelList>(s, `models ${kind}`);

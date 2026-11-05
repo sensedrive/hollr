@@ -1,13 +1,11 @@
 /**
- * Side conversations ("Nebengespräch"): a copy of a pane's agent session in a new herdr tab of the same
- * workspace, started with a write guard, so you can talk about the session (omp /live) without disturbing
- * it – the main session keeps working and its files stay as they are.
+ * Forks: a new chat that continues with the copied history of a pane's agent session, in a new herdr tab
+ * of the same workspace (or, on reset, in the old fork's tab). The original session keeps running untouched.
  *
  * omp: the session JSONL is copied next to the original as a new, distinct session (own id, `parentSession`
- * = the original, like omp's own fork) and resumed with `--approval-mode=always-ask` (reads run, every write
- * or command asks). Claude Code: `--resume <id> --fork-session` in plan mode (read-only until you approve).
- * Forks are recorded in ~/.config/hollr/forks.json – only those can be closed with `fork-close`, and the
- * tree marks them so the apps show them as side conversations.
+ * = the original, like omp's own fork) and resumed. Claude Code: `--resume <id> --fork-session`.
+ * Forks are recorded in ~/.config/hollr/forks.json – for the tree's fork mark, for reset (`replace`) and
+ * for the cutoff time (`at`) from which the fork's own conversation starts.
  */
 import { constants, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -15,10 +13,8 @@ import { basename, dirname, join } from "node:path";
 import type { Agent, Exec } from "./herdr";
 
 export interface ForkRequest {
-  /** herdr tab label; default "🎙 Nebengespräch · <title>" */
+  /** herdr tab label; default the session's title */
   label?: string;
-  /** start with the write guard (default) */
-  readOnly?: boolean;
   /** reset: this earlier fork of the same pane is replaced by a fresh one – in its tab, which keeps its place */
   replace?: string;
 }
@@ -30,7 +26,7 @@ export interface ForkEntry {
   /** the pane the fork was made from */
   of: string;
   kind: string;
-  /** epoch ms of the fork: the side conversation is what the fork's log has after this */
+  /** epoch ms of the fork: the fork's own conversation is what its log has after this */
   at: number;
   /** the fork's session file (omp) or id (claude) */
   session?: string;
@@ -99,7 +95,7 @@ export interface OmpFork {
 
 /**
  * Copies an omp session into a new, distinct session in the same folder: header with a new id and time,
- * `parentSession` = the original's id (as omp's own fork writes it), the title marked with `titlePrefix`.
+ * `parentSession` = the original's id (as omp's own fork writes it); the title stays as it is.
  * Only complete lines are taken – the main agent may be in the middle of a turn. The session's artifact
  * folder (tool output, subagent transcripts) is copied too (copy-on-write where the file system can), so
  * `artifact://` and subagent links keep working and the fork never writes into the original's folder.
@@ -107,19 +103,16 @@ export interface OmpFork {
  */
 export function forkOmpSession(
   source: string,
-  opts: { id?: string; now?: Date; titlePrefix?: string } = {},
+  opts: { id?: string; now?: Date } = {},
 ): OmpFork {
   const raw = readFileSync(source, "utf8");
   const cut = raw.lastIndexOf("\n");
   const lines = (cut < 0 ? "" : raw.slice(0, cut)).split("\n");
   const now = opts.now ?? new Date();
   const id = opts.id ?? Bun.randomUUIDv7();
-  const prefix = opts.titlePrefix ?? "";
-  const retitle = (title: unknown) =>
-    typeof title === "string" && prefix && !title.startsWith(prefix) ? `${prefix}${title}` : title;
   let parent: string | undefined;
   const out = lines.map((line) => {
-    if (parent !== undefined && !line.startsWith('{"type":"title"')) return line;
+    if (parent !== undefined) return line;
     let e: Record<string, unknown>;
     try {
       e = JSON.parse(line);
@@ -132,18 +125,10 @@ export function forkOmpSession(
         ...e,
         id,
         timestamp: now.toISOString(),
-        title: retitle(e.title),
         parentSession: parent,
         // omp's fork keeps the provider prompt cache of the original
         providerPromptCacheKey: e.providerPromptCacheKey ?? parent,
       });
-    }
-    if (e.type === "title" && typeof e.title === "string") {
-      // omp rewrites this slot in place: keep the line's length by giving the pad what the title took
-      const next: Record<string, unknown> = { ...e, title: retitle(e.title) };
-      const grow = Buffer.byteLength(JSON.stringify(next)) - Buffer.byteLength(line);
-      if (typeof e.pad === "string") next.pad = " ".repeat(Math.max(0, e.pad.length - grow));
-      return JSON.stringify(next);
     }
     return line;
   });
@@ -161,53 +146,18 @@ export function forkOmpSession(
 
 // ---------------------------------------------------------------- starting the fork
 
-/** What the fork is told for the whole conversation (appended to its system prompt). */
-export function sidePrompt(readOnly: boolean): string {
-  return [
-    "# Side conversation (Hollr)",
-    "",
-    "This session is a fork of another agent session that may still be running in another terminal. Everything",
-    "before this point is that session's history up to the moment of the fork. From now on the user talks with you",
-    "in a side conversation, usually by voice: about that session – questions, explanations, thinking out loud –",
-    "without disturbing it. Afterwards they go back to the main session.",
-    "",
-    "- Answer and explain. Keep answers short and conversational; they are often spoken aloud.",
-    "- Read files, search the code and run read-only commands when that helps to answer.",
-    ...(readOnly
-      ? [
-          "- Change nothing: do not edit, write, move or delete files, do not run commands that change files, git,",
-          "  packages, services or anything else, and do not start subagents that could. The main session may be",
-          "  working on the same files right now. If a tool asks for approval to write, that is the guard working.",
-          "- When the user wants a change, say what should change (they take it to the main session) instead of doing it.",
-        ]
-      : ["- Make changes only when the user explicitly asks for them."]),
-    "- Do not carry on with the main session's task on your own.",
-    "- Answer in the language the user speaks.",
-  ].join("\n");
-}
-
-/** CLI args for the fork's agent: resume the copy / fork the session, with the guard and the side prompt. */
-export function forkArgs(kind: string, session: string, promptFile: string, readOnly: boolean, newId?: string): string[] {
-  if (kind === "omp")
-    return [`--resume=${session}`, ...(readOnly ? ["--approval-mode=always-ask"] : []), `--append-system-prompt=${promptFile}`];
-  if (kind === "claude")
-    return [
-      "--resume",
-      session,
-      "--fork-session",
-      ...(newId ? ["--session-id", newId] : []),
-      ...(readOnly ? ["--permission-mode", "plan"] : []),
-      "--append-system-prompt-file",
-      promptFile,
-    ];
+/** CLI args for the fork's agent: resume the copy (omp) / fork the session (Claude). */
+export function forkArgs(kind: string, session: string, newId?: string): string[] {
+  if (kind === "omp") return [`--resume=${session}`];
+  if (kind === "claude") return ["--resume", session, "--fork-session", ...(newId ? ["--session-id", newId] : [])];
   throw new Error("unsupported");
 }
 
-/** The tab label: what the app sent (cleaned), else "🎙 Nebengespräch · <title>". */
+/** The tab label: what the app sent (cleaned), else the session's title. */
 export function forkLabel(title: string, label?: string): string {
   const clean = (s: string) => s.replace(/\s+/g, " ").replace(/[\p{Cc}\p{Co}]/gu, "").trim();
   // by code points: a cut emoji would leave half a surrogate pair in herdr's label
-  return [...(clean(label ?? "") || `🎙 Nebengespräch · ${clean(title)}`)].slice(0, 80).join("");
+  return [...(clean(label ?? "") || clean(title))].slice(0, 80).join("");
 }
 
 /** A pane as herdr's `tab create` / `pane list` report it. */
@@ -240,7 +190,7 @@ export async function forkPane(
   exec: Exec,
   agent: Agent,
   req: ForkRequest,
-  opts: { file?: string; promptDir?: string } = {},
+  opts: { file?: string } = {},
 ): Promise<ForkEntry & { tab?: string }> {
   if (agent.kind !== "omp" && agent.kind !== "claude") throw new Error("unsupported");
   if (!agent.sessionFile) throw new Error("no_session");
@@ -253,25 +203,18 @@ export async function forkPane(
     if (!old || old.of !== agent.pane) throw new Error("not_a_fork");
     oldAlive = panes.has(old.pane);
   }
-  const readOnly = req.readOnly !== false;
   const at = Date.now();
-  // the prompt as a file: no quoting through herdr's shell, and it stays readable for whoever wonders
-  const dir = opts.promptDir ?? join(homedir(), ".config", "hollr");
-  mkdirSync(dir, { recursive: true });
-  const promptFile = join(dir, readOnly ? "side-conversation.md" : "side-conversation-rw.md");
-  writeFileSync(promptFile, `${sidePrompt(readOnly)}\n`);
-
   let session: string;
   let args: string[];
   let copy: OmpFork | undefined;
   if (agent.kind === "omp") {
-    copy = forkOmpSession(agent.sessionFile, { titlePrefix: "🎙 " });
+    copy = forkOmpSession(agent.sessionFile);
     session = copy.file;
-    args = forkArgs("omp", copy.file, promptFile, readOnly);
+    args = forkArgs("omp", copy.file);
   } else {
     // Claude makes the copy itself; the fork's id is chosen here so the registry knows it at once
     session = crypto.randomUUID();
-    args = forkArgs("claude", basename(agent.sessionFile).replace(/\.jsonl$/, ""), promptFile, readOnly, session);
+    args = forkArgs("claude", basename(agent.sessionFile).replace(/\.jsonl$/, ""), session);
   }
   const dropCopy = () => {
     if (!copy) return;
@@ -315,17 +258,4 @@ export async function forkPane(
   const entry: ForkEntry = { pane, terminal: terminal || undefined, of: agent.pane, kind: agent.kind, at, session };
   saveForks([...loadForks(file).filter((e) => e.pane !== pane && e.pane !== old?.pane), entry], file);
   return { ...entry, tab: created.tab?.tab_id ?? created.pane?.tab_id };
-}
-
-/** Closes a registered fork's pane (refuses any other pane: `not_a_fork`); one already gone is just forgotten. */
-export async function closeFork(exec: Exec, pane: string, file = forksFile()): Promise<void> {
-  const list = loadForks(file);
-  const panes = await paneTerminals(exec);
-  const entry = findFork(list, pane, panes.get(pane) || undefined);
-  if (!entry) throw new Error("not_a_fork");
-  if (panes.has(pane)) await exec(["pane", "close", pane]);
-  saveForks(
-    list.filter((e) => e !== entry),
-    file,
-  );
 }

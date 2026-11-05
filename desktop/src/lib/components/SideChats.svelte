@@ -6,8 +6,8 @@
   import * as api from "$lib/api";
   import type { Timeline } from "$lib/api";
   import { t } from "$lib/i18n";
-  import { forkError } from "$lib/sideWindow";
-  import { sideItems } from "$lib/sidetalk";
+  import { forkError } from "$lib/contextChat.svelte";
+  import { historyCut } from "$lib/contextChatText";
   import { firstPrompt, questionOf, sideChatLabel, sidechats, type SideChat } from "$lib/sidechats.svelte";
   import TimelineView from "./TimelineView.svelte";
   import Icon from "./git/Icon.svelte";
@@ -41,7 +41,7 @@
   /** after the fork only, the first question without the quote and context sent with it */
   const shown = $derived.by((): Timeline | null => {
     if (!timeline || !chat?.at) return null;
-    const items = sideItems(timeline.items, chat.at).map((i) => (i.k === "user" ? { ...i, text: questionOf(i.text) } : i));
+    const items = timeline.items.slice(historyCut(timeline.items, chat.at)).map((i) => (i.k === "user" ? { ...i, text: questionOf(i.text) } : i));
     return { ...timeline, items };
   });
   const running = $derived(!!timeline?.running);
@@ -102,7 +102,7 @@
   }
 
   async function remove(c: SideChat) {
-    if (c.pane) await api.closeFork(server, c.pane).catch(() => {});
+    if (c.pane) await api.closePane(server, c.pane).catch(() => {});
     sidechats.remove(c.id);
     if (active === c.id) active = undefined;
   }
@@ -136,7 +136,7 @@
     <div class="active">
       <div class="scroll">
         <blockquote class="quote">{chat.quote}</blockquote>
-        <span class="ctx"><Icon name="info" size={12} /> {t("Kennt den ganzen Verlauf von „{title}“ · ändert nichts", { title })}</span>
+        <span class="ctx"><Icon name="info" size={12} /> {t("Kennt den ganzen Verlauf von „{title}“", { title })}</span>
         {#if shown}
           <TimelineView timeline={shown} overview={false} onAnswer={(ask, picks) => api.answer(server, chat.pane!, ask, picks).then(() => true, () => false)} />
         {/if}

@@ -5,6 +5,7 @@ import * as api from "./api";
 import type { Pane, Server, Workspace } from "./api";
 import { type Space, spaces as loadSpaces } from "./git";
 import * as d from "./drafts";
+import { chatLabel } from "./contextChatText";
 
 export const app = $state({
   servers: [] as Server[],
@@ -68,16 +69,12 @@ export const dialogMemory = {
 
 // ------------------------------------------------------------ drafts (unsent composer text)
 
-/** Composer text per session ("serverId|pane"), saved shortly after each change and when the window goes.
- *  The side conversation's window shares the stored drafts: each window writes back only the drafts it
- *  changed and picks up the other's changes (`storage` events). */
+/** Composer text per session ("serverId|pane"), saved shortly after each change and when the window goes. */
 class DraftStore {
   all = $state<d.Drafts>(this.load());
   /** ↑ history per session (memory only) */
   #recall: Record<string, string[]> = {};
   #timer: ReturnType<typeof setTimeout> | undefined;
-  /** keys changed here since the last write */
-  #dirty = new Set<string>();
 
   load(): d.Drafts {
     try {
@@ -89,40 +86,30 @@ class DraftStore {
   text = (key: string) => this.all[key]?.text ?? "";
   setText(key: string, text: string) {
     d.setText(this.all, key, text);
-    this.save(key);
+    this.save();
   }
   beginSend(key: string, msg: string) {
     d.beginSend(this.all, key, msg);
-    this.save(key);
+    this.save();
   }
   endSend(key: string, msg: string, ok: boolean) {
     d.endSend(this.all, key, msg, ok);
-    this.save(key);
+    this.save();
   }
   recall = (key: string) => this.#recall[key] ?? [];
   setRecall(key: string, list: string[]) {
     this.#recall[key] = list.slice(0, d.RECALL_MAX);
   }
-  save(key: string) {
-    this.#dirty.add(key);
+  save() {
     clearTimeout(this.#timer);
     this.#timer = setTimeout(() => this.flush(), 300);
   }
   flush() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
-    if (!this.#dirty.size) return;
     try {
-      const stored = d.storedDrafts(localStorage.getItem(d.DRAFTS_KEY));
-      localStorage.setItem(d.DRAFTS_KEY, d.serializeDrafts(d.mergeDrafts(stored, $state.snapshot(this.all), this.#dirty)));
-      this.#dirty.clear();
+      localStorage.setItem(d.DRAFTS_KEY, d.serializeDrafts($state.snapshot(this.all)));
     } catch {}
-  }
-  /** the other window wrote: take its drafts, keep the ones changed here and not yet written */
-  pickUp(raw: string | null) {
-    const stored = d.storedDrafts(raw);
-    for (const key of Object.keys(this.all)) if (!this.#dirty.has(key) && !stored[key]) delete this.all[key];
-    for (const [key, draft] of Object.entries(stored)) if (!this.#dirty.has(key)) this.all[key] = draft;
   }
 }
 
@@ -130,10 +117,6 @@ export const drafts = new DraftStore();
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => drafts.flush());
   window.addEventListener("pagehide", () => drafts.flush());
-  window.addEventListener("storage", (e) => {
-    if (e.key === d.DRAFTS_KEY) drafts.pickUp(e.newValue);
-    else if (e.key === MY) mySessions.ids = loadMy();
-  });
 }
 
 // ------------------------------------------------------------ my sessions
@@ -148,28 +131,28 @@ function loadMy(): string[] {
   }
 }
 
-/** Sessions opened or started in Hollr ("serverId|pane", most recent first) – the dashboard shows these.
- *  Every change starts from what is stored: the side window must not write back an old list. */
+/** Sessions opened or started in Hollr ("serverId|pane", most recent first) – the dashboard shows these. */
 class MySessions {
   ids = $state<string[]>(loadMy());
   touch(id: string) {
-    const ids = loadMy();
-    if (ids[0] === id) return void (this.ids = ids);
-    this.set([id, ...ids.filter((x) => x !== id)]);
+    if (this.ids[0] === id) return;
+    this.ids = [id, ...this.ids.filter((x) => x !== id)];
+    this.save();
   }
   remove(id: string) {
-    this.set(loadMy().filter((x) => x !== id));
+    this.ids = this.ids.filter((x) => x !== id);
+    this.save();
   }
   /** keeps only the ids `keep` accepts */
   prune(keep: (id: string) => boolean) {
-    const ids = loadMy();
-    const kept = ids.filter(keep);
-    if (kept.length !== ids.length) this.set(kept);
+    const kept = this.ids.filter(keep);
+    if (kept.length === this.ids.length) return;
+    this.ids = kept;
+    this.save();
   }
-  set(ids: string[]) {
-    this.ids = ids;
+  save() {
     try {
-      localStorage.setItem(MY, JSON.stringify(ids));
+      localStorage.setItem(MY, JSON.stringify(this.ids));
     } catch {}
   }
 }
@@ -187,9 +170,9 @@ export interface PaneRef {
   id: string;
 }
 
-/** herdr numbers unnamed tabs: show the workspace name instead of "1" */
-/** shown name of a herdr tab: unnamed ones by their workspace; side conversations named before 0.40 lose their 🎙 */
-export const tabName = (tab: string, workspace: string) => (/^(Tab )?\d+$/.test(tab) ? workspace : tab.replace(/^🎙\uFE0F?\s*/u, ""));
+/** shown name of a herdr tab: unnamed ones (herdr numbers them) by their workspace; forks from earlier versions
+ *  without their old prefix (contextChatText.ts) */
+export const tabName = (tab: string, workspace: string) => (/^(Tab )?\d+$/.test(tab) ? workspace : chatLabel(tab));
 
 export function allPanes(serverId?: string): PaneRef[] {
   const out: PaneRef[] = [];

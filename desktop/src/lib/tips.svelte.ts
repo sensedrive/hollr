@@ -19,7 +19,7 @@ export const TIPS: Tip[] = [
   { id: "notify", icon: "🔔", title: "Mitteilungen", since: 1,
     text: "Wartet ein Agent auf dich oder ist fertig, meldet sich Hollr mit einer Mitteilung – ein Klick öffnet den Chat. Abschaltbar unter Einstellungen › Allgemein." },
   { id: "keys", icon: "⌘", title: "Tastenkürzel", since: 1,
-    text: "Im Chat: {mod}K Eingabe, {mod}⇧G Git & Dateien, {mod}⇧B Browser, {mod}⇧I Info, {mod}⇧M Modell, {mod}. bricht ab." },
+    text: "{mod}K findet jede Sitzung und jeden Befehl. Im Chat: {mod}J Eingabe, {mod}⇧G Git & Dateien, {mod}⇧B Browser, {mod}⇧I Info, {mod}⇧M Modell, {mod}. bricht ab." },
   { id: "terminal", icon: ">_", title: "Terminal", since: 1,
     text: "{mod}⇧T wechselt zwischen Chat und dem Terminal der Session – derselbe Bildschirm wie am Rechner." },
   { id: "snippets", icon: "✚", title: "Bausteine und @", since: 1,

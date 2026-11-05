@@ -1,12 +1,15 @@
 <script lang="ts">
   // ⌘K: one search over every session (all servers, the ones that need you first), the current server's spaces
   // and the app's commands with their shortcuts – it replaces the long ⋯ menu as the place to find things, and
-  // keeps the old "Agents" and "Spaces" lists reachable. ↑↓ choose, ↩ runs, Esc closes.
+  // keeps the old "Agents" and "Spaces" lists reachable. Every typed word has to match (palette.ts). ↑↓ / Tab
+  // choose, ↩ runs, Esc closes.
   import { tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
-  import { allPanes, app, dialogs, go, tabName } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, findPane, go, nav, tabName } from "$lib/store.svelte";
+  import { canFork, startContextChat } from "$lib/contextChat.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
   import { statusRank } from "$lib/views/dashboard/util";
+  import { matchItems } from "$lib/palette";
   import type { FullSpace } from "$lib/views/spaces/spaces";
   import Icon from "./git/Icon.svelte";
 
@@ -30,11 +33,22 @@
       run: () => go({ view: "space", server: currentServer(), ws: sp.id }),
     })),
   );
+  /** the session on screen, when a chat with its context can be started */
+  const forkable = $derived.by(() => {
+    const r = nav.route;
+    const p = r.view === "agent" ? findPane(r.server, r.pane) : undefined;
+    return p && canFork(p.pane) ? p : undefined;
+  });
   const commands = $derived<Item[]>([
     { id: "c:new", label: t("Neue Sitzung"), icon: "plus", kbd: `${mod}N`, run: () => (dialogs.newSession = {}) },
+    ...(forkable
+      ? [{ id: "c:fork", label: t("Neuer Chat mit Kontext"), sub: tabName(forkable.tab.label, forkable.workspace.label), icon: "chat-plus", kbd: `${mod}${mod === "⌘" ? "⇧" : "Shift+"}L`,
+          run: () => void startContextChat(forkable.server.id, forkable.pane.pane) }]
+      : []),
     { id: "c:dash", label: t("Übersicht"), icon: "grid", kbd: `${mod}1`, run: () => go({ view: "dashboard" }) },
-    ...app.servers.map((s, i): Item => ({
-      id: `c:srv:${s.id}`, label: t("Server-Info: {server}", { server: s.label }), icon: "server", kbd: i < 9 ? `${mod}⌥${i + 1}` : undefined,
+    // the server's page; ⌘⌥1…9 switches to the server itself (its last session), so no shortcut here
+    ...app.servers.map((s): Item => ({
+      id: `c:srv:${s.id}`, label: t("Server-Info: {server}", { server: s.label }), icon: "server",
       run: () => go({ view: "serverinfo", server: s.id }),
     })),
     { id: "c:agents", label: t("Alle Agents"), icon: "list", run: () => go({ view: "agents" }) },
@@ -50,18 +64,30 @@
   $effect(() => void tick().then(() => input?.focus()));
 
   const groups = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    const hit = (i: Item) => !q || `${i.label} ${i.sub ?? ""}`.toLowerCase().includes(q);
+    const q = query.trim();
     return [
-      { title: t("Sitzungen"), items: sessions.filter(hit).slice(0, q ? 12 : 6) },
-      { title: t("Spaces"), items: spaces.filter(hit).slice(0, q ? 8 : 4) },
-      { title: t("Befehle"), items: commands.filter(hit) },
+      { title: t("Sitzungen"), items: matchItems(sessions, q).slice(0, q ? 12 : 6) },
+      { title: t("Spaces"), items: matchItems(spaces, q).slice(0, q ? 8 : 4) },
+      { title: t("Befehle"), items: matchItems(commands, q) },
     ].filter((g) => g.items.length);
   });
   const flat = $derived(groups.flatMap((g) => g.items));
   $effect(() => {
     void query;
     sel = 0;
+  });
+  // the chosen row stays in sight while ↑↓ walk past the list's edge
+  let list = $state<HTMLElement>();
+  $effect(() => {
+    const id = flat[sel]?.id;
+    if (id) list?.querySelector(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
+  });
+  // back to where the palette was opened from (the composer, the terminal …)
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  $effect(() => () => {
+    void tick().then(() => {
+      if (opener?.isConnected && (!document.activeElement || document.activeElement === document.body)) opener.focus({ preventScroll: true });
+    });
   });
 
   function run(i: Item | undefined) {
@@ -70,10 +96,13 @@
     i.run();
   }
   function onKey(e: KeyboardEvent) {
+    const down = e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey);
+    const up = e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey);
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(flat.length - 1, sel + 1); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, sel - 1); }
-    else if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); run(flat[sel]); }
+    // Tab walks the list too – focus stays in the search field, never behind the overlay
+    else if (down) { e.preventDefault(); sel = Math.min(flat.length - 1, sel + 1); }
+    else if (up) { e.preventDefault(); sel = Math.max(0, sel - 1); }
+    else if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); run(flat[Math.min(sel, flat.length - 1)]); }
   }
 </script>
 
@@ -86,13 +115,13 @@
         role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={flat[sel]?.id} />
       <kbd>Esc</kbd>
     </div>
-    <div class="list" id="palette-list" role="listbox">
+    <div class="list" id="palette-list" role="listbox" bind:this={list}>
       {#if !flat.length}<div class="empty">{t("Nichts gefunden")}</div>{/if}
       {#each groups as g (g.title)}
         <div class="group">{g.title}</div>
         {#each g.items as i (i.id)}
           {@const n = flat.indexOf(i)}
-          <button class="item" id={i.id} role="option" aria-selected={n === sel} onmousemove={() => (sel = n)} onclick={() => run(i)}>
+          <button class="item" id={i.id} role="option" tabindex="-1" aria-selected={n === sel} onmousemove={() => (sel = n)} onclick={() => run(i)}>
             <span class="ico">{#if i.status}<span class="dot {i.status}"></span>{:else if i.icon}<Icon name={i.icon} size={15} />{/if}</span>
             <span class="label">{i.label}</span>
             <span class="sub">{i.sub ?? ""}</span>

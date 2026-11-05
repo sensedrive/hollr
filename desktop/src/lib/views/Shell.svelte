@@ -1,12 +1,8 @@
 <script lang="ts">
   // Hollr desktop shell (the main window): sidebar (navigation + my sessions) and the current view on the right.
   import { onMount, untrack } from "svelte";
-  import { listen } from "@tauri-apps/api/event";
   import { t } from "$lib/i18n";
   import { settings } from "$lib/settings.svelte";
-  import { joinLive } from "$lib/live.svelte";
-  import { appendDraft } from "$lib/sidetalk";
-  import { draftKey } from "$lib/drafts";
   import {
     app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName,
   } from "$lib/store.svelte";
@@ -68,21 +64,12 @@
   onMount(() => {
     loadServers().then(() => refreshSpaces());
     tour.tips = pendingTips();
-    // a call already running in the side conversation's window shows here too (live pill, tab markers)
-    void joinLive();
     let unlisten = () => {};
     listenFeeds().then((off) => (unlisten = off)).catch(() => {});
-    // "Ergebnis in den Hauptchat" from a side window: below the session's draft, the session in front – never sent
-    const offResult = listen<{ server: string; pane: string; text: string }>("hollr-side-result", ({ payload: r }) => {
-      const key = draftKey(r.server, r.pane);
-      drafts.setText(key, appendDraft(drafts.text(key), r.text));
-      go({ view: "agent", server: r.server, pane: r.pane });
-    });
     const timer = setInterval(poll, 5000);
     return () => {
       clearInterval(timer);
       unlisten();
-      void offResult.then((off) => off());
     };
   });
 
@@ -160,7 +147,7 @@
         <span class="ico"><Icon name="find" size={15} /></span><span class="grow">{t("Suchen …")}</span><kbd>{mod}K</kbd>
       </button>
     </nav>
-    <ServerTabs side />
+    <ServerTabs />
     <div class="list">
       <SpacesSidebar />
     </div>

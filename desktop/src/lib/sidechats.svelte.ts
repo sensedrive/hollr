@@ -1,5 +1,5 @@
-// Sidechats ("Nachfragen"): a small chat about a selected piece of a session. Each one is a write-guarded fork of
-// the session (`api.fork`, like the side conversation) – the agent knows the whole history, the panel only shows the
+// Sidechats ("Nachfragen"): a small chat about a selected piece of a session. Each one is a fork of the session
+// (`api.fork`, like a chat with context; the first prompt asks it to only answer) – the agent knows the whole history, the panel only shows the
 // quote and what was asked after it. Kept per computer, listed per session in the session's "Nachfragen" panel; their
 // forks don't show as tabs or on the overview (their tab name starts with SIDECHAT_PREFIX).
 export { FIRST_PREFIX, SIDECHAT_PREFIX, firstPrompt, isSideChatLabel, questionOf, sideChatLabel } from "./sidechat";
