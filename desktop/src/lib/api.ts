@@ -234,7 +234,14 @@ function answerError(e: unknown): Error {
 export const kinds = (s: string) => gate<{ kinds: string[] }>(s, "kinds").then((r) => r.kinds);
 export const newChat = (s: string, body: Record<string, unknown>) =>
   gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
-export const closePane = (s: string, pane: string) => gate(s, `close ${pane}`);
+/** Closes a session. Its space stays: for the space's last pane the server opens an empty terminal first.
+ *  A refusal rejects – older servers answer nothing then (no `ok`): never a silent no-op. */
+export const closePane = (s: string, pane: string) =>
+  gate<{ ok?: boolean }>(s, `close ${pane}`).then((r) => {
+    if (!r.ok) throw new Error(t("Die Sitzung ließ sich nicht schließen. Hollr auf dem Server aktualisieren (Server › Werkzeuge) und erneut versuchen."));
+  });
+/** the space's only pane – closing it leaves the space with an empty terminal (`closePane`) */
+export const lastPaneOf = (ws: Workspace) => ws.tabs.reduce((n, tb) => n + tb.panes.length, 0) === 1;
 /** A new chat that continues with `pane`'s session history (its agent session copied into a new tab next to it).
  *  Older servers answer "not_allowed". Loading a big session takes the agent a while – the long path.
  *  `replace` (reset): that earlier fork of `pane` makes way – the new one takes its tab. */

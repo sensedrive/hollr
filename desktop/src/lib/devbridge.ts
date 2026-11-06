@@ -1,7 +1,8 @@
 // Dev only: lets the frontend run in a normal browser against the backend bridge
 // (`cargo run --example bridge -- <data dir>`, then http://localhost:1420/?bridge=7419).
 // Commands the bridge doesn't serve (tunnel, plugins) resolve to null. Events the bridge emits
-// (the live terminal's `hollr-term`, omp /live's `live`) arrive as server-sent events from /events.
+// (the live terminal's `hollr-term`, omp /live's `live`, the change feed's `hollr-changed` / `hollr-feed`)
+// arrive as server-sent events from /events.
 const port = new URLSearchParams(location.search).get("bridge");
 if (port && !("__TAURI_INTERNALS__" in window)) {
   let id = 0;
@@ -32,7 +33,7 @@ if (port && !("__TAURI_INTERNALS__" in window)) {
           events ??= subscribe();
           return handler;
         }
-        const bridged = ["servers", "gate", "gate_long", "term_start", "term_write", "term_resize", "term_stop", "live_start", "live_stop", "live_mute", "live_speaker", "live_headphones"];
+        const bridged = ["servers", "gate", "gate_long", "feeds_sync", "term_start", "term_write", "term_resize", "term_stop", "live_start", "live_stop", "live_mute", "live_speaker", "live_headphones"];
         if (!bridged.includes(cmd)) return null;
         // the bridge has no long variant: its gate waits the normal reply time (uploads, summaries)
         const body = JSON.stringify({ cmd: cmd === "gate_long" ? "gate" : cmd, args });

@@ -161,6 +161,14 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Git-Stand sofort aktuell: pull, fetch, commit oder checkout – auch in einem normalen Terminal oder außerhalb von Hollr – zeigen ↑/↓ und Änderungen nach wenigen Sekunden":
+    "Git state up to date right away: pull, fetch, commit or checkout – also in a plain terminal or outside Hollr – show ↑/↓ and changes within seconds",
+  "Letzte Sitzung eines Space lässt sich schließen – der Space bleibt mit einem leeren Terminal; scheitert das Schließen, siehst du warum":
+    "The last session of a space can be closed – the space stays with an empty terminal; if closing fails, you see why",
+  "Space schließen mit Worktrees: der Dialog zeigt, welche Worktree-Spaces mit schließen; Spaces mit gelöschtem Ordner sind markiert und lassen sich schließen":
+    "Closing a space with worktrees: the dialog shows which worktree spaces close with it; spaces whose folder was deleted are marked and can be closed",
+  "Terminal-Links öffnen genau die angezeigte Adresse: lange umgebrochene URLs vollständig, localhost auf diesem Mac unverändert, bei entfernten Servern zeigt der Dialog die Tunnel-Adresse; Emoji verschieben die Zeile nicht mehr":
+    "Terminal links open exactly the address shown: long wrapped URLs in full, localhost on this Mac unchanged, for remote servers the dialog shows the tunnel address; emoji no longer shift the line",
   "Neue Sitzung: statt endloser Platzhalter ein Startbild mit Agent und Version, Modell, Kontext, Ordner, Branch, MCP-Status, Update-Hinweis und ersten Schritten – vorher hing der Chat, bis das erste Wort fiel":
     "New session: instead of endless placeholders a start screen with agent and version, model, context, folder, branch, MCP status, update hint and first steps – the chat used to hang until the first word",
   "Git-Verlauf zeigt auch Remote-Branches (abschaltbar), lange Branch-Namen werden gekürzt":

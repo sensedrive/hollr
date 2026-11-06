@@ -125,8 +125,18 @@
         {/if}
       </div>
 
+      {#if space?.missing}
+        <!-- a worktree removed outside herdr: nothing can run there any more, only closing helps -->
+        <div class="card missing small">
+          <span><Icon name="⚠" size={15} /> {t("Der Ordner dieses Spaces fehlt.")}</span>
+          <button class="btn danger" onclick={() => (closing = true)}>{t("Ordner fehlt – schließen …")}</button>
+        </div>
+      {/if}
+
       <div class="actions">
-        <button class="btn primary" onclick={() => (dialogs.newSession = { server, ws })}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
+        {#if !space?.missing}
+          <button class="btn primary" onclick={() => (dialogs.newSession = { server, ws })}><Icon name="＋" size={15} /> {t("Neue Sitzung")}</button>
+        {/if}
         {#if space && !space.isWorktree && space.git}
           <button class="btn" onclick={() => (newWorktree = true)}><Icon name="⑂" size={15} /> {t("Neuer Worktree …")}</button>
         {/if}
@@ -175,7 +185,7 @@
 {#if closingPane}
   {@const r = closingPane}
   <ConfirmDialog title={t("Chat schließen?")} confirmLabel={t("Schließen")}
-    message={t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: agentName(r.pane) })}
+    message={`${t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: agentName(r.pane) })}${api.lastPaneOf(r.workspace) ? ` ${t("Der Space bleibt – mit einem leeren Terminal.")}` : ""}`}
     onConfirm={() => closePane(r)} onClose={() => (closingPane = null)} />
 {/if}
 
@@ -203,4 +213,5 @@
   .meta { display: grid; gap: 4px; margin-bottom: 14px; }
   .git { display: flex; gap: 8px; align-items: center; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .missing { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--orange); }
 </style>

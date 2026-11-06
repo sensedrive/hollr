@@ -108,6 +108,8 @@ export default {
   "hört zu": "listening",
   "localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.":
     "Hollr opens localhost addresses through the SSH connection to the server.",
+  "Der System-Browser öffnet sie über die SSH-Verbindung zum Server als:":
+    "The system browser opens it through the SSH connection to the server as:",
   läuft: "running",
   Leertaste: "Space",
   "n (nein)": "n (no)",

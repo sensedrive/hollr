@@ -273,8 +273,15 @@ export function keySequence(name: string, appCursor = false): string | undefined
 
 // ------------------------------------------------------------ links
 
-/** Links in terminal text: http(s)://, www., localhost:PORT, 127.0.0.1:PORT (like iOS). */
-const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>"'`]+|\b(?:localhost|127\.0\.0\.1):\d{2,5}(?:\/[^\s<>"'`]*)?/g;
+/** Links in terminal text: http(s)://, www., localhost:PORT, 127.0.0.1:PORT (like iOS). A link ends at
+ *  whitespace, quotes, angle brackets and at what frames or cuts it in TUIs: box drawing and block elements
+ *  (`│https://x│`), "…" (a shortened link), CJK punctuation, fullwidth forms and Nerd Font glyphs. */
+const URL_CHAR = "[^\\s<>\"'`\\u2026\\u2500-\\u259f\\u3000-\\u303f\\ue000-\\uf8ff\\uff00-\\uffef]";
+const URL_RE = new RegExp(
+  `\\b(?:https?:\\/\\/|www\\.)${URL_CHAR}+|\\b(?:localhost|127\\.0\\.0\\.1):\\d{2,5}(?:\\/${URL_CHAR}*)?`,
+  "g",
+);
+const LINK_CHAR = new RegExp(`^${URL_CHAR}$`);
 const count = (s: string, c: string) => s.split(c).length - 1;
 
 /** Sentence punctuation after a link, a closing bracket the link didn't open. */
@@ -283,14 +290,96 @@ function trimUrl(url: string): string {
   return url;
 }
 
+/** A string range [start, end) of a (logical) line and what opening it opens. */
+export interface FoundLink {
+  start: number;
+  end: number;
+  url: string;
+}
+
 /** The links in a (logical) line: string range [start, end) and the URL to open. */
-export function findLinks(text: string): { start: number; end: number; url: string }[] {
-  const out: { start: number; end: number; url: string }[] = [];
+export function findLinks(text: string): FoundLink[] {
+  const out: FoundLink[] = [];
   for (const m of text.matchAll(URL_RE)) {
     const raw = trimUrl(m[0]);
     if (!raw) continue;
     const url = /^https?:/i.test(raw) ? raw : (raw.startsWith("www.") ? "https://" : "http://") + raw;
     out.push({ start: m.index, end: m.index + raw.length, url });
+  }
+  return out;
+}
+
+/** The part of an xterm.js buffer line (IBufferLine) the link mapping reads. */
+export interface TermLine {
+  readonly isWrapped: boolean;
+  readonly length: number;
+  getCell(x: number): { getChars(): string; getWidth(): number } | undefined;
+}
+
+/** A link on the screen: first and last cell (1-based, inclusive – xterm.js' IBufferRange), the text
+ *  shown there and the URL to open. */
+export interface CellLink {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  text: string;
+  url: string;
+}
+
+/** The character in the row's last column (the left half of a wide character standing there). */
+function lastChars(line: TermLine): string {
+  const last = line.getCell(line.length - 1);
+  if (last && last.getWidth() === 0) return line.getCell(line.length - 2)?.getChars() ?? "";
+  return last?.getChars() ?? "";
+}
+
+/** Row `row` goes on with the line of row `row - 1`: wrapped by the terminal, or – programs that draw
+ *  their rows themselves (herdr, tmux, full-screen TUIs) break long lines without marking the next row
+ *  as wrapped – the previous row is filled up to its last column and both meet inside a link-like word. */
+function continues(getLine: (row: number) => TermLine | undefined, row: number): boolean {
+  const line = getLine(row);
+  if (!line) return false;
+  if (line.isWrapped) return true;
+  const prev = getLine(row - 1);
+  return !!prev && LINK_CHAR.test(lastChars(prev)) && LINK_CHAR.test(line.getCell(0)?.getChars() ?? "");
+}
+
+/**
+ * The links touching buffer row `y` (1-based): its logical line – the rows wrapped into one – read as text,
+ * `find` run on it and each string range mapped back to the cells it is drawn in. Wide characters (emoji,
+ * CJK) take two cells but one or two UTF-16 units, combining marks share their base's cell.
+ */
+export function linksAt(
+  getLine: (row: number) => TermLine | undefined,
+  rows: number,
+  y: number,
+  find: (text: string) => FoundLink[],
+): CellLink[] {
+  let first = y - 1;
+  while (first > 0 && continues(getLine, first)) first--;
+  let text = "";
+  /** per UTF-16 unit of `text`: the cell it is drawn in (1-based) and the last column of that cell */
+  const cells: { x: number; y: number; last: number }[] = [];
+  for (let row = first; row < rows; row++) {
+    const line = getLine(row);
+    if (!line || (row > first && !continues(getLine, row))) break;
+    // the empty cell a wide character left at the end of a row when it wrapped is no gap in the line
+    let end = line.length;
+    if (continues(getLine, row + 1)) while (end > 0 && !line.getCell(end - 1)?.getChars()) end--;
+    for (let x = 0; x < end; x++) {
+      const cell = line.getCell(x);
+      const width = cell?.getWidth() ?? 1;
+      if (width === 0) continue; // the second half of a wide character
+      const chars = cell?.getChars() || " ";
+      text += chars;
+      for (let i = 0; i < chars.length; i++) cells.push({ x: x + 1, y: row + 1, last: x + width });
+    }
+  }
+  const out: CellLink[] = [];
+  for (const l of find(text)) {
+    const start = cells[l.start];
+    const end = cells[l.end - 1];
+    if (!start || !end || start.y > y || end.y < y) continue;
+    out.push({ start: { x: start.x, y: start.y }, end: { x: end.last, y: end.y }, text: text.slice(l.start, l.end), url: l.url });
   }
   return out;
 }

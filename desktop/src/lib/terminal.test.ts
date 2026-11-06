@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "bun:test";
-import { findLinks, keySequence, reconnectDelay, TermSession, type TermBackend, type TermEvent, type TermPhase } from "./terminal";
+import { findLinks, keySequence, linksAt, reconnectDelay, TermSession, type TermBackend, type TermEvent, type TermLine, type TermPhase } from "./terminal";
 
 /** A backend whose starts answer when the test says so. */
 function fakeBackend() {
@@ -198,5 +198,124 @@ describe("findLinks", () => {
     ]);
     const [first] = findLinks(text);
     expect(text.slice(first.start, first.end)).toBe("https://example.com/a_(b)");
+  });
+
+  test("a link ends at TUI frames, a shortening ellipsis, CJK punctuation and Nerd Font glyphs", () => {
+    const urls = (text: string) => findLinks(text).map((l) => l.url);
+    expect(urls("│https://example.com/a│")).toEqual(["https://example.com/a"]);
+    expect(urls("browser open https://idmsa.apple.com/signin?appIdKey=2bd7197b69c4…")).toEqual(["https://idmsa.apple.com/signin?appIdKey=2bd7197b69c4"]);
+    expect(urls("見て https://example.com/x。次")).toEqual(["https://example.com/x"]);
+    expect(urls("https://example.com/y\ue0b0 main")).toEqual(["https://example.com/y"]);
+    expect(urls("PR https://gourmetta.pr-2850.128-140-61-8.nip.io/ und https://github.com/leicht-luftig/tendr/pull/2850.")).toEqual([
+      "https://gourmetta.pr-2850.128-140-61-8.nip.io/",
+      "https://github.com/leicht-luftig/tendr/pull/2850",
+    ]);
+  });
+});
+
+/** Terminal rows as xterm.js lays them out with the Unicode 11 width table (TerminalView): wide characters
+ *  (emoji incl. ⚡ and skin tone modifiers, CJK) in two cells, the second one empty with width 0; combining
+ *  marks and VS16 in their base's cell; padded to `cols`. Checked against a real xterm.js 6 + addon-unicode11:
+ *  "F ✔ ⚡ 👍🏽" → F:1 ␠:1 ✔:1 ␠:1 ⚡:2 "":0 ␠:1 👍:2 "":0 🏽:2 "":0. */
+function screen(cols: number, rows: { text: string; wrapped?: boolean }[]): (row: number) => TermLine | undefined {
+  const wide = (c: number) =>
+    c >= 0x1f000 || c === 0x26a1 || (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3);
+  const joins = (c: number) => (c >= 0x300 && c <= 0x36f) || c === 0xfe0f;
+  const lines = rows.map(({ text, wrapped = false }) => {
+    const cells: { chars: string; width: number }[] = [];
+    for (const ch of text) {
+      const c = ch.codePointAt(0)!;
+      if (joins(c) && cells.length) {
+        const base = cells.findLast((cell) => cell.width > 0)!;
+        base.chars += ch;
+      } else if (wide(c)) cells.push({ chars: ch, width: 2 }, { chars: "", width: 0 });
+      else cells.push({ chars: ch, width: 1 });
+    }
+    if (cells.length > cols) throw new Error(`row longer than ${cols}: ${text}`);
+    while (cells.length < cols) cells.push({ chars: "", width: 1 });
+    return {
+      isWrapped: wrapped,
+      length: cols,
+      getCell: (x: number) => cells[x] && { getChars: () => cells[x].chars, getWidth: () => cells[x].width },
+    };
+  });
+  return (row) => lines[row];
+}
+
+describe("linksAt", () => {
+  const at = (cols: number, rows: { text: string; wrapped?: boolean }[], y: number) => linksAt(screen(cols, rows), rows.length, y, findLinks);
+
+  test("wide characters, combining marks and glyphs before a link don't shift its cells", () => {
+    const cases: [string, number][] = [
+      ["A 🚀 deploy: https://gourmetta.pr-2850.128-140-61-8.nip.io/", 14],
+      ["B │ 日本語 https://github.com/finksmart/hollr/pull/123", 12],
+      ["C \uf113 \ue0a0 main https://example.com/nerd?q=1", 12],
+      ["D e\u0301e\u0301 https://example.com/combining", 6],
+      ["F ✔ ⚡ 👍🏽 https://example.com/emoji", 13],
+      ["🚀h deploy ⚡ ok https://example.com/x", 18],
+    ];
+    for (const [text, x] of cases) {
+      const [link, ...rest] = at(80, [{ text }], 1);
+      expect(rest).toEqual([]);
+      expect(link.start).toEqual({ x, y: 1 });
+      expect(link.end).toEqual({ x: x + link.text.length - 1, y: 1 });
+      expect(link.url).toBe(link.text);
+      expect(text.endsWith(link.text)).toBe(true);
+    }
+  });
+
+  test("several links in a row, each with its own cells", () => {
+    const text = "🔗 https://github.com/a/b/pull/1 and http://localhost:5173/x";
+    expect(at(80, [{ text }], 1)).toEqual([
+      { start: { x: 4, y: 1 }, end: { x: 32, y: 1 }, text: "https://github.com/a/b/pull/1", url: "https://github.com/a/b/pull/1" },
+      { start: { x: 38, y: 1 }, end: { x: 60, y: 1 }, text: "http://localhost:5173/x", url: "http://localhost:5173/x" },
+    ]);
+  });
+
+  test("a link ending in a wide character ends on its second cell", () => {
+    const [link] = at(40, [{ text: "see https://example.com/日本" }], 1);
+    expect(link.url).toBe("https://example.com/日本");
+    expect(link.end).toEqual({ x: 28, y: 1 });
+  });
+
+  const url = `https://example.com/long/${"a".repeat(60)}/end`;
+
+  test("a link the terminal wrapped is one link on all its rows", () => {
+    const rows = [{ text: "G " + url.slice(0, 38) }, { text: url.slice(38, 78), wrapped: true }, { text: url.slice(78), wrapped: true }];
+    for (const y of [1, 2, 3]) {
+      const [link, ...rest] = at(40, rows, y);
+      expect(rest).toEqual([]);
+      expect(link).toEqual({ start: { x: 3, y: 1 }, end: { x: url.length - 78, y: 3 }, text: url, url });
+    }
+  });
+
+  test("a link a multiplexer or TUI broke into rows itself (not marked wrapped) is still one link", () => {
+    const rows = [
+      { text: "G " + url.slice(0, 38) },
+      { text: url.slice(38, 78) },
+      { text: url.slice(78) },
+      { text: "next line" },
+    ];
+    for (const y of [1, 2, 3]) expect(at(40, rows, y).map((l) => l.url)).toEqual([url]);
+    expect(at(40, rows, 4)).toEqual([]);
+  });
+
+  test("a row ending with a wide character that didn't fit keeps the link whole", () => {
+    // xterm leaves the last cell empty when a wide character wraps to the next row
+    const rows = [{ text: "x https://example.com/日本" }, { text: "語/end", wrapped: true }];
+    for (const y of [1, 2]) expect(at(27, rows, y).map((l) => l.url)).toEqual(["https://example.com/日本語/end"]);
+  });
+
+  test("rows that only touch don't join: a link before a space, frames, a short row", () => {
+    const boxed = [
+      { text: "│ see https://example.com/boxed".padEnd(41) + "│" },
+      { text: "│ more".padEnd(41) + "│" },
+    ];
+    expect(at(42, boxed, 1).map((l) => l.url)).toEqual(["https://example.com/boxed"]);
+    expect(at(42, boxed, 2)).toEqual([]);
+    const full = [{ text: "https://example.com/" + "b".repeat(20) }, { text: " not part of it" }];
+    expect(at(40, full, 1).map((l) => l.url)).toEqual(["https://example.com/" + "b".repeat(20)]);
+    const short = [{ text: "https://example.com/short" }, { text: "word" }];
+    expect(at(40, short, 1).map((l) => l.url)).toEqual(["https://example.com/short"]);
   });
 });

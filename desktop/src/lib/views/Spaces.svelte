@@ -13,7 +13,7 @@
 
   onMount(() => {
     refreshSpaces();
-    // pushed changes refresh spaces right away; this is the safety net (git state changes herdr doesn't report)
+    // pushed changes (incl. the server's git watch) refresh spaces right away; this is the safety net
     const timer = setInterval(pollSpaces, 10_000);
     return () => clearInterval(timer);
   });

@@ -18,6 +18,7 @@
     <span class="grow text">
       <span class="label ellipsis" class:strong={!nested}>{space.label}
         {#if space.isWorktree}<span class="pill">worktree</span>{/if}
+        {#if space.missing}<span class="lost small">{t("Ordner fehlt")}</span>{/if}
         {#if space.paneCount}<span class="dim small"> · {space.paneCount}</span>{/if}
       </span>
       {#if space.git}
@@ -50,6 +51,7 @@
   .text { display: grid; gap: 1px; }
   .label.strong { font-weight: 600; }
   .label .pill { margin-left: 6px; }
+  .lost { margin-left: 6px; color: var(--orange); font-weight: 400; }
   .git { display: flex; gap: 8px; }
   .branch { color: var(--purple); }
   .commit { color: var(--dim); }

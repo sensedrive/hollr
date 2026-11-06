@@ -1,13 +1,14 @@
 //! Live change feed: one long-running `hollr gate events` channel per server. Every change in herdr
-//! (new workspace, closed pane, agent status …) is forwarded to the frontend as a `hollr-changed`
-//! event, so the UI refreshes right away instead of waiting for the next poll.
+//! (new workspace, closed pane, agent status …) and in the spaces' git state (pull, fetch, commit …)
+//! is forwarded to the frontend as a `hollr-changed` event, so the UI refreshes right away instead of
+//! waiting for the next poll.
 //! (Desktop counterpart of the feed in `ios/Sources/Hollr/Model/HerdrStore.swift`.)
 
 use std::collections::HashMap;
 use std::time::Duration;
 
 use russh::ChannelMsg;
-use serde::Serialize;
+use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -16,18 +17,6 @@ use crate::hollr::Hollr;
 
 #[derive(Default)]
 pub struct Feeds(Mutex<HashMap<String, JoinHandle<()>>>);
-
-#[derive(Clone, Serialize)]
-struct Changed {
-    server: String,
-    spaces: bool,
-}
-
-#[derive(Clone, Serialize)]
-struct Live {
-    server: String,
-    live: bool,
-}
 
 impl Feeds {
     /// Makes sure exactly these servers have a running feed.
@@ -42,18 +31,29 @@ impl Feeds {
         });
         for id in servers {
             if !feeds.contains_key(&id) {
-                feeds.insert(id.clone(), tokio::spawn(run(app.clone(), id)));
+                let app = app.clone();
+                feeds.insert(
+                    id.clone(),
+                    tokio::spawn(async move {
+                        let hollr = app.state::<Hollr>();
+                        follow(&hollr, &id, |name, payload| {
+                            let _ = app.emit(name, payload);
+                        })
+                        .await;
+                    }),
+                );
             }
         }
     }
 }
 
-async fn run(app: AppHandle, server: String) {
+/// Follows one server's feed for good (reconnecting with backoff): `hollr-feed` {server, live} when the
+/// channel comes up or goes down, `hollr-changed` {server, spaces} per change. (The dev bridge reuses it.)
+pub async fn follow(hollr: &Hollr, server: &str, emit: impl Fn(&str, Value)) {
     let mut backoff = 2u64;
     loop {
         let mut unsupported = false;
-        let hollr = app.state::<Hollr>();
-        if let Ok(handle) = hollr.handle_for(&server).await
+        if let Ok(handle) = hollr.handle_for(server).await
             && let Ok(mut channel) = handle.channel_open_session().await
             && channel.exec(true, "events").await.is_ok()
         {
@@ -68,15 +68,15 @@ async fn run(app: AppHandle, server: String) {
                 buf.extend_from_slice(&data);
                 while let Some(nl) = buf.iter().position(|b| *b == b'\n') {
                     let line: Vec<u8> = buf.drain(..=nl).collect();
-                    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&line) else { continue };
+                    let Ok(v) = serde_json::from_slice::<Value>(&line) else { continue };
                     match v["t"].as_str() {
                         Some("ready") => {
                             backoff = 2;
-                            let _ = app.emit("hollr-feed", Live { server: server.clone(), live: true });
+                            emit("hollr-feed", json!({ "server": server, "live": true }));
                         }
                         Some("changed") => {
                             let spaces = v["spaces"].as_bool().unwrap_or(false);
-                            let _ = app.emit("hollr-changed", Changed { server: server.clone(), spaces });
+                            emit("hollr-changed", json!({ "server": server, "spaces": spaces }));
                         }
                         None if v.get("error").is_some() => unsupported = true, // older server
                         _ => {}
@@ -84,7 +84,7 @@ async fn run(app: AppHandle, server: String) {
                 }
             }
         }
-        let _ = app.emit("hollr-feed", Live { server: server.clone(), live: false });
+        emit("hollr-feed", json!({ "server": server, "live": false }));
         // an older server without the feed: polling covers it, look again in a few minutes
         tokio::time::sleep(Duration::from_secs(if unsupported { 300 } else { backoff })).await;
         backoff = (backoff * 2).min(30);

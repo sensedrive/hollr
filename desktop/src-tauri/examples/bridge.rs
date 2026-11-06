@@ -1,8 +1,10 @@
 // Dev only: serves the backend commands over HTTP on 127.0.0.1 so the frontend can be tested in a
 // normal browser (`bun run dev`, then open http://localhost:1420/?bridge=7419). Events (the live
-// terminal's `hollr-term`, omp /live's `live`) come as server-sent events from GET /events.
+// terminal's `hollr-term`, omp /live's `live`, the change feed's `hollr-changed` / `hollr-feed`) come
+// as server-sent events from GET /events.
 // Live runs without microphone / speakers here: only the connection, phases and omp's state.
 //   cargo run --example bridge -- "<app data dir>" [port]
+use hollr_desktop_lib::feed;
 use hollr_desktop_lib::hollr::Hollr;
 use hollr_desktop_lib::live::{Emit, Lives, Options};
 use hollr_desktop_lib::term::{self, Cmd};
@@ -14,6 +16,7 @@ use tokio::net::TcpListener;
 use tokio::sync::{Mutex, broadcast, mpsc};
 
 type Terms = Arc<Mutex<(u64, HashMap<u64, mpsc::UnboundedSender<Cmd>>)>>;
+type FeedTasks = Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,13 +25,14 @@ async fn main() -> anyhow::Result<()> {
     let (events, _) = broadcast::channel::<String>(4096);
     let terms: Terms = Default::default();
     let lives = Arc::new(Lives::default());
+    let feeds: FeedTasks = Default::default();
     let port = args.get(2).map(|p| p.parse()).transpose()?.unwrap_or(7419u16);
     let listener = TcpListener::bind(("127.0.0.1", port)).await?;
     println!("bridge on 127.0.0.1:{port}");
     loop {
         let (mut sock, _) = listener.accept().await?;
         let hollr = hollr.clone();
-        let (events, terms, lives) = (events.clone(), terms.clone(), lives.clone());
+        let (events, terms, lives, feeds) = (events.clone(), terms.clone(), lives.clone(), feeds.clone());
         tokio::spawn(async move {
             let mut buf = Vec::new();
             let mut chunk = [0u8; 8192];
@@ -101,6 +105,20 @@ async fn main() -> anyhow::Result<()> {
                     "live_mute" => { lives.mute(a["session"].as_u64().unwrap_or_default(), a["on"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
                     "live_speaker" => { lives.speaker(a["session"].as_u64().unwrap_or_default(), a["muted"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
                     "live_headphones" => { lives.headphones(a["on"].as_bool().unwrap_or_default()).await; Ok(json!(null)) }
+                    // the live change feed (`hollr gate events`) per server, like the app's feed.rs
+                    "feeds_sync" => {
+                        let mut f = feeds.lock().await;
+                        let want: Vec<String> = serde_json::from_value(a["servers"].clone()).unwrap_or_default();
+                        f.retain(|id, task| { let keep = want.contains(id) && !task.is_finished(); if !keep { task.abort(); } keep });
+                        for id in want {
+                            if f.contains_key(&id) { continue; }
+                            let (hollr, events) = (hollr.clone(), events.clone());
+                            f.insert(id.clone(), tokio::spawn(async move {
+                                feed::follow(&hollr, &id, |name, v| { let _ = events.send(json!({ "event": name, "payload": v }).to_string()); }).await;
+                            }));
+                        }
+                        Ok(json!(null))
+                    }
                     other => Err(anyhow::anyhow!("bridge: {other} not available")),
                 };
                 match r { Ok(v) => (200, v), Err(e) => (500, json!(format!("{e:#}"))) }

@@ -2,7 +2,9 @@
   import Icon from "$lib/components/git/Icon.svelte";
   // Close a space with all options: keep files, remove the worktree (with or without its branch,
   // locally and on origin) or delete a plain folder – showing first what would be lost.
-  // "Änderungen ansehen" opens the git panel right next to the options.
+  // "Änderungen ansehen" opens the git panel right next to the options. A repo's main space closes
+  // together with its worktree spaces (herdr's group) – listed here first. A space whose folder is
+  // gone can only be closed.
   import GitPanel from "$lib/components/GitPanel.svelte";
   import { t } from "$lib/i18n";
   import { refresh, refreshSpaces } from "$lib/store.svelte";
@@ -28,12 +30,13 @@
   });
 
   const destructive = $derived(option !== "close");
+  const group = $derived(info?.group ?? []);
   const canRun = $derived(!!info && !busy && (!destructive || confirmText === space.label));
   const choices = $derived.by(() => {
     const out: { value: Option; title: string; detail: string }[] = [
       { value: "close", title: t("Nur schließen"), detail: t("Sitzungen beenden, Dateien und Branch bleiben.") },
     ];
-    if (info?.isWorktree) {
+    if (info?.isWorktree && !info.missing) {
       out.push({ value: "removeWorktree", title: t("Worktree entfernen"), detail: t("Ordner wird gelöscht, der Branch bleibt.") });
       if (info.branch && !info.defaultBranch)
         out.push({ value: "removeWorktreeAndBranch", title: t("Worktree und Branch löschen"),
@@ -48,6 +51,7 @@
     if (!canRun) return;
     busy = true; error = "";
     const body: SpaceRequest = { op: "close", ws: space.id };
+    if (group.length) body.group = true;
     if (option === "removeWorktree") body.removeWorktree = true;
     else if (option === "removeWorktreeAndBranch") Object.assign(body, { removeWorktree: true, deleteBranch: true, deleteRemote });
     else if (option === "deleteFolder") body.deleteFolder = true;
@@ -90,6 +94,7 @@
             <button class="fact link warn" onclick={() => (showGit = true)}>↑ {t("{n} Commit(s) nicht gepusht", { n: info.unpushed })}</button>
           {/if}
           {#if info.agents > 0}<div class="fact muted"><Icon name="〰" size={15} /> {t("{n} Sitzung(en) werden beendet", { n: info.agents })}</div>{/if}
+          {#if info.missing}<div class="fact warn"><span><Icon name="⚠" size={15} /> {t("Der Ordner fehlt – der Space lässt sich nur noch schließen.")}</span></div>{/if}
           {#if info.git}
             <button class="fact link" onclick={() => (showGit = !showGit)}><Icon name="⑂" size={15} /> {showGit ? t("Git-Ansicht schließen") : t("Änderungen, Verlauf und Branches ansehen")}</button>
           {/if}
@@ -100,6 +105,18 @@
           <div class="skeleton" style="height:12px; width:40%"></div>
         {/if}
       </div>
+
+      {#if group.length}
+        <div class="section">{t("Schließt mit: {n} Worktree-Space(s)", { n: group.length })}</div>
+        <div class="card facts">
+          {#each group as g (g.ws)}
+            <div class="fact">
+              <span class="ellipsis">{g.label}{#if g.agents > 0}<span class="dim small"> · {t("{n} Sitzung(en)", { n: g.agents })}</span>{/if}</span>
+              {#if g.missing}<span class="small warn">{t("Ordner fehlt")}</span>{:else}<span class="mono small dim val ellipsis">{g.root}</span>{/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
 
       <div class="section">{t("Was soll passieren?")}</div>
       <div class="rows" role="radiogroup">
@@ -135,7 +152,7 @@
 
       <div class="buttons">
         <button class="btn" onclick={onClose}>{t("Abbrechen")}</button>
-        <button class="btn solid-danger" disabled={!canRun} onclick={run}>{busy ? "…" : destructive ? t("Löschen") : t("Schließen")}</button>
+        <button class="btn solid-danger" disabled={!canRun} onclick={run}>{busy ? "…" : destructive ? t("Löschen") : group.length ? t("{n} Spaces schließen", { n: group.length + 1 }) : t("Schließen")}</button>
       </div>
     </div>
     {#if showGit}

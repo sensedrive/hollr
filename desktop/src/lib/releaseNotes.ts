@@ -12,6 +12,17 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 32,
+    version: "0.44.0",
+    date: "06.11.2026",
+    items: [
+      { icon: "⑂", text: "Git-Stand sofort aktuell: pull, fetch, commit oder checkout – auch in einem normalen Terminal oder außerhalb von Hollr – zeigen ↑/↓ und Änderungen nach wenigen Sekunden" },
+      { icon: "✕", text: "Letzte Sitzung eines Space lässt sich schließen – der Space bleibt mit einem leeren Terminal; scheitert das Schließen, siehst du warum" },
+      { icon: "▢", text: "Space schließen mit Worktrees: der Dialog zeigt, welche Worktree-Spaces mit schließen; Spaces mit gelöschtem Ordner sind markiert und lassen sich schließen" },
+      { icon: "↗", text: "Terminal-Links öffnen genau die angezeigte Adresse: lange umgebrochene URLs vollständig, localhost auf diesem Mac unverändert, bei entfernten Servern zeigt der Dialog die Tunnel-Adresse; Emoji verschieben die Zeile nicht mehr" },
+    ],
+  },
+  {
     build: 31,
     version: "0.43.0",
     date: "06.11.2026",

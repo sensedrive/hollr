@@ -39,6 +39,8 @@ private struct AgentConversation: View {
     @Environment(ServerStore.self) private var store
 
     @State private var confirmClose = false
+    /// herdr refused to close the chat – shown, the chat stays
+    @State private var closeError: String?
     @State private var gitSpace: Space?
     @State private var switchModel = false
     @State private var showTerminal = false
@@ -88,6 +90,7 @@ private struct AgentConversation: View {
                 await herdr.refresh(store.servers)
             } catch {
                 HollrLog.error("close: \(error)")
+                closeError = error.localizedDescription
             }
         }
     }
@@ -169,6 +172,9 @@ private struct AgentConversation: View {
         } message: {
             Text("Das Pane „\(ref.title)“ wird in herdr auf \(ref.server.label) geschlossen und \(ref.pane.agentName) beendet.")
         }
+        .alert("Chat ließ sich nicht schließen", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
+            Button("OK") { closeError = nil }
+        } message: { Text(closeError ?? "") }
         .task {
             // omp: the chat streams in (`gate follow`); older servers are polled
             guard session.usesTimeline else { return }

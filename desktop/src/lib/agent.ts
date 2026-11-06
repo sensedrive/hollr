@@ -180,11 +180,20 @@ export function urlFrom(input: string): URL | undefined {
   return s;
 }
 
-/** localhost:3000/x → 127.0.0.1:<local>/x */
+/** localhost:3000/x → 127.0.0.1:<local>/x (the in-app browser) */
 export function viaTunnel(url: URL, localPort: number): string {
   const u = new URL(url.href);
   u.protocol = "http:";
   u.hostname = "127.0.0.1";
+  u.port = String(localPort);
+  return u.href;
+}
+
+/** What the system browser opens for an address on the server: the same address with this computer's end of
+ *  the tunnel as port (the same port when the server is this computer). Scheme and host stay, so
+ *  `https://app.localhost` keeps its TLS and the host name its reverse proxy routes by. */
+export function tunneledUrl(url: URL, localPort: number): string {
+  const u = new URL(url.href);
   u.port = String(localPort);
   return u.href;
 }

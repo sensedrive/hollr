@@ -5,13 +5,14 @@
   // (`hollr gate shell`). Click into it and type: keys go straight in, Cmd shortcuts stay with the app.
   // A dropped connection comes back by itself; Cmd+click opens links and file paths (the preview).
   import { untrack } from "svelte";
-  import { Terminal, type IBufferCell, type ILink } from "@xterm/xterm";
+  import { Terminal, type ILink } from "@xterm/xterm";
   import { FitAddon } from "@xterm/addon-fit";
+  import { Unicode11Addon } from "@xterm/addon-unicode11";
   import "@xterm/xterm/css/xterm.css";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { t } from "../i18n";
   import { settings } from "../settings.svelte";
-  import { findLinks, keySequence, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
+  import { findLinks, keySequence, linksAt, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
   import { findPaths, pathHref } from "../paths";
   import { rememberViewPrefs, viewPrefsOf } from "../viewPrefs";
   import { cleanSelection, ScrollSelection } from "../scrollSelection";
@@ -64,39 +65,20 @@
   }
 
   /** Links and file paths in the (wrapped) line at buffer row `y` (1-based), mapped back to their cells. */
-  function linksAt(y: number): ILink[] {
+  function linksOn(y: number): ILink[] {
     if (!term) return [];
     const buf = term.buffer.active;
-    let first = y - 1;
-    while (first > 0 && buf.getLine(first)?.isWrapped) first--;
-    let text = "";
-    const cells: { x: number; y: number }[] = [];
-    let cell: IBufferCell | undefined;
-    for (let row = first; row < buf.length; row++) {
-      const line = buf.getLine(row);
-      if (!line || (row > first && !line.isWrapped)) break;
-      for (let x = 0; x < line.length; x++) {
-        cell = line.getCell(x, cell);
-        if (!cell || cell.getWidth() === 0) continue; // the second half of a wide character
-        const chars = cell.getChars() || " ";
-        text += chars;
-        for (let i = 0; i < chars.length; i++) cells.push({ x: x + 1, y: row + 1 });
-      }
-    }
-    const found = [
+    const found = linksAt((row) => buf.getLine(row), buf.length, y, (text) => [
       ...findLinks(text),
       ...findPaths(text).map((p) => ({ start: p.start, end: p.end, url: pathHref(p.path, p.line) })),
-    ];
-    return found
-      .map((l) => ({ start: cells[l.start], end: cells[l.end - 1], url: l.url, label: text.slice(l.start, l.end) }))
-      .filter((l) => l.start && l.end && l.start.y <= y && l.end.y >= y)
-      .map((l) => ({
-        range: { start: l.start, end: l.end },
-        text: l.label,
-        activate: (e: MouseEvent) => {
-          openLink(e, l.url);
-        },
-      }));
+    ]);
+    return found.map((l) => ({
+      range: { start: l.start, end: l.end },
+      text: l.text,
+      activate: (e: MouseEvent) => {
+        openLink(e, l.url);
+      },
+    }));
   }
 
   // primitives that only change when they really do: the parent hands `pane` through an object that
@@ -130,6 +112,8 @@
         // ⌥-click would otherwise move the prompt cursor with arrow keys
         altClickMovesCursor: false,
         theme: { background: "#0f1216", foreground: "#d7dae0", cursor: "#7aa2f7", selectionBackground: "#3d59a1" },
+        // `x.unicode` (the character width table below) is proposed API
+        allowProposedApi: true,
         // OSC 8 hyperlinks
         linkHandler: {
           activate: (e, uri) => {
@@ -139,6 +123,10 @@
       });
       const fit = new FitAddon();
       x.loadAddon(fit);
+      // emoji (🚀 ⚡ 👍) two cells wide like herdr, omp and the shells count them – the default Unicode 6
+      // table makes them one, which leaves stale characters next to them when herdr redraws a row
+      x.loadAddon(new Unicode11Addon());
+      x.unicode.activeVersion = "11";
       x.open(el);
       term = x;
       const s = new TermSession({
@@ -148,7 +136,7 @@
       });
       session = s;
 
-      x.registerLinkProvider({ provideLinks: (y, done) => done(linksAt(y)) });
+      x.registerLinkProvider({ provideLinks: (y, done) => done(linksOn(y)) });
       x.attachCustomKeyEventHandler((e) => {
         if (e.type !== "keydown") return true;
         const key = e.key.toLowerCase();

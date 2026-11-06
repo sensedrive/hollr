@@ -18,6 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import QRCode from "qrcode";
 import { type AskPick, answerAsk, answerWithText } from "./ask";
+import { closePane } from "./close";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { runEvents } from "./events";
@@ -100,7 +101,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.43.0";
+export const VERSION = "0.44.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -247,8 +248,16 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "close":
-      await execHerdr(["pane", "close", pane]);
-      json({ ok: true });
+      // the space stays (close.ts); a refusal answers as {"error"} – the app reads only stdout
+      try {
+        const { placeholder } = await closePane(execHerdr, pane);
+        if (placeholder)
+          log("gate", `close ${pane}: last pane, terminal ${placeholder} keeps the space`);
+        json({ ok: true, ...(placeholder ? { placeholder } : {}) });
+      } catch (err) {
+        log("gate", `close ${pane} failed: ${err instanceof Error ? err.message : err}`);
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
       return 0;
     case "fork": {
       // a new chat with <pane>'s session history: {"label?","replace?"} → {"pane","tab","kind","at"} (fork.ts)

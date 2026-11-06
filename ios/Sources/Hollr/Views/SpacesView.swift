@@ -76,8 +76,8 @@ struct SpacesView: View {
         .task {
             while !Task.isCancelled {
                 await herdr.refreshSpaces(store.servers)
-                // the live feed refreshes spaces on every change; this is the safety net – also for git
-                // state changed outside any session (a pull in the IDE), which herdr doesn't report
+                // the live feed refreshes spaces on every change – git state too (the server watches the
+                // spaces' repos); this is the safety net for a server without a live feed or a change it missed
                 let allLive = store.servers.allSatisfy { herdr.live.contains($0.id) }
                 try? await Task.sleep(for: .seconds(allLive ? 30 : 10))
             }
@@ -123,6 +123,9 @@ struct SpaceRow: View {
                 .font(nested ? Typo.note : Typo.md)
                 .foregroundStyle(nested ? Theme.muted : Theme.fg)
                 .lineLimit(1)
+            if space.missing == true {
+                Text("Ordner fehlt").font(Typo.sm).foregroundStyle(Theme.warn)
+            }
             Spacer(minLength: Gap.s)
             if let git = space.git, git.dirty > 0 || git.ahead > 0 || git.behind > 0 {
                 HStack(spacing: 6) {

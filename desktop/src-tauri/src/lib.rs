@@ -1,5 +1,5 @@
 pub mod hollr;
-mod feed;
+pub mod feed;
 mod follow;
 pub mod live;
 mod tunnel;

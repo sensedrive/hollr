@@ -14,6 +14,8 @@ struct DashboardView: View {
     @State private var workFilter: WorkFilter = .all
     @State private var reloading = false
     @State private var showLimits = false
+    /// herdr refused to end a session – shown, the session stays
+    @State private var closeError: String?
 
     var body: some View {
         ScrollView {
@@ -56,6 +58,9 @@ struct DashboardView: View {
             }
         }
         .refreshable { await refreshAll() }
+        .alert("Sitzung ließ sich nicht beenden", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
+            Button("OK") { closeError = nil }
+        } message: { Text(closeError ?? "") }
         .task {
             await herdr.refreshUsage(store.servers)
             // branches for the cards and rows
@@ -234,8 +239,13 @@ struct DashboardView: View {
 
     private func closeSession(_ ref: AgentRef) {
         Task {
-            try? await HollrClient.close(ref.server, pane: ref.pane.pane)
-            mySessions.remove(ref.id)
+            do {
+                try await HollrClient.close(ref.server, pane: ref.pane.pane)
+                mySessions.remove(ref.id)
+            } catch {
+                HollrLog.error("close: \(error)")
+                closeError = error.localizedDescription
+            }
             await herdr.refresh(store.servers)
         }
     }

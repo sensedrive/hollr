@@ -26,7 +26,7 @@
   import { sessionTerms } from "../dictationText";
   import {
     cleanScreen, cleanTitle, duration, hashId, history as loadHistory, isLoopback, openPhase, pendingAsk, phaseDone, phaseName,
-    runningActivity, shortPath, todoColor, toolTitle, urlPort, viaTunnel, waitingSince, type HistoryEvent,
+    runningActivity, shortPath, todoColor, toolTitle, tunneledUrl, urlPort, waitingSince, type HistoryEvent,
   } from "../agent";
   import { jobViews, shortCommand } from "../chatTools";
   import MsgActions from "./MsgActions.svelte";
@@ -306,6 +306,9 @@
   let showCodex = $state(false);
   let confirmClose = $state(false);
   let linkUrl = $state<URL | null>(null);
+  /** what the system browser gets for `linkUrl`: the server's localhost goes through a tunnel (stays open until
+   *  Hollr quits) – asked for when the dialog opens, so the dialog shows the address that really opens */
+  let linkTarget = $state<Promise<string>>(Promise.resolve(""));
   /** a path from the chat or terminal in the preview; `n` makes a second click on the same path a fresh open */
   let filePreview = $state<{ path: string; line?: number; n: number } | null>(null);
   /** the preview's "Im Git-Panel öffnen" (space-relative) */
@@ -521,6 +524,8 @@
       return;
     }
     linkUrl = url;
+    linkTarget = isLoopback(url) ? api.tunnelOpen(server, urlPort(url)).then((port) => tunneledUrl(url, port)) : Promise.resolve(url.href);
+    linkTarget.catch(() => {}); // the dialog shows a failed tunnel, opening reports it
   }
   function openInGit(path: string, dir: boolean) {
     filePreview = null;
@@ -535,11 +540,10 @@
     zen = false;
     browserRequest = { url: url.href };
   }
-  async function linkExternal(url: URL) {
+  async function linkExternal(target: Promise<string>) {
     linkUrl = null;
     try {
-      // the server's localhost goes through a tunnel (stays open until Hollr quits)
-      await openUrl(isLoopback(url) ? viaTunnel(url, await api.tunnelOpen(server, urlPort(url))) : url.href);
+      await openUrl(await target);
     } catch (e) {
       actionError = e instanceof Error ? e.message : String(e);
     }
@@ -962,7 +966,7 @@
 
 {#if confirmClose}
   <Modal icon="trash" tone="danger" place="center" width={420} title={t("Chat schließen?")} onClose={() => (confirmClose = false)}>
-    <p>{t("Das Pane „{title}“ wird in herdr auf {server} geschlossen und {agent} beendet.", { title, server: serverLabel, agent: agentName })}</p>
+    <p>{t("Das Pane „{title}“ wird in herdr auf {server} geschlossen und {agent} beendet.", { title, server: serverLabel, agent: agentName })}{api.lastPaneOf(workspace) ? ` ${t("Der Space bleibt – mit einem leeren Terminal.")}` : ""}</p>
     <div class="mbuttons">
       <button class="btn" onclick={() => (confirmClose = false)}>{t("Abbrechen")}</button>
       <button class="btn danger" onclick={close}>{t("Schließen")}</button>
@@ -994,11 +998,23 @@
   {@const url = linkUrl}
   <Modal icon="globe" width={440} title={url.host || "Link"} onClose={() => (linkUrl = null)}>
     <div class="mono small sel linkurl">{url.href}</div>
-    {#if isLoopback(url)}<div class="muted small">{t("localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.")}</div>{/if}
+    {#if isLoopback(url)}
+      {#await linkTarget}
+        <div class="muted small">{t("localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.")}</div>
+      {:then target}
+        <!-- a server that is this computer needs no tunnel: the address opens as it is -->
+        {#if target !== url.href}
+          <div class="muted small">{t("Der System-Browser öffnet sie über die SSH-Verbindung zum Server als:")}</div>
+          <div class="mono small sel linkurl">{target}</div>
+        {/if}
+      {:catch e}
+        <div class="muted small">{t("localhost-Adressen öffnet Hollr über die SSH-Verbindung zum Server.")} {e instanceof Error ? e.message : String(e)}</div>
+      {/await}
+    {/if}
     <div class="choices">
       <!-- svelte-ignore a11y_autofocus -->
       <button class="btn primary" autofocus onclick={() => linkInBrowser(url)}><Icon name="◍" size={15} /> {t("Im Hollr-Browser")}</button>
-      <button class="btn" onclick={() => linkExternal(url)}><Icon name="↗" size={15} /> {t("Im System-Browser")}</button>
+      <button class="btn" onclick={() => linkExternal(linkTarget)}><Icon name="↗" size={15} /> {t("Im System-Browser")}</button>
       <button class="btn" onclick={() => linkCopy(url)}><Icon name="⧉" size={15} /> {t("Link kopieren")}</button>
       <button class="btn" onclick={() => (linkUrl = null)}>{t("Abbrechen")}</button>
     </div>

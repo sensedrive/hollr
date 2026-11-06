@@ -1,11 +1,13 @@
 //! Localhost tunnel for the in-app browser: a listener on this computer's 127.0.0.1 forwards every
 //! connection through the server's pooled SSH connection (direct-tcpip) to the server's own
 //! `localhost:<port>`. Device keys may only forward to localhost, nothing else is exposed.
+//! A server that is this computer needs none: its localhost is ours, the port stays as it is.
 //! (Desktop counterpart of `ios/Sources/Hollr/SSH/Tunnel.swift`.)
 
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
+use russh::keys::{HashAlg, PublicKey};
 use tauri::{AppHandle, Manager};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
@@ -25,8 +27,13 @@ struct Tunnel {
 pub struct Tunnels(Mutex<HashMap<u16, Tunnel>>);
 
 impl Tunnels {
-    /// Local port that leads to `localhost:<remote_port>` on `server` (reuses a running tunnel).
+    /// Local port that leads to `localhost:<remote_port>` on `server` (reuses a running tunnel);
+    /// `remote_port` itself when the server is this computer.
     pub async fn open(&self, app: AppHandle, server: String, remote_port: u16) -> Result<u16> {
+        let paired = app.state::<Hollr>().servers().into_iter().find(|s| s.id == server).context("Server nicht gefunden")?;
+        if is_this_computer(&paired.host_fingerprint) {
+            return Ok(remote_port);
+        }
         let mut tunnels = self.0.lock().await;
         tunnels.retain(|_, t| !t.task.is_finished());
         if let Some((&port, _)) = tunnels.iter().find(|(_, t)| t.server == server && t.remote_port == remote_port) {
@@ -58,6 +65,21 @@ impl Tunnels {
             }
         });
     }
+}
+
+/// `fingerprint` ("SHA256:…", pinned at pairing) is one of this computer's SSH host keys.
+fn is_this_computer(fingerprint: &str) -> bool {
+    let Ok(dir) = std::fs::read_dir("/etc/ssh") else { return false };
+    dir.flatten().any(|entry| {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        name.starts_with("ssh_host_")
+            && name.ends_with("_key.pub")
+            && std::fs::read_to_string(entry.path())
+                .ok()
+                .and_then(|key| PublicKey::from_openssh(key.trim()).ok())
+                .is_some_and(|key| key.fingerprint(HashAlg::Sha256).to_string() == fingerprint)
+    })
 }
 
 async fn accept_loop(app: AppHandle, listener: TcpListener, server: String, remote_port: u16) {

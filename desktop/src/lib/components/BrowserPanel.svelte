@@ -8,7 +8,7 @@
   import * as api from "../api";
   import { t } from "../i18n";
   import {
-    displayUrl, isLoopback, portLabel, ports as loadPorts, recentUrls, rememberUrl, shortPath, urlFrom, urlPort, viaTunnel,
+    displayUrl, isLoopback, portLabel, ports as loadPorts, recentUrls, rememberUrl, shortPath, tunneledUrl, urlFrom, urlPort, viaTunnel,
     type WebPort,
   } from "../agent";
 
@@ -120,7 +120,7 @@
   async function external() {
     if (!current) return;
     try {
-      await openUrl(isLoopback(current) ? viaTunnel(current, await local(urlPort(current))) : current.href);
+      await openUrl(isLoopback(current) ? tunneledUrl(current, await local(urlPort(current))) : current.href);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }

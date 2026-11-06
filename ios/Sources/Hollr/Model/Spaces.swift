@@ -26,6 +26,8 @@ struct Space: Codable, Identifiable, Hashable {
     let isWorktree: Bool
     let git: GitSummary?
     let paneCount: Int
+    /// its folder is gone (a worktree removed outside herdr) – it can only be closed; older servers don't send it
+    var missing: Bool? = nil
 
     var folder: String { root.split(separator: "/").last.map(String.init) ?? root }
 }

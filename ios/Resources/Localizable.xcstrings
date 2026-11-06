@@ -8908,6 +8908,76 @@
           }
         }
       }
+    },
+    "Chat ließ sich nicht schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat could not be closed"
+          }
+        }
+      }
+    },
+    "Sitzung ließ sich nicht beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session could not be ended"
+          }
+        }
+      }
+    },
+    "Die Sitzung ließ sich nicht schließen. Hollr auf dem Server aktualisieren (Server › Werkzeuge) und erneut versuchen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The session could not be closed. Update Hollr on the server (Server › Tools) and try again."
+          }
+        }
+      }
+    },
+    "Ordner fehlt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder missing"
+          }
+        }
+      }
+    },
+    "Der Ordner fehlt – der Space lässt sich nur noch schließen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The folder is missing – the space can only be closed."
+          }
+        }
+      }
+    },
+    "Schließt mit: %lld Worktree-Space(s)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Closes along with it: %lld worktree space(s)"
+          }
+        }
+      }
+    },
+    "%lld Spaces schließen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close %lld spaces"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

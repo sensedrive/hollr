@@ -8,6 +8,8 @@ export type FullSpace = Space & {
   focused?: boolean;
   status?: string;
   paneCount?: number;
+  /** its folder is gone (a worktree removed outside herdr) – it can only be closed */
+  missing?: boolean;
   git?: Space["git"] & { lastCommit?: { hash: string; subject: string; at: number } };
 };
 
@@ -39,6 +41,10 @@ export interface CloseInfo {
   defaultBranch: boolean;
   agents: number;
   linkedWorktrees?: number;
+  /** the folder is gone: only closing is possible */
+  missing?: boolean;
+  /** worktree spaces that close with this repo's main space (herdr's group; older servers don't send it) */
+  group?: { ws: string; label: string; root: string; agents: number; missing: boolean }[];
   canDeleteFolder: boolean;
 }
 
@@ -55,6 +61,8 @@ export interface SpaceRequest {
   deleteBranch?: boolean;
   deleteRemote?: boolean;
   deleteFolder?: boolean;
+  /** close the main space together with its worktree spaces (`CloseInfo.group`) */
+  group?: boolean;
 }
 
 export const space = (server: string, req: SpaceRequest) => gate<{ ws?: string; pane?: string }>(server, "space", req);

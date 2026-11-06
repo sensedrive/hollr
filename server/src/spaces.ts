@@ -41,6 +41,10 @@ export interface Space {
   isWorktree: boolean;
   git?: GitSummary;
   paneCount: number;
+  /** herdr's repo key (its .git): a main checkout and its linked worktrees share it – herdr's worktree group */
+  repoKey?: string;
+  /** its folder is gone (e.g. a worktree removed outside herdr) – the space can only be closed */
+  missing?: boolean;
 }
 
 export interface GitSummary {
@@ -51,25 +55,33 @@ export interface GitSummary {
   lastCommit?: { hash: string; subject: string; at: number };
 }
 
+const GIT_ENV = { ...Bun.env, GIT_OPTIONAL_LOCKS: "0" };
+
 const run = (args: string[], cwd?: string) => {
-  const res = Bun.spawnSync(args, {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...Bun.env, GIT_OPTIONAL_LOCKS: "0" },
-  });
+  const res = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe", env: GIT_ENV });
   return { ok: res.exitCode === 0, out: res.stdout.toString() };
 };
 
-export function gitSummary(dir: string): GitSummary | undefined {
-  if (!existsSync(dir)) return undefined;
-  const st = run(["git", "status", "--porcelain=v2", "--branch"], dir);
-  if (!st.ok) return undefined;
+/** `run` without blocking – a slow `git status` (a big worktree) doesn't hold up the others */
+const runAsync = async (args: string[], cwd: string) => {
+  try {
+    const proc = Bun.spawn(args, { cwd, stdout: "pipe", stderr: "ignore", env: GIT_ENV });
+    const out = await new Response(proc.stdout).text();
+    return { ok: (await proc.exited) === 0, out };
+  } catch {
+    return { ok: false, out: "" }; // the folder went away meanwhile
+  }
+};
+
+const STATUS = ["git", "status", "--porcelain=v2", "--branch"];
+const LAST_COMMIT = ["git", "log", "-1", "--format=%h%x1f%s%x1f%ct"];
+
+function parseSummary(status: string, log: string): GitSummary {
   let branch = "?";
   let ahead = 0;
   let behind = 0;
   let dirty = 0;
-  for (const line of st.out.split("\n")) {
+  for (const line of status.split("\n")) {
     if (line.startsWith("# branch.head ")) branch = line.slice(14);
     else if (line.startsWith("# branch.ab ")) {
       const m = line.match(/\+(\d+) -(\d+)/);
@@ -77,8 +89,7 @@ export function gitSummary(dir: string): GitSummary | undefined {
       behind = Number(m?.[2] ?? 0);
     } else if (line && !line.startsWith("#")) dirty++;
   }
-  const log = run(["git", "log", "-1", "--format=%h%x1f%s%x1f%ct"], dir);
-  const [hash, subject, ct] = log.out.trim().split("\x1f");
+  const [hash, subject, ct] = log.trim().split("\x1f");
   return {
     branch,
     ahead,
@@ -88,7 +99,36 @@ export function gitSummary(dir: string): GitSummary | undefined {
   };
 }
 
+export function gitSummary(dir: string): GitSummary | undefined {
+  if (!existsSync(dir)) return undefined;
+  const st = run(STATUS, dir);
+  return st.ok ? parseSummary(st.out, run(LAST_COMMIT, dir).out) : undefined;
+}
+
+/** `gitSummary` for many folders side by side (the spaces list, the git watch). */
+export async function gitSummaryAsync(dir: string): Promise<GitSummary | undefined> {
+  if (!existsSync(dir)) return undefined;
+  const [st, log] = await Promise.all([runAsync(STATUS, dir), runAsync(LAST_COMMIT, dir)]);
+  return st.ok ? parseSummary(st.out, log.out) : undefined;
+}
+
 export async function listSpaces(exec: Exec = execHerdr): Promise<Space[]> {
+  const spaces = await herdrSpaces(exec);
+  await Promise.all(
+    spaces.map(async (s) => {
+      s.git = s.root ? await gitSummaryAsync(s.root) : undefined;
+    }),
+  );
+  return spaces;
+}
+
+/** The spaces' folders only – no `git status` each (the live feed's git watch). */
+export async function spaceRoots(exec: Exec = execHerdr): Promise<string[]> {
+  return (await herdrSpaces(exec)).map((s) => s.root).filter(Boolean);
+}
+
+/** herdr's workspaces with their folder, without the git summary */
+async function herdrSpaces(exec: Exec): Promise<Space[]> {
   const [ws, panes] = (await Promise.all([
     exec(["workspace", "list"]),
     exec(["pane", "list"]),
@@ -102,6 +142,7 @@ export async function listSpaces(exec: Exec = execHerdr): Promise<Space[]> {
       const wt = (w.worktree ?? {}) as {
         checkout_path?: string;
         repo_name?: string;
+        repo_key?: string;
         is_linked_worktree?: boolean;
       };
       const own = allPanes.filter((p) => p.workspace_id === w.workspace_id);
@@ -115,8 +156,9 @@ export async function listSpaces(exec: Exec = execHerdr): Promise<Space[]> {
         root,
         repo: wt.repo_name,
         isWorktree: wt.is_linked_worktree === true,
-        git: root ? gitSummary(root) : undefined,
         paneCount: own.length,
+        ...(wt.repo_key ? { repoKey: wt.repo_key } : {}),
+        ...(root && !existsSync(root) ? { missing: true } : {}),
       } satisfies Space;
     })
     .sort((a, b) => a.number - b.number);
@@ -474,15 +516,27 @@ export interface SpaceRequest {
   deleteRemote?: boolean;
   /** close a normal space: delete its folder completely */
   deleteFolder?: boolean;
+  /** close a repo's main space: its linked worktree spaces close with it (herdr's `--group`) – required
+   *  when there are any (`closeInfo().group`), so nothing closes the user hasn't seen listed */
+  group?: boolean;
 }
 
-/** What closing would throw away: changes, unpushed commits, branch, running agents. */
+/** The worktree spaces herdr closes together with `space` (its group): a main checkout's linked
+ *  worktrees, open as spaces. A worktree space or a plain folder closes alone. */
+export function groupOf(space: Space, spaces: Space[]): Space[] {
+  if (space.isWorktree || !space.repoKey) return [];
+  return spaces.filter((s) => s.id !== space.id && s.isWorktree && s.repoKey === space.repoKey);
+}
+
+/** What closing would throw away: changes, unpushed commits, branch, running agents – and which
+ *  worktree spaces close with it. A space whose folder is gone can still be closed (no git facts). */
 export async function closeInfo(ws: string, exec: Exec = execHerdr) {
-  const spaces = await listSpaces(exec);
+  const spaces = await herdrSpaces(exec);
   const space = spaces.find((s) => s.id === ws);
   if (!space) throw new Error("Space nicht gefunden");
   const root = space.root;
-  const git = root ? run(["git", "rev-parse", "--is-inside-work-tree"], root).ok : false;
+  const git =
+    !!root && !space.missing && run(["git", "rev-parse", "--is-inside-work-tree"], root).ok;
   let branch: string | undefined;
   let changed = 0;
   let add = 0;
@@ -535,6 +589,15 @@ export async function closeInfo(ws: string, exec: Exec = execHerdr) {
     defaultBranch,
     agents: space.paneCount,
     linkedWorktrees,
+    missing: space.missing === true,
+    // closes with it (herdr's worktree group) – listed before, `group: true` to go ahead
+    group: groupOf(space, spaces).map((s) => ({
+      ws: s.id,
+      label: s.label,
+      root: s.root,
+      agents: s.paneCount,
+      missing: s.missing === true,
+    })),
     // deleting the folder is only offered for plain folders inside home or /tmp,
     // never for a repo other worktrees still depend on
     canDeleteFolder: !space.isWorktree && linkedWorktrees === 0 && safeToDelete(root),
@@ -610,6 +673,7 @@ export async function manageSpace(
       const info = await closeInfo(req.ws, exec);
       if (req.removeWorktree) {
         if (!info.isWorktree) throw new Error("Das ist kein Worktree");
+        if (info.missing) throw new Error("Der Ordner fehlt schon – den Space nur schließen");
         // main repo, to delete the branch after the worktree is gone
         const common = run(
           ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -629,7 +693,11 @@ export async function manageSpace(
           }
         }
       } else {
-        await exec(["workspace", "close", req.ws]);
+        if (info.group.length && !req.group)
+          throw new Error(
+            `Mit „${info.label}“ schließen auch ${info.group.map((g) => `„${g.label}“`).join(", ")} – bitte erst bestätigen`,
+          );
+        await exec(["workspace", "close", req.ws, ...(info.group.length ? ["--group"] : [])]);
         if (req.deleteFolder) {
           if (!info.canDeleteFolder)
             throw new Error("Dieser Ordner wird aus Sicherheitsgründen nicht gelöscht");

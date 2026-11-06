@@ -30,6 +30,16 @@ export default {
   "„{name}“ schließen?": "Close “{name}”?",
   "Die Session wird in herdr beendet – {agent} hört dabei auf zu arbeiten.":
     "The session ends in herdr – {agent} stops working.",
+  "Der Space bleibt – mit einem leeren Terminal.": "The space stays – with an empty terminal.",
+  "Die Sitzung ließ sich nicht schließen. Hollr auf dem Server aktualisieren (Server › Werkzeuge) und erneut versuchen.":
+    "The session could not be closed. Update Hollr on the server (Server › Tools) and try again.",
+  "Ordner fehlt": "Folder missing",
+  "Ordner fehlt – schließen …": "Folder missing – close …",
+  "Der Ordner dieses Spaces fehlt.": "This space's folder is missing.",
+  "Der Ordner fehlt – der Space lässt sich nur noch schließen.": "The folder is missing – the space can only be closed.",
+  "Schließt mit: {n} Worktree-Space(s)": "Closes along with it: {n} worktree space(s)",
+  "{n} Sitzung(en)": "{n} session(s)",
+  "{n} Spaces schließen": "Close {n} spaces",
   "{n} ausgeblendet – alle zeigen": "{n} hidden – show all",
   "Worktrees einklappen": "Collapse worktrees",
   "Worktrees zeigen": "Show worktrees",

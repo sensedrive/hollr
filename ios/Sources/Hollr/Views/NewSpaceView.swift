@@ -194,10 +194,23 @@ private struct SpaceCloseInfo: Decodable {
     let agents: Int
     let linkedWorktrees: Int?
     let canDeleteFolder: Bool
+    /// the folder is gone: only closing is possible (older servers don't send it)
+    let missing: Bool?
+    /// worktree spaces that close with this repo's main space (herdr's group)
+    let group: [Member]?
+
+    struct Member: Decodable, Hashable {
+        let ws: String
+        let label: String
+        let root: String
+        let agents: Int
+        let missing: Bool
+    }
 }
 
 /// Close a space with all options: keep files, remove the worktree (with or without its branch,
-/// locally and on origin) or delete a plain folder – showing first what would be lost.
+/// locally and on origin) or delete a plain folder – showing first what would be lost. A repo's main
+/// space closes together with its worktree spaces (listed first); a space whose folder is gone can only be closed.
 struct CloseSpaceSheet: View {
     enum Option: Hashable { case close, removeWorktree, removeWorktreeAndBranch, deleteFolder }
 
@@ -223,7 +236,7 @@ struct CloseSpaceSheet: View {
             VStack(alignment: .leading, spacing: Gap.s) {
                 Text("Was soll passieren?").font(Typo.sm.weight(.semibold)).foregroundStyle(Theme.muted)
                 choice(.close, String(localized: "Nur schließen"), String(localized: "Sitzungen beenden, Dateien und Branch bleiben."))
-                if info?.isWorktree == true {
+                if info?.isWorktree == true, info?.missing != true {
                     choice(.removeWorktree, String(localized: "Worktree entfernen"), String(localized: "Ordner wird gelöscht, der Branch bleibt."))
                     if let branch = info?.branch, info?.defaultBranch == false {
                         choice(.removeWorktreeAndBranch, String(localized: "Worktree und Branch löschen"), String(localized: "Ordner und Branch „\(branch)“ werden gelöscht."))
@@ -264,7 +277,8 @@ struct CloseSpaceSheet: View {
                 if busy {
                     Spinner(color: Theme.red)
                 } else {
-                    Text(destructive ? String(localized: "Löschen") : String(localized: "Schließen"))
+                    Text(destructive ? String(localized: "Löschen")
+                         : group.isEmpty ? String(localized: "Schließen") : String(localized: "\(group.count + 1) Spaces schließen"))
                 }
             }
             .buttonStyle(.hollr(.danger))
@@ -303,6 +317,19 @@ struct CloseSpaceSheet: View {
                 if info.agents > 0 {
                     fact(.message) { Text("\(info.agents) Sitzung(en) werden beendet") }
                 }
+                if info.missing == true {
+                    fact(.alert, tint: Theme.warn) { Text("Der Ordner fehlt – der Space lässt sich nur noch schließen.") }
+                }
+                if !group.isEmpty {
+                    Text("Schließt mit: \(group.count) Worktree-Space(s)").font(Typo.sm.weight(.semibold)).foregroundStyle(Theme.muted)
+                    ForEach(group, id: \.ws) { g in
+                        fact(.folder, tint: g.missing ? Theme.warn : Theme.fg) {
+                            Text(g.label).lineLimit(1)
+                            Spacer(minLength: Gap.xs)
+                            Text(g.missing ? String(localized: "Ordner fehlt") : g.root).font(Typo.monoSmall).lineLimit(1)
+                        }
+                    }
+                }
                 if info.git {
                     NavigationLink { GitPanel(server: server, space: space, tab: .changes) } label: {
                         fact(.branch, tint: Theme.accent, link: true) { Text("Änderungen, Verlauf und Branches ansehen") }
@@ -336,6 +363,7 @@ struct CloseSpaceSheet: View {
     }
 
     private var destructive: Bool { option != .close }
+    private var group: [SpaceCloseInfo.Member] { info?.group ?? [] }
 
     private func choice(_ value: Option, _ title: String, _ detail: String) -> some View {
         Button { option = value } label: {
@@ -377,6 +405,7 @@ struct CloseSpaceSheet: View {
             body["deleteFolder"] = true
         }
         if discard { body["force"] = true }
+        if !group.isEmpty { body["group"] = true }
         do {
             try await HollrClient.space(server, body)
             await herdr.refreshSpaces(store.servers)

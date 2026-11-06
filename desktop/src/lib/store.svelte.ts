@@ -207,9 +207,9 @@ export async function loadServers() {
 export async function listenFeeds(): Promise<() => void> {
   const offChanged = await api.onChanged(async ({ server, spaces }) => {
     app.changes++;
-    await refresh(server);
-    if (spaces) await refreshSpaces(server);
-    else refreshSpacesSoon(server);
+    if (!spaces) refreshSpacesSoon(server);
+    // side by side: a pull's ↓N shouldn't wait for the session tree
+    await Promise.all([refresh(server), spaces && refreshSpaces(server)]);
   });
   const offLive = await api.onFeed(({ server, live }) => {
     app.live[server] = live;
@@ -258,24 +258,31 @@ export async function refresh(...only: string[]) {
 /** when each server's spaces (with their git state) were last loaded */
 const spacesAt: Record<string, number> = {};
 const spacesSoon: Record<string, ReturnType<typeof setTimeout>> = {};
+/** per server: newest spaces request – a pull right after a fetch sends two quick changes; the older answer
+ *  arriving last must not bring back the old ↓N */
+const spacesSeq: Record<string, number> = {};
 
 export async function refreshSpaces(serverId?: string) {
   await Promise.all(
     app.servers
       .filter((s) => !serverId || s.id === serverId)
       .map(async (s) => {
+        const seq = (spacesSeq[s.id] = (spacesSeq[s.id] ?? 0) + 1);
         try {
-          app.spaces[s.id] = await loadSpaces(s.id);
+          const spaces = await loadSpaces(s.id);
+          if (seq !== spacesSeq[s.id]) return;
+          app.spaces[s.id] = spaces;
           spacesAt[s.id] = Date.now();
         } catch (e) {
+          if (seq !== spacesSeq[s.id]) return;
           app.errors[s.id] = String(e instanceof Error ? e.message : e);
         }
       }),
   );
 }
 
-/** A pull, commit or checkout changes no herdr structure – only a session's activity (status, title, folder)
- *  shows it: that reloads the spaces, at most every 5 s. */
+/** Session activity (status, title, folder) may come with a commit or checkout the server's git watch already
+ *  reported (`spaces: true`) – or, on servers before that watch, didn't: reload the spaces, at most every 5 s. */
 function refreshSpacesSoon(server: string) {
   if (spacesSoon[server]) return;
   const wait = Math.max(0, (spacesAt[server] ?? 0) + 5_000 - Date.now());
@@ -286,7 +293,7 @@ function refreshSpacesSoon(server: string) {
 }
 
 /** The safety net, every 10 s from the space lists: servers without a live feed each time, the others every
- *  30 s (a pull or fetch outside any session – in the IDE, a cron job – changes nothing herdr reports). */
+ *  30 s (a change the server's git watch missed, e.g. a repo past its refs-folder budget). */
 export function pollSpaces() {
   const now = Date.now();
   for (const s of app.servers) {

@@ -129,27 +129,24 @@
     };
   }
 
-  // ---- close: a plain terminal right away, an agent session after asking (its work in herdr ends)
+  // ---- close: a plain terminal right away, an agent session after asking (its work in herdr ends); the space's
+  // last pane leaves an empty terminal behind (server) – the space stays
   let closing = $state<{ tab: Tab; pane: Pane } | null>(null);
   function askClose(tab: Tab, pane: Pane) {
     if (pane.agent) closing = { tab, pane };
-    else void close(pane);
+    else void close(pane).catch((e) => (error = e instanceof Error ? e.message : String(e)));
   }
+  /** throws when herdr refuses – the confirm dialog (or the bar) shows why, the tab stays open */
   async function close(pane: Pane) {
+    error = "";
     // leaving the closed session: the tab next to it, else the space
-    if (pane.pane === active) {
-      const all = tabs.flatMap((tb) => tb.panes);
-      const i = all.findIndex((p) => p.pane === pane.pane);
-      const next = all[i + 1] ?? all[i - 1];
-      go(next ? { view: "agent", server, pane: next.pane } : { view: "space", server, ws: ws.id });
-    }
-    try {
-      await api.closePane(server, pane.pane);
-      mySessions.remove(`${server}|${pane.pane}`);
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
+    const all = tabs.flatMap((tb) => tb.panes);
+    const i = all.findIndex((p) => p.pane === pane.pane);
+    const next = all[i + 1] ?? all[i - 1];
+    await api.closePane(server, pane.pane);
+    mySessions.remove(`${server}|${pane.pane}`);
     closing = null;
+    if (pane.pane === active) go(next ? { view: "agent", server, pane: next.pane } : { view: "space", server, ws: ws.id });
     await refresh(server);
   }
 </script>
@@ -197,7 +194,7 @@
 {#if closing}
   {@const c = closing}
   <ConfirmDialog title={t("„{name}“ schließen?", { name: nameOf(c.tab, c.pane) })}
-    message={t("Die Session wird in herdr beendet – {agent} hört dabei auf zu arbeiten.", { agent: c.pane.agent ?? "" })}
+    message={`${t("Die Session wird in herdr beendet – {agent} hört dabei auf zu arbeiten.", { agent: c.pane.agent ?? "" })}${api.lastPaneOf(ws) ? ` ${t("Der Space bleibt – mit einem leeren Terminal.")}` : ""}`}
     confirmLabel={t("Schließen")} onConfirm={() => close(c.pane)} onClose={() => (closing = null)} />
 {/if}
 

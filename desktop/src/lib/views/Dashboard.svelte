@@ -368,7 +368,7 @@
 {#if ending}
   {@const r = ending}
   <ConfirmDialog title={t("Sitzung beenden?")} confirmLabel={t("Sitzung beenden")}
-    message={t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: r.pane.agent ?? "Shell" })}
+    message={`${t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: r.pane.agent ?? "Shell" })}${api.lastPaneOf(r.workspace) ? ` ${t("Der Space bleibt – mit einem leeren Terminal.")}` : ""}`}
     onConfirm={() => endSession(r)} onClose={() => (ending = null)} />
 {/if}
 {#if showLimits}

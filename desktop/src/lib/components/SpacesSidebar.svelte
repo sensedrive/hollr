@@ -2,7 +2,8 @@
   // Sidebar like herdr's "spaces" list, for every paired server: repos with their branch, worktrees nested
   // below (├─ / └─, foldable), plain workspaces standalone. One status dot per space from its sessions.
   // A click jumps straight into the session that needs you most; ✕ / right-click hides a space here and on the
-  // dashboard (it comes back by itself as soon as it needs you). 〰 shows where a live call runs.
+  // dashboard (it comes back by itself as soon as it needs you). 〰 shows where a live call runs. A space whose
+  // folder is gone (a worktree removed outside herdr) says so and offers closing.
   import { onMount } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import Icon from "./git/Icon.svelte";
@@ -10,6 +11,7 @@
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
   import { groupSpaces, type FullSpace } from "$lib/views/spaces/spaces";
+  import CloseSpaceDialog from "$lib/views/spaces/CloseSpaceDialog.svelte";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
@@ -37,8 +39,8 @@
   }
 
   onMount(() => {
-    // pushed changes refresh spaces right away (listenFeeds); this is the safety net (git state changes
-    // herdr doesn't report)
+    // pushed changes refresh spaces right away (listenFeeds, incl. the server's git watch); this is the safety
+    // net (a server without a live feed, a change the watch missed)
     const timer = setInterval(pollSpaces, 10_000);
     return () => clearInterval(timer);
   });
@@ -75,10 +77,13 @@
   });
 
   function open(server: string, sp: FullSpace) {
-    const first = panesOf(server, sp.id)[0];
+    const first = sp.missing ? undefined : panesOf(server, sp.id)[0];
     if (first) go({ view: "agent", server, pane: first.pane.pane });
     else go({ view: "space", server, ws: sp.id });
   }
+
+  // ---- a space whose folder is gone: closed from here (the dialog lists what goes with it)
+  let closing = $state<{ server: string; space: FullSpace } | null>(null);
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   function rowMenu(e: MouseEvent, server: string, sp: FullSpace) {
@@ -91,9 +96,10 @@
     menu = {
       x: e.clientX, y: e.clientY,
       items: [
+        ...(sp.missing ? [{ label: t("Ordner fehlt – schließen …"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
         ...sessions,
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
-        { label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) },
+        ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
         { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hiddenSpaces.hide(server, sp.id) },
       ],
     };
@@ -130,7 +136,8 @@
           <button class="item" onclick={() => open(sec.server.id, sp)} oncontextmenu={(e) => rowMenu(e, sec.server.id, sp)}
             title={[sp.label, sp.git?.branch, statusLabel(st), sp.root].filter(Boolean).join(" · ")}>
             <span class="dotbox">{#if busy}<span class="dot {st}"></span>{/if}</span>
-            <span class="name ellipsis">{sp.label}</span>
+            <span class="name ellipsis" class:gone={sp.missing}>{sp.label}</span>
+            {#if sp.missing}<span class="lost" title={t("Der Ordner dieses Spaces fehlt.")}>{t("Ordner fehlt")}</span>{/if}
             {#if !nested && sp.git}
               <span class="stats">{#if sp.git.dirty > 0}<span>*{sp.git.dirty}</span>{/if}{#if sp.git.ahead > 0}<span>↑{sp.git.ahead}</span>{/if}{#if sp.git.behind > 0}<span>↓{sp.git.behind}</span>{/if}</span>
             {/if}
@@ -157,6 +164,11 @@
 
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+{/if}
+{#if closing}
+  {@const c = closing}
+  <CloseSpaceDialog server={c.server} space={c.space} onClose={() => (closing = null)}
+    onClosed={() => { if (currentWs === `${c.server}|${c.space.id}`) go({ view: "spaces" }); }} />
 {/if}
 
 <style>
@@ -186,6 +198,8 @@
   @keyframes pulse { 50% { opacity: .35; } }
   @media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } }
   .name { color: var(--fg); min-width: 0; }
+  .name.gone { color: var(--dim); text-decoration: line-through; }
+  .lost { flex: none; font-size: 11px; color: var(--orange); }
   .stats { margin-left: auto; display: flex; gap: 6px; flex: none; font: 11.5px var(--mono); color: var(--dim); }
   .fold, .hide { all: unset; cursor: pointer; position: absolute; top: 50%; translate: 0 -50%; height: 22px; display: flex; align-items: center; gap: 2px;
     justify-content: center; border-radius: 5px; color: var(--dim); font-size: 11px; }

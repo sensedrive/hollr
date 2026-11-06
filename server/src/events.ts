@@ -3,10 +3,14 @@
  * Subscribes to herdr's socket API and writes one JSON line per burst of changes:
  *   {"t":"ready"} once, {"t":"changed","spaces":true|false} (coalesced, ≤ 4/s), {"t":"ping"} every 20 s.
  * Pane output alone (revision bumps) is not a change – only structure, cwd, title and agent status.
+ * Git state herdr doesn't see (a pull, fetch, commit or checkout in any shell) comes from a watch on the
+ * spaces' repos (gitwatch.ts) as {"t":"changed","spaces":true}.
  * Ends when herdr goes away or the SSH channel closes; the apps reconnect.
  */
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { GitWatch } from "./gitwatch";
+import { spaceRoots } from "./spaces";
 
 const SUBSCRIPTIONS = [
   "workspace.created",
@@ -73,6 +77,27 @@ export async function runEvents(): Promise<number> {
   let buf = "";
   const { promise: finished, resolve: done } = Promise.withResolvers<number>();
   let stopping = false;
+  // the spaces' repos: a pull/fetch/commit/checkout in any shell changes their badges without herdr noticing
+  const git = new GitWatch(() => {
+    pending = "spaces";
+  });
+  /** which folders to watch follows the spaces: soon after a workspace/worktree change, at most every 10 s
+   *  after session activity (a pane's folder may have changed) */
+  let rootsTimer: ReturnType<typeof setTimeout> | undefined;
+  let rootsAt = Number.POSITIVE_INFINITY;
+  const watchSoon = (delay: number) => {
+    if (rootsTimer && Date.now() + delay >= rootsAt) return;
+    clearTimeout(rootsTimer);
+    rootsAt = Date.now() + delay;
+    rootsTimer = setTimeout(async () => {
+      rootsTimer = undefined;
+      rootsAt = Number.POSITIVE_INFINITY;
+      try {
+        const roots = await spaceRoots();
+        if (!stopping) git.setRoots(roots);
+      } catch {}
+    }, delay);
+  };
 
   let sock: Awaited<ReturnType<typeof Bun.connect>>;
   try {
@@ -97,6 +122,7 @@ export async function runEvents(): Promise<number> {
               }
               const c = classify(msg, panes);
               if (c === "spaces" || (c === "tree" && pending === "none")) pending = c;
+              if (c !== "none") watchSoon(c === "spaces" ? 1000 : 10_000);
             } catch {}
           }
         },
@@ -120,6 +146,7 @@ export async function runEvents(): Promise<number> {
       params: { subscriptions: SUBSCRIPTIONS.map((type) => ({ type })) },
     })}\n`,
   );
+  watchSoon(0);
   const flush = setInterval(() => {
     if (pending === "none") return;
     out({ t: "changed", spaces: pending === "spaces" });
@@ -134,6 +161,8 @@ export async function runEvents(): Promise<number> {
   stopping = true;
   clearInterval(flush);
   clearInterval(ping);
+  clearTimeout(rootsTimer);
+  git.close();
   sock.end();
   return code;
 }

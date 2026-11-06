@@ -282,9 +282,16 @@ enum HollrClient {
         throw HollrError.server((obj["error"] as? String) ?? String(localized: "Chat konnte nicht geöffnet werden."))
     }
 
+    /// Closes a session; its space stays (for the space's last pane the server leaves an empty terminal).
+    /// A refusal throws – older servers answer nothing then (no `ok`), never a silent no-op.
     static func close(_ server: Server, pane: String) async throws {
-        let client = try await SSHPool.shared.client(for: server)
-        _ = try await client.exec("close \(pane)", on: server)
+        let data = try await run("close \(pane)", on: server)
+        struct R: Decodable { let ok: Bool?; let error: String? }
+        let reply = try? JSONDecoder().decode(R.self, from: data)
+        if let error = reply?.error { throw HollrError.server(error) }
+        guard reply?.ok == true else {
+            throw HollrError.server(String(localized: "Die Sitzung ließ sich nicht schließen. Hollr auf dem Server aktualisieren (Server › Werkzeuge) und erneut versuchen."))
+        }
     }
 
     /// Visible terminal screen of a pane (for agents without a parsed history, or prompts).

@@ -139,7 +139,7 @@
 {#if closing}
   {@const r = closing}
   <ConfirmDialog title={t("Chat schließen?")} confirmLabel={t("Schließen")}
-    message={t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: agentName(r.pane) })}
+    message={`${t("„{title}“ wird in herdr geschlossen und {agent} beendet.", { title: refTitle(r), agent: agentName(r.pane) })}${api.lastPaneOf(r.workspace) ? ` ${t("Der Space bleibt – mit einem leeren Terminal.")}` : ""}`}
     onConfirm={() => close(r)} onClose={() => (closing = null)} />
 {/if}
 

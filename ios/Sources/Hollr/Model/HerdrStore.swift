@@ -21,18 +21,24 @@ final class HerdrStore {
     /// when each server's spaces (with their git state) were last loaded
     private var spacesAt: [UUID: Date] = [:]
     private var spacesSoon: Set<UUID> = []
+    /// per server: newest spaces request – a pull right after a fetch sends two quick changes; the older
+    /// answer arriving last must not bring back the old ↓N
+    private var spacesSeq: [UUID: Int] = [:]
 
     func refreshSpaces(_ servers: [Server]) async {
         for server in servers {
-            if let list = try? await HollrClient.spaces(server) {
+            let seq = (spacesSeq[server.id] ?? 0) + 1
+            spacesSeq[server.id] = seq
+            if let list = try? await HollrClient.spaces(server), spacesSeq[server.id] == seq {
                 spaces[server.id] = list
                 spacesAt[server.id] = Date()
             }
         }
     }
 
-    /// A pull, commit or checkout changes no herdr structure – only a session's activity (status, title,
-    /// folder) shows it: that reloads the spaces, at most every 5 s.
+    /// Session activity (status, title, folder) may come with a commit or checkout the server's git watch
+    /// already reported (`spaces: true`) – or, on servers before that watch, didn't: reload the spaces, at
+    /// most every 5 s.
     private func refreshSpacesSoon(_ server: Server) {
         guard !spacesSoon.contains(server.id) else { return }
         spacesSoon.insert(server.id)
