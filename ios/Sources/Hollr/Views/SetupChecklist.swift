@@ -18,24 +18,24 @@ struct SetupChecklist: View {
     var body: some View {
         Section {
             if problems.isEmpty {
-                Label("Alles eingerichtet", systemImage: "checkmark.seal.fill").foregroundStyle(Theme.live)
+                Label("Alles eingerichtet", icon: .check).font(Typo.md).foregroundStyle(Theme.green)
             }
             ForEach(problems) { check in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Gap.s) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.warn)
+                        Image(.alert).font(Typo.md).foregroundStyle(Theme.warn)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(check.name).font(.subheadline.weight(.semibold))
-                            Text(check.detail).font(.caption).foregroundStyle(.secondary)
+                            Text(check.name).font(Typo.md.weight(.semibold))
+                            Text(check.detail).font(Typo.sm).foregroundStyle(Theme.muted)
                         }
                     }
                     fixButton(check)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Gap.xs)
             }
-            if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+            if let message { Text(message).font(Typo.sm).foregroundStyle(Theme.muted) }
         } header: {
-            Text("Einrichtung · \(checks.count - problems.count)/\(checks.count) bereit")
+            SectionHeader(title: String(localized: "Einrichtung · \(checks.count - problems.count)/\(checks.count) bereit"))
         }
         .confirmationDialog("Push-Schlüssel übernehmen?", isPresented: Binding(
             get: { pushSource != nil }, set: { if !$0 { pushSource = nil } }), titleVisibility: .visible,
@@ -62,20 +62,22 @@ struct SetupChecklist: View {
         } else if action == "push" {
             button(check, String(localized: "Push einrichten"), "bell.badge") { try await setUpPush() }
         } else if let fix = check.fix, !fix.isEmpty {
-            HStack(spacing: 8) {
-                Text(fix).font(.caption.monospaced()).lineLimit(2).textSelection(.enabled)
-                Spacer(minLength: 4)
+            HStack(spacing: Gap.s) {
+                Text(fix).font(Typo.monoSmall).lineLimit(2).textSelection(.enabled)
+                Spacer(minLength: Gap.xs)
                 Button {
                     UIPasteboard.general.string = fix
                     copied = check.id
                 } label: {
-                    Image(systemName: copied == check.id ? "checkmark" : "doc.on.doc")
+                    IconView(copied == check.id ? .check : .copy, size: 14)
+                        .foregroundStyle(copied == check.id ? Theme.green : Theme.muted)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.icon(size: 32))
                 .accessibilityLabel("Befehl kopieren")
             }
-            .padding(8)
-            .background(Theme.fg.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.vertical, Gap.xs).padding(.leading, 10).padding(.trailing, Gap.xs)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Theme.border, lineWidth: 1))
         }
     }
 
@@ -94,13 +96,13 @@ struct SetupChecklist: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                if busy == check.id { ProgressView().controlSize(.small) } else { Image(systemName: icon) }
+            Label {
                 Text(title)
+            } icon: {
+                if busy == check.id { Spinner(color: Theme.muted, size: 13) } else { Image(systemName: icon) }
             }
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
+        .buttonStyle(.hollr(small: true))
         .disabled(busy != nil)
     }
 

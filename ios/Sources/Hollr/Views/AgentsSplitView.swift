@@ -22,16 +22,19 @@ struct AgentsSplitView: View {
                     }
                     .id(selection)
                 } else {
-                    ContentUnavailableView("Kein Agent gewählt", systemImage: "sidebar.left",
-                                           description: Text("Links einen Agent wählen – Rechtsklick › „Rechts daneben öffnen“ zeigt einen zweiten daneben."))
+                    EmptyState(icon: .message, title: String(localized: "Kein Agent gewählt"),
+                               text: String(localized: "Links einen Agent wählen – Rechtsklick › „Rechts daneben öffnen“ zeigt einen zweiten daneben."))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Theme.bg)
                 }
                 if let beside {
-                    Divider()
+                    Rectangle().fill(Theme.border).frame(width: 1)
                     NavigationStack {
                         AgentDetailView(agentId: besidePath.last ?? beside, path: $besidePath)
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
-                                    Button { self.beside = nil } label: { Image(systemName: "xmark") }
+                                    Button { self.beside = nil } label: { Image(.x) }
+                                        .buttonStyle(.icon())
                                         .accessibilityLabel("Zweiten Chat schließen")
                                 }
                             }

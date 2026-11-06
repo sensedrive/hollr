@@ -1,32 +1,36 @@
 import SwiftUI
 
-/// Home: active sessions with live previews, usage limits, connections (Moshi-style).
+/// Übersicht (screens/Uebersicht): usage limits, "Braucht dich" as focus cards, "Läuft gerade" grouped by project.
+/// Connections live in Einstellungen → Server.
 struct DashboardView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
     @Environment(SessionStore.self) private var sessions
-    let onPair: () -> Void
+    @Environment(MySessions.self) private var mySessions
+    @Environment(Inbox.self) private var inbox
+    @Environment(\.openInBrowser) private var openInBrowser
     let onNew: () -> Void
     @Binding var sheetAgent: String?
-    @Environment(MySessions.self) private var mySessions
-    @State private var confirmRemove: Server?
-    @Environment(\.openInBrowser) private var openInBrowser
-    @Environment(Inbox.self) private var inbox
-
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    @State private var workFilter: WorkFilter = .all
+    @State private var reloading = false
+    @State private var showLimits = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: Gap.xl) {
                 limitsStrip
                 InboxSection { sheetAgent = $0 }
-                sessionsSection
-                connectionsSection
+                workingSection
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
+            .padding(.horizontal, Gap.l)
+            .padding(.bottom, Gap.xxl)
         }
-        .navigationTitle("Hollr")
+        #if DEBUG
+        // screenshots of "Läuft gerade" (-hollrScrollBottom YES)
+        .defaultScrollAnchor(UserDefaults.standard.bool(forKey: "hollrScrollBottom") ? .bottom : .top)
+        #endif
+        .navigationTitle("Übersicht")
+        .navigationBarTitleDisplayMode(.large)
         .themedPage()
         // what waits for you – on every herdr change (the live feed makes this immediate)
         .task(id: herdr.trees) { await inbox.update(herdr.allAgents(store.servers, includeShells: false)) }
@@ -37,77 +41,195 @@ struct DashboardView: View {
             mySessions.prune(alive: alive, loadedServers: loaded)
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: onNew) { Image(systemName: "plus") }
-                    .accessibilityLabel("Neue Sitzung")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { openInBrowser() } label: { Image(systemName: "globe") }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { openInBrowser() } label: { Image(.globe) }
+                    .buttonStyle(.icon())
                     .accessibilityLabel("Browser")
+                Button { Task { await reload() } } label: {
+                    if reloading { Spinner(color: Theme.muted) } else { Image(.refresh) }
+                }
+                .buttonStyle(.icon())
+                .disabled(reloading)
+                .accessibilityLabel("Aktualisieren")
+                Button(action: onNew) { Label("Neue Sitzung", icon: .plus) }
+                    .buttonStyle(.hollr(.primary, small: true))
             }
         }
-        .refreshable {
-            await herdr.refresh(store.servers, force: true)
-            await herdr.refreshUsage(store.servers, force: true)
-        }
-        .task { await herdr.refreshUsage(store.servers) }
-        .confirmationDialog("Server aus Hollr entfernen?", isPresented: Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }),
-                            titleVisibility: .visible, presenting: confirmRemove) { server in
-            Button("Entfernen", role: .destructive) { store.remove(server); confirmRemove = nil }
-            Button("Abbrechen", role: .cancel) { confirmRemove = nil }
-        } message: { server in
-            Text("Auf dem Server bleibt der Schlüssel bis `hollr revoke \(server.deviceId)`.")
+        .refreshable { await refreshAll() }
+        .task {
+            await herdr.refreshUsage(store.servers)
+            // branches for the cards and rows
+            if store.servers.contains(where: { herdr.spaces[$0.id] == nil }) { await herdr.refreshSpaces(store.servers) }
         }
     }
 
-    // MARK: Sessions
+    private func refreshAll() async {
+        await herdr.refresh(store.servers, force: true)
+        await herdr.refreshUsage(store.servers, force: true)
+    }
+
+    private func reload() async {
+        reloading = true
+        await refreshAll()
+        reloading = false
+    }
+
+    // MARK: Läuft gerade
+
+    /// Alle / Arbeitet (working or waiting) / Neu (new result)
+    enum WorkFilter: Hashable {
+        case all, busy, new
+
+        func includes(_ ref: AgentRef) -> Bool {
+            switch self {
+            case .all: return true
+            case .busy: return ref.pane.status == "working" || ref.pane.status == "blocked"
+            case .new: return ref.pane.status == "done"
+            }
+        }
+    }
+
+    /// One workspace on one server with its sessions (organism ProjectCard).
+    private struct WorkProject: Identifiable {
+        let id: String
+        let name: String
+        let server: Server
+        var refs: [AgentRef]
+    }
 
     private var liveIds: Set<String> { Set(sessions.sessions.filter { $0.value.isLive }.map(\.key)) }
 
-    /// Only the sessions you opened in Hollr, grouped by machine.
-    @ViewBuilder private var sessionsSection: some View {
-        let mine = mySessions.ids.compactMap { herdr.ref(id: $0, servers: store.servers) }
-        if mine.isEmpty && !herdr.loaded && !mySessions.ids.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                SkeletonBar(width: 120, height: 12)
-                Skeleton(style: .cards, count: 1).frame(height: 200)
-            }
-            .shimmer()
-        } else if mine.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: String(localized: "Sitzungen"), trailing: nil)
-                Text("Hier erscheinen die Sitzungen, die du in Hollr öffnest oder startest – Agents und Terminals, nach Maschine sortiert.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Button(action: onNew) {
-                    Label("Neue Sitzung", systemImage: "plus").frame(maxWidth: .infinity).padding(.vertical, 4)
-                }
-                .buttonStyle(.borderedProminent)
-            }
+    /// What's going on: the sessions you opened in Hollr plus every agent that works, waits or just finished.
+    private var workRefs: [AgentRef] {
+        let mine = Set(mySessions.ids)
+        return herdr.allAgents(store.servers, includeShells: true).filter { ref in
+            mine.contains(ref.id) || (ref.pane.agent != nil && ["working", "blocked", "done"].contains(ref.pane.status))
         }
-        ForEach(store.servers) { server in
-            let refs = mine.filter { $0.server.id == server.id }
+    }
+
+    /// grouped per workspace and server, in the agents' order (needs-you first)
+    private func projects(_ refs: [AgentRef]) -> [WorkProject] {
+        var order: [String] = []
+        var byKey: [String: WorkProject] = [:]
+        for ref in refs {
+            let key = "\(ref.server.id.uuidString)|\(ref.workspace)"
+            if byKey[key] == nil {
+                order.append(key)
+                byKey[key] = WorkProject(id: key, name: ref.workspace, server: ref.server, refs: [])
+            }
+            byKey[key]?.refs.append(ref)
+        }
+        return order.compactMap { byKey[$0] }
+    }
+
+    private var filterOptions: [(value: WorkFilter, title: String)] {
+        [(value: .all, title: String(localized: "Alle")),
+         (value: .busy, title: String(localized: "Arbeitet")),
+         (value: .new, title: String(localized: "Neu"))]
+    }
+
+    @ViewBuilder private var workingSection: some View {
+        let refs = workRefs
+        VStack(alignment: .leading, spacing: Gap.m) {
+            SectionHeader(title: String(localized: "Läuft gerade"), trailing: refs.isEmpty ? nil : "\(refs.count)")
             if !refs.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        Circle().fill(herdr.errors[server.id] == nil ? Theme.live : Theme.warn).frame(width: 7, height: 7)
-                        SectionHeader(title: server.label, trailing: "\(refs.count)")
-                    }
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(refs) { ref in
-                            SessionCard(ref: ref, live: liveIds.contains(ref.id)) { sheetAgent = ref.id }
-                                .contextMenu {
-                                    Button { mySessions.remove(ref.id) } label: {
-                                        Label("Aus der Übersicht nehmen", systemImage: "eye.slash")
-                                    }
-                                    Button(role: .destructive) { closeSession(ref) } label: {
-                                        Label("Sitzung beenden", systemImage: "xmark.circle")
-                                    }
-                                }
-                        }
+                Segmented(label: String(localized: "Filter"), options: filterOptions, selection: $workFilter, boxed: true)
+                let shown = projects(refs.filter(workFilter.includes))
+                if shown.isEmpty {
+                    Text("Nichts mit diesem Filter.")
+                        .font(Typo.sm).foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .cardStyle()
+                }
+                let live = liveIds
+                ForEach(shown) { project in projectCard(project, live: live) }
+            } else if !herdr.loaded {
+                skeleton
+            } else {
+                emptyCard
+            }
+        }
+    }
+
+    private func projectCard(_ project: WorkProject, live: Set<String>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            projectHead(project)
+            ForEach(project.refs) { ref in workRow(ref, live: live.contains(ref.id)) }
+        }
+        .cardStyle(padding: EdgeInsets(top: Gap.s, leading: Gap.s, bottom: Gap.s, trailing: Gap.s), radius: Radius.xl)
+    }
+
+    /// colour bar, name, server (when several are paired), counts per state in their colours
+    private func projectHead(_ project: WorkProject) -> some View {
+        let states: [PaneState] = [.working, .blocked, .result]
+        let counts: [(state: PaneState, count: Int)] = states.map { state in
+            (state: state, count: project.refs.filter { PaneState(status: $0.pane.status, agent: $0.pane.agent != nil) == state }.count)
+        }
+        return HStack(spacing: Gap.s) {
+            ProjectBar(color: Theme.identity(project.name), height: 15)
+            Text(project.name).font(Typo.lg).lineLimit(1).layoutPriority(1)
+            if store.servers.count > 1 {
+                Text(project.server.label).font(Typo.sm).foregroundStyle(Theme.dim).lineLimit(1)
+            }
+            Spacer(minLength: Gap.xs)
+            ForEach(counts.filter { $0.count > 0 }, id: \.state) { item in
+                Text(verbatim: "\(item.count) \(item.state.label)")
+                    .font(Typo.sm).foregroundStyle(item.state.color)
+                    .lineLimit(1).fixedSize()
+            }
+        }
+        .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 6)
+    }
+
+    private func workRow(_ ref: AgentRef, live: Bool) -> some View {
+        Button { sheetAgent = ref.id } label: {
+            AgentRow(ref: ref, showWorkspace: false, branch: herdr.branch(of: ref), live: live)
+                .padding(Gap.s)
+                .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
+        }
+        .buttonStyle(WorkRowButtonStyle())
+        .zoomSource(ref.id)
+        .contextMenu {
+            if mySessions.ids.contains(ref.id) {
+                Button { mySessions.remove(ref.id) } label: {
+                    Label("Aus der Übersicht nehmen", systemImage: "eye.slash")
+                }
+            }
+            Button(role: .destructive) { closeSession(ref) } label: {
+                Label("Sitzung beenden", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    private var skeleton: some View {
+        VStack(alignment: .leading, spacing: Gap.m) {
+            SkeletonBar(width: 120, height: 13)
+            ForEach(0..<3, id: \.self) { i in
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous).fill(Theme.wash(0.09)).frame(width: 28, height: 28)
+                    VStack(alignment: .leading, spacing: 6) {
+                        SkeletonBar(width: CGFloat([150, 190, 120][i]), height: 12)
+                        SkeletonBar(width: CGFloat([90, 130, 70][i]), height: 9)
                     }
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(radius: Radius.xl)
+        .shimmer()
+        .accessibilityElement()
+        .accessibilityLabel("Lädt")
+    }
+
+    private var emptyCard: some View {
+        VStack(alignment: .leading, spacing: Gap.m) {
+            Text("Gerade läuft keine Sitzung. Starte eine neue oder öffne eine im Tab „Agents“.")
+                .font(Typo.md).foregroundStyle(Theme.muted)
+            Button(action: onNew) { Label("Neue Sitzung", icon: .plus) }
+                .buttonStyle(.hollr(.primary))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(padding: EdgeInsets(top: Gap.l, leading: Gap.l, bottom: Gap.l, trailing: Gap.l), radius: Radius.xl)
     }
 
     private func closeSession(_ ref: AgentRef) {
@@ -119,8 +241,6 @@ struct DashboardView: View {
     }
 
     // MARK: Limits
-
-    @State private var showLimits = false
 
     private var quietCaps: [UsageCapacity] {
         var all: [UsageCapacity] = []
@@ -159,169 +279,65 @@ struct DashboardView: View {
         return digits * hours
     }
 
-    /// one quiet line: "Claude 5h 2% 7d 64%  ChatGPT 5h 1% 7d 5%" (pooled over all accounts)
+    /// one quiet line (dash__limits): "Claude 5h ▬ 2% 7d ▬ 64%  ChatGPT …" (pooled over all accounts)
     @ViewBuilder private var limitsStrip: some View {
         let caps = quietCaps
         if !caps.isEmpty {
             Button { showLimits = true } label: { LimitsLine(caps: caps) }
-            .buttonStyle(.plain)
-            .sheet(isPresented: $showLimits) {
-                LimitsSheet()
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-    }
-
-    // MARK: Connections
-
-    private var connectionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: String(localized: "Verbindungen"), trailing: nil)
-            ForEach(store.servers) { server in
-                NavigationLink { ServerInfoView(server: server) } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "server.rack")
-                        .font(.title3).foregroundStyle(Theme.accent)
-                        .frame(width: 40, height: 40)
-                        .background(Theme.accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(server.label).font(.headline)
-                        Text(server.displayAddress).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if PushManager.shared.enabled, PushManager.shared.serverReady[server.id] == false {
-                        // no APNs key on this computer: no notifications from it (fix: server › Einrichtung)
-                        Image(systemName: "bell.slash.fill").font(.caption).foregroundStyle(Theme.warn)
-                            .accessibilityLabel("Push fehlt")
-                    }
-                    Circle().fill(herdr.errors[server.id] == nil ? Theme.live : Theme.warn).frame(width: 9, height: 9)
-                    Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.tertiary)
-                }
-                .padding(14)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .contextMenu {
-                    Button("Entfernen", role: .destructive) { confirmRemove = server }
-                }
-                }
                 .buttonStyle(.plain)
-            }
-            Button(action: onPair) {
-                Label("Server koppeln", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity).padding(.vertical, 4)
-            }
-            .buttonStyle(.bordered)
+                .sheet(isPresented: $showLimits) {
+                    LimitsSheet()
+                        .presentationDetents([.medium, .large])
+                        .dialogSheet()
+                }
         }
     }
 }
 
-struct SectionHeader: View {
-    let title: String
-    let trailing: String?
+/// usage colour like the desktop app: red above 85 %, orange above 60 %, else green (quiet: muted)
+private func usedColor(_ used: Double, quiet: Bool = false) -> Color {
+    used > 0.85 ? Theme.red : used > 0.6 ? Theme.orange : quiet ? Theme.muted : Theme.green
+}
 
-    var body: some View {
-        HStack {
-            Text(title.uppercased()).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-            Spacer()
-            if let trailing { Text(trailing).font(.footnote).foregroundStyle(.tertiary) }
-        }
-        .padding(.top, 6)
+/// A work row's tap feedback: a text wash behind the row while pressed (work-row:hover).
+private struct WorkRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Theme.wash(0.05) : .clear,
+                        in: RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
     }
 }
 
-/// Card with a tiny live terminal preview of the agent's screen.
-struct SessionCard: View {
-    let ref: AgentRef
-    let live: Bool
-    let onOpen: () -> Void
-    @State private var preview = ""
-
-    var body: some View {
-        Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Omp.successBg)
-                    if preview.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(0..<7, id: \.self) { i in SkeletonBar(width: CGFloat([90, 120, 70, 110, 60, 100, 80][i]), height: 6) }
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                        .shimmer()
-                    }
-                    Text(preview.isEmpty ? " " : preview)
-                        .font(.system(size: 7.5, design: .monospaced))
-                        .foregroundStyle(Omp.muted)
-                        .lineLimit(16)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                        .clipped()
-                    HStack(spacing: 5) {
-                        Circle().fill(Theme.statusColor(ref.pane.status)).frame(width: 7, height: 7)
-                        Text(ref.pane.agentName).font(.caption2.weight(.bold))
-                        if live { Image(systemName: "waveform").font(.caption2).foregroundStyle(Theme.live) }
-                    }
-                    .padding(.horizontal, 7).padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(8)
-                }
-                .frame(height: 150)
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(ref.pane.status == "blocked" ? Theme.warn : Omp.border, lineWidth: ref.pane.status == "blocked" ? 1.5 : 0.8))
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).fill(Theme.identity(ref.workspace)).frame(width: 4, height: 14)
-                    Text(ref.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                }
-                let status = ref.pane.agent == nil ? String(localized: "Terminal") : Theme.statusLabel(ref.pane.status)
-                Text(ref.title == ref.workspace ? status : "\(ref.workspace) · \(status)")
-                    .font(.caption).foregroundStyle(Theme.statusColor(ref.pane.status)).lineLimit(1)
-            }
-        }
-        .buttonStyle(.plain)
-        .zoomSource(ref.id)
-        .task(id: ref.id) {
-            while !Task.isCancelled {
-                if let text = try? await HollrClient.screen(ref.server, pane: ref.pane.pane, lines: 30) {
-                    preview = AgentSession.cleanScreen(text)
-                }
-                try? await Task.sleep(for: .seconds(ref.pane.status == "working" ? 4 : 15))
-            }
-        }
-    }
-}
-
-struct LimitBar: View {
+/// One limit in the sheet: window, percent in its colour, meter, reset countdown.
+private struct LimitBar: View {
     let limit: UsageLimit
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(limit.label.replacingOccurrences(of: "Claude ", with: "")).font(.caption)
-                Spacer()
-                Text("\(Int((limit.used * 100).rounded())) %").font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(color)
-                if let reset = limit.resetsAt {
-                    Text("· \(RelativeTime.countdown(reset))").font(.caption2.monospacedDigit()).foregroundStyle(.tertiary)
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: Gap.s) {
+                Text(limit.label.replacingOccurrences(of: "Claude ", with: "")).font(Typo.md)
+                Spacer(minLength: Gap.s)
+                Text(verbatim: "\(Int((limit.used * 100).rounded())) %")
+                    .font(Typo.sm.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(usedColor(limit.used))
             }
             GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.fg.opacity(0.08))
-                    Capsule().fill(color).frame(width: max(4, geo.size.width * limit.used))
-                }
+                ProgressMeter(value: limit.used, width: geo.size.width, height: 6, color: usedColor(limit.used))
             }
             .frame(height: 6)
+            if let reset = limit.resetsAt {
+                Text("zurückgesetzt \(RelativeTime.countdown(reset))")
+                    .font(Typo.xs.monospacedDigit()).foregroundStyle(Theme.dim)
+            }
         }
-    }
-
-    private var color: Color {
-        limit.used > 0.85 ? Omp.error : limit.used > 0.6 ? Omp.warning : Omp.success
     }
 }
 
-/// Per-account details behind the quiet limits line.
+/// Per-account details behind the quiet limits line (organism LimitsDialog).
 struct LimitsSheet: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
+    @Environment(\.dismiss) private var dismiss
     @State private var loading = false
     @State private var updated: Date?
 
@@ -337,56 +353,60 @@ struct LimitsSheet: View {
     }
 
     // split up: as one expression the Release compiler took >500 ms to type-check it
-    private func providerSection(_ provider: String, _ items: [UsageLimit]) -> some View {
+    /// one card per provider and account ("Claude · martin@…")
+    private func providerCards(_ provider: String, _ items: [UsageLimit]) -> some View {
         let accounts: [(String, [UsageLimit])] = Dictionary(grouping: items, by: { $0.account ?? "" })
             .map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
-        let several: Bool = Set(items.compactMap(\.account)).count > 1
-        return Section(provider) {
-            ForEach(accounts, id: \.0) { account, rows in
-                VStack(alignment: .leading, spacing: 8) {
-                    if several { Text("Konto \(account)").font(.caption).foregroundStyle(.secondary) }
-                    ForEach(rows) { LimitBar(limit: $0) }
-                }
-                .padding(.vertical, 4)
+        return ForEach(accounts, id: \.0) { account, rows in
+            VStack(alignment: .leading, spacing: Gap.m) {
+                Text(account.isEmpty ? provider : "\(provider) · \(account)")
+                    .font(Typo.md.weight(.semibold)).lineLimit(1).truncationMode(.middle)
+                ForEach(rows) { LimitBar(limit: $0) }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
         }
+    }
+
+    private var historyRow: some View {
+        HStack(spacing: Gap.s) {
+            Label("Verlauf & Statistik", systemImage: "chart.xyaxis.line").font(Typo.md).foregroundStyle(Theme.fg)
+            Spacer(minLength: Gap.s)
+            Text("Beta")
+                .font(Typo.xs.weight(.semibold)).foregroundStyle(Theme.accent)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Theme.accentSoft, in: Capsule())
+            Image(.chevronRight).font(Typo.xs.weight(.semibold)).foregroundStyle(Theme.dim)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .cardStyle()
     }
 
     var body: some View {
         NavigationStack {
-            List {
-            Group {
-                Section {
-                    NavigationLink { UsageHistoryView() } label: {
-                        HStack {
-                            Label("Verlauf & Statistik", systemImage: "chart.xyaxis.line")
-                            Spacer()
-                            Text("Beta").font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Theme.accent.opacity(0.2), in: Capsule()).foregroundStyle(Theme.accent)
-                        }
+            DialogScaffold(icon: .activity, title: String(localized: "Nutzungslimits"), onClose: { dismiss() }) {
+                NavigationLink { UsageHistoryView() } label: { historyRow }
+                    .buttonStyle(.plain)
+                ForEach(providers, id: \.name) { provider in providerCards(provider.name, provider.items) }
+            } footer: {
+                if let updated {
+                    Text("Stand \(updated.formatted(date: .omitted, time: .shortened))")
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
+                }
+                Spacer(minLength: 0)
+                Button { Task { await reload() } } label: {
+                    HStack(spacing: 6) {
+                        if loading { Spinner(color: Theme.muted, size: 13) } else { IconView(.refresh, size: 14) }
+                        Text("Aktualisieren")
                     }
                 }
-                ForEach(providers, id: \.name) { provider in providerSection(provider.name, provider.items) }
+                .buttonStyle(.hollr(.secondary, small: true))
+                .disabled(loading)
+                Button("Fertig") { dismiss() }
+                    .buttonStyle(.hollr(.primary, small: true))
             }
-            .listRowBackground(Theme.card)
-        }.themedList()
-            .navigationTitle("Nutzungslimits")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await reload() } } label: {
-                        if loading { ProgressView() } else { Image(systemName: "arrow.clockwise") }
-                    }
-                    .disabled(loading)
-                    .accessibilityLabel("Aktualisieren")
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    if let updated {
-                        Text("Stand \(updated.formatted(date: .omitted, time: .shortened))")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .refreshable { await reload() }
             // fresh numbers every time the sheet opens (the providers' APIs, not the 2-min cache)
             .task { await reload() }
@@ -401,6 +421,7 @@ struct LimitsSheet: View {
     }
 }
 
+/// The quiet limits line (dash__limits): provider muted, window dim, a small meter, percent in its colour.
 private struct LimitsLine: View {
     let caps: [UsageCapacity]
 
@@ -408,41 +429,51 @@ private struct LimitsLine: View {
         Dictionary(grouping: caps, by: \.provider).map { ($0.key, $0.value) }.sorted { $0.provider < $1.provider }
     }
 
-    /// The widest version that fits: "Claude 5h 43% 7d 53%" → tighter → "C 5h 43 7d 53" – never "ChatG…".
+    /// The widest version that fits: one line with meters → one provider per line → "C 5h 43 7d 53" – never "ChatG…".
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Gap.s) {
             ViewThatFits(in: .horizontal) {
-                line(name: { UsageLimit.name($0) }, spacing: 14, percent: true)
-                line(name: { UsageLimit.name($0) }, spacing: 9, percent: false)
-                line(name: { String(UsageLimit.name($0).prefix(1)) }, spacing: 8, percent: false)
+                HStack(spacing: Gap.l) {
+                    ForEach(groups, id: \.provider) { providerGroup($0, meters: true) }
+                }
+                VStack(alignment: .leading, spacing: Gap.s) {
+                    ForEach(groups, id: \.provider) { providerGroup($0, meters: true) }
+                }
+                HStack(spacing: Gap.s) {
+                    ForEach(groups, id: \.provider) { providerGroup($0, meters: false) }
+                }
             }
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+            Image(.chevronRight).font(Typo.xs.weight(.semibold)).foregroundStyle(Theme.dim)
         }
-        .font(.caption.monospacedDigit())
+        .font(Typo.sm.monospacedDigit())
+        .padding(.vertical, Gap.s)
+        .contentShape(Rectangle())
     }
 
-    private func line(name: @escaping (String) -> String, spacing: CGFloat, percent: Bool) -> some View {
-        HStack(spacing: spacing) {
-            ForEach(groups, id: \.provider) { group in
-                HStack(spacing: 4) {
-                    Text(name(group.provider)).foregroundStyle(.secondary)
-                    ForEach(group.rows) { cap in CapText(cap: cap, percent: percent) }
-                }
-                .fixedSize()
-            }
+    /// with meters: "Claude 5h ▬ 72%"; without: "C 5h 72"
+    private func providerGroup(_ group: (provider: String, rows: [UsageCapacity]), meters: Bool) -> some View {
+        let name = UsageLimit.name(group.provider)
+        return HStack(spacing: meters ? Gap.m : Gap.xs) {
+            Text(verbatim: meters ? name : String(name.prefix(1))).foregroundStyle(Theme.muted)
+            ForEach(group.rows) { cap in CapText(cap: cap, meter: meters) }
         }
         .lineLimit(1)
+        .fixedSize()
     }
 }
 
 private struct CapText: View {
     let cap: UsageCapacity
-    var percent = true
+    var meter = true
 
     var body: some View {
         let value = Int((cap.used * 100).rounded())
-        let color: Color = cap.used > 0.85 ? Omp.error : cap.used > 0.6 ? Omp.warning : .secondary
-        Text(percent ? "\(cap.window) \(value)%" : "\(cap.window) \(value)").foregroundStyle(color)
+        HStack(spacing: 6) {
+            Text(verbatim: cap.window).foregroundStyle(Theme.dim)
+            if meter { ProgressMeter(value: cap.used, width: 36, height: 4, color: usedColor(cap.used)) }
+            Text(verbatim: meter ? "\(value)%" : "\(value)").foregroundStyle(usedColor(cap.used, quiet: true))
+        }
+        .accessibilityElement(children: .combine)
     }
 }

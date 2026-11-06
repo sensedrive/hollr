@@ -11,12 +11,12 @@ struct ScaledMarkdown: View {
     }
 }
 
-/// Renders an agent answer (GitHub-flavoured Markdown: tables, code, lists) in Hollr's style.
+/// Renders an agent answer (GitHub-flavoured Markdown: tables, code, lists) straight on the page (sess__md).
 /// Long answers start collapsed.
 struct AgentMarkdown: View {
     let text: String
     var dimmed = false
-    /// omp style: no card, no folding (assistant text in the timeline)
+    /// omp style: no folding (assistant text in the timeline)
     var plain = false
     @State private var expanded = false
 
@@ -24,19 +24,17 @@ struct AgentMarkdown: View {
 
     var body: some View {
         let long = !plain && text.count > Self.collapseAt
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Gap.s) {
             ScaledMarkdown(text: long && !expanded ? Self.preview(text) : text)
             if long {
                 Button(expanded ? "Weniger anzeigen" : "Ganze Antwort anzeigen") {
                     withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
                 }
-                .font(.footnote.weight(.semibold))
+                .buttonStyle(.hollr(.ghost, small: true))
             }
         }
-        .padding(.horizontal, plain ? 4 : 14).padding(.vertical, plain ? 0 : 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(plain ? .clear : Theme.card, in: RoundedRectangle(cornerRadius: 18))
-        .opacity(dimmed ? 0.75 : 1)
+        .opacity(dimmed ? 0.6 : 1)
     }
 
     /// First paragraphs up to the limit, never cutting inside a code block or table.
@@ -59,13 +57,14 @@ struct AgentMarkdown: View {
 extension MarkdownUI.Theme {
     static func hollr(size: CGFloat) -> MarkdownUI.Theme { MarkdownUI.Theme()
         .text {
-            ForegroundColor(.primary)
+            ForegroundColor(Hollr.Theme.fg)
             FontSize(size)
         }
+        // inline code: mono on a 7 % text wash (sess__md code)
         .code {
             FontFamilyVariant(.monospaced)
-            FontSize(.em(0.85))
-            BackgroundColor(Theme.fg.opacity(0.08))
+            FontSize(.em(0.88))
+            BackgroundColor(Hollr.Theme.wash(0.07))
         }
         .strong { FontWeight(.semibold) }
         .link { ForegroundColor(Hollr.Theme.accent) }
@@ -87,11 +86,11 @@ extension MarkdownUI.Theme {
         .paragraph { configuration in
             configuration.label
                 .fixedSize(horizontal: false, vertical: true)
-                .relativeLineSpacing(.em(0.2))
+                .relativeLineSpacing(.em(0.25))
                 .markdownMargin(top: 0, bottom: 10)
         }
         .listItem { configuration in
-            configuration.label.markdownMargin(top: .em(0.2))
+            configuration.label.markdownMargin(top: .em(0.25))
         }
         .codeBlock { configuration in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -102,18 +101,19 @@ extension MarkdownUI.Theme {
                         FontFamilyVariant(.monospaced)
                         FontSize(.em(0.82))
                     }
-                    .padding(10)
+                    .padding(.vertical, Gap.s).padding(.horizontal, 10)
             }
-            .background(Theme.fg.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            .background(Hollr.Theme.raised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Hollr.Theme.border, lineWidth: 1))
             .markdownMargin(top: 0, bottom: 10)
         }
         .table { configuration in
             ScrollView(.horizontal, showsIndicators: false) {
                 configuration.label
                     .fixedSize(horizontal: true, vertical: true)
-                    .markdownTableBorderStyle(.init(color: Theme.fg.opacity(0.12)))
+                    .markdownTableBorderStyle(.init(color: Hollr.Theme.border))
                     .markdownTableBackgroundStyle(
-                        .alternatingRows(Color.clear, Theme.fg.opacity(0.04), header: Theme.fg.opacity(0.08))
+                        .alternatingRows(Color.clear, Hollr.Theme.wash(0.04), header: Hollr.Theme.wash(0.08))
                     )
             }
             .markdownMargin(top: 0, bottom: 10)
@@ -130,9 +130,9 @@ extension MarkdownUI.Theme {
         }
         .blockquote { configuration in
             configuration.label
-                .padding(.leading, 10)
-                .overlay(alignment: .leading) { Rectangle().fill(Theme.fg.opacity(0.2)).frame(width: 3) }
-                .markdownTextStyle { ForegroundColor(.secondary) }
+                .padding(.leading, Gap.m)
+                .overlay(alignment: .leading) { Rectangle().fill(Hollr.Theme.border).frame(width: 2) }
+                .markdownTextStyle { ForegroundColor(Hollr.Theme.muted) }
         }
     }
 }

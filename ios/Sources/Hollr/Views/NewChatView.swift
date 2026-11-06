@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Open a new session: agent (omp / Claude / ChatGPT-Codex) or a plain terminal, and where it runs.
+/// Open a new session (organism NewSessionDialog): server, agent (omp / Claude / ChatGPT-Codex) or a plain
+/// terminal, model, and where it runs.
 struct NewChatView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
@@ -18,6 +19,10 @@ struct NewChatView: View {
     @State private var installing: String?
     @State private var model: String?
     @State private var level: String?
+    @State private var pickModel = false
+    @FocusState private var field: Field?
+
+    private enum Field { case folder, label }
 
     private static let newWorkspace = "__new__"
     /// no project: a new workspace in the home directory
@@ -33,57 +38,36 @@ struct NewChatView: View {
     private var server: Server? { store.servers.first { $0.id == serverId } ?? store.servers.first }
 
     var body: some View {
-        NavigationStack {
-            Form {
-            Group {
-                if store.servers.count > 1 {
-                    Picker("Server", selection: Binding(get: { server?.id }, set: { serverId = $0 })) {
-                        ForEach(store.servers) { Text($0.label).tag(Optional($0.id)) }
+        DialogScaffold(icon: .plus, title: String(localized: "Neue Sitzung"), onClose: { dismiss() }) {
+            if store.servers.count > 1 {
+                DialogField(label: String(localized: "Server")) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Segmented(label: String(localized: "Server"),
+                                  options: store.servers.map { (value: Optional($0.id), title: $0.label) },
+                                  selection: Binding(get: { server?.id }, set: { serverId = $0 }),
+                                  boxed: true)
                     }
                 }
-                Section("Was") {
-                    ForEach(Self.agents, id: \.kind) { agent in
-                        let available = installed.isEmpty || installed.contains(agent.kind)
-                        Button {
-                            kind = agent.kind
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(agent.name).foregroundStyle(available ? .primary : .secondary)
-                                    Text(available ? agent.note : installing == agent.kind ? String(localized: "wird installiert …") : String(localized: "auf \(server?.label ?? "dem Server") nicht installiert"))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if kind == agent.kind && available { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
-                                if !available {
-                                    if installing == agent.kind {
-                                        ProgressView()
-                                    } else {
-                                        Button("Installieren") { install(agent.kind) }
-                                            .buttonStyle(.bordered).tint(Theme.accent).font(.subheadline)
-                                    }
-                                }
-                            }
-                        }
-                        .disabled(!available && installing != nil)
-                    }
+            }
+            DialogField(label: String(localized: "Was")) {
+                VStack(spacing: 6) {
+                    ForEach(Self.agents, id: \.kind) { agent in kindRow(agent) }
                 }
-                if kind != "shell", let server {
-                    Section {
-                        NavigationLink {
-                            ModelPicker(server: server, kind: kind, model: $model, level: $level)
-                        } label: {
-                            LabeledContent("Modell") {
-                                Text([model ?? String(localized: "Standard"), level].compactMap { $0 }.joined(separator: " · "))
-                                    .lineLimit(1).truncationMode(.middle)
-                            }
-                        }
-                    } footer: {
-                        Text("Mit Suche, zuletzt genutzten Modellen und \(kind == "omp" ? "Thinking" : "Effort")-Stufe.")
+            }
+            if kind != "shell", server != nil {
+                DialogField(label: String(localized: "Modell"),
+                            note: String(localized: "Mit Suche, zuletzt genutzten Modellen und \(kind == "omp" ? "Thinking" : "Effort")-Stufe.")) {
+                    Button { pickModel = true } label: {
+                        Label([model ?? String(localized: "Standard"), level].compactMap { $0 }.joined(separator: " · "), icon: .cpu)
+                            .truncationMode(.middle)
                     }
-                    .onChange(of: kind) { _, _ in model = nil; level = nil }
+                    .buttonStyle(.hollr())
+                    .accessibilityLabel("Modell")
+                    .accessibilityValue([model ?? String(localized: "Standard"), level].compactMap { $0 }.joined(separator: " · "))
                 }
-                Section {
+            }
+            DialogField(label: String(localized: "Wo"), note: whereNote) {
+                Menu {
                     Picker("Workspace", selection: $workspace) {
                         Text("Kein Projekt (Home)").tag(Self.home)
                         Text("Neuer Workspace").tag(Self.newWorkspace)
@@ -91,42 +75,105 @@ struct NewChatView: View {
                             Text(ws.label).tag(ws.id)
                         }
                     }
-                    if workspace == Self.newWorkspace {
-                        TextField("Ordner auf dem Server, z. B. ~/projects/my-app", text: $folder)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
+                } label: {
+                    HStack(spacing: Gap.s) {
+                        Text(workspaceTitle).foregroundStyle(Theme.fg).lineLimit(1)
+                        Spacer(minLength: Gap.s)
+                        IconView(.chevronDown, size: 13).foregroundStyle(Theme.dim)
                     }
-                    TextField("Name (optional)", text: $label)
-                } header: {
-                    Text("Wo")
-                } footer: {
-                    Text(workspace == Self.home
-                         ? String(localized: "Startet im Home-Verzeichnis von \(server?.user ?? "dir") – ohne Projekt.")
-                         : workspace == Self.newWorkspace
-                         ? String(localized: "Leer = Home-Verzeichnis. Ordner mit ~ werden auf dem Server aufgelöst.")
-                         : String(localized: "Öffnet als neuer Tab im Ordner dieses Workspaces."))
+                    .fieldStyle()
+                    .contentShape(Rectangle())
                 }
-                if let error {
-                    Section { Text(error).foregroundStyle(Theme.warn) }
+                .accessibilityLabel("Workspace")
+                .accessibilityValue(workspaceTitle)
+                if workspace == Self.newWorkspace {
+                    TextField("Ordner auf dem Server, z. B. ~/projects/my-app", text: $folder,
+                              prompt: Text("Ordner auf dem Server, z. B. ~/projects/my-app").foregroundStyle(Theme.dim))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($field, equals: .folder)
+                        .fieldStyle(focused: field == .folder)
+                        .font(Typo.mono)
+                }
+                TextField("Name (optional)", text: $label, prompt: Text("Name (optional)").foregroundStyle(Theme.dim))
+                    .focused($field, equals: .label)
+                    .fieldStyle(focused: field == .label)
+            }
+            if let error {
+                Label(error, icon: .alert).font(Typo.sm).foregroundStyle(Theme.warn)
+            }
+        } footer: {
+            Button("Abbrechen") { dismiss() }.buttonStyle(.hollr())
+            Button(action: create) {
+                HStack(spacing: 6) {
+                    if busy { Spinner(color: Theme.onAccent, size: 13) }
+                    Text("Öffnen")
                 }
             }
-            .listRowBackground(Theme.card)
-        }.themedList()
-            .navigationTitle("Neue Sitzung")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if busy { ProgressView() } else { Button("Öffnen", action: create).bold() }
-                }
-            }
-            .task(id: server?.id) {
-                guard let server else { return }
-                installed = (try? await HollrClient.kinds(server)) ?? []
-                if !installed.isEmpty, !installed.contains(kind) { kind = installed[0] }
+            .buttonStyle(.hollr(.primary))
+            .disabled(busy)
+        }
+        .dialogSheet()
+        .onChange(of: kind) { _, _ in model = nil; level = nil }
+        .sheet(isPresented: $pickModel) {
+            if let server {
+                ModelPicker(server: server, kind: kind, model: $model, level: $level)
+                    .dialogSheet()
+                    .presentationDetents([.large])
             }
         }
+        .task(id: server?.id) {
+            guard let server else { return }
+            installed = (try? await HollrClient.kinds(server)) ?? []
+            if !installed.isEmpty, !installed.contains(kind) { kind = installed[0] }
+        }
+    }
+
+    /// One agent to choose (nsd__kind): badge, name, note – or install it when it is missing.
+    private func kindRow(_ agent: (kind: String, name: String, note: String)) -> some View {
+        let available = installed.isEmpty || installed.contains(agent.kind)
+        return Button {
+            kind = agent.kind
+        } label: {
+            ChoiceRow(selected: kind == agent.kind && available) {
+                AgentBadge(agent: agent.kind == "shell" ? nil : agent.kind)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(agent.name).font(Typo.md).foregroundStyle(available ? Theme.fg : Theme.muted)
+                    Text(available ? agent.note : installing == agent.kind ? String(localized: "wird installiert …") : String(localized: "auf \(server?.label ?? "dem Server") nicht installiert"))
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
+                }
+                Spacer(minLength: Gap.s)
+                if kind == agent.kind && available { IconView(.check, size: 14).foregroundStyle(Theme.accent) }
+                if !available {
+                    if installing == agent.kind {
+                        Spinner(color: Theme.accent)
+                    } else {
+                        Button("Installieren") { install(agent.kind) }
+                            .buttonStyle(.hollr(small: true))
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!available && installing != nil)
+    }
+
+    private var workspaceTitle: String {
+        switch workspace {
+        case Self.home: return String(localized: "Kein Projekt (Home)")
+        case Self.newWorkspace: return String(localized: "Neuer Workspace")
+        default:
+            guard let server else { return workspace }
+            return herdr.trees[server.id]?.first { ws in ws.id == workspace }?.label ?? workspace
+        }
+    }
+
+    private var whereNote: String {
+        workspace == Self.home
+            ? String(localized: "Startet im Home-Verzeichnis von \(server?.user ?? "dir") – ohne Projekt.")
+            : workspace == Self.newWorkspace
+            ? String(localized: "Leer = Home-Verzeichnis. Ordner mit ~ werden auf dem Server aufgelöst.")
+            : String(localized: "Öffnet als neuer Tab im Ordner dieses Workspaces.")
     }
 
     /// Installs a missing agent on the server, then selects it.

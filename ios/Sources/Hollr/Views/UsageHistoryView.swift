@@ -62,22 +62,19 @@ struct UsageHistoryView: View {
         List {
             Group {
                 Section {
-                    Picker("Zeitraum", selection: $days) {
-                        Text("24 Std.").tag(1)
-                        Text("7 Tage").tag(7)
-                        Text("30 Tage").tag(30)
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
+                    Segmented(label: String(localized: "Zeitraum"),
+                              options: [(1, String(localized: "24 Std.")), (7, String(localized: "7 Tage")), (30, String(localized: "30 Tage"))],
+                              selection: $days, boxed: true)
+                        .listRowBackground(Theme.bg)
+                        .listRowInsets(EdgeInsets())
                 }
-                if let error { Text(error).foregroundStyle(Theme.warn) }
+                if let error { Label(error, icon: .alert).font(Typo.sm).foregroundStyle(Theme.warn) }
                 if loading && histories.isEmpty {
                     Section { SkeletonBar(width: 240, height: 160).shimmer() }
                 } else if accounts.isEmpty && hoursByMachine.isEmpty {
                     Section {
                         Text("Noch keine Daten. Der Hollr-Server zeichnet ab jetzt alle 10 Minuten auf – schau in einer Stunde wieder vorbei.")
-                            .foregroundStyle(.secondary)
+                            .font(Typo.md).foregroundStyle(Theme.muted)
                     }
                 }
                 ForEach(accounts, id: \.self) { account in
@@ -85,24 +82,30 @@ struct UsageHistoryView: View {
                         limitChart(account)
                         dailyChart(account)
                     } header: {
-                        Text(account)
+                        SectionHeader(title: account)
                     }
                 }
                 if !hoursByMachine.isEmpty {
                     Section {
                         machineChart
                         ForEach(kindTotals, id: \.kind) { row in
-                            LabeledContent(row.kind, value: Self.hours(row.seconds))
+                            LabeledContent {
+                                Text(verbatim: Self.hours(row.seconds)).font(Typo.monoSmall).foregroundStyle(Theme.muted)
+                            } label: {
+                                Text(verbatim: row.kind).font(Typo.md)
+                            }
                         }
                     } header: {
-                        Text("Agent-Zeit pro Maschine")
+                        SectionHeader(title: String(localized: "Agent-Zeit pro Maschine"))
                     } footer: {
                         Text("Wie lange Agents auf jeder Maschine gearbeitet haben – zeigt, wer die Limits verbraucht.")
+                            .font(Typo.sm).foregroundStyle(Theme.dim)
                     }
                 }
                 Section {
                 } footer: {
                     Text("Beta. Prozente kommen von den Anbietern (omp usage) und werden vom Hollr-Server aufgezeichnet, Agent-Zeit misst der Server selbst. Gespeichert werden 30 Tage.")
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
                 }
             }
             .listRowBackground(Theme.card)
@@ -119,7 +122,7 @@ struct UsageHistoryView: View {
     private func limitChart(_ account: String) -> some View {
         let points = limitPoints.filter { $0.series.hasPrefix(account + " · ") }
         return VStack(alignment: .leading, spacing: 6) {
-            Text("Auslastung").font(.subheadline.weight(.semibold))
+            Text("Auslastung").font(Typo.lg)
             Chart(points) { p in
                 LineMark(x: .value("Zeit", p.date), y: .value("Genutzt", p.used * 100))
                     .foregroundStyle(by: .value("Limit", String(p.series.dropFirst(account.count + 3))))
@@ -129,7 +132,13 @@ struct UsageHistoryView: View {
                     .symbolSize(points.count < 40 ? 24 : 0)
             }
             .chartYScale(domain: 0...100)
-            .chartYAxis { AxisMarks(values: [0, 50, 100]) { v in AxisGridLine(); AxisValueLabel("\(v.as(Int.self) ?? 0) %") } }
+            .chartYAxis {
+                AxisMarks(values: [0, 50, 100]) { v in
+                    AxisGridLine().foregroundStyle(Theme.border)
+                    AxisValueLabel("\(v.as(Int.self) ?? 0) %").foregroundStyle(Theme.dim)
+                }
+            }
+            .chartTheme()
             .frame(height: 170)
         }
         .padding(.vertical, 6)
@@ -138,17 +147,23 @@ struct UsageHistoryView: View {
     private func dailyChart(_ account: String) -> some View {
         let values = dailyUse.filter { $0.group == account }
         return VStack(alignment: .leading, spacing: 6) {
-            Text("Verbrauch pro Tag").font(.subheadline.weight(.semibold))
+            Text("Verbrauch pro Tag").font(Typo.lg)
             Text("Prozentpunkte des längsten Limits (z. B. 7 Tage), die an dem Tag dazukamen")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(Typo.sm).foregroundStyle(Theme.muted)
             if values.isEmpty {
-                Text("Noch kein Verbrauch aufgezeichnet.").font(.caption).foregroundStyle(.tertiary)
+                Text("Noch kein Verbrauch aufgezeichnet.").font(Typo.sm).foregroundStyle(Theme.dim)
             } else {
                 Chart(values) { v in
                     BarMark(x: .value("Tag", v.day, unit: .day), y: .value("Verbrauch", v.value * 100))
                         .foregroundStyle(Theme.accent)
                 }
-                .chartYAxis { AxisMarks { v in AxisGridLine(); AxisValueLabel("\(v.as(Int.self) ?? 0) %") } }
+                .chartYAxis {
+                    AxisMarks { v in
+                        AxisGridLine().foregroundStyle(Theme.border)
+                        AxisValueLabel("\(v.as(Int.self) ?? 0) %").foregroundStyle(Theme.dim)
+                    }
+                }
+                .chartTheme()
                 .frame(height: 130)
             }
         }
@@ -160,7 +175,13 @@ struct UsageHistoryView: View {
             BarMark(x: .value("Tag", v.day, unit: days == 1 ? .hour : .day), y: .value("Stunden", v.value / 3600))
                 .foregroundStyle(by: .value("Maschine", v.group))
         }
-        .chartYAxis { AxisMarks { v in AxisGridLine(); AxisValueLabel("\(v.as(Double.self).map { String(format: "%.0f h", $0) } ?? "")") } }
+        .chartYAxis {
+            AxisMarks { v in
+                AxisGridLine().foregroundStyle(Theme.border)
+                AxisValueLabel("\(v.as(Double.self).map { String(format: "%.0f h", $0) } ?? "")").foregroundStyle(Theme.dim)
+            }
+        }
+        .chartTheme()
         .frame(height: 170)
         .padding(.vertical, 6)
     }
@@ -265,5 +286,18 @@ struct UsageHistoryView: View {
         histories = result.map { (server: $0.0, history: $0.1) }
         error = failed.isEmpty ? nil : String(localized: "Kein Verlauf von: \(failed.joined(separator: ", ")) (Hollr-Server aktualisieren)")
         loading = false
+    }
+}
+
+private extension View {
+    /// Series in the design's hues (accent, green, orange, …) and a hairline x axis with dim labels.
+    func chartTheme() -> some View {
+        chartForegroundStyleScale(range: [Theme.accent, Theme.green, Theme.orange, Theme.purple, Theme.cyan, Theme.pink])
+            .chartXAxis {
+                AxisMarks { _ in
+                    AxisGridLine().foregroundStyle(Theme.border)
+                    AxisValueLabel().foregroundStyle(Theme.dim)
+                }
+            }
     }
 }

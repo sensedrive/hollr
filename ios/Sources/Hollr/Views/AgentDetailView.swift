@@ -15,10 +15,11 @@ struct AgentDetailView: View {
         } else {
             if !herdr.loaded {
                 // cold start / opened from a notification: the tree is still loading
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spinner(color: Theme.muted, size: 20).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView("Agent nicht gefunden", systemImage: "questionmark.circle",
-                                       description: Text("Die Session existiert in herdr nicht mehr."))
+                EmptyState(icon: .help, title: String(localized: "Agent nicht gefunden"),
+                           text: String(localized: "Die Session existiert in herdr nicht mehr."))
+                    .frame(maxHeight: .infinity)
             }
         }
     }
@@ -97,12 +98,15 @@ private struct AgentConversation: View {
     private var landscape: Bool { verticalSizeClass == .compact && !reading }
 
     var body: some View {
-        HStack(spacing: 0) {
-            conversation
-            if landscape {
-                Divider()
-                SidePanel(ref: ref)
-                    .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
+        VStack(spacing: 0) {
+            if !compact { header }
+            HStack(spacing: 0) {
+                conversation
+                if landscape {
+                    Rectangle().fill(Theme.border).frame(width: 1)
+                    SidePanel(ref: ref)
+                        .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
+                }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reading)
@@ -120,39 +124,31 @@ private struct AgentConversation: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { toggleView() } label: {
-                    Image(systemName: terminalView ? "text.bubble" : "apple.terminal")
-                }
-                .accessibilityLabel(terminalView ? "Als Chat zeigen" : "Als Terminal zeigen")
+                Button { Task { await openGit() } } label: { Image(.branch) }
+                    .buttonStyle(.icon())
+                    .accessibilityLabel("Git & Dateien")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { dismissKeyboard(); reading = true } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                }
-                .accessibilityLabel("Zen-Modus")
+                Button { dismissKeyboard(); reading = true } label: { Image(.maximize) }
+                    .buttonStyle(.icon())
+                    .accessibilityLabel("Zen-Modus")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if ref.pane.agent != nil {
-                        Button { switchModel = true } label: {
-                            Label("Modell wechseln", systemImage: "cpu")
-                        }
+                        Button { switchModel = true } label: { Label("Modell wechseln", icon: .cpu) }
                     }
-                    Button { showTerminal = true } label: {
-                        Label("Terminal", systemImage: "apple.terminal")
-                    }
-                    Button { Task { await openGit() } } label: {
-                        Label("Git & Dateien", systemImage: "arrow.triangle.branch")
-                    }
+                    Button { showTerminal = true } label: { Label("Terminal", icon: .terminal) }
                     Section("Textgröße") {
                         Button { rescale(by: 1) } label: { Label("Größer", systemImage: "textformat.size.larger") }
                         Button { rescale(by: -1) } label: { Label("Kleiner", systemImage: "textformat.size.smaller") }
                         Button { scaleIndex = TextScale.system } label: { Label("Wie iOS", systemImage: "arrow.counterclockwise") }
                     }
                     Button(role: .destructive) { confirmClose = true } label: {
-                        Label("Chat schließen", systemImage: "xmark.circle")
+                        Label("Chat schließen", icon: .x)
                     }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Image(.more).foregroundStyle(Theme.muted) }
+                .accessibilityLabel("Mehr")
             }
         }
         .sheet(isPresented: $switchModel) {
@@ -160,7 +156,7 @@ private struct AgentConversation: View {
         }
         .sheet(item: $gitSpace) { space in
             NavigationStack {
-                GitPanel(server: ref.server, space: space, showAgents: false, tab: .changes)
+                GitPanel(server: ref.server, space: space, tab: .changes)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) { Button("Fertig") { gitSpace = nil } }
                     }
@@ -217,25 +213,39 @@ private struct AgentConversation: View {
         .sensoryFeedback(.impact, trigger: session.phase == .live)
     }
 
-    // MARK: Header
+    // MARK: Header (organism AgentHeader)
 
+    /// omp reports "working" a moment late: a running turn counts as working unless it waits for you
+    private var shownStatus: String {
+        session.timeline?.running == true && session.agentStatus != "blocked" ? "working" : session.agentStatus
+    }
+
+    /// Status dot, agent badge, state and server – and the Chat / Terminal switch.
     private var header: some View {
-        HStack(spacing: 8) {
-            Circle().fill(session.timeline?.running == true && session.agentStatus != "blocked" ? Theme.work : Theme.statusColor(session.agentStatus)).frame(width: 8, height: 8)
-            Text(ref.pane.agent == nil
-                 ? String(localized: "Terminal · \(ref.pane.folder)")
-                 : "\(ref.pane.agentName) · \(session.timeline?.running == true && session.agentStatus != "blocked" ? "arbeitet" : Theme.statusLabel(session.agentStatus))")
-            if session.phase == .live {
-                Text("· Live: \(Theme.ompStateLabel(session.ompState))").foregroundStyle(session.muted ? Theme.warn : Theme.live)
+        HStack(spacing: Gap.s) {
+            AgentBadge(pane: ref.pane)
+            StatusDot(status: shownStatus, agent: ref.pane.agent != nil, pulse: shownStatus == "working")
+            HStack(spacing: 4) {
+                Text(ref.pane.agent == nil
+                     ? String(localized: "Terminal · \(ref.pane.folder)")
+                     : Theme.statusLabel(shownStatus))
+                    .foregroundStyle(ref.pane.agent == nil ? Theme.muted : Theme.statusColor(shownStatus))
+                if session.phase == .live {
+                    Text("· Live: \(Theme.ompStateLabel(session.ompState))").foregroundStyle(session.muted ? Theme.warn : Theme.live)
+                }
+                Text("· \(ref.server.label)").foregroundStyle(Theme.dim)
             }
-            Spacer()
-            Text(ref.server.label)
+            .font(Typo.sm)
+            .lineLimit(1)
+            Spacer(minLength: Gap.xs)
+            Segmented(label: String(localized: "Ansicht"),
+                      options: [(value: false, title: String(localized: "Chat")), (value: true, title: String(localized: "Terminal"))],
+                      selection: Binding(get: { terminalView }, set: { if $0 != terminalView { toggleView() } }))
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Gap.l)
+        .padding(.vertical, 6)
+        .background(Theme.bg)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
     // MARK: Transcript
@@ -257,10 +267,9 @@ private struct AgentConversation: View {
     /// The chat's rows (own function: inside `transcript` the Release compiler needed >300 ms).
     @ViewBuilder private func transcriptRows(_ visible: [TimelineItem]) -> some View {
                     Text(session.timeline?.cleanTitle ?? ref.pane.title)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
                         .frame(maxWidth: .infinity)
-                        .padding(.bottom, 4)
+                        .padding(.bottom, Gap.xs)
                     if session.usesTimeline {
                         let tl = session.timeline ?? .empty
                         if tl.items.isEmpty && session.items.isEmpty { emptyHint }
@@ -288,11 +297,11 @@ private struct AgentConversation: View {
                                      collapsible: session.usesTimeline)
                     }
                     if case .failed(let message) = session.phase {
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote).foregroundStyle(Theme.warn)
+                        Label(message, icon: .alert)
+                            .font(Typo.note).foregroundStyle(Theme.warn)
                             .frame(maxWidth: .infinity)
                     } else if let error = session.lastError {
-                        Text(error).font(.footnote).foregroundStyle(Theme.warn).frame(maxWidth: .infinity)
+                        Text(error).font(Typo.note).foregroundStyle(Theme.warn).frame(maxWidth: .infinity)
                     }
                     Color.clear.frame(height: 1).id("bottom")
                         // iOS 17: the end of the list on screen = following (iOS 18 measures the distance)
@@ -305,9 +314,10 @@ private struct AgentConversation: View {
             ScrollView {
                 // computed once per update (it filters the whole list)
                 let visible = session.timeline?.visibleItems ?? []
-                LazyVStack(alignment: .leading, spacing: 10) { transcriptRows(visible) }
+                LazyVStack(alignment: .leading, spacing: Gap.m) { transcriptRows(visible) }
                 .scrollTargetLayout()
-                .padding()
+                .padding(.horizontal, Gap.m)
+                .padding(.vertical, Gap.l)
             }
             // while you read, the entry at the top stays put – even when entries below change size
             .scrollPosition(id: $readingAnchor, anchor: .top)
@@ -347,7 +357,7 @@ private struct AgentConversation: View {
     }
 
     @ViewBuilder private var emptyHint: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Gap.s) {
             if !session.historyLoaded {
                 Skeleton(style: .chat, count: 6).frame(height: 420)
             } else if session.phase == .connecting {
@@ -356,18 +366,18 @@ private struct AgentConversation: View {
                 Text("Ich höre zu …")
             } else if ref.pane.live {
                 Text("Schreib unten, diktiere mit dem Mikrofon – oder tippe auf „Live“ und sprich mit omp.")
-                Text("Live landet direkt in dieser Session – wie /live am Rechner.").font(.footnote)
+                Text("Live landet direkt in dieser Session – wie /live am Rechner.").font(Typo.note).foregroundStyle(Theme.dim)
             } else if ref.pane.agent != nil {
                 Text("Schreib \(ref.pane.agentName) unten eine Nachricht – oder diktiere sie mit dem Mikrofon.")
-                Text("Live-Gespräche gibt es nur mit omp.").font(.footnote)
+                Text("Live-Gespräche gibt es nur mit omp.").font(Typo.note).foregroundStyle(Theme.dim)
             } else {
                 Text("Hier läuft kein Agent, nur eine Shell.")
             }
         }
-        .multilineTextAlignment(.center)
-        .foregroundStyle(.secondary)
+        .font(Typo.md)
+        .multilineTextAlignment(.center).foregroundStyle(Theme.muted)
         .frame(maxWidth: .infinity)
-        .padding(.top, 40)
+        .padding(.top, Gap.xxxl)
     }
 
     // MARK: Reading mode / scale
@@ -375,9 +385,10 @@ private struct AgentConversation: View {
     @ViewBuilder private var scaleToastView: some View {
         if let scaleToast {
             Label(scaleToast, systemImage: "textformat.size")
-                .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Theme.card, in: Capsule())
+                .font(Typo.note.weight(.semibold))
+                .padding(.horizontal, 14).padding(.vertical, Gap.s)
+                .background(Theme.side, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
                 .id(scaleToast)
                 .padding(.top, reading ? 56 : 10)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -385,37 +396,34 @@ private struct AgentConversation: View {
     }
 
     private var readingBar: some View {
-        HStack(spacing: 4) {
-            Button { rescale(by: -1) } label: { Image(systemName: "textformat.size.smaller").frame(width: 44, height: 44) }
+        HStack(spacing: 2) {
+            Button { rescale(by: -1) } label: { Image(systemName: "textformat.size.smaller") }
+                .buttonStyle(.icon())
                 .accessibilityLabel("Text kleiner")
-            Button { rescale(by: 1) } label: { Image(systemName: "textformat.size.larger").frame(width: 44, height: 44) }
+            Button { rescale(by: 1) } label: { Image(systemName: "textformat.size.larger") }
+                .buttonStyle(.icon())
                 .accessibilityLabel("Text größer")
-            Divider().frame(height: 22)
-            Button { reading = false } label: {
-                Image(systemName: "arrow.down.right.and.arrow.up.left").frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Zen-Modus beenden")
+            Rectangle().fill(Theme.border).frame(width: 1, height: 22)
+            Button { reading = false } label: { Image(systemName: "arrow.down.right.and.arrow.up.left") }
+                .buttonStyle(.icon())
+                .accessibilityLabel("Zen-Modus beenden")
         }
-        .font(.body.weight(.semibold))
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Theme.fg.opacity(0.1)))
-        .padding(.trailing, 12).padding(.top, 2)
+        .padding(.horizontal, Gap.xs)
+        .background(Theme.side, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+        .padding(.trailing, Gap.m).padding(.top, 2)
     }
 
-    /// Zen: only transcript and a see-through composer floating over it.
+    /// tap on the composer's model line: switch the model (agents only)
+    private var modelAction: (() -> Void)? {
+        ref.pane.agent != nil ? { switchModel = true } : nil
+    }
+
+    /// Zen: only transcript and the composer (with its HUD) over it.
     private var zenComposer: some View {
-        VStack(spacing: 6) {
-            if let timeline = session.timeline, AgentHUD.isVisible(timeline) {
-                AgentHUD(timeline: timeline)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.ultraThinMaterial.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            Composer(session: session, editing: $editing, translucent: true)
-        }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        Composer(session: session, editing: $editing, showsHUD: true, onModel: modelAction)
+            .padding(.horizontal, Gap.s)
+            .padding(.bottom, Gap.xs)
     }
 
     /// Chat (Hollr's own rendering of omp's log) or Terminal (the agent's real TUI via herdr attach –
@@ -443,41 +451,31 @@ private struct AgentConversation: View {
     }
 
     private var chatConversation: some View {
-        VStack(spacing: 0) {
-            // omp shows status in its footer; other agents keep the small header
-            if !compact && !session.usesTimeline { header }
-            // the composer floats over the chat (frosted, like zen): the conversation shows through
-            transcript
-                .overlay(alignment: .top) { scaleToastView }
-                .overlay(alignment: .topTrailing) { if reading { readingBar } }
-                .safeAreaInset(edge: .bottom) { if reading { zenComposer } else { controls } }
-        }
+        // the composer floats over the chat: the conversation scrolls underneath
+        transcript
+            .overlay(alignment: .top) { scaleToastView }
+            .overlay(alignment: .topTrailing) { if reading { readingBar } }
+            .safeAreaInset(edge: .bottom) { if reading { zenComposer } else { controls } }
     }
 
     // MARK: Controls
 
     private var controls: some View {
-        VStack(spacing: 8) {
-            if !editing, !terminalView, let timeline = session.timeline, AgentHUD.isVisible(timeline) {
-                // floats over the chat like the composer: needs its own frosted backing
-                AgentHUD(timeline: timeline)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            Composer(session: session, editing: $editing, translucent: true)
+        VStack(spacing: Gap.s) {
+            Composer(session: session, editing: $editing, showsHUD: !editing && !terminalView, onModel: modelAction)
             if !editing {
                 // omp's footer sits right under the editor
-                if !terminalView, let line = session.timeline?.line {
-                    // tap the model to switch it (like clicking omp's status line)
-                    StatusLineView(line: line, running: session.timeline?.running == true)
+                if !terminalView, let line = session.timeline?.line, StatusLineView.hasContent(line) {
+                    // tap to switch the model (like clicking omp's status line)
+                    StatusLineView(line: line)
                         .contentShape(Rectangle())
-                        .onTapGesture { switchModel = true }
+                        .onTapGesture { modelAction?() }
                 }
                 AgentSwitcher(current: ref) { path = [$0] }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.horizontal, Gap.s)
+        .padding(.top, Gap.s)
         .padding(.bottom, 6)
         // status line and chips stay readable over the chat: the page color fades in towards the bottom
         .background(alignment: .bottom) {
@@ -502,36 +500,41 @@ private struct TerminalCard: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Gap.s) {
             Button {
                 if collapsible { withAnimation(.snappy) { expanded.toggle() } }
             } label: {
-                HStack {
-                    Label(waiting ? String(localized: "Wartet auf dich – antworte mit >_ (z. B. ↓ und Enter)") : String(localized: "Terminal"),
-                          systemImage: waiting ? "exclamationmark.bubble.fill" : "terminal")
+                HStack(spacing: Gap.s) {
+                    Label(waiting ? String(localized: "Wartet auf dich – antworte über die Tasten (z. B. ↓ und Enter)") : String(localized: "Terminal"),
+                          icon: waiting ? .help : .terminal)
                     Spacer(minLength: 0)
                     if collapsible {
-                        Image(systemName: expanded ? "chevron.up" : "chevron.down").foregroundStyle(.secondary)
+                        IconView(.chevronRight, size: 12)
+                            .foregroundStyle(Theme.dim)
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
                     }
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(waiting ? Theme.warn : .secondary)
+                .font(Typo.sm.weight(.semibold))
+                .foregroundStyle(waiting ? Theme.warn : Theme.muted)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!collapsible)
             if !collapsible || expanded {
                 ScrollView(.horizontal, showsIndicators: false) {
                     Text(text)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(Typo.monoSmall)
+                        .foregroundStyle(Theme.fg)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }
-        .padding(12)
+        .padding(.vertical, Gap.m).padding(.horizontal, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(waiting ? Theme.warn.opacity(0.5) : Theme.fg.opacity(0.08)))
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+            .strokeBorder(waiting ? Theme.warn.opacity(0.45) : Theme.border, lineWidth: 1))
     }
 }
 
@@ -548,21 +551,24 @@ private struct AgentSwitcher: View {
         if others.count > 1 {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         ForEach(others) { ref in
+                            let selected = ref.id == current.id
                             Button { onSwitch(ref.id) } label: {
                                 HStack(spacing: 6) {
-                                    Circle().fill(Theme.statusColor(ref.pane.status)).frame(width: 7, height: 7)
+                                    StatusDot(status: ref.pane.status, agent: ref.pane.agent != nil, size: 7)
                                     Text(ref.title).lineLimit(1)
                                     // the workspace's color
-                                    Capsule().fill(Theme.identity(ref.workspace)).frame(width: 3, height: 12)
+                                    ProjectBar(color: Theme.identity(ref.workspace), height: 12)
                                     if sessions.sessions[ref.id]?.isLive == true {
-                                        Image(systemName: "waveform").foregroundStyle(Theme.live)
+                                        IconView(.activity, size: 12).foregroundStyle(Theme.live)
                                     }
                                 }
-                                .font(.caption.weight(.medium))
+                                .font(Typo.sm.weight(.medium))
+                                .foregroundStyle(selected ? Theme.fg : Theme.muted)
                                 .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(ref.id == current.id ? Theme.accent.opacity(0.3) : Theme.card, in: Capsule())
+                                .background(selected ? Theme.accentSoft : Theme.card, in: Capsule())
+                                .overlay(Capsule().strokeBorder(selected ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1))
                             }
                             .buttonStyle(.plain)
                             .id(ref.id)
@@ -582,49 +588,24 @@ private struct Bubble: View {
         switch item.kind {
         case .voice, .typed:
             HStack(alignment: .bottom, spacing: 6) {
-                Spacer(minLength: 40)
+                Spacer(minLength: Gap.xxl)
                 Image(systemName: item.kind == .voice ? "waveform" : "keyboard")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(Typo.xs).foregroundStyle(Theme.dim)
                 Text(item.text)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Theme.accent.opacity(item.final ? 0.35 : 0.2), in: RoundedRectangle(cornerRadius: 18))
+                    .userBubbleStyle()
+                    // not yet in the agent's log (sess__user[data-pending])
+                    .opacity(item.final ? 1 : 0.6)
             }
         case .agent:
             AgentMarkdown(text: item.text, dimmed: !item.final)
         case .tool:
-            Label(item.text, systemImage: "hammer.fill")
-                .font(.caption.monospaced())
-                .foregroundStyle(Theme.work)
+            Label(item.text, systemImage: "hammer")
+                .font(Typo.monoSmall)
+                .foregroundStyle(Theme.muted)
                 .lineLimit(1)
-                .padding(.leading, 6)
         case .info:
-            Text(item.text).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+            Text(item.text).font(Typo.sm).foregroundStyle(Theme.dim).frame(maxWidth: .infinity)
         }
-    }
-}
-
-struct RoundButton: View {
-    let systemImage: String
-    let active: Bool
-    let enabled: Bool
-    var tint: Color? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .frame(width: 58, height: 58)
-                .background(background, in: Circle())
-                .foregroundStyle(active ? Theme.onAccent : (tint == nil ? .primary : .white))
-        }
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
-    }
-
-    private var background: Color {
-        if active { return Theme.warn.opacity(0.9) }
-        return tint ?? Theme.card
     }
 }
 
@@ -658,39 +639,34 @@ struct Orb: View {
     }
 }
 
-
-/// omp's footer: model · folder · branch *dirty · context
+/// omp's footer under the composer: folder · branch *dirty · cost (model and context sit in the composer).
 struct StatusLineView: View {
     let line: StatusLine
-    var running = false
+
+    static func hasContent(_ line: StatusLine) -> Bool {
+        line.folder != nil || line.branch != nil || line.cost != nil
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                if running { BrailleSpinner(color: Omp.accent) }
-                if let model = line.model {
-                    Label(model, systemImage: "circle.hexagongrid.fill").foregroundStyle(Omp.custom)
-                }
+            HStack(spacing: Gap.m) {
                 if let folder = line.folder {
-                    Label("…\(folder)", systemImage: "folder.fill").foregroundStyle(.primary.opacity(0.8))
+                    Label("…\(folder)", icon: .folder)
                 }
                 if let branch = line.branch {
                     HStack(spacing: 3) {
-                        Image(systemName: "arrow.triangle.branch")
+                        Image(.branch)
                         Text(branch)
-                        if let dirty = line.dirty, dirty > 0 { Text("*\(dirty)") }
+                        if let dirty = line.dirty, dirty > 0 { Text("*\(dirty)").foregroundStyle(Theme.orange) }
                     }
-                    .foregroundStyle(Omp.accent)
-                }
-                if let context = line.context {
-                    Label(context, systemImage: "gauge.with.dots.needle.33percent").foregroundStyle(Omp.muted)
                 }
                 if let cost = line.cost {
-                    Text("$\(cost)").foregroundStyle(Omp.dim)
+                    Text("$\(cost)")
                 }
             }
-            .font(.caption2.monospaced())
-            .padding(.horizontal, 6)
+            .font(Typo.monoXS)
+            .foregroundStyle(Theme.dim)
+            .padding(.horizontal, Gap.s)
         }
     }
 }
@@ -708,19 +684,19 @@ private struct SidePanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Ansicht", selection: $panel) {
-                Text("Terminal").tag("terminal")
-                Text("Änderungen").tag("changes")
-            }
-            .pickerStyle(.segmented)
-            .padding(6)
+            Segmented(label: String(localized: "Ansicht"),
+                      options: [(value: "terminal", title: String(localized: "Terminal")),
+                                (value: "changes", title: String(localized: "Änderungen"))],
+                      selection: $panel)
+                .padding(6)
             switch panel {
             case "changes":
                 if let space {
                     ChangesTab(server: ref.server, space: space)
                 } else {
-                    ContentUnavailableView("Kein Git-Repo", systemImage: "arrow.triangle.branch",
-                                           description: Text("Dieser Chat arbeitet nicht in einem Git-Repo."))
+                    EmptyState(icon: .branch, title: String(localized: "Kein Git-Repo"),
+                               text: String(localized: "Dieser Chat arbeitet nicht in einem Git-Repo."))
+                        .frame(maxHeight: .infinity)
                 }
             default:
                 TerminalPanel(ref: ref).id(ref.id)
@@ -774,12 +750,13 @@ private struct JumpToEnd: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.down")
-                if unseen > 0 { Text("Neu").font(.caption.weight(.semibold)) }
+                if unseen > 0 { Text("Neu").font(Typo.sm.weight(.semibold)).foregroundStyle(Theme.accent) }
             }
-            .font(.subheadline.weight(.semibold))
+            .font(Typo.md.weight(.semibold))
+            .foregroundStyle(Theme.fg)
             .padding(.horizontal, unseen > 0 ? 12 : 10).padding(.vertical, 9)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Theme.fg.opacity(0.12)))
+            .background(Theme.side, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .padding(.trailing, 14).padding(.bottom, 10)

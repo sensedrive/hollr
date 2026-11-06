@@ -294,20 +294,23 @@ struct PushSettingsView: View {
                 }
             } footer: {
                 Text("Dein Server meldet sich direkt über Apple, wenn ein Agent auf dich wartet, fertig ist oder mit einem Fehler stoppt.")
+                    .font(Typo.sm).foregroundStyle(Theme.dim)
             }
             if push.enabled {
-                Section("Melden, wenn …") {
+                Section {
                     ForEach(PushManager.Kind.allCases) { kind in
                         Toggle(kind.title, isOn: Binding(get: { push.wants(kind) }, set: { push.set(kind, $0) }))
                     }
+                } header: {
+                    SectionHeader(title: String(localized: "Melden, wenn …"))
                 }
                 Section {
                     ForEach(store.servers) { server in
                         LabeledContent(server.label) {
                             switch push.serverReady[server.id] {
-                            case true?: Label("bereit", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.live)
+                            case true?: Label("bereit", icon: .check).foregroundStyle(Theme.live)
                             case false?: Text("Schlüssel fehlt").foregroundStyle(Theme.warn)
-                            case nil: Text(push.token == nil ? String(localized: "warte auf iOS") : String(localized: "…")).foregroundStyle(.secondary)
+                            case nil: Text(push.token == nil ? String(localized: "warte auf iOS") : String(localized: "…")).foregroundStyle(Theme.muted)
                             }
                         }
                     }
@@ -315,32 +318,35 @@ struct PushSettingsView: View {
                         testing = true
                         Task { await push.sendTest(); testing = false }
                     } label: {
-                        if testing { ProgressView() } else { Text("Test-Mitteilung senden") }
+                        if testing { Spinner(color: Theme.muted) } else { Text("Test-Mitteilung senden") }
                     }
                     if let result = push.lastResult {
-                        Text(result).font(.footnote).foregroundStyle(.secondary)
+                        Text(result).font(Typo.sm).foregroundStyle(Theme.muted)
                     }
                 } header: {
-                    Text("Server")
+                    SectionHeader(title: String(localized: "Server"))
                 }
                 Section {
                     Button { importing = true } label: {
                         Label(push.hasKey ? String(localized: "Anderen APNs-Schlüssel importieren …") : String(localized: "APNs-Schlüssel importieren (.p8) …"),
-                              systemImage: "key.fill")
+                              icon: .key)
                     }
                     if pendingURL != nil {
                         TextField("Key-ID (10 Zeichen)", text: $keyId).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                            .font(Typo.mono)
                         TextField("Team-ID", text: $teamId).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                            .font(Typo.mono)
                         Button("Speichern und auf Server übertragen") { Task { await saveKey() } }
                             .disabled(keyId.count != 10 || teamId.count != 10)
                     }
-                    if let keyError { Text(keyError).font(.footnote).foregroundStyle(Theme.warn) }
+                    if let keyError { Text(keyError).font(Typo.sm).foregroundStyle(Theme.warn) }
                 } header: {
-                    Text("Schlüssel")
+                    SectionHeader(title: String(localized: "Schlüssel"))
                 } footer: {
                     Text(push.hasKey
                          ? String(localized: "Der Schlüssel liegt im Schlüsselbund dieses iPhones. Neue Server bekommen ihn automatisch.")
                          : String(localized: "Einmal fürs Team: developer.apple.com → Keys → „+“ → Apple Push Notifications service. Die .p8 hier importieren – Hollr richtet damit alle Server ein."))
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
                 }
             }
         }

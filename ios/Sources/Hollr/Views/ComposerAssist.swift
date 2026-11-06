@@ -60,14 +60,10 @@ struct SnippetChips: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(snippets.items, id: \.self) { prompt in
                     Button { pick(prompt) } label: {
-                        Text(PromptSnippets.title(prompt))
-                            .font(.footnote)
-                            .lineLimit(1)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Theme.fg.opacity(0.08), in: Capsule())
+                        Text(PromptSnippets.title(prompt)).chipStyle()
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(prompt)
@@ -89,17 +85,23 @@ struct MentionSuggestions: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(files.prefix(5), id: \.self) { file in
                 Button { pick(file) } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "doc.text").font(.caption).foregroundStyle(.secondary)
-                        Text((file as NSString).lastPathComponent).font(.subheadline.weight(.medium))
-                        Text((file as NSString).deletingLastPathComponent).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: Gap.s) {
+                        IconView(.file, size: 13).foregroundStyle(Theme.dim)
+                        Text((file as NSString).lastPathComponent).font(Typo.md.weight(.medium)).foregroundStyle(Theme.fg)
+                        Text((file as NSString).deletingLastPathComponent).font(Typo.monoXS).foregroundStyle(Theme.dim)
                             .lineLimit(1).truncationMode(.head)
                         Spacer(minLength: 0)
                     }
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 7).padding(.horizontal, 10)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            }
+        }
+        .background(Theme.side, in: RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
+        .overlay {
+            if !files.isEmpty {
+                RoundedRectangle(cornerRadius: Radius.row, style: .continuous).strokeBorder(Theme.border, lineWidth: 1)
             }
         }
         .task(id: query) {
@@ -140,15 +142,21 @@ struct SnippetSettingsView: View {
                         snippets.items.append(p)
                         newPrompt = ""
                     }
+                    .buttonStyle(.hollr(.secondary, small: true))
                     .disabled(newPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             } footer: {
                 Text("Erscheinen beim Schreiben über der Tastatur – ein Tipp fügt den Text ein. Tipp: „@“ im Eingabefeld schlägt Dateien aus dem Repo vor.")
+                    .font(Typo.sm).foregroundStyle(Theme.dim)
             }
+            .listRowBackground(Theme.card)
             Section {
                 Button("Standardbausteine wiederherstellen") { snippets.items = PromptSnippets.defaults }
+                    .foregroundStyle(Theme.accent)
             }
+            .listRowBackground(Theme.card)
         }
+        .themedList()
         .navigationTitle("Prompt-Bausteine")
         .toolbar { EditButton() }
         .themedPage()

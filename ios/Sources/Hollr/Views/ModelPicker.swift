@@ -48,81 +48,104 @@ enum RecentModels {
     }
 }
 
-/// Searchable model list with thinking / effort level.
+/// Model dialog (organism ModelDialog): search, recently used, the list with the chosen model, thinking /
+/// effort level. Without `onConfirm` a tap picks the model and closes; with it the footer confirms.
+/// Present in a sheet with `.dialogSheet()`.
 struct ModelPicker: View {
     let server: Server
     let kind: String
     /// nil = agent default
     @Binding var model: String?
     @Binding var level: String?
+    var title = String(localized: "Modell")
     var current: String? = nil
     var confirmTitle: String? = nil
+    /// quiet note under the list (dlg-note)
+    var note: String? = nil
+    /// what went wrong on confirming
+    var problem: String? = nil
     var onConfirm: (() -> Void)? = nil
     @State private var list: ModelList?
     @State private var error: String?
     @State private var search = ""
+    @FocusState private var searching: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List {
-            Group {
-                if let current {
-                    Section { LabeledContent("Aktuell", value: current) }
-                }
-                if let list, !list.levels.isEmpty {
-                    Section {
-                        Picker(list.levelName, selection: Binding(get: { level ?? "" }, set: { level = $0.isEmpty ? nil : $0 })) {
-                            Text("Standard").tag("")
-                            ForEach(list.levels, id: \.self) { Text($0).tag($0) }
-                        }
-                    }
-                }
-                if search.isEmpty, onConfirm == nil {
-                    Section {
-                        row(id: nil, name: String(localized: "Standard des Agents"), detail: nil)
-                    }
-                }
-                let recent = RecentModels.list(kind).compactMap { id in list?.models.first { $0.id == id } }
-                if search.isEmpty, !recent.isEmpty {
-                    Section("Zuletzt") {
-                        ForEach(recent) { m in row(id: m.id, name: m.name, detail: m.id) }
-                    }
-                }
-                ForEach(groups, id: \.name) { group in
-                    Section(group.name) {
-                        ForEach(group.models) { m in row(id: m.id, name: m.name, detail: detail(m)) }
-                    }
-                }
-                if let error { Text(error).foregroundStyle(Theme.warn) }
-            }
-            .listRowBackground(Theme.card)
-        }
-        .themedList()
-        .overlay {
-            if list == nil && error == nil {
-                List(0..<8, id: \.self) { _ in
-                    VStack(alignment: .leading) {
-                        Text("Modellname lädt").font(.body)
-                        Text("anbieter/modell-id").font(.caption)
-                    }
-                    .redacted(reason: .placeholder)
-                    .listRowBackground(Theme.card)
-                }
-                .themedList()
-            }
-        }
-        .searchable(text: $search, prompt: "Modell suchen")
-        .navigationTitle("Modell")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        Group {
             if let confirmTitle, let onConfirm {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(confirmTitle) { onConfirm() }.bold().disabled(model == nil)
+                DialogScaffold(icon: .cpu, title: title, onClose: { dismiss() }) {
+                    content
+                } footer: {
+                    Button("Abbrechen") { dismiss() }.buttonStyle(.hollr())
+                    Button(confirmTitle) { onConfirm() }
+                        .buttonStyle(.hollr(.primary))
+                        .disabled(model == nil)
                 }
+            } else {
+                DialogScaffold(icon: .cpu, title: title, onClose: { dismiss() }) { content }
             }
         }
         .refreshable { await load(refresh: true) }
         .task { await load(refresh: false) }
+    }
+
+    @ViewBuilder private var content: some View {
+        TextField("Modell suchen", text: $search, prompt: Text("Modell suchen …").foregroundStyle(Theme.dim))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($searching)
+            .fieldStyle(focused: searching)
+        if let current {
+            HStack(spacing: Gap.s) {
+                Text("Aktuell").foregroundStyle(Theme.muted)
+                Spacer(minLength: Gap.s)
+                Text(current).font(Typo.mono).lineLimit(1).truncationMode(.middle)
+            }
+        }
+        if let list, !list.levels.isEmpty {
+            DialogField(label: list.levelName) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Segmented(label: list.levelName,
+                              options: [(value: "", title: String(localized: "Standard"))] + list.levels.map { (value: $0, title: $0) },
+                              selection: Binding(get: { level ?? "" }, set: { level = $0.isEmpty ? nil : $0 }),
+                              boxed: true)
+                }
+            }
+        }
+        if list == nil && error == nil {
+            VStack(spacing: 6) {
+                ForEach(0..<6, id: \.self) { _ in
+                    ChoiceRow(selected: false) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Modellname lädt").font(Typo.md)
+                            Text("anbieter/modell-id").font(Typo.monoSmall)
+                        }
+                    }
+                }
+            }
+            .redacted(reason: .placeholder)
+        }
+        if search.isEmpty, onConfirm == nil {
+            row(id: nil, name: String(localized: "Standard des Agents"), detail: nil)
+        }
+        let recent = RecentModels.list(kind).compactMap { id in list?.models.first { $0.id == id } }
+        if search.isEmpty, !recent.isEmpty {
+            group(String(localized: "Zuletzt"), recent.map { ($0, $0.id) })
+        }
+        ForEach(groups, id: \.name) { g in
+            group(g.name, g.models.map { ($0, detail($0)) })
+        }
+        if let error { Text(error).font(Typo.sm).foregroundStyle(Theme.warn) }
+        if let problem { Text(problem).font(Typo.sm).foregroundStyle(Theme.warn) }
+        if let note { Text(note).font(Typo.sm).foregroundStyle(Theme.dim) }
+    }
+
+    private func group(_ name: String, _ models: [(ModelOption, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionHeader(title: name)
+            ForEach(models, id: \.0.id) { item in row(id: item.0.id, name: item.0.name, detail: item.1) }
+        }
     }
 
     private var groups: [(name: String, models: [ModelOption])] {
@@ -150,15 +173,14 @@ struct ModelPicker: View {
             if let id { RecentModels.add(id, kind: kind) }
             if onConfirm == nil { dismiss() }
         } label: {
-            HStack {
+            ChoiceRow(selected: model == id) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name).foregroundStyle(.primary)
-                    if let detail { Text(detail).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1) }
+                    Text(name).font(Typo.md).foregroundStyle(Theme.fg)
+                    if let detail { Text(detail).font(Typo.monoSmall).foregroundStyle(Theme.dim).lineLimit(1) }
                 }
-                Spacer()
-                if model == id { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
+                Spacer(minLength: Gap.s)
+                if model == id { IconView(.check, size: 14).foregroundStyle(Theme.accent) }
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -185,42 +207,33 @@ struct ModelSwitchSheet: View {
     private var ref: AgentRef { session.ref }
 
     var body: some View {
-        NavigationStack {
+        Group {
             if ref.pane.agent == "codex" {
-                VStack(spacing: 16) {
-                    Image(systemName: "cpu").font(.largeTitle).foregroundStyle(Theme.accent)
+                DialogScaffold(icon: .cpu, title: String(localized: "Modell wechseln"), onClose: { dismiss() }) {
                     Text("Codex wechselt das Modell nur über seine eigene Auswahl im Terminal.")
-                        .multilineTextAlignment(.center)
+                    Text("Danach über die Tasten ↑ ↓ und Enter wählen.").font(Typo.sm).foregroundStyle(Theme.dim)
+                } footer: {
+                    Button("Abbrechen") { dismiss() }.buttonStyle(.hollr())
                     Button("Auswahl in Codex öffnen (/model)") {
                         session.sendText("/model")
                         dismiss()
                     }
-                    .buttonStyle(.borderedProminent)
-                    Text("Danach mit >_ ↑ ↓ und Enter wählen.").font(.caption).foregroundStyle(.secondary)
+                    .buttonStyle(.hollr(.primary))
                 }
-                .padding(24)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } } }
             } else {
                 ModelPicker(server: ref.server, kind: ref.pane.agent ?? "omp", model: $model, level: $level,
+                            title: String(localized: "Modell wechseln"),
                             current: session.timeline?.line?.model ?? session.timeline?.model,
-                            confirmTitle: busy ? "…" : "Wechseln") {
+                            confirmTitle: busy ? "…" : String(localized: "Wechseln"),
+                            note: ref.pane.agent == "omp"
+                                ? String(localized: "Gilt nur für diese Sitzung – omps Standard bleibt.")
+                                : String(localized: "Wechselt das Modell dieser Claude-Sitzung (/model)."),
+                            problem: error) {
                     Task { await apply() }
                 }
-                .safeAreaInset(edge: .bottom) {
-                    VStack(spacing: 4) {
-                        if let error { Text(error).font(.footnote).foregroundStyle(Theme.warn) }
-                        Text(ref.pane.agent == "omp"
-                             ? String(localized: "Gilt nur für diese Sitzung – omps Standard bleibt.")
-                             : String(localized: "Wechselt das Modell dieser Claude-Sitzung (/model)."))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                    .background(.bar)
-                }
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { dismiss() } } }
             }
         }
+        .dialogSheet()
     }
 
     private func apply() async {

@@ -111,14 +111,13 @@ struct DiffFileView: View {
                         } else {
                             Button { withAnimation(.snappy) { _ = expanded.insert(id) } } label: {
                                 HStack(spacing: 10) {
-                                    Image(systemName: "arrow.up.and.down").font(.caption)
+                                    Image(systemName: "arrow.up.and.down").font(Typo.sm)
                                         .frame(width: 44)
-                                    Text("\(lines.count) unveränderte Zeilen").font(.footnote)
+                                    Text("\(lines.count) unveränderte Zeilen").font(Typo.sm)
                                     Spacer()
-                                }
-                                .foregroundStyle(.secondary)
+                                }.foregroundStyle(Theme.muted)
                                 .padding(.vertical, 9)
-                                .background(Theme.fg.opacity(0.05))
+                                .background(Theme.wash(0.05))
                             }
                             .buttonStyle(.plain)
                         }
@@ -130,15 +129,16 @@ struct DiffFileView: View {
 
     private var header: some View {
         Button { withAnimation(.snappy) { collapsed.toggle() } } label: {
-            HStack(spacing: 8) {
-                Image(systemName: collapsed ? "chevron.right" : "chevron.down").font(.caption).foregroundStyle(.secondary)
-                Circle().fill(GitStyle.lanes[0]).frame(width: 7, height: 7)
-                Text(file.path).font(.subheadline).lineLimit(1).truncationMode(.head)
+            HStack(spacing: Gap.s) {
+                IconView(collapsed ? .chevronRight : .chevronDown, size: 12).foregroundStyle(Theme.dim)
+                IconView(.file, size: 13).foregroundStyle(Theme.muted)
+                Text(file.path).font(Typo.monoSmall).lineLimit(1).truncationMode(.head)
                 Spacer()
                 PlusMinus(add: file.add, del: file.del)
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(GitStyle.background)
+            .padding(.horizontal, Gap.m).padding(.vertical, 10)
+            .background(Theme.card)
+            .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
         }
         .buttonStyle(.plain)
     }
@@ -188,16 +188,16 @@ struct DiffLineRow: View {
         HStack(alignment: .top, spacing: 0) {
             Rectangle().fill(gutter).frame(width: 3)
             Text(number)
-                .foregroundStyle(line.kind == .context ? Omp.dim : gutter)
+                .foregroundStyle(line.kind == .context ? Theme.dim : gutter)
                 .frame(width: 44, alignment: .trailing)
                 .padding(.trailing, 10)
             Text(line.old == nil && line.new == nil ? AttributedString(line.text) : Syntax.highlight(line.text.isEmpty ? " " : line.text, lang: lang))
                 .lineLimit(wrap ? nil : 1)
                 .fixedSize(horizontal: !wrap, vertical: true)
-                .foregroundStyle(line.old == nil && line.new == nil ? Omp.dim : .primary)
+                .foregroundStyle(line.old == nil && line.new == nil ? Theme.dim : .primary)
             if wrap { Spacer(minLength: 0) }
         }
-        .font(.system(.footnote, design: .monospaced))
+        .font(Typo.mono)
         .padding(.vertical, 2)
         // full-width tint, also when scrolling sideways
         .frame(minWidth: wrap ? nil : DiffLineRow.screenWidth, maxWidth: wrap ? .infinity : nil, alignment: .leading)
@@ -217,16 +217,17 @@ struct DiffLineRow: View {
 
     private var gutter: Color {
         switch line.kind {
-        case .added: return GitStyle.added
-        case .removed: return GitStyle.removed
+        case .added: return Theme.green
+        case .removed: return Theme.red
         case .context: return .clear
         }
     }
 
+    /// added / removed lines on a 12 % green / red wash (tool-card__dl)
     private var background: Color {
         switch line.kind {
-        case .added: return GitStyle.addedBg
-        case .removed: return GitStyle.removedBg
+        case .added: return Theme.green.opacity(0.12)
+        case .removed: return Theme.red.opacity(0.12)
         case .context: return .clear
         }
     }
@@ -251,19 +252,20 @@ struct DiffScreen: View {
         Group {
             if let files {
                 if files.isEmpty {
-                    ContentUnavailableView("Keine Änderungen", systemImage: "checkmark.circle")
+                    EmptyState(icon: .check, title: String(localized: "Keine Änderungen"), text: "")
                 } else if wrap {
                     ScrollView { content(files) }
                 } else {
                     ScrollView([.vertical, .horizontal]) { content(files) }
                 }
             } else if let error {
-                ContentUnavailableView("Fehler", systemImage: "exclamationmark.triangle", description: Text(error))
+                EmptyState(icon: .alert, title: String(localized: "Fehler"), text: error)
             } else {
                 Skeleton(style: .code, count: 30)
             }
         }
-        .background(GitStyle.background)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -276,10 +278,10 @@ struct DiffScreen: View {
     }
 
     private func content(_ files: [DiffFile]) -> some View {
-        LazyVStack(alignment: .leading, spacing: 14, pinnedViews: []) {
+        LazyVStack(alignment: .leading, spacing: Gap.l, pinnedViews: []) {
             ForEach(files) { DiffFileView(file: $0, wrap: wrap) }
         }
-        .padding(.bottom, 80)
+        .padding(.bottom, Gap.xl)
         .textSelection(.enabled)
     }
 

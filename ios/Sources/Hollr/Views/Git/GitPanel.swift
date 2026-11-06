@@ -1,23 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// Moshi-style repo browser: files, uncommitted changes, history graph, branches.
-/// A floating capsule switches between them (plus the space's agents when shown in Spaces).
+/// Repo browser of a space ("Git & Dateien"): files, uncommitted changes, history graph, branches.
+/// A segmented control at the top switches between them, like the desktop git panel.
 struct GitPanel: View {
+    /// raw values are what the debug key `hollrSpaceTab` selects
     enum Tab: Int, CaseIterable {
-        case agents, files, changes, history, branches
-        var icon: String {
-            switch self {
-            case .agents: return "waveform"
-            case .files: return "list.bullet.indent"
-            case .changes: return "doc.badge.plus"
-            case .history: return "clock.arrow.circlepath"
-            case .branches: return "arrow.triangle.branch"
-            }
-        }
+        case files = 1, changes, history, branches
         var title: String {
             switch self {
-            case .agents: return "Agents"
             case .files: return String(localized: "Dateien")
             case .changes: return String(localized: "Änderungen")
             case .history: return String(localized: "Verlauf")
@@ -28,61 +19,35 @@ struct GitPanel: View {
 
     let server: Server
     let space: Space
-    var showAgents = true
     @State var tab: Tab = .files
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch tab {
-                case .agents: SpaceAgentsList(server: server, space: space)
-                case .files: FilesTab(server: server, space: space, path: "")
-                case .changes: ChangesTab(server: server, space: space)
-                case .history: HistoryTab(server: server, space: space)
-                case .branches: BranchesTab(server: server, space: space)
-                }
+        Group {
+            switch tab {
+            case .files: FilesTab(server: server, space: space, path: "")
+            case .changes: ChangesTab(server: server, space: space)
+            case .history: HistoryTab(server: server, space: space)
+            case .branches: BranchesTab(server: server, space: space)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            bar
         }
-        .background(GitStyle.background)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .top, spacing: 0) { bar }
+        .background(Theme.bg)
+        .navigationTitle(space.label)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var bar: some View {
-        HStack(spacing: 4) {
-            ForEach(Tab.allCases.filter { showAgents || $0 != .agents }, id: \.self) { t in
-                Button { withAnimation(.snappy) { tab = t } } label: {
-                    Image(systemName: t.icon)
-                        .font(.title3)
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                        .background(tab == t ? Theme.fg.opacity(0.16) : .clear, in: Capsule())
-                        .foregroundStyle(tab == t ? .primary : .secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(t.title)
-            }
+        let segmented = Segmented(label: String(localized: "Ansicht"),
+                                  options: Tab.allCases.map { (value: $0, title: $0.title) },
+                                  selection: $tab)
+        return ViewThatFits(in: .horizontal) {
+            segmented
+            ScrollView(.horizontal, showsIndicators: false) { segmented }
         }
-        .padding(5)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Theme.fg.opacity(0.1)))
-        .padding(.horizontal, 22)
-        .padding(.bottom, 6)
-    }
-}
-
-private struct PanelHeader: View {
-    let icon: String
-    let title: String
-    var trailing: AnyView? = nil
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).font(.title3)
-            Text(title).font(.title2.weight(.semibold)).lineLimit(1)
-            Spacer()
-            trailing
-        }
-        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
+        .padding(.horizontal, Gap.l).padding(.vertical, Gap.s)
+        .frame(maxWidth: .infinity)
+        .background(Theme.bg)
     }
 }
 
@@ -97,14 +62,7 @@ struct FilesTab: View {
 
     var body: some View {
         List {
-            Group {
-            if path.isEmpty {
-                Section {
-                    PanelHeader(icon: "list.bullet.indent", title: space.repo ?? space.label)
-                        .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
-                }
-            }
-            if let error { Text(error).foregroundStyle(Theme.warn) }
+            if let error { Text(error).foregroundStyle(Theme.warn).listRowBackground(Theme.card) }
             ForEach(entries ?? []) { entry in
                 let full = path.isEmpty ? entry.name : "\(path)/\(entry.name)"
                 NavigationLink {
@@ -116,17 +74,12 @@ struct FilesTab: View {
                 } label: {
                     row(entry)
                 }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
             }
-            Color.clear.frame(height: 60).listRowBackground(Color.clear).listRowSeparator(.hidden)
-        }
             .listRowBackground(Theme.card)
-        }.themedList()
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .overlay { if entries == nil && error == nil { Skeleton(style: .iconList, count: 14).background(GitStyle.background) } }
-        .navigationTitle(path.isEmpty ? "" : (path as NSString).lastPathComponent)
+        }
+        .themedList()
+        .overlay { if entries == nil && error == nil { Skeleton(style: .iconList, count: 14).background(Theme.bg) } }
+        .navigationTitle(path.isEmpty ? space.label : (path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
@@ -134,13 +87,13 @@ struct FilesTab: View {
 
     private func row(_ entry: DirEntry) -> some View {
         let (symbol, color) = FileIcon.symbol(entry.name, dir: entry.dir)
-        return HStack(spacing: 14) {
-            Image(systemName: symbol).foregroundStyle(color).frame(width: 26)
-            Text(entry.name).lineLimit(1).truncationMode(.middle)
-                .foregroundStyle(entry.name.hasPrefix(".") ? .secondary : .primary)
+        return HStack(spacing: Gap.m) {
+            Image(systemName: symbol).font(Typo.md.weight(.medium)).foregroundStyle(color).frame(width: 22)
+            Text(entry.name).font(Typo.md).lineLimit(1).truncationMode(.middle)
+                .foregroundStyle(entry.name.hasPrefix(".") ? Theme.muted : Theme.fg)
             Spacer()
             if let mtime = entry.mtime, mtime > 0 {
-                Text(GitStyle.age(mtime)).font(.footnote).foregroundStyle(.tertiary)
+                Text(GitStyle.age(mtime)).font(Typo.xs.monospacedDigit()).foregroundStyle(Theme.dim)
             }
         }
     }
@@ -169,22 +122,23 @@ struct FileViewer: View {
         Group {
             if let content {
                 if content.binary {
-                    ContentUnavailableView("Binärdatei", systemImage: "doc",
-                                           description: Text(ByteCountFormatter.string(fromByteCount: Int64(content.size), countStyle: .file)))
+                    EmptyState(icon: .file, title: String(localized: "Binärdatei"),
+                               text: ByteCountFormatter.string(fromByteCount: Int64(content.size), countStyle: .file))
                 } else if isMarkdown && rendered {
-                    ScrollView { ScaledMarkdown(text: content.text).padding() }
+                    ScrollView { ScaledMarkdown(text: content.text).padding(Gap.l) }
                 } else if wrap {
                     ScrollView { lines(content) }
                 } else {
                     ScrollView([.vertical, .horizontal]) { lines(content) }
                 }
             } else if let error {
-                ContentUnavailableView("Fehler", systemImage: "exclamationmark.triangle", description: Text(error))
+                EmptyState(icon: .alert, title: String(localized: "Fehler"), text: error)
             } else {
                 Skeleton(style: .code, count: 30)
             }
         }
-        .background(GitStyle.background)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.bg)
         .navigationTitle((path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -192,6 +146,7 @@ struct FileViewer: View {
                 Button(rendered ? "Quelltext" : "Vorschau") { rendered.toggle() }
             } else {
                 Button { wrap.toggle() } label: { Image(systemName: wrap ? "text.justify.left" : "arrow.turn.down.left") }
+                    .accessibilityLabel(wrap ? "Nicht umbrechen" : "Zeilen umbrechen")
             }
         }
         .task {
@@ -212,11 +167,11 @@ struct FileViewer: View {
             }
             if content.truncated {
                 Text("… gekürzt (\(ByteCountFormatter.string(fromByteCount: Int64(content.size), countStyle: .file)))")
-                    .font(.footnote).foregroundStyle(.secondary).padding()
+                    .font(Typo.sm).foregroundStyle(Theme.muted).padding(Gap.l)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.bottom, 60)
+        .padding(.vertical, Gap.s)
+        .padding(.bottom, Gap.xl)
         .textSelection(.enabled)
     }
 
@@ -246,40 +201,31 @@ struct ChangesTab: View {
 
     var body: some View {
         List {
-            Group {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    PanelHeader(icon: "doc.badge.plus", title: String(localized: "Nicht committete Änderungen"))
-                    if let data {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.triangle.branch").foregroundStyle(.secondary)
-                            Text(data.branch).font(.system(.subheadline, design: .monospaced))
-                            Text(summary(data)).font(.subheadline).foregroundStyle(.secondary)
-                            Spacer()
-                            PlusMinus(add: (data.staged + data.unstaged).map(\.add).reduce(0, +),
-                                      del: (data.staged + data.unstaged).map(\.del).reduce(0, +))
-                        }
-                        .padding(.horizontal, 16)
-                    }
+            if let data {
+                // meta line (space__meta): branch, counts, +/-
+                HStack(spacing: 6) {
+                    IconView(.branch, size: 13).foregroundStyle(Theme.muted)
+                    Text(data.branch).font(Typo.monoSmall).lineLimit(1)
+                    Text(summary(data)).font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(1)
+                    Spacer()
+                    PlusMinus(add: (data.staged + data.unstaged).map(\.add).reduce(0, +),
+                              del: (data.staged + data.unstaged).map(\.del).reduce(0, +))
                 }
-                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: Gap.xs, bottom: 0, trailing: Gap.xs))
             }
-            if let error { Text(error).foregroundStyle(Theme.warn) }
+            if let error { Text(error).foregroundStyle(Theme.warn).listRowBackground(Theme.card) }
             if let data {
                 if data.staged.isEmpty && data.unstaged.isEmpty {
-                    Text("Alles committet.").foregroundStyle(.secondary).listRowBackground(Color.clear)
+                    Text("Alles committet.").foregroundStyle(Theme.muted).listRowBackground(Theme.card)
                 }
-                if !data.staged.isEmpty { section("Gestaged", data.staged, staged: true) }
-                if !data.unstaged.isEmpty { section("Nicht gestaged", data.unstaged, staged: false) }
+                if !data.staged.isEmpty { section(String(localized: "Gestaged"), data.staged, staged: true) }
+                if !data.unstaged.isEmpty { section(String(localized: "Nicht gestaged"), data.unstaged, staged: false) }
             }
-            Color.clear.frame(height: 120).listRowBackground(Color.clear).listRowSeparator(.hidden)
         }
-            .listRowBackground(Theme.card)
-        }.themedList()
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .overlay { if data == nil && error == nil { Skeleton(style: .iconList, count: 10).background(GitStyle.background) } }
-        .safeAreaInset(edge: .bottom) { reviewBar }
+        .themedList()
+        .overlay { if data == nil && error == nil { Skeleton(style: .iconList, count: 10).background(Theme.bg) } }
+        .safeAreaInset(edge: .bottom, spacing: 0) { reviewBar }
         .refreshable { await load() }
         .task { await load() }
         .confirmationDialog("Änderungen an dieser Datei verwerfen?", isPresented: Binding(
@@ -311,18 +257,17 @@ struct ChangesTab: View {
         if let data, !(data.staged.isEmpty && data.unstaged.isEmpty) || notice != nil {
             VStack(spacing: 6) {
                 if let notice {
-                    Text(notice).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Text(notice).font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !(data.staged.isEmpty && data.unstaged.isEmpty) {
-                    Button { showCommit = true } label: {
-                        Label("Commit …", systemImage: "checkmark.circle").frame(maxWidth: .infinity).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.borderedProminent)
+                    Button { showCommit = true } label: { Label("Commit …", icon: .check) }
+                        .buttonStyle(.hollr(.primary, fullWidth: true))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 64) // above the tab capsule
+            .padding(.horizontal, Gap.l).padding(.vertical, Gap.s)
+            .background(Theme.bg)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
         }
     }
 
@@ -358,16 +303,16 @@ struct ChangesTab: View {
     private func section(_ title: String, _ files: [FileChange], staged: Bool) -> some View {
         Section {
             ForEach(files) { file in
-                HStack(spacing: 12) {
+                HStack(spacing: Gap.s) {
                     NavigationLink {
                         DiffScreen(server: server, space: space, source: .file(path: file.path, staged: staged), title: file.name)
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: 10) {
                             StatusBadge(status: file.status)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(file.name).lineLimit(1)
+                                Text(file.name).font(Typo.monoSmall).lineLimit(1)
                                 if !file.dir.isEmpty {
-                                    Text(file.dir).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                                    Text(file.dir).font(Typo.monoXS).foregroundStyle(Theme.dim).lineLimit(1).truncationMode(.head)
                                 }
                             }
                             Spacer()
@@ -376,40 +321,33 @@ struct ChangesTab: View {
                     }
                     Button { Task { await toggleStage(file, staged: staged) } } label: {
                         if busy == file.path {
-                            ProgressView()
+                            Spinner(color: Theme.muted)
                         } else {
-                            Image(systemName: staged ? "minus" : "plus").foregroundStyle(.secondary)
+                            Image(systemName: staged ? "minus" : "plus")
                         }
                     }
-                    .buttonStyle(.plain)
-                    .frame(width: 28)
+                    .buttonStyle(.icon(size: 32))
                     .accessibilityLabel(staged ? "Unstagen" : "Stagen")
                 }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                .listRowBackground(Theme.card)
                 .swipeActions(edge: .leading) {
                     Button { Task { await toggleStage(file, staged: staged) } } label: {
                         Label(staged ? "Unstagen" : "Stagen", systemImage: staged ? "minus.circle" : "plus.circle")
                     }
-                    .tint(staged ? .gray : .green)
+                    .tint(staged ? Theme.muted : Theme.green)
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { confirmDiscard = file } label: {
                         Label("Verwerfen", systemImage: "arrow.uturn.backward")
                     }
                     if agent != nil {
-                        Button { commenting = file } label: { Label("Kommentar", systemImage: "text.bubble") }
+                        Button { commenting = file } label: { Label("Kommentar", icon: .message) }
                             .tint(Theme.accent)
                     }
                 }
             }
         } header: {
-            HStack {
-                Text(title).font(.headline).foregroundStyle(.primary)
-                Spacer()
-                Text("\(files.count)").foregroundStyle(.secondary)
-            }
-            .textCase(nil)
+            SectionHeader(title: title, trailing: "\(files.count)")
         }
     }
 
@@ -452,9 +390,10 @@ struct HistoryTab: View {
         // sideways too: long commit messages stay readable
         ScrollView([.vertical, .horizontal]) {
             LazyVStack(alignment: .leading, spacing: 0) {
-                PanelHeader(icon: "clock.arrow.circlepath", title: String(localized: "Verlauf"))
-                    .frame(width: DiffLineRow.screenWidth, alignment: .leading)
-                if let error { Text(error).foregroundStyle(Theme.warn).padding() }
+                if let error {
+                    Text(error).foregroundStyle(Theme.warn).padding(Gap.l)
+                        .frame(width: DiffLineRow.screenWidth, alignment: .leading)
+                }
                 if let changes, changes.files > 0 {
                     NavigationLink { ChangesTab(server: server, space: space) } label: {
                         HStack(spacing: 0) {
@@ -468,7 +407,7 @@ struct HistoryTab: View {
                                            with: .color(GitStyle.lanes[0]), lineWidth: 2)
                             }
                             .frame(width: GraphCell.x(0) + 16)
-                            Text("Nicht committete Änderungen").padding(.leading, 4)
+                            Text("Nicht committete Änderungen").font(Typo.md).foregroundStyle(Theme.muted).padding(.leading, Gap.xs)
                             Spacer()
                             PlusMinus(add: changes.add, del: changes.del).padding(.trailing, 14)
                         }
@@ -480,9 +419,9 @@ struct HistoryTab: View {
                     Button { selected = row.commit } label: {
                         HStack(spacing: 0) {
                             GraphCell(row: row, top: false)
-                            Text(row.commit.subject).lineLimit(1).fixedSize().padding(.leading, 4)
-                            Spacer(minLength: 12)
-                            Text(GitStyle.age(row.commit.at)).font(.footnote).foregroundStyle(.tertiary)
+                            Text(row.commit.subject).font(Typo.md).lineLimit(1).fixedSize().padding(.leading, Gap.xs)
+                            Spacer(minLength: Gap.m)
+                            Text(GitStyle.age(row.commit.at)).font(Typo.xs.monospacedDigit()).foregroundStyle(Theme.dim)
                                 .padding(.trailing, 14)
                         }
                         .frame(minWidth: DiffLineRow.screenWidth, minHeight: Self.rowHeight, maxHeight: Self.rowHeight, alignment: .leading)
@@ -490,17 +429,17 @@ struct HistoryTab: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Color.clear.frame(height: 70)
             }
+            .padding(.bottom, Gap.xl)
         }
-        .overlay { if !loaded && error == nil { Skeleton(style: .graph, count: 16).background(GitStyle.background) } }
+        .background(Theme.bg)
+        .overlay { if !loaded && error == nil { Skeleton(style: .graph, count: 16).background(Theme.bg) } }
         .refreshable { await load() }
         .task { if !loaded { await load() } }
         .sheet(item: $selected) { commit in
             NavigationStack { CommitSheet(server: server, space: space, commit: commit) }
                 .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Theme.card)
+                .dialogSheet()
         }
     }
 
@@ -527,37 +466,30 @@ struct CommitSheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(commit.subject).font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: Gap.l) {
+                Text(commit.subject).font(Typo.lg)
                 if let body = detail?.body, !body.isEmpty {
-                    Text(body).font(.subheadline).foregroundStyle(.secondary)
+                    Text(body).font(Typo.md).foregroundStyle(Theme.muted)
                 }
                 if let detail {
-                    HStack {
-                        Text("GEÄNDERTE DATEIEN  \(detail.files.count)").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                        Spacer()
-                        PlusMinus(add: detail.files.map(\.add).reduce(0, +), del: detail.files.map(\.del).reduce(0, +))
-                    }
-                    if detail.merge {
-                        Text("Merge – zeigt, was der Merge gebracht hat.").font(.caption).foregroundStyle(.secondary)
-                    }
-                    ForEach(detail.files.prefix(60)) { file in
-                        NavigationLink {
-                            DiffScreen(server: server, space: space, source: .commit(hash: commit.hash, path: file.path), title: file.name)
-                        } label: {
-                            HStack(spacing: 12) {
-                                StatusBadge(status: file.status)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(file.name).foregroundStyle(.primary).lineLimit(1)
-                                    if !file.dir.isEmpty {
-                                        Text(file.dir).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
-                                    }
+                    VStack(alignment: .leading, spacing: Gap.s) {
+                        HStack(alignment: .lastTextBaseline, spacing: Gap.s) {
+                            SectionHeader(title: String(localized: "Geänderte Dateien"), trailing: "\(detail.files.count)")
+                            PlusMinus(add: detail.files.map(\.add).reduce(0, +), del: detail.files.map(\.del).reduce(0, +))
+                        }
+                        if detail.merge {
+                            FootNote(String(localized: "Merge – zeigt, was der Merge gebracht hat."))
+                        }
+                        Rows {
+                            ForEach(detail.files.prefix(60)) { file in
+                                NavigationLink {
+                                    DiffScreen(server: server, space: space, source: .commit(hash: commit.hash, path: file.path), title: file.name)
+                                } label: {
+                                    ChangeRow(status: file.status, path: file.path, add: file.add, del: file.del)
                                 }
-                                Spacer()
-                                PlusMinus(add: file.add, del: file.del)
+                                .buttonStyle(.plain)
                             }
                         }
-                        .buttonStyle(.plain)
                     }
                     info(detail)
                 } else if let error {
@@ -566,29 +498,29 @@ struct CommitSheet: View {
                     Skeleton(style: .iconList, count: 5).frame(height: 260)
                 }
             }
-            .padding(20)
+            .padding(Gap.l)
         }
+        .background(Theme.side)
         .safeAreaInset(edge: .bottom) {
-            HStack(spacing: 12) {
+            HStack(spacing: Gap.s) {
                 NavigationLink {
                     DiffScreen(server: server, space: space, source: .commit(hash: commit.hash, path: nil), title: String(commit.hash.prefix(8)))
                 } label: {
-                    Text("Änderungen anzeigen").font(.headline)
-                        .frame(maxWidth: .infinity).frame(height: 52)
-                        .background(GitStyle.lanes[0], in: Capsule())
-                        .foregroundStyle(.white)
+                    Text("Änderungen anzeigen")
                 }
+                .buttonStyle(.hollr(.primary, fullWidth: true))
                 Button {
                     UIPasteboard.general.string = commit.hash
                     copied = true
                 } label: {
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .frame(width: 52, height: 52)
-                        .background(Theme.fg.opacity(0.1), in: Circle())
+                    IconView(copied ? .check : .copy, size: 15)
                 }
+                .buttonStyle(.hollr(.secondary))
                 .accessibilityLabel("Commit-Hash kopieren")
             }
-            .padding(.horizontal, 20).padding(.bottom, 8)
+            .padding(.horizontal, Gap.l).padding(.vertical, Gap.m)
+            .background(Theme.side)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
         }
         .task {
             do {
@@ -600,26 +532,45 @@ struct CommitSheet: View {
     }
 
     private func info(_ d: CommitDetail) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            field("COMMIT") { Text(d.hash).font(.system(.subheadline, design: .monospaced)).textSelection(.enabled) }
-            field("AUTOR") {
-                (Text(d.author) + Text(" <\(d.email)>").foregroundColor(.secondary)).font(.subheadline)
+        VStack(alignment: .leading, spacing: Gap.m) {
+            field(String(localized: "Commit")) { Text(d.hash).font(Typo.monoSmall).textSelection(.enabled) }
+            field(String(localized: "Autor")) {
+                (Text(d.author) + Text(" <\(d.email)>").foregroundStyle(Theme.muted)).font(Typo.md)
             }
-            field("DATUM") {
+            field(String(localized: "Datum")) {
                 Text("\(Date(timeIntervalSince1970: d.at / 1000).formatted(date: .numeric, time: .shortened)) · \(RelativeTime.string(d.at))")
-                    .font(.subheadline)
+                    .font(Typo.md)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Theme.fg.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
+        .cardStyle()
     }
 
     private func field(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(label.uppercased()).font(Typo.xs).tracking(0.6).foregroundStyle(Theme.muted)
             content()
         }
+    }
+}
+
+/// A changed file as one mono line (space__change): kind letter, path, +N −N.
+struct ChangeRow: View {
+    let status: String
+    let path: String
+    let add: Int
+    let del: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            StatusBadge(status: status)
+            Text(path).font(Typo.monoSmall).lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PlusMinus(add: add, del: del)
+        }
+        .padding(.vertical, Gap.s).padding(.horizontal, 14)
+        .frame(minHeight: Metric.touch)
+        .contentShape(Rectangle())
     }
 }
 
@@ -633,23 +584,14 @@ struct BranchesTab: View {
 
     var body: some View {
         List {
-            Group {
-            Section {
-                PanelHeader(icon: "arrow.triangle.branch", title: "Branches")
-                    .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
-            }
-            if let error { Text(error).foregroundStyle(Theme.warn) }
+            if let error { Text(error).foregroundStyle(Theme.warn).listRowBackground(Theme.card) }
             if let data {
-                section("Lokal", data.local)
+                section(String(localized: "Lokal"), data.local)
                 section("Remote", data.remote)
             }
-            Color.clear.frame(height: 60).listRowBackground(Color.clear).listRowSeparator(.hidden)
         }
-            .listRowBackground(Theme.card)
-        }.themedList()
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .overlay { if data == nil && error == nil { Skeleton(style: .iconList, count: 10).background(GitStyle.background) } }
+        .themedList()
+        .overlay { if data == nil && error == nil { Skeleton(style: .iconList, count: 10).background(Theme.bg) } }
         .refreshable { await load() }
         .task { await load() }
     }
@@ -657,52 +599,46 @@ struct BranchesTab: View {
     private func section(_ title: String, _ items: [BranchInfo]) -> some View {
         Section {
             ForEach(items) { b in
-                HStack(spacing: 14) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .foregroundStyle(b.current ? GitStyle.lanes[0] : .secondary)
-                        .frame(width: 24)
+                HStack(spacing: Gap.m) {
+                    IconView(.branch, size: 15)
+                        .foregroundStyle(b.current ? Theme.accent : Theme.dim)
+                        .frame(width: 22)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(b.name).lineLimit(1).truncationMode(.middle)
-                            .fontWeight(b.current ? .semibold : .regular)
-                        Text("\(b.subject) · \(GitStyle.age(b.at))").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        Text(b.name).font(Typo.mono.weight(b.current ? .semibold : .regular))
+                            .lineLimit(1).truncationMode(.middle)
+                        Text("\(b.subject) · \(GitStyle.age(b.at))").font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
                     trailing(b)
                 }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                .listRowBackground(Theme.card)
             }
         } header: {
-            HStack {
-                Text(title).font(.headline).foregroundStyle(.primary)
-                Spacer()
-                Text("\(items.count)").font(.system(.subheadline, design: .monospaced)).foregroundStyle(.secondary)
-            }
-            .textCase(nil)
+            SectionHeader(title: title, trailing: "\(items.count)")
         }
     }
 
     @ViewBuilder private func trailing(_ b: BranchInfo) -> some View {
         if let pr = b.pr {
             HStack(spacing: 5) {
-                Image(systemName: "arrow.triangle.pull").font(.caption)
-                Text(verbatim: "#\(pr.number)").font(.system(.footnote, design: .monospaced))
+                Image(systemName: "arrow.triangle.pull").font(Typo.xs)
+                Text(verbatim: "#\(pr.number)").font(Typo.monoSmall)
                 switch pr.checks {
-                case "ok": Image(systemName: "checkmark.circle.fill").foregroundStyle(GitStyle.added)
-                case "fail": Image(systemName: "xmark.circle.fill").foregroundStyle(GitStyle.removed)
-                case "pending": Image(systemName: "clock.fill").foregroundStyle(Omp.warning)
+                case "ok": IconView(.check, size: 12).foregroundStyle(Theme.green)
+                case "fail": IconView(.x, size: 12).foregroundStyle(Theme.red)
+                case "pending": Image(systemName: "clock").font(Typo.xs).foregroundStyle(Theme.yellow)
                 default: EmptyView()
                 }
             }
-            .foregroundStyle(pr.draft ? .secondary : .primary)
+            .foregroundStyle(pr.draft ? Theme.muted : Theme.fg)
             .padding(.horizontal, 9).padding(.vertical, 5)
-            .background(Theme.fg.opacity(0.08), in: Capsule())
+            .background(Theme.wash(0.08), in: Capsule())
         } else if b.ahead > 0 || b.behind > 0 {
             HStack(spacing: 4) {
-                if b.ahead > 0 { Text("↑\(b.ahead)").foregroundStyle(GitStyle.added) }
-                if b.behind > 0 { Text("↓\(b.behind)").foregroundStyle(Omp.warning) }
+                if b.ahead > 0 { Text(verbatim: "↑\(b.ahead)").foregroundStyle(Theme.green) }
+                if b.behind > 0 { Text(verbatim: "↓\(b.behind)").foregroundStyle(Theme.yellow) }
             }
-            .font(.system(.subheadline, design: .monospaced))
+            .font(Typo.monoSmall)
         }
     }
 
@@ -716,7 +652,7 @@ struct BranchesTab: View {
     }
 }
 
-/// Commit sheet: own message, or let the agent write it (and commit) – then push / open a PR.
+/// Commit dialog: own message, or let the agent write it (and commit) – then push / open a PR.
 private struct CommitComposer: View {
     let server: Server
     let space: Space
@@ -732,55 +668,60 @@ private struct CommitComposer: View {
     @State private var committed: String?
     @FocusState private var focused: Bool
 
+    private var canCommit: Bool { !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !busy }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                if let committed {
-                    Section {
-                        Label("Committet: \(committed)", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.live)
-                        Button { Task { await run("push") } } label: { Label("Pushen", systemImage: "arrow.up.circle") }
-                        Button { Task { await run("pr") } } label: { Label("Pushen und PR öffnen", systemImage: "arrow.triangle.pull") }
-                    }
-                } else {
-                    Section {
-                        TextField("Commit-Nachricht", text: $message, axis: .vertical)
-                            .lineLimit(2...6)
-                            .focused($focused)
-                        if hasStaged {
-                            Toggle("Auch nicht gestagte Änderungen", isOn: $all)
-                        }
-                    } footer: {
-                        Text(hasStaged && !all ? "Nur die gestagten Dateien." : "Alle Änderungen, auch neue Dateien.")
-                    }
-                    Section {
-                        Button { Task { await commit() } } label: {
-                            Label("Committen", systemImage: "checkmark.circle")
-                        }
-                        .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
-                        if let agent {
-                            Button {
-                                sessions.session(for: agent).sendText(
-                                    "Schau dir die aktuellen Änderungen an und committe sie mit einer passenden, kurzen Commit-Nachricht.")
-                                done(String(localized: "\(agent.title) schreibt die Commit-Nachricht und committet."))
-                                dismiss()
-                            } label: {
-                                Label("\(agent.pane.agentName) die Nachricht schreiben lassen", systemImage: "sparkles")
-                            }
-                        }
-                    }
+        DialogScaffold(icon: .check, title: String(localized: "Commit"), onClose: { dismiss() }) {
+            if let committed {
+                Label("Committet: \(committed)", icon: .check).foregroundStyle(Theme.live)
+                Button { Task { await run("push") } } label: { Label("Pushen", icon: .arrowUp) }
+                    .buttonStyle(.hollr(.secondary, fullWidth: true))
+                    .disabled(busy)
+                Button { Task { await run("pr") } } label: { Label("Pushen und PR öffnen", systemImage: "arrow.triangle.pull") }
+                    .buttonStyle(.hollr(.secondary, fullWidth: true))
+                    .disabled(busy)
+            } else {
+                DialogField(label: String(localized: "Commit-Nachricht"),
+                            note: hasStaged && !all ? String(localized: "Nur die gestagten Dateien.")
+                                                    : String(localized: "Alle Änderungen, auch neue Dateien.")) {
+                    TextField("Commit-Nachricht", text: $message, axis: .vertical)
+                        .lineLimit(2...6)
+                        .focused($focused)
+                        .fieldStyle(focused: focused)
                 }
-                if let error {
-                    Section { Text(error).foregroundStyle(Theme.warn).font(.footnote) }
+                if hasStaged {
+                    Toggle("Auch nicht gestagte Änderungen", isOn: $all).font(Typo.md)
+                }
+                if let agent {
+                    Button {
+                        sessions.session(for: agent).sendText(
+                            "Schau dir die aktuellen Änderungen an und committe sie mit einer passenden, kurzen Commit-Nachricht.")
+                        done(String(localized: "\(agent.title) schreibt die Commit-Nachricht und committet."))
+                        dismiss()
+                    } label: {
+                        Label("\(agent.pane.agentName) die Nachricht schreiben lassen", icon: .sparkle)
+                    }
+                    .buttonStyle(.hollr(.secondary, fullWidth: true))
                 }
             }
-            .navigationTitle("Commit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Schließen") { dismiss() } }
-                if busy { ToolbarItem(placement: .confirmationAction) { ProgressView() } }
+            if let error {
+                Text(error).foregroundStyle(Theme.warn).font(Typo.sm)
             }
-            .onAppear { focused = true }
+        } footer: {
+            Button("Schließen") { dismiss() }
+                .buttonStyle(.hollr(.secondary))
+            if committed == nil {
+                Button { Task { await commit() } } label: {
+                    if busy { Spinner(color: Theme.onAccent) } else { Label("Committen", icon: .check) }
+                }
+                .buttonStyle(.hollr(.primary))
+                .disabled(!canCommit)
+            } else if busy {
+                Spinner()
+            }
         }
+        .dialogSheet()
+        .onAppear { focused = true }
     }
 
     private func commit() async {

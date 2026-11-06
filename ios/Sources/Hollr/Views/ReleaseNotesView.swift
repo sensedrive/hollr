@@ -215,22 +215,31 @@ struct ReleaseNotesView: View {
                 Section {
                     ForEach(Array(note.items.enumerated()), id: \.offset) { _, item in
                         Label {
-                            Text(item.text)
+                            Text(item.text).font(Typo.md)
                         } icon: {
-                            Image(systemName: item.icon).foregroundStyle(Theme.accent)
+                            Image(systemName: item.icon).foregroundStyle(Theme.muted)
                         }
                     }
                 } header: {
-                    HStack {
+                    // section label (uppercase 11 pt muted) with the "installiert" badge and the date on the right
+                    HStack(spacing: Gap.s) {
                         Text(note.build == 1 ? "Anfang" : "Build \(note.build)")
+                            .textCase(.uppercase)
+                            .tracking(0.6)
+                            .foregroundStyle(Theme.muted)
                         if note.build == ReleaseNotes.currentBuild {
-                            Text("installiert").font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Theme.accent.opacity(0.25), in: Capsule())
+                            Text("installiert").font(Typo.xs.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, Gap.s).padding(.vertical, 1)
+                                .background(Theme.accent.opacity(0.18), in: Capsule())
                         }
-                        Spacer()
-                        Text(note.date)
+                        Spacer(minLength: Gap.s)
+                        Text(verbatim: note.date).monospacedDigit().foregroundStyle(Theme.dim)
                     }
+                    .font(Typo.xs)
+                    .textCase(nil)
+                    .padding(.top, Gap.s)
+                    .accessibilityAddTraits(.isHeader)
                 }
             }
         }

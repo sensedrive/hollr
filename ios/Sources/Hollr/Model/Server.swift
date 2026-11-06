@@ -101,10 +101,19 @@ struct AgentRef: Hashable, Identifiable {
 final class ServerStore {
     private(set) var servers: [Server] = []
     private let url: URL
+    /// debug screenshot demo: made-up servers in memory only, never saved
+    private var demo = false
 
     init(directory: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         url = directory.appendingPathComponent("servers.json")
+        #if DEBUG
+        if DemoMode.isOn {
+            servers = DemoMode.servers
+            demo = true
+            return
+        }
+        #endif
         if let data = try? Data(contentsOf: url),
            let saved = try? JSONDecoder().decode([Server].self, from: data) {
             servers = saved
@@ -142,7 +151,7 @@ final class ServerStore {
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(servers) else { return }
+        guard !demo, let data = try? JSONEncoder().encode(servers) else { return }
         try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }

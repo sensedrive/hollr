@@ -82,18 +82,18 @@ struct ServerInfoView: View {
         List {
             Group {
             if let error {
-                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warn)
+                Label(error, icon: .alert).font(Typo.sm).foregroundStyle(Theme.warn)
             }
             Section {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Gap.xs) {
                     Text(shown.host).font(.title3.weight(.semibold))
-                    Text("\(shown.os) · \(shown.arch)").font(.subheadline).foregroundStyle(.secondary)
+                    Text("\(shown.os) · \(shown.arch)").font(Typo.md).foregroundStyle(Theme.muted)
                     Text("Kernel \(shown.kernel) · läuft seit \(Self.duration(shown.uptime)) · Hollr \(shown.hollr)")
-                        .font(.caption).foregroundStyle(.tertiary)
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Gap.xs)
             }
-            Section("Auslastung") {
+            Section {
                 Meter(title: "CPU", value: (shown.cpu ?? 0) / 100,
                       label: shown.cpu.map { "\(Int($0.rounded())) % · \(shown.cores) Kerne" } ?? "\(shown.cores) Kerne")
                 Meter(title: "Last", value: (shown.load.first ?? 0) / Double(max(shown.cores, 1)),
@@ -108,41 +108,43 @@ struct ServerInfoView: View {
                     Meter(title: disk.mount, value: disk.used / max(disk.total, 1),
                           label: "\(Self.bytes(disk.used)) / \(Self.bytes(disk.total))")
                 }
+            } header: {
+                SectionHeader(title: String(localized: "Auslastung"))
             }
             Section {
                 ForEach(shown.checks) { check in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Image(systemName: check.ok ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                                .foregroundStyle(check.ok ? Theme.live : Theme.warn)
-                            Text(check.name)
+                    VStack(alignment: .leading, spacing: Gap.xs) {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(check.ok ? HIcon.check : HIcon.alert)
+                                .foregroundStyle(check.ok ? Theme.green : Theme.warn)
+                            Text(check.name).font(Typo.md)
                             Spacer()
                         }
-                        Text(check.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        Text(check.detail).font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(2)
                         if !check.ok, let fix = check.fix {
                             Button {
                                 UIPasteboard.general.string = fix
                             } label: {
-                                Label(fix, systemImage: "doc.on.doc").font(.caption.monospaced()).lineLimit(2)
+                                Label(fix, icon: .copy).font(Typo.monoSmall).lineLimit(2)
+                                    .foregroundStyle(Theme.accent)
                             }
                         }
                     }
                 }
             } header: {
                 let failed = shown.checks.filter { !$0.ok }.count
-                Text(failed == 0 ? "Einrichtung · alles korrekt" : "Einrichtung · \(failed) Problem(e)")
+                SectionHeader(title: failed == 0 ? String(localized: "Einrichtung · alles korrekt")
+                                                 : String(localized: "Einrichtung · \(failed) Problem(e)"))
             }
             Section {
-                Picker("", selection: $onlyStack) {
-                    Text("Alle").tag(false)
-                    Text("Hollr & Agents").tag(true)
-                }
-                .pickerStyle(.segmented)
+                Segmented(label: String(localized: "Prozesse · nach CPU"),
+                          options: [(false, String(localized: "Alle")), (true, String(localized: "Hollr & Agents"))],
+                          selection: $onlyStack, boxed: true)
                 ForEach(shown.processes.filter { (!onlyStack || $0.stack) && (search.isEmpty || $0.command.localizedCaseInsensitiveContains(search) || $0.name.localizedCaseInsensitiveContains(search)) }) { p in
                     ProcessRow(process: p)
                 }
             } header: {
-                Text("Prozesse · nach CPU")
+                SectionHeader(title: String(localized: "Prozesse · nach CPU"))
             }
         }
             .listRowBackground(Theme.card)
@@ -179,6 +181,7 @@ struct ServerInfoView: View {
     }
 }
 
+/// One load line: name, mono value, a ProgressMeter bar over the full row width (green, orange from 70 %, red from 90 %).
 private struct Meter: View {
     let title: String
     let value: Double
@@ -187,22 +190,19 @@ private struct Meter: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).lineLimit(1)
+                Text(title).font(Typo.md).lineLimit(1)
                 Spacer()
-                Text(label).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text(label).font(Typo.monoSmall.monospacedDigit()).foregroundStyle(Theme.muted)
             }
             GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.fg.opacity(0.08))
-                    Capsule().fill(color).frame(width: max(4, geo.size.width * min(max(value, 0), 1)))
-                }
+                ProgressMeter(value: value, width: geo.size.width, height: 6, color: color)
             }
             .frame(height: 6)
         }
         .padding(.vertical, 2)
     }
 
-    private var color: Color { value > 0.9 ? Omp.error : value > 0.7 ? Omp.warning : Omp.success }
+    private var color: Color { value > 0.9 ? Theme.red : value > 0.7 ? Theme.warn : Theme.green }
 }
 
 private struct ProcessRow: View {
@@ -211,18 +211,18 @@ private struct ProcessRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
+            HStack(spacing: Gap.s) {
                 if process.stack { Circle().fill(Theme.accent).frame(width: 6, height: 6) }
-                Text(process.name).lineLimit(1)
+                Text(process.name).font(Typo.md).lineLimit(1)
                 Spacer()
-                Text(String(format: "%.1f %%", process.cpu)).font(.caption.monospacedDigit())
-                    .foregroundStyle(process.cpu > 50 ? Omp.warning : .secondary)
-                Text("\(process.rssMb) MB").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text(String(format: "%.1f %%", process.cpu)).font(Typo.monoSmall.monospacedDigit())
+                    .foregroundStyle(process.cpu > 50 ? Theme.warn : Theme.muted)
+                Text("\(process.rssMb) MB").font(Typo.monoSmall.monospacedDigit()).foregroundStyle(Theme.muted)
                     .frame(width: 64, alignment: .trailing)
             }
-            Text(verbatim: "\(process.pid) · \(process.user)").font(.caption2).foregroundStyle(.tertiary)
+            Text(verbatim: "\(process.pid) · \(process.user)").font(Typo.monoXS).foregroundStyle(Theme.dim)
             if expanded {
-                Text(process.command).font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                Text(process.command).font(Typo.monoXS).foregroundStyle(Theme.muted).textSelection(.enabled)
             }
         }
         .contentShape(Rectangle())

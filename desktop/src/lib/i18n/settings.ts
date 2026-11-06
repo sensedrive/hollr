@@ -161,6 +161,10 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "iPhone-App im neuen Design: Übersicht mit „Braucht dich“ und „Läuft gerade“ (Alle / Arbeitet / Neu), „neues Ergebnis“ in Blau, flache Werkzeugschritte, Modell und Kontext im Eingabefeld, Linien-Icons, helles Thema „Hollr Hell“":
+    "iPhone app in the new design: overview with “Needs you” and “Running now” (All / Working / New), “new result” in blue, flat tool steps, model and context in the composer, line icons, light theme “Hollr Light”",
+  "Dialoge, Menüs, App-Sperre, Dateivorschau und Vorlese-Leiste im neuen Overlay-Stil; „Nachfragen“ (⌘⇧K) zu markiertem Text":
+    "Dialogs, menus, app lock, file preview and read-aloud bar in the new overlay style; “Ask about it” (⌘⇧K) for selected text",
   "Neuer Chat mit Kontext (⌘⇧L, ⋯, ⌘K): ein leerer Chat im Tab neben der Session, der ihren Verlauf im Hintergrund kennt – ein normaler Chat ohne Sonderfenster; ⋯ › Zurücksetzen und Ergebnis in den Hauptchat":
     "New chat with context (⌘⇧L, ⋯, ⌘K): an empty chat in a tab next to the session that knows its history in the background – an ordinary chat, no extra window; ⋯ › Reset and Result to the main chat",
   "Linien-Icons überall statt Emoji-Zeichen": "Line icons everywhere instead of emoji glyphs",

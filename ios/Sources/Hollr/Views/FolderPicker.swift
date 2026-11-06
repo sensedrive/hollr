@@ -33,6 +33,7 @@ struct FolderPicker: View {
     @State private var error: String?
     @State private var newName = ""
     @State private var filter = ""
+    @FocusState private var newFocused: Bool
 
     private var shown: [DirListing.Entry] {
         let all = listing?.dirs ?? []
@@ -45,16 +46,15 @@ struct FolderPicker: View {
             List {
                 Group {
                     Section {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Gap.s) {
                             if let parent = listing?.parent {
-                                Button { Task { await load(parent) } } label: {
-                                    Image(systemName: "chevron.up").frame(width: 28, height: 28)
-                                }
-                                .buttonStyle(.bordered)
+                                Button { Task { await load(parent) } } label: { Image(systemName: "chevron.up") }
+                                    .buttonStyle(.icon(size: 36))
+                                    .accessibilityLabel("Übergeordneter Ordner")
                             }
-                            Text(listing?.path ?? path).font(.callout.monospaced()).lineLimit(2).truncationMode(.head)
+                            Text(listing?.path ?? path).font(Typo.mono).lineLimit(2).truncationMode(.head)
                             if listing?.repo == true {
-                                Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.accent)
+                                IconView(.branch, size: 14).foregroundStyle(Theme.accent)
                             }
                         }
                     }
@@ -62,7 +62,7 @@ struct FolderPicker: View {
                         Section("Projekt-Orte") {
                             ForEach(places, id: \.self) { place in
                                 Button { Task { await load(place) } } label: {
-                                    Label(place, systemImage: "star").font(.callout.monospaced())
+                                    Label(place, systemImage: "star").font(Typo.mono).foregroundStyle(Theme.fg)
                                 }
                             }
                         }
@@ -74,23 +74,24 @@ struct FolderPicker: View {
                         if listing == nil, error == nil {
                             ForEach(0..<6, id: \.self) { _ in SkeletonBar(width: 200, height: 14).shimmer() }
                         } else if shown.isEmpty {
-                            Text(filter.isEmpty ? "Keine Unterordner." : "Nichts gefunden.").foregroundStyle(.secondary)
+                            Text(filter.isEmpty ? "Keine Unterordner." : "Nichts gefunden.").foregroundStyle(Theme.muted)
                         }
                         ForEach(shown) { entry in
                             Button { Task { await load(entry.path) } } label: {
                                 HStack(spacing: 10) {
-                                    Image(systemName: entry.repo ? "arrow.triangle.branch" : "folder")
-                                        .foregroundStyle(entry.repo ? Theme.accent : .secondary)
+                                    IconView(entry.repo ? .branch : .folder, size: 15)
+                                        .foregroundStyle(entry.repo ? Theme.accent : Theme.muted)
                                         .frame(width: 22)
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(entry.name).foregroundStyle(.primary)
+                                        Text(entry.name).font(Typo.md).foregroundStyle(Theme.fg)
                                         if let branch = entry.branch {
-                                            Text(branch).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                            Text(branch).font(Typo.monoSmall).foregroundStyle(Theme.muted)
                                         }
                                     }
                                     Spacer()
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                                    IconView(.chevronRight, size: 13).foregroundStyle(Theme.dim)
                                 }
+                                .contentShape(Rectangle())
                             }
                             .swipeActions(edge: .trailing) {
                                 Button("Wählen") { pick(entry.path) }.tint(Theme.accent)
@@ -102,13 +103,16 @@ struct FolderPicker: View {
                         Text("Antippen öffnet den Ordner, nach links wischen wählt ihn direkt. Git-Repos sind markiert.")
                     }
                     Section {
-                        HStack {
+                        HStack(spacing: Gap.s) {
                             TextField("Neuer Unterordner", text: $newName)
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .focused($newFocused)
+                                .fieldStyle(focused: newFocused)
                             Button("Anlegen") {
                                 let name = newName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "/", with: "-")
                                 pick("\(listing?.path ?? path)/\(name)")
                             }
+                            .buttonStyle(.hollr(.secondary))
                             .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     } footer: {

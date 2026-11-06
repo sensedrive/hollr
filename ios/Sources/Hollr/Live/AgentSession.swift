@@ -78,6 +78,9 @@ final class AgentSession {
     /// each, instead of a poll every 1.5 s. Returns false when the server is too old (poll then).
     func follow() async -> Bool {
         guard usesTimeline else { return false }
+        #if DEBUG
+        if DemoMode.isDemo(ref.server) { return false } // demo answers polls only
+        #endif
         let pane = ref.pane.pane
         let server = ref.server
         let heard = Clock()

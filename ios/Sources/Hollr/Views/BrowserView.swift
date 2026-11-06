@@ -20,10 +20,10 @@ struct BrowserView: View {
                     ProgressView(value: model.progress).tint(Theme.accent).frame(height: 2)
                 }
                 if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote).foregroundStyle(Theme.warn)
+                    Label(error, icon: .alert)
+                        .font(Typo.note).foregroundStyle(Theme.warn)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal).padding(.vertical, 8)
+                        .padding(.horizontal, Gap.l).padding(.vertical, Gap.s)
                         .background(Theme.warn.opacity(0.12))
                 }
                 if model.current == nil && !addressFocused {
@@ -47,13 +47,11 @@ struct BrowserView: View {
     private var addressBar: some View {
         HStack(spacing: 6) {
             if model.tunneled, let server = model.server {
-                Label(server.label, systemImage: "server.rack")
-                    .labelStyle(.iconOnly)
+                IconView(.server, size: 14)
                     .foregroundStyle(Theme.live)
                     .accessibilityLabel("Über \(server.label)")
             }
             TextField("URL oder localhost:3000", text: $model.address)
-                .font(.subheadline)
                 .keyboardType(.webSearch)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -61,38 +59,42 @@ struct BrowserView: View {
                 .focused($addressFocused)
                 .onSubmit { model.load(model.address) }
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Theme.fg.opacity(0.08), in: Capsule())
+        .fieldStyle(focused: addressFocused, radius: Radius.row)
         .frame(minWidth: 220)
     }
 
     private var toolbar: some View {
         HStack {
-            Button { model.webView.goBack() } label: { Image(systemName: "chevron.backward") }
-                .disabled(!model.canGoBack)
+            toolButton(HIcon.chevronLeft.symbol, disabled: !model.canGoBack) { model.webView.goBack() }
             Spacer()
-            Button { model.webView.goForward() } label: { Image(systemName: "chevron.forward") }
-                .disabled(!model.canGoForward)
+            toolButton(HIcon.chevronRight.symbol, disabled: !model.canGoForward) { model.webView.goForward() }
             Spacer()
-            Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
-                .disabled(model.current == nil)
+            toolButton(HIcon.refresh.symbol, disabled: model.current == nil) { model.reload() }
             Spacer()
             if let url = model.current {
                 ShareLink(item: url) { Image(systemName: "square.and.arrow.up") }
+                    .buttonStyle(.icon())
                 Spacer()
                 // Safari can't reach the server's localhost
-                Button { UIApplication.shared.open(url) } label: { Image(systemName: "safari") }
-                    .disabled(model.tunneled)
+                toolButton("safari", disabled: model.tunneled) { UIApplication.shared.open(url) }
                     .accessibilityLabel("In Safari öffnen")
             } else {
-                Image(systemName: "square.and.arrow.up").foregroundStyle(.tertiary)
+                toolButton("square.and.arrow.up", disabled: true) {}
                 Spacer()
-                Image(systemName: "safari").foregroundStyle(.tertiary)
+                toolButton("safari", disabled: true) {}
+                    .accessibilityLabel("In Safari öffnen")
             }
         }
-        .font(.title3)
-        .padding(.horizontal, 28).padding(.vertical, 10)
-        .background(.bar)
+        .padding(.horizontal, Gap.l).padding(.vertical, Gap.xs)
+        .background(Theme.side)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
+    }
+
+    private func toolButton(_ symbol: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol) }
+            .buttonStyle(.icon())
+            .disabled(disabled)
+            .opacity(disabled ? 0.4 : 1)
     }
 }
 
@@ -117,20 +119,23 @@ private struct BrowserStart: View {
             if let server = model.server {
                 Section {
                     if ports.isEmpty {
-                        Text(loading ? String(localized: "Suche Web-Dienste …") : String(localized: "Gerade läuft dort kein Web-Dienst auf localhost."))
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: Gap.s) {
+                            if loading { Spinner(color: Theme.muted) }
+                            Text(loading ? String(localized: "Suche Web-Dienste …") : String(localized: "Gerade läuft dort kein Web-Dienst auf localhost."))
+                        }
+                        .foregroundStyle(Theme.muted)
                     }
                     ForEach(ports) { port in
                         Button { model.load("http://localhost:\(port.port)") } label: {
-                            HStack {
+                            HStack(spacing: Gap.m) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(port.label).foregroundStyle(.primary).lineLimit(1)
+                                    Text(port.label).font(Typo.md).foregroundStyle(Theme.fg).lineLimit(1)
                                     Text([port.process, port.cwd.map { ($0 as NSString).abbreviatingWithTildeInPath }]
                                         .compactMap { $0 }.joined(separator: " · "))
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                        .font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(1)
                                 }
                                 Spacer()
-                                Text(verbatim: ":\(port.port)").font(.callout.monospaced()).foregroundStyle(Theme.live)
+                                Text(verbatim: ":\(port.port)").font(Typo.mono).foregroundStyle(Theme.live)
                             }
                         }
                     }
@@ -149,7 +154,8 @@ private struct BrowserStart: View {
                 Section("Zuletzt") {
                     ForEach(recent, id: \.self) { url in
                         Button { model.load(url) } label: {
-                            Label(url, systemImage: "globe").lineLimit(1).truncationMode(.middle)
+                            Label(url, icon: .globe).font(Typo.md).foregroundStyle(Theme.fg)
+                                .lineLimit(1).truncationMode(.middle)
                         }
                     }
                 }

@@ -49,6 +49,10 @@ enum HollrClient {
         addresses: [String], port: Int, user: String, fingerprint: String,
         key: Curve25519.Signing.PrivateKey
     ) async throws -> SSHClient {
+        #if DEBUG
+        // the screenshot demo server never touches the network
+        if fingerprint == DemoMode.fingerprint { throw HollrError.unreachable("Demo") }
+        #endif
         var hosts = addresses
         if let last = await ConnectionInfo.shared.via[fingerprint], let i = hosts.firstIndex(of: last) {
             hosts.insert(hosts.remove(at: i), at: 0)
@@ -146,11 +150,18 @@ enum HollrClient {
 
     // MARK: Commands
 
-    static func tree(_ server: Server) async throws -> [Workspace] {
+    /// Runs one read command on the pooled connection and returns its stdout.
+    private static func run(_ command: String, on server: Server) async throws -> Data {
+        #if DEBUG
+        if DemoMode.isDemo(server) { return DemoMode.answer(command, on: server) }
+        #endif
         let client = try await SSHPool.shared.client(for: server)
-        let buffer = try await client.exec("tree", on: server)
+        return Data(try await client.exec(command, on: server).readableBytesView)
+    }
+
+    static func tree(_ server: Server) async throws -> [Workspace] {
+        let data = try await run("tree", on: server)
         struct Response: Decodable { let workspaces: [Workspace]?; let error: String? }
-        let data = Data(buffer.readableBytesView)
         guard let response = try? JSONDecoder().decode(Response.self, from: data) else {
             HollrLog.error("tree: bad response \(String(decoding: data.prefix(300), as: UTF8.self))")
             throw HollrError.badResponse
@@ -161,9 +172,8 @@ enum HollrClient {
 
     /// nil = unchanged since `etag` (the server then only answers {"same":true}).
     static func timeline(_ server: Server, pane: String, limit: Int = 150, etag: String? = nil) async throws -> Timeline? {
-        let client = try await SSHPool.shared.client(for: server)
         let command = etag.map { "timeline \(pane) \(limit) \($0)" } ?? "timeline \(pane) \(limit)"
-        let data = Data(try await client.exec(command, on: server).readableBytesView)
+        let data = try await run(command, on: server)
         if data.count < 200, String(decoding: data, as: UTF8.self).contains("\"same\":true") { return nil }
         do {
             return try JSONDecoder().decode(Timeline.self, from: data)
@@ -174,16 +184,14 @@ enum HollrClient {
     }
 
     static func spaces(_ server: Server) async throws -> [Space] {
-        let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.exec("spaces", on: server).readableBytesView)
+        let data = try await run("spaces", on: server)
         struct R: Decodable { let spaces: [Space] }
         return try JSONDecoder().decode(R.self, from: data).spaces
     }
 
     /// Web pages listening on the server's loopback (for the browser's quick links).
     static func ports(_ server: Server) async throws -> [WebPort] {
-        let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.exec("ports", on: server).readableBytesView)
+        let data = try await run("ports", on: server)
         struct R: Decodable { let ports: [WebPort] }
         return try JSONDecoder().decode(R.self, from: data).ports
     }
@@ -197,8 +205,7 @@ enum HollrClient {
     }
 
     static func usage(_ server: Server, refresh: Bool = false) async throws -> (limits: [UsageLimit], capacity: [UsageCapacity]) {
-        let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.exec(refresh ? "usage refresh" : "usage", on: server).readableBytesView)
+        let data = try await run(refresh ? "usage refresh" : "usage", on: server)
         struct R: Decodable { let limits: [UsageLimit]; let capacity: [UsageCapacity]? }
         let r = try JSONDecoder().decode(R.self, from: data)
         return (r.limits, r.capacity ?? [])
@@ -214,6 +221,9 @@ enum HollrClient {
 
     static func fs<T: Decodable>(_ server: Server, _ body: [String: Any], as: T.Type, command: String = "fs",
                                  seconds: Double = 30) async throws -> T {
+        #if DEBUG
+        if DemoMode.isDemo(server) { return try JSONDecoder().decode(T.self, from: DemoMode.answer(command, body, on: server)) }
+        #endif
         let client = try await SSHPool.shared.client(for: server)
         var payload = try JSONSerialization.data(withJSONObject: body)
         payload.append(0x0a)
@@ -241,9 +251,7 @@ enum HollrClient {
     }
 
     static func history(_ server: Server, pane: String, limit: Int = 80) async throws -> [LiveEvent] {
-        let client = try await SSHPool.shared.client(for: server)
-        let buffer = try await client.exec("history \(pane) \(limit)", on: server)
-        let data = Data(buffer.readableBytesView)
+        let data = try await run("history \(pane) \(limit)", on: server)
         guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let events = obj["events"] as? [[String: Any]]
         else { throw HollrError.badResponse }
@@ -252,8 +260,7 @@ enum HollrClient {
 
     /// Agent CLIs installed on the server (omp, claude, codex).
     static func kinds(_ server: Server) async throws -> [String] {
-        let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.exec("kinds", on: server).readableBytesView)
+        let data = try await run("kinds", on: server)
         struct R: Decodable { let kinds: [String] }
         return (try? JSONDecoder().decode(R.self, from: data))?.kinds ?? []
     }
@@ -282,8 +289,7 @@ enum HollrClient {
 
     /// Visible terminal screen of a pane (for agents without a parsed history, or prompts).
     static func screen(_ server: Server, pane: String, lines: Int = 40) async throws -> String {
-        let client = try await SSHPool.shared.client(for: server)
-        let data = Data(try await client.exec("screen \(pane) \(lines)", on: server).readableBytesView)
+        let data = try await run("screen \(pane) \(lines)", on: server)
         struct R: Decodable { let text: String? }
         return (try? JSONDecoder().decode(R.self, from: data))?.text ?? ""
     }

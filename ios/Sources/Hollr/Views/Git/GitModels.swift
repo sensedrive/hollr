@@ -78,20 +78,18 @@ struct TextResponse: Decodable { let text: String }
 // MARK: - Look
 
 enum GitStyle {
-    private static var p: Palette { Palette.current }
-    static var lanes: [Color] { [p.purple, p.orange, p.pink, p.cyan, p.blue, p.green, p.yellow, p.red].map { Color(hex: $0) } }
-    static var added: Color { Color(hex: p.green) }
-    static var removed: Color { Color(hex: p.red) }
-    static var addedBg: Color { Color(hex: p.green).opacity(0.16) }
-    static var removedBg: Color { Color(hex: p.red).opacity(0.18) }
-    static var background: Color { Color(hex: p.isDark && p.name == "Hollr" ? 0x1E1F26 : p.bg) }
+    /// graph lane colours, in the order lanes are taken
+    static var lanes: [Color] {
+        [Theme.purple, Theme.orange, Theme.pink, Theme.cyan, Theme.blue, Theme.green, Theme.yellow, Theme.red]
+    }
 
+    /// change kind (space__ck): M orange, A / untracked (shown as A) green, D red, R blue
     static func statusColor(_ s: String) -> Color {
         switch s {
-        case "A": return added
-        case "D": return removed
-        case "R": return Color(hex: 0x5AA9F0)
-        default: return Color(hex: 0xB48CF2)
+        case "A", "?": return Theme.green
+        case "D": return Theme.red
+        case "R": return Theme.blue
+        default: return Theme.orange
         }
     }
 
@@ -109,27 +107,28 @@ enum GitStyle {
     }
 }
 
-/// M / A / D badge
+/// M / A / D letter of a changed file (space__ck): bold mono in the kind's colour.
 struct StatusBadge: View {
     let status: String
     var body: some View {
-        Text(status == "?" ? "A" : status)
-            .font(.system(.footnote, design: .monospaced).weight(.semibold))
+        Text(verbatim: status == "?" ? "A" : status)
+            .font(Typo.monoSmall.weight(.bold))
             .foregroundStyle(GitStyle.statusColor(status))
-            .frame(width: 26, height: 26)
-            .background(GitStyle.statusColor(status).opacity(0.16), in: RoundedRectangle(cornerRadius: 7))
+            .frame(width: 14, alignment: .leading)
     }
 }
 
+/// "+N −N" in green / red mono; zero counts are left out.
 struct PlusMinus: View {
     let add: Int
     let del: Int
     var body: some View {
         HStack(spacing: 6) {
-            Text("+\(add)").foregroundStyle(GitStyle.added)
-            Text("-\(del)").foregroundStyle(GitStyle.removed)
+            if add > 0 { Text(verbatim: "+\(add)").foregroundStyle(Theme.green) }
+            if del > 0 { Text(verbatim: "\u{2212}\(del)").foregroundStyle(Theme.red) }
         }
-        .font(.system(.footnote, design: .monospaced))
+        .font(Typo.monoSmall)
+        .fixedSize()
     }
 }
 
@@ -253,12 +252,11 @@ struct GraphCell: View {
 // MARK: - Syntax highlighting (lightweight, per line)
 
 enum Syntax {
-    private static var p: Palette { Palette.current }
-    static var keyword: Color { Color(hex: p.pink) }
-    static var string: Color { Color(hex: p.yellow) }
-    static var comment: Color { Color(hex: p.dim) }
-    static var number: Color { Color(hex: p.purple) }
-    static var type: Color { Color(hex: p.cyan) }
+    static var keyword: Color { Theme.pink }
+    static var string: Color { Theme.yellow }
+    static var comment: Color { Theme.dim }
+    static var number: Color { Theme.purple }
+    static var type: Color { Theme.cyan }
 
     private static let keywords: Set<String> = [
         "import", "from", "export", "default", "const", "let", "var", "function", "return", "if", "else", "for",
@@ -322,7 +320,7 @@ enum Syntax {
                 word.append(c)
             } else {
                 flushWord()
-                append(String(c), c == "{" || c == "}" || c == "(" || c == ")" || c == "[" || c == "]" || c == ";" || c == "," ? Omp.muted : nil)
+                append(String(c), c == "{" || c == "}" || c == "(" || c == ")" || c == "[" || c == "]" || c == ";" || c == "," ? Theme.muted : nil)
             }
             i += 1
         }
@@ -333,33 +331,34 @@ enum Syntax {
 
 // MARK: - File type icons
 
+/// Line icon and identity hue per file type (folders blue, TypeScript blue, JavaScript yellow, …).
 enum FileIcon {
     static func symbol(_ name: String, dir: Bool) -> (String, Color) {
-        if dir { return ("folder.fill", Color(hex: 0x6CA6F0)) }
+        if dir { return (HIcon.folder.symbol, Theme.blue) }
         let lower = name.lowercased()
-        if lower.hasPrefix(".env") { return ("slider.horizontal.3", Color(hex: 0xE5C07B)) }
-        if lower == ".gitignore" || lower == ".gitattributes" { return ("arrow.triangle.branch", Color(hex: 0xE0603A)) }
-        if lower.hasPrefix("dockerfile") || lower == ".dockerignore" { return ("shippingbox.fill", Color(hex: 0x3B9DE0)) }
+        if lower.hasPrefix(".env") { return ("slider.horizontal.3", Theme.yellow) }
+        if lower == ".gitignore" || lower == ".gitattributes" { return (HIcon.branch.symbol, Theme.orange) }
+        if lower.hasPrefix("dockerfile") || lower == ".dockerignore" { return ("shippingbox", Theme.blue) }
         switch (name as NSString).pathExtension.lowercased() {
-        case "ts", "tsx", "mts", "cts": return ("t.square.fill", Color(hex: 0x3B82D6))
-        case "js", "jsx", "mjs", "cjs": return ("j.square.fill", Color(hex: 0xE8C547))
-        case "json", "jsonc": return ("curlybraces", Color(hex: 0xD9A441))
-        case "md", "mdx": return ("m.square.fill", Color(hex: 0x5AA9F0))
-        case "yml", "yaml": return ("list.bullet.rectangle.fill", Color(hex: 0xE05D5D))
-        case "toml", "ini", "conf", "cfg": return ("gearshape.fill", Color(hex: 0x8B95A5))
-        case "swift": return ("swift", Color(hex: 0xF0743E))
-        case "py": return ("p.square.fill", Color(hex: 0x4B8BBE))
-        case "rs": return ("r.square.fill", Color(hex: 0xDE7A4B))
-        case "go": return ("g.square.fill", Color(hex: 0x4FC3D9))
-        case "sh", "bash", "zsh": return ("terminal.fill", Color(hex: 0x7CC36E))
-        case "css", "scss", "sass": return ("paintbrush.fill", Color(hex: 0x5AA9F0))
-        case "html", "htm", "vue", "svelte": return ("chevron.left.forwardslash.chevron.right", Color(hex: 0xE5713E))
-        case "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "heic": return ("photo.fill", Color(hex: 0xB48CF2))
-        case "pdf": return ("doc.richtext.fill", Color(hex: 0xE05D5D))
-        case "lock": return ("lock.fill", Color(hex: 0x8B95A5))
-        case "sql", "prisma": return ("cylinder.fill", Color(hex: 0x5ED3C1))
-        case "txt", "log": return ("doc.plaintext", Color(hex: 0x8B95A5))
-        default: return ("doc.text", Color(hex: 0x6C9BD2))
+        case "ts", "tsx", "mts", "cts": return ("t.square", Theme.blue)
+        case "js", "jsx", "mjs", "cjs": return ("j.square", Theme.yellow)
+        case "json", "jsonc": return ("curlybraces", Theme.yellow)
+        case "md", "mdx": return ("m.square", Theme.cyan)
+        case "yml", "yaml": return ("list.bullet.rectangle", Theme.red)
+        case "toml", "ini", "conf", "cfg": return ("gearshape", Theme.muted)
+        case "swift": return ("swift", Theme.orange)
+        case "py": return ("p.square", Theme.blue)
+        case "rs": return ("r.square", Theme.orange)
+        case "go": return ("g.square", Theme.cyan)
+        case "sh", "bash", "zsh": return ("terminal", Theme.green)
+        case "css", "scss", "sass": return ("paintbrush", Theme.cyan)
+        case "html", "htm", "vue", "svelte": return ("chevron.left.forwardslash.chevron.right", Theme.orange)
+        case "png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "heic": return (HIcon.image.symbol, Theme.purple)
+        case "pdf": return ("doc.richtext", Theme.red)
+        case "lock": return (HIcon.lock.symbol, Theme.muted)
+        case "sql", "prisma": return ("cylinder", Theme.cyan)
+        case "txt", "log": return ("doc.plaintext", Theme.muted)
+        default: return ("doc.text", Theme.muted)
         }
     }
 }

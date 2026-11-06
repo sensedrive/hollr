@@ -35,55 +35,61 @@ struct ToolsView: View {
     var body: some View {
         List {
             Group {
-            if let error { Text(error).foregroundStyle(Theme.warn) }
+            if let error {
+                Label(error, icon: .alert).font(Typo.sm).foregroundStyle(Theme.warn)
+            }
             if !pending.isEmpty {
                 Button {
                     Task { for tool in pending { await run(tool.name) } }
                 } label: {
                     Label(pending.count == 1 ? String(localized: "1 Werkzeug installieren/aktualisieren")
                           : String(localized: "\(pending.count) Werkzeuge installieren/aktualisieren"),
-                          systemImage: "arrow.down.circle.fill")
-                        .frame(maxWidth: .infinity)
+                          systemImage: "arrow.down.circle")
                 }
-                .buttonStyle(.borderedProminent)
-                .listRowBackground(Color.clear)
+                .buttonStyle(.hollr(.primary, fullWidth: true))
+                .listRowBackground(Theme.bg)
                 .listRowInsets(EdgeInsets())
             }
             ForEach(tools) { tool in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
+                VStack(alignment: .leading, spacing: Gap.s) {
+                    HStack(spacing: Gap.m) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(tool.title)
+                            Text(tool.title).font(Typo.md.weight(.semibold))
                             versionLine(tool)
                         }
                         Spacer()
                         if tool.running {
-                            ProgressView()
+                            Spinner(color: Theme.work, size: 16)
+                                .accessibilityLabel("Läuft")
                         } else if !tool.installed {
                             Button("Installieren") { Task { await run(tool.name) } }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.hollr(.primary, small: true))
                         } else if tool.updateAvailable == true {
                             Button("Aktualisieren") { Task { await run(tool.name) } }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.hollr(.primary, small: true))
                         } else {
                             Menu {
-                                Button("Trotzdem neu installieren") { Task { await run(tool.name) } }
+                                Button("Trotzdem neu installieren", systemImage: HIcon.refresh.symbol) { Task { await run(tool.name) } }
                             } label: {
-                                Label("Aktuell", systemImage: "checkmark.seal.fill").font(.subheadline)
-                                    .foregroundStyle(Theme.live)
+                                Label("Aktuell", icon: .check)
+                                    .font(Typo.note)
+                                    .foregroundStyle(Theme.green)
                             }
                         }
                     }
                     if let exit = tool.exit, !tool.running {
-                        Label(exit == 0 ? "Fertig" : "Fehlgeschlagen (Exit \(exit))",
-                              systemImage: exit == 0 ? "checkmark.circle.fill" : "xmark.octagon.fill")
-                            .font(.caption).foregroundStyle(exit == 0 ? Theme.live : Theme.warn)
+                        Label(exit == 0 ? "Fertig" : "Fehlgeschlagen (Exit \(exit))", icon: exit == 0 ? .check : .alert)
+                            .font(Typo.sm).foregroundStyle(exit == 0 ? Theme.green : Theme.red)
                     }
                     if let log = tool.log {
                         let open = tool.running || openLogs.contains(tool.name)
                         if open {
-                            Text(log).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(tool.running ? 6 : 20)
+                            Text(log).font(Typo.monoXS).foregroundStyle(Theme.muted).lineLimit(tool.running ? 6 : 20)
                                 .textSelection(.enabled)
+                                .padding(.vertical, Gap.s).padding(.horizontal, 10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Theme.raised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Theme.border, lineWidth: 1))
                         }
                         if !tool.running {
                             Button(open ? "Protokoll ausblenden" : "Protokoll anzeigen") {
@@ -91,12 +97,12 @@ struct ToolsView: View {
                                     if open { openLogs.remove(tool.name) } else { openLogs.insert(tool.name) }
                                 }
                             }
-                            .font(.caption)
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.hollr(.ghost, small: true))
+                            .padding(.leading, -10)
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Gap.xs)
             }
         }
             .listRowBackground(Theme.card)
@@ -110,7 +116,7 @@ struct ToolsView: View {
                         checking = false
                     }
                 } label: {
-                    if checking { ProgressView() } else { Image(systemName: "arrow.triangle.2.circlepath") }
+                    if checking { Spinner(color: Theme.muted, size: 16) } else { Image(.refresh) }
                 }
                 .accessibilityLabel("Nach Updates suchen")
             }
@@ -136,11 +142,11 @@ struct ToolsView: View {
         HStack(spacing: 4) {
             Text(tool.installed ? (tool.version ?? String(localized: "installiert")) : String(localized: "nicht installiert"))
             if let latest = tool.latest, tool.updateAvailable == true || !tool.installed {
-                Image(systemName: "arrow.right").font(.caption2)
+                Image(systemName: "arrow.right").font(Typo.xs)
                 Text(latest).foregroundStyle(Theme.accent)
             }
         }
-        .font(.caption.monospaced()).foregroundStyle(.secondary)
+        .font(Typo.monoSmall).foregroundStyle(Theme.muted)
     }
 
     private func load() async {

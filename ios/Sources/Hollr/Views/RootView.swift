@@ -73,23 +73,23 @@ struct RootView: View {
             } else {
                 TabView(selection: $tab) {
                     NavigationStack {
-                        DashboardView(onPair: { pairing = PairingRequest() }, onNew: { newChat = true }, sheetAgent: $sheetAgent)
+                        DashboardView(onNew: { newChat = true }, sheetAgent: $sheetAgent)
+                            .safeAreaInset(edge: .bottom) { LiveBar(path: $agentPath, tab: $tab) }
                     }
-                    .safeAreaInset(edge: .bottom) { LiveBar(path: $agentPath, tab: $tab) }
-                    .tabItem { Label("Übersicht", systemImage: "square.grid.2x2") }
+                    .tabItem { TabLabel(title: "Übersicht", icon: .grid) }
                     .tag(RootTab.home)
 
                     spacesTab
-                    .tabItem { Label("Spaces", systemImage: "square.stack.3d.up") }
+                    .tabItem { TabLabel(title: "Spaces", icon: .folder) }
                     .tag(RootTab.spaces)
 
                     agentsTab
                     .safeAreaInset(edge: .bottom) { LiveBar(path: $agentPath, tab: $tab) }
-                    .tabItem { Label("Agents", systemImage: "waveform.circle") }
+                    .tabItem { TabLabel(title: "Agents", icon: .message) }
                     .tag(RootTab.agents)
 
                     NavigationStack { SettingsView(onPair: { pairing = PairingRequest() }) }
-                        .tabItem { Label("Einstellungen", systemImage: "gearshape") }
+                        .tabItem { TabLabel(title: "Einstellungen", icon: .sliders) }
                         .tag(RootTab.settings)
                 }
                 // tapped push notification → open that agent
@@ -127,6 +127,9 @@ struct RootView: View {
                 // after an update: what's new and where it hides (once; again in Settings › Tipps & Tricks)
                 .task {
                     try? await Task.sleep(for: .seconds(1.5))
+                    #if DEBUG
+                    if DemoMode.isOn { return } // screenshots: no tour sheet over the screen
+                    #endif
                     if !store.servers.isEmpty, shared == nil, sheetAgent == nil { tour = Tips.pending() }
                 }
                 .sheet(isPresented: Binding(get: { tour != nil }, set: { if !$0 { tour = nil; Tips.markSeen() } })) {
@@ -333,6 +336,16 @@ enum DebugLaunch {
     }
 }
 #endif
+
+/// Tab bar item with the design's line icon (the tab bar would switch to the filled variant).
+private struct TabLabel: View {
+    let title: LocalizedStringKey
+    let icon: HIcon
+
+    var body: some View {
+        Label { Text(title) } icon: { Image(icon).environment(\.symbolVariants, .none) }
+    }
+}
 
 struct SheetID: Identifiable {
     let id: String

@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 30,
+    version: "0.42.0",
+    date: "06.11.2026",
+    items: [
+      { icon: "📱", text: "iPhone-App im neuen Design: Übersicht mit „Braucht dich“ und „Läuft gerade“ (Alle / Arbeitet / Neu), „neues Ergebnis“ in Blau, flache Werkzeugschritte, Modell und Kontext im Eingabefeld, Linien-Icons, helles Thema „Hollr Hell“" },
+      { icon: "▢", text: "Dialoge, Menüs, App-Sperre, Dateivorschau und Vorlese-Leiste im neuen Overlay-Stil; „Nachfragen“ (⌘⇧K) zu markiertem Text" },
+    ],
+  },
+  {
     build: 29,
     version: "0.41.0",
     date: "05.11.2026",

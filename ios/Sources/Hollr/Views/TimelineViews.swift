@@ -1,37 +1,20 @@
 import SwiftUI
 
-/// omp's TUI colors, taken from the current palette (Settings → Design).
-enum Omp {
-    private static var p: Palette { Palette.current }
-    static var accent: Color { Color(hex: p.orange) }
-    static var success: Color { Color(hex: p.green) }
-    static var error: Color { Color(hex: p.red) }
-    static var warning: Color { Color(hex: p.yellow) }
-    static var muted: Color { Color(hex: p.muted) }
-    static var dim: Color { Color(hex: p.dim) }
-    static var border: Color { Color(hex: p.border) }
-    static var pendingBg: Color { Color(hex: p.accent).opacity(0.08) }
-    static var successBg: Color { Color(hex: p.raised) }
-    static var errorBg: Color { Color(hex: p.red).opacity(0.14) }
-    static var userBg: Color { Color(hex: p.orange).opacity(0.11) }
-    static var code: Color { Color(hex: p.pink) }
-    static var custom: Color { Color(hex: p.purple) }
-    static let mono = Font.system(.footnote, design: .monospaced)
-    static let monoSmall = Font.system(.caption, design: .monospaced)
-
-    static func icon(for tool: String) -> String {
+/// How a tool looks in the chat: its line icon (SF Symbol) and its title.
+private enum ToolLook {
+    static func symbol(for tool: String) -> String {
         switch tool {
-        case "bash": return "❯"
-        case "edit", "write": return "✎"
-        case "read": return "≡"
-        case "grep", "glob": return "⌕"
-        case "task": return "⇶"
-        case "todo": return "☑"
-        case "ask": return "?"
-        case "wait", "hub": return "⚙"
-        case "web_search", "browser": return "◍"
-        case "eval": return "λ"
-        default: return "•"
+        case "bash": return HIcon.terminal.symbol
+        case "edit", "write": return HIcon.pencil.symbol
+        case "read": return HIcon.file.symbol
+        case "grep", "glob", "find": return HIcon.search.symbol
+        case "task": return "square.stack"
+        case "todo": return "checklist"
+        case "ask": return HIcon.help.symbol
+        case "wait", "hub": return "gearshape"
+        case "web_search", "browser": return HIcon.globe.symbol
+        case "eval": return "function"
+        default: return "circle"
         }
     }
 
@@ -43,28 +26,23 @@ enum Omp {
             return tool.prefix(1).uppercased() + tool.dropFirst()
         }
     }
-}
 
-extension Color {
-    init(hex: UInt32) {
-        self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
-    }
-}
-
-/// Braille spinner like omp's status frames.
-struct BrailleSpinner: View {
-    var color: Color = Omp.accent
-    private static let frames = Array("⣾⣽⣻⢿⡿⣟⣯⣷")
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.09)) { context in
-            let i = Int(context.date.timeIntervalSinceReferenceDate / 0.09) % Self.frames.count
-            Text(String(Self.frames[i])).font(Omp.mono).foregroundStyle(color)
+    static func state(_ status: String) -> ToolStepRow.StepState {
+        switch status {
+        case "running": return .running
+        case "error": return .error
+        default: return .done
         }
     }
+
+    /// Paths under the server user's home as `~/…`.
+    static func short(_ path: String?) -> String {
+        guard let path else { return "" }
+        return path.replacingOccurrences(of: #"^/home/[^/]+"#, with: "~", options: .regularExpression)
+    }
 }
 
-// MARK: - Rows (omp's TUI rules: packages/tui/src/chat + tools/*)
+// MARK: - Rows (Sitzung: user bubble, Gedanken, markdown, flat tool steps, ask card)
 
 struct TimelineRow: View, Equatable {
     let item: TimelineItem
@@ -89,39 +67,56 @@ struct TimelineRow: View, Equatable {
             // omp shows no "done" marker, only aborts and errors
             if status != "done" { EndRow(status: status, error: error) }
         case let .info(_, text):
-            Text(text).font(.caption).foregroundStyle(Omp.dim).frame(maxWidth: .infinity)
+            Text(text).font(Typo.sm).foregroundStyle(Theme.dim).frame(maxWidth: .infinity)
         }
     }
 }
 
-/// Full-width tinted block, no prefix (user-message.ts).
+/// Your message: right-aligned bubble on the card fill (sess__user, at most ~92 % wide on the phone).
 struct UserRow: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(Omp.userBg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        HStack(spacing: 0) {
+            Spacer(minLength: Gap.xxl)
+            Text(text)
+                .textSelection(.enabled)
+                .userBubbleStyle()
+        }
     }
 }
 
-/// Italic, muted prose; code blocks dropped like omp's proseOnlyThinking. Long thoughts fold to 3 lines.
+/// One dim line "Gedanken · …"; a tap opens the thought as a muted block with a border on the left.
+/// Code blocks are dropped like omp's proseOnlyThinking.
 struct ThinkingRow: View {
     let text: String
     @State private var open = false
 
     var body: some View {
         let prose = Self.prose(text)
-        Text(prose)
-            .font(.subheadline.italic())
-            .foregroundStyle(Omp.muted)
-            .lineLimit(open ? nil : 3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
-            .contentShape(Rectangle())
-            .onTapGesture { withAnimation(.snappy) { open.toggle() } }
+        Group {
+            if open {
+                VStack(alignment: .leading, spacing: Gap.xs) {
+                    Text("Gedanken ausblenden").font(Typo.sm).foregroundStyle(Theme.dim)
+                    Text(prose)
+                        .font(Typo.md)
+                        .foregroundStyle(Theme.muted)
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
+                }
+                .padding(.vertical, 2).padding(.leading, Gap.m)
+                .overlay(alignment: .leading) { Rectangle().fill(Theme.border).frame(width: 2) }
+            } else {
+                Text("Gedanken · \(prose.replacingOccurrences(of: "\n", with: " "))")
+                    .font(Typo.note)
+                    .foregroundStyle(Theme.dim)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.snappy) { open.toggle() } }
+        .accessibilityAddTraits(.isButton)
     }
 
     static func prose(_ text: String) -> String {
@@ -139,8 +134,8 @@ struct ThinkingRow: View {
     }
 }
 
-/// Renders one run of tool calls the way omp does: each call on its own,
-/// read/grep/glob as compact lines (consecutive reads merged), bash & edits as framed cards.
+/// One run of tool calls as flat steps (molecule ToolCard): consecutive reads merged into one step,
+/// output, matches and errors fold open under their step.
 struct ToolsBlock: View {
     let calls: [ToolCall]
 
@@ -179,50 +174,103 @@ struct ToolsBlock: View {
     }
 
     var body: some View {
-        if folds {
-            Button { withAnimation(.easeInOut(duration: 0.2)) { expanded = true } } label: { summary }
-                .buttonStyle(.plain)
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                if compact && expanded {
-                    Button { withAnimation(.easeInOut(duration: 0.2)) { expanded = false } } label: {
-                        Label("Zuklappen", systemImage: "chevron.up").font(Omp.monoSmall).foregroundStyle(Omp.dim)
-                    }
+        Group {
+            if folds {
+                Button { withAnimation(.easeInOut(duration: 0.2)) { expanded = true } } label: { summary }
                     .buttonStyle(.plain)
-                }
-                ForEach(pieces) { piece in
-                    switch piece {
-                    case let .reads(group): ReadLines(calls: group)
-                    case let .call(call): ToolView(call: call)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    if compact && expanded {
+                        Button { withAnimation(.easeInOut(duration: 0.2)) { expanded = false } } label: {
+                            ToolStepRow(symbol: "chevron.up", name: String(localized: "Zuklappen"))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ForEach(pieces) { piece in
+                        switch piece {
+                        case let .reads(group): ReadStep(calls: group)
+                        case let .call(call): ToolView(call: call)
+                        }
                     }
                 }
             }
         }
+        // the step icons line up with the text above (sess__tools)
+        .padding(.horizontal, -Gap.s)
     }
 
-    /// "12 Werkzeuge · 3 Dateien geändert +40 −12 ›"
+    /// "12 Werkzeuge · 3 Dateien geändert +40 −12" as one flat step.
     private var summary: some View {
         let edits = calls.filter { $0.name == "edit" || $0.name == "write" }
         let files = Set(edits.compactMap { $0.path ?? $0.detail }).count
         let add = calls.compactMap(\.add).reduce(0, +), del = calls.compactMap(\.del).reduce(0, +)
-        return HStack(spacing: 8) {
-            Image(systemName: "wrench.and.screwdriver").foregroundStyle(Omp.dim)
-            Text("\(calls.count) Werkzeuge").foregroundStyle(.secondary)
+        return HStack(spacing: Gap.s) {
+            Image(systemName: "wrench.and.screwdriver")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.dim)
+                .frame(width: 16)
+            Text("\(calls.count) Werkzeuge").foregroundStyle(Theme.fg).lineLimit(1)
             if files > 0 {
                 Text("· \(files) \(files == 1 ? String(localized: "Datei") : String(localized: "Dateien")) geändert")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.dim).lineLimit(1)
             }
+            Spacer(minLength: Gap.xs)
             if add + del > 0 {
-                Text("+\(add)").foregroundStyle(Omp.success)
-                Text("−\(del)").foregroundStyle(Omp.error)
+                Text("+\(add)").foregroundStyle(Theme.green)
+                Text("−\(del)").foregroundStyle(Theme.red)
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.down").font(.caption2).foregroundStyle(Omp.dim)
+            Image(systemName: HIcon.chevronRight.symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.dim)
         }
-        .font(Omp.monoSmall)
-        .padding(.vertical, 6).padding(.horizontal, 10)
-        .background(Omp.dim.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .font(Typo.monoSmall)
+        .padding(.vertical, 5).padding(.horizontal, Gap.s)
+        .frame(minHeight: 30)
         .contentShape(Rectangle())
+    }
+}
+
+/// A flat step that opens its body (output, matches, error) on tap.
+private struct ToolStep<Content: View>: View {
+    let symbol: String
+    let name: String
+    var detail: String? = nil
+    var meta: String? = nil
+    var state: ToolStepRow.StepState = .done
+    /// there is something to open
+    var expandable = false
+    @ViewBuilder var content: () -> Content
+    @State private var open: Bool
+
+    init(symbol: String, name: String, detail: String? = nil, meta: String? = nil, state: ToolStepRow.StepState = .done,
+         expandable: Bool = false, startsOpen: Bool = false, @ViewBuilder content: @escaping () -> Content) {
+        self.symbol = symbol
+        self.name = name
+        self.detail = detail
+        self.meta = meta
+        self.state = state
+        self.expandable = expandable
+        self.content = content
+        _open = State(initialValue: startsOpen)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if expandable {
+                Button { withAnimation(.snappy) { open.toggle() } } label: { row(expanded: open) }
+                    .buttonStyle(.plain)
+                if open {
+                    VStack(alignment: .leading, spacing: 6) { content() }.toolBodyStyle()
+                }
+            } else {
+                row(expanded: nil)
+            }
+        }
+    }
+
+    private func row(expanded: Bool?) -> some View {
+        ToolStepRow(symbol: state == .error ? HIcon.alert.symbol : symbol, name: name, detail: detail, meta: meta,
+                    state: state, expanded: expanded)
     }
 }
 
@@ -231,236 +279,181 @@ private struct ToolView: View {
 
     var body: some View {
         switch call.name {
-        case "bash", "eval": BashCard(call: call)
-        case "grep", "glob", "find", "todo", "wait": CompactToolLine(call: call)
-        case "edit", "write", "task", "web_search": HeaderCard(call: call)
+        case "bash", "eval": BashStep(call: call)
+        case "grep", "glob", "find", "todo", "wait": CompactStep(call: call)
+        case "edit", "write", "task", "web_search": HeaderStep(call: call)
         default:
-            if call.name.hasPrefix("mcp__") { CompactToolLine(call: call) } else { GenericTool(call: call) }
+            if call.name.hasPrefix("mcp__") { CompactStep(call: call) } else { GenericStep(call: call) }
         }
     }
 }
 
-/// Status glyph: spinner while running, ✘ on error, else the given symbol.
-private struct StatusGlyph: View {
-    let call: ToolCall
-    var ok: String = "✔"
-    var okColor: Color = Omp.success
-
-    var body: some View {
-        switch call.status {
-        case "running": BrailleSpinner()
-        case "error": Text("✘").foregroundStyle(Omp.error)
-        default: Text(ok).foregroundStyle(okColor)
-        }
-    }
+/// The error text under a failed step.
+private struct ErrorText: View {
+    let text: String
+    var body: some View { Text(text).foregroundStyle(Theme.red).lineLimit(8).textSelection(.enabled) }
 }
 
-/// `● Read path:sel` or `• Read (3)` with a tree of paths.
-private struct ReadLines: View {
+/// `Read path` – several reads in a row as one step with the paths in its body.
+private struct ReadStep: View {
     let calls: [ToolCall]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if calls.count == 1, let call = calls.first {
-                HStack(spacing: 6) {
-                    StatusGlyph(call: call, ok: "●", okColor: .primary.opacity(0.85))
-                    Text("Read").bold()
-                    Text(Self.short(call.detail)).foregroundStyle(Omp.accent).lineLimit(1).truncationMode(.middle)
-                }
-            } else {
-                HStack(spacing: 6) {
-                    if let running = calls.first(where: { $0.status == "running" }) {
-                        StatusGlyph(call: running)
-                    } else {
-                        Text("•").foregroundStyle(calls.contains { $0.status == "error" } ? Omp.error : .primary)
-                    }
-                    Text("Read").bold()
-                    Text("(\(calls.count))").foregroundStyle(Omp.dim)
-                }
-                ForEach(Array(calls.enumerated()), id: \.element.id) { index, call in
-                    HStack(spacing: 6) {
-                        Text(index == calls.count - 1 ? "└─" : "├─").foregroundStyle(Omp.dim)
-                        Text(Self.short(call.detail))
-                            .foregroundStyle(call.status == "error" ? Omp.error : Omp.accent)
+        let state: ToolStepRow.StepState = calls.contains { $0.status == "running" } ? .running
+            : calls.contains { $0.status == "error" } ? .error : .done
+        if calls.count == 1, let call = calls.first {
+            let error = call.status == "error" ? call.result : nil
+            ToolStep(symbol: ToolLook.symbol(for: "read"), name: "Read", detail: ToolLook.short(call.detail),
+                     state: state, expandable: error != nil, startsOpen: error != nil) {
+                if let error { ErrorText(text: error) }
+            }
+        } else {
+            ToolStep(symbol: ToolLook.symbol(for: "read"), name: "Read",
+                     detail: String(localized: "\(calls.count) Dateien"), state: state,
+                     expandable: true, startsOpen: state == .error) {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(calls) { call in
+                        Text(ToolLook.short(call.detail))
+                            .foregroundStyle(call.status == "error" ? Theme.red : Theme.muted)
                             .lineLimit(1).truncationMode(.middle)
                     }
-                    .padding(.leading, 14)
                 }
             }
         }
-        .font(Omp.monoSmall)
-        .padding(.horizontal, 4)
-    }
-
-    static func short(_ path: String?) -> String {
-        guard let path else { return "" }
-        return path.replacingOccurrences(of: #"^/home/[^/]+"#, with: "~", options: .regularExpression)
     }
 }
 
-/// `⌕ Grep: pattern 6 Treffer · in path` – one unframed line (+ error text).
-private struct CompactToolLine: View {
+/// `Grep pattern · 6 Treffer` – the scope and errors in the body.
+private struct CompactStep: View {
     let call: ToolCall
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                StatusGlyph(call: call, ok: Omp.icon(for: call.name), okColor: Omp.muted)
-                (Text(Omp.title(for: call.name)).bold().foregroundColor(.primary)
-                    + Text(call.detail.map { ": \($0)" } ?? "").foregroundColor(Omp.muted)
-                    + Text(meta).foregroundColor(Omp.dim))
-                    .lineLimit(2)
-            }
-            if call.status == "error", let result = call.result {
-                Text(result).foregroundStyle(Omp.error).lineLimit(3).padding(.leading, 18)
-            }
-        }
-        .font(Omp.monoSmall)
-        .padding(.horizontal, 4)
-    }
-
-    private var meta: String {
-        var parts: [String] = []
-        if call.status != "error", let result = call.result { parts.append(result) }
-        if let path = call.path { parts.append("in " + ReadLines.short(path)) }
-        return parts.isEmpty ? "" : "  " + parts.joined(separator: " · ")
-    }
-}
-
-/// Rounded frame tinted by state, like omp's output-block.
-private struct ToolFrame<Content: View>: View {
-    let call: ToolCall
-    var muted = false
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) { content }
-            .font(Omp.monoSmall)
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(border, lineWidth: 1))
-    }
-
-    private var background: Color {
-        switch call.status {
-        case "running": return Omp.pendingBg
-        case "error": return Omp.errorBg
-        default: return Omp.successBg
-        }
-    }
-
-    private var border: Color {
-        switch call.status {
-        case "running": return Omp.accent.opacity(0.7)
-        case "error": return Omp.error.opacity(0.8)
-        default: return muted ? Omp.border.opacity(0.6) : Omp.dim.opacity(0.7)
+        let error = call.status == "error" ? call.result : nil
+        let detail = [call.detail, error == nil ? call.result : nil].compactMap { $0 }.joined(separator: " · ")
+        ToolStep(symbol: ToolLook.symbol(for: call.name), name: ToolLook.title(for: call.name),
+                 detail: detail, state: ToolLook.state(call.status),
+                 expandable: call.path != nil || error != nil, startsOpen: error != nil) {
+            if let path = call.path { Text("in \(ToolLook.short(path))").foregroundStyle(Theme.muted) }
+            if let error { ErrorText(text: error) }
         }
     }
 }
 
-/// bash: no header, `$ command`, output tail, `⟨Wall: 2.93s⟩`.
-private struct BashCard: View {
+/// bash / eval: the command, its time or exit code; the output tail in the body (diffs tinted).
+private struct BashStep: View {
     let call: ToolCall
-    @State private var expanded = false
-
-    private var shown: Int { expanded ? 12 : 4 }
 
     var body: some View {
-        ToolFrame(call: call) {
-            if call.name == "eval" {
-                HStack(spacing: 6) {
-                    StatusGlyph(call: call, ok: "•", okColor: Omp.accent)
-                    Text(call.detail ?? "Eval").bold().lineLimit(1)
-                }
-            } else {
-                (Text("$ ").foregroundColor(Omp.dim) + Text(call.detail ?? "").foregroundColor(.primary))
-                    .lineLimit(expanded ? 12 : 3)
+        let isEval = call.name == "eval"
+        let hasOut = !(call.out ?? []).isEmpty
+        let failed = call.status == "error"
+        ToolStep(symbol: ToolLook.symbol(for: call.name), name: isEval ? ToolLook.title(for: "eval") : "Bash",
+                 detail: call.detail, meta: meta, state: ToolLook.state(call.status),
+                 expandable: true, startsOpen: call.status == "running" || failed) {
+            if !isEval, let command = call.detail {
+                (Text("$ ").foregroundColor(Theme.dim) + Text(command).foregroundColor(Theme.fg))
+                    .textSelection(.enabled)
             }
             if let out = call.out, !out.isEmpty {
-                let tail = Array(out.suffix(shown))
-                let hidden = (call.outTotal ?? out.count) - tail.count
-                Divider().overlay(Omp.border)
+                let hidden = (call.outTotal ?? out.count) - out.count
                 if hidden > 0 {
-                    Text("… (\(hidden) earlier lines, showing \(tail.count) of \(call.outTotal ?? out.count))")
-                        .foregroundStyle(Omp.dim)
+                    Text("… (\(hidden) earlier lines, showing \(out.count) of \(call.outTotal ?? out.count))")
+                        .foregroundStyle(Theme.dim)
                 }
-                Text(tail.joined(separator: "\n"))
-                    .foregroundStyle(call.status == "error" ? Omp.error : Omp.muted)
-                    .lineLimit(expanded ? nil : shown * 2)
-                    .textSelection(.enabled)
-            } else if call.status == "error", let result = call.result {
-                Text(result).foregroundStyle(Omp.error).lineLimit(4)
+                OutputLines(lines: out, failed: failed)
+            } else if failed, let result = call.result {
+                ErrorText(text: result)
             }
-            footer
+            if call.status == "running", !hasOut {
+                Text("läuft").foregroundStyle(Theme.muted)
+            }
+            if !footer.isEmpty {
+                Text(footer).foregroundStyle(call.exit != nil ? Theme.red : Theme.dim)
+            }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
     }
 
-    @ViewBuilder private var footer: some View {
-        if call.status == "running" {
-            HStack(spacing: 6) { BrailleSpinner(); Text("läuft").foregroundStyle(Omp.muted) }
+    private var meta: String? {
+        if let exit = call.exit { return "Exit \(exit)" }
+        return call.ms.map { Durations.format(ms: $0) }
+    }
+
+    private var footer: String {
+        [
+            call.ms.map { "Wall: " + String(format: "%.2fs", $0 / 1000) },
+            call.exit.map { "Exit: \($0)" },
+            call.bg.map { "Backgrounded: \($0)" },
+        ].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// Command output; a unified diff (git diff …) gets the green/red line washes of tool-card__dl.
+private struct OutputLines: View {
+    let lines: [String]
+    let failed: Bool
+
+    private var isDiff: Bool { lines.contains { $0.hasPrefix("@@") || $0.hasPrefix("diff --git") } }
+
+    var body: some View {
+        if isDiff {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    let kind = Self.kind(line)
+                    Text(line.isEmpty ? " " : line)
+                        .foregroundStyle(kind == .add ? Theme.green : kind == .del ? Theme.red : Theme.dim)
+                        .lineLimit(1)
+                        .padding(.horizontal, Gap.s)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(kind == .add ? Theme.green.opacity(0.12) : kind == .del ? Theme.red.opacity(0.12) : .clear)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+            .textSelection(.enabled)
         } else {
-            let parts = [
-                call.ms.map { "Wall: " + String(format: "%.2fs", $0 / 1000) },
-                call.exit.map { "Exit: \($0)" },
-                call.bg.map { "Backgrounded: \($0)" },
-            ].compactMap { $0 }
-            if !parts.isEmpty {
-                Text("⟨\(parts.joined(separator: " | "))⟩").foregroundStyle(call.exit != nil ? Omp.error : Omp.dim)
-            }
+            Text(lines.joined(separator: "\n"))
+                .foregroundStyle(failed ? Theme.red : Theme.muted)
+                .textSelection(.enabled)
         }
+    }
+
+    private enum Kind { case add, del, ctx }
+
+    private static func kind(_ line: String) -> Kind {
+        if line.hasPrefix("+"), !line.hasPrefix("+++") { return .add }
+        if line.hasPrefix("-"), !line.hasPrefix("---") { return .del }
+        return .ctx
     }
 }
 
-/// edit/write/task/web: framed header line only (`✎ Edit: path ⟦+3/-1⟧`).
-private struct HeaderCard: View {
+/// edit / write / task / web: `Edit path +3 −1`.
+private struct HeaderStep: View {
     let call: ToolCall
 
     var body: some View {
-        ToolFrame(call: call, muted: true) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                StatusGlyph(call: call, ok: Omp.icon(for: call.name), okColor: Omp.accent)
-                (Text(Omp.title(for: call.name)).bold().foregroundColor(.primary)
-                    + Text(call.detail.map { ": " + ReadLines.short($0) } ?? "").foregroundColor(Omp.accent))
-                    .lineLimit(2).truncationMode(.middle)
-                Spacer(minLength: 4)
-                if (call.add ?? 0) + (call.del ?? 0) > 0 {
-                    (Text("⟦").foregroundColor(Omp.dim) + Text("+\(call.add ?? 0)").foregroundColor(Omp.success)
-                        + Text("/").foregroundColor(Omp.dim) + Text("-\(call.del ?? 0)").foregroundColor(Omp.error)
-                        + Text("⟧").foregroundColor(Omp.dim))
-                }
-            }
-            if call.status == "error", let result = call.result {
-                Text(result).foregroundStyle(Omp.error).lineLimit(4)
-            }
+        let error = call.status == "error" ? call.result : nil
+        let changed = (call.add ?? 0) + (call.del ?? 0) > 0
+        ToolStep(symbol: ToolLook.symbol(for: call.name), name: ToolLook.title(for: call.name),
+                 detail: ToolLook.short(call.detail), meta: changed ? "+\(call.add ?? 0) −\(call.del ?? 0)" : nil,
+                 state: ToolLook.state(call.status), expandable: error != nil, startsOpen: error != nil) {
+            if let error { ErrorText(text: error) }
         }
     }
 }
 
-/// Fallback: `• Name` and ` └─ args` dim.
-private struct GenericTool: View {
+/// Any other tool: its name and arguments.
+private struct GenericStep: View {
     let call: ToolCall
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                StatusGlyph(call: call, ok: "•", okColor: .primary)
-                Text(Omp.title(for: call.name)).bold()
-            }
-            if let detail = call.detail {
-                Text(" └─ \(detail)").foregroundStyle(Omp.dim).lineLimit(1).truncationMode(.tail)
-            }
-            if call.status == "error", let result = call.result {
-                Text(result).foregroundStyle(Omp.error).lineLimit(3)
-            }
+        let error = call.status == "error" ? call.result : nil
+        ToolStep(symbol: ToolLook.symbol(for: call.name), name: ToolLook.title(for: call.name), detail: call.detail,
+                 state: ToolLook.state(call.status), expandable: error != nil, startsOpen: error != nil) {
+            if let error { ErrorText(text: error) }
         }
-        .font(Omp.monoSmall)
-        .padding(.horizontal, 4)
     }
 }
 
+/// omp's question (molecule AskCard): orange head, numbered options, own answer, send.
 struct AskCard: View {
     let id: String
     let questions: [AskQuestion]
@@ -491,81 +484,70 @@ struct AskCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("?").font(Omp.mono.weight(.bold)).foregroundStyle(Omp.accent)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: Gap.s) {
+                IconView(.help, size: 14)
                 Text(pending ? String(localized: "Ask – omp wartet auf dich") : String(localized: "Ask"))
-                    .font(Omp.monoSmall.weight(.semibold)).foregroundStyle(pending ? Omp.warning : .primary)
                 if questions.count == 1, let header = questions.first?.header {
-                    Text("· \(header)").font(Omp.monoSmall).foregroundStyle(.secondary).lineLimit(1)
+                    Text("· \(header)").lineLimit(1)
                 }
             }
+            .font(Typo.sm.weight(.semibold))
+            .foregroundStyle(Theme.orange)
             ForEach(Array(questions.enumerated()), id: \.offset) { qi, q in
                 questionBlock(qi, q)
             }
             if pending && !sent {
                 if questions.answeredByTap {
-                    Label("Eigene Antwort? Einfach unten eintippen.", systemImage: "pencil")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Label("Eigene Antwort? Einfach unten eintippen.", icon: .pencil)
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
                 } else {
-                    Button { submit() } label: {
-                        HStack(spacing: 6) {
-                            if sending { ProgressView().controlSize(.small) }
-                            Text("Antworten senden")
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button { submit() } label: {
+                            HStack(spacing: 6) {
+                                if sending { Spinner(color: Theme.onAccent, size: 12) }
+                                Text("Antworten senden")
+                            }
                         }
-                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.hollr(.primary, small: true))
+                        .disabled(!complete || sending)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Omp.accent)
-                    .disabled(!complete || sending)
                 }
             }
             if let answer {
-                Text("✔ \(answer)").font(Omp.monoSmall).foregroundStyle(answer == "abgebrochen" ? Omp.warning : Omp.success)
+                Label(answer, icon: .check)
+                    .font(Typo.sm)
+                    .foregroundStyle(answer == "abgebrochen" ? Theme.yellow : Theme.green)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Omp.successBg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(pending ? Omp.warning.opacity(0.7) : Omp.border.opacity(0.6)))
+        .askCardStyle()
     }
 
     @ViewBuilder private func questionBlock(_ qi: Int, _ q: AskQuestion) -> some View {
         if questions.count > 1 {
             HStack(spacing: 6) {
-                Text("\(qi + 1).").font(Omp.monoSmall.weight(.bold)).foregroundStyle(Omp.accent)
-                if let header = q.header { Text(header).font(Omp.monoSmall).foregroundStyle(.secondary).lineLimit(1) }
-                if q.multi { Text("mehrere möglich").font(.caption2).foregroundStyle(.secondary) }
+                Text("\(qi + 1).").font(Typo.monoSmall.weight(.bold)).foregroundStyle(Theme.orange)
+                if let header = q.header { Text(header).font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(1) }
+                if q.multi { Text("mehrere möglich").font(Typo.xs).foregroundStyle(Theme.dim) }
             }
             .padding(.top, qi == 0 ? 0 : 6)
         } else if q.multi {
-            Text("mehrere möglich").font(.caption2).foregroundStyle(.secondary)
+            Text("mehrere möglich").font(Typo.xs).foregroundStyle(Theme.dim)
         }
-        Text(q.question).font(.body)
-        ForEach(Array(q.options.enumerated()), id: \.offset) { index, option in
-            let chosen = picks[qi].options.contains(index) || answer?.contains(option) == true
-            Button { tap(qi, index) } label: {
-                HStack(spacing: 8) {
-                    Text(q.multi ? (chosen ? "☑" : "☐") : (chosen ? "◉" : "○")).foregroundStyle(Omp.accent)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(option).foregroundStyle(.primary).multilineTextAlignment(.leading)
-                            if index == q.recommended { RecommendedBadge() }
-                        }
-                        // omp's explanation of the option (only while you still have to choose)
-                        if open, let text = q.description(index) {
-                            Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
-                        }
-                    }
-                    Spacer(minLength: 0)
+        Text(q.question).font(Typo.md.weight(.semibold))
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(q.options.enumerated()), id: \.offset) { index, option in
+                let chosen = picks[qi].options.contains(index) || answer?.contains(option) == true
+                Button { tap(qi, index) } label: {
+                    // omp's explanation of the option (only while you still have to choose)
+                    OptionRow(index: index, label: option, detail: open ? q.description(index) : nil,
+                              recommended: index == q.recommended, selected: chosen)
                 }
-                .font(.subheadline)
-                .padding(.vertical, 8).padding(.horizontal, 10)
-                .background(open ? Omp.pendingBg : chosen ? Omp.pendingBg.opacity(0.5) : .clear,
-                            in: RoundedRectangle(cornerRadius: 8))
+                .buttonStyle(.plain)
+                .disabled(!open)
+                .accessibilityAddTraits(chosen ? .isSelected : [])
             }
-            .buttonStyle(.plain)
-            .disabled(!open)
         }
         if open && !questions.answeredByTap {
             // omp's own last row "Other (type your own)"
@@ -573,10 +555,8 @@ struct AskCard: View {
                 picks[qi].text = text
                 if !q.multi && !text.trimmingCharacters(in: .whitespaces).isEmpty { picks[qi].options = [] }
             }), axis: .vertical)
-                .font(.subheadline)
                 .lineLimit(1...3)
-                .padding(.vertical, 8).padding(.horizontal, 10)
-                .background(Omp.pendingBg, in: RoundedRectangle(cornerRadius: 8))
+                .fieldStyle()
         }
     }
 
@@ -610,20 +590,21 @@ struct EndRow: View {
     var body: some View {
         Group {
             if status == "aborted" {
-                Text("⏹ Abgebrochen").foregroundStyle(Omp.warning)
+                Label("Abgebrochen", icon: .stop).foregroundStyle(Theme.yellow)
             } else {
-                Text("Error: \(error ?? "unbekannt")").foregroundStyle(Omp.error).lineLimit(8)
+                Label { Text("Error: \(error ?? "unbekannt")").lineLimit(8) } icon: { Image(HIcon.alert) }
+                    .foregroundStyle(Theme.red)
             }
         }
-        .font(Omp.monoSmall)
+        .font(Typo.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
     }
 }
 
-// MARK: - Above the editor (interactive-mode.ts: todo HUD, working row)
+// MARK: - Composer top (organism Hud): what's running, background jobs, the TODO
 
-/// omp's pinned area: TODO tree, background jobs and the working row with the current intent.
+/// omp's pinned area inside the composer: the working row with the current intent, background jobs and
+/// the current TODO task (opens to the whole list).
 struct AgentHUD: View {
     let timeline: Timeline
     @State private var todoOpen = false
@@ -638,56 +619,51 @@ struct AgentHUD: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let phase = Self.openPhase(timeline) { todo(phase) }
+        VStack(alignment: .leading, spacing: Gap.xs) {
             if !timeline.jobs.isEmpty || timeline.running { activity }
+            if let phase = Self.openPhase(timeline) { todo(phase) }
         }
-        .font(Omp.monoSmall)
-        .padding(.horizontal, 6)
+        .font(Typo.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func todo(_ active: TodoPhase) -> some View {
         let phases = timeline.todo ?? []
         let numbered = phases.count > 1
+        let current = active.tasks.first { $0.status == "in_progress" } ?? active.tasks.first { !$0.isClosed }
         return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text("TODO").bold().foregroundStyle(Omp.accent)
-                if !todoOpen {
-                    Text(name(active, in: phases, numbered: numbered)).foregroundStyle(Omp.accent).lineLimit(1)
-                    Text("· \(active.done)/\(active.tasks.count)").foregroundStyle(Omp.dim)
+            HStack(spacing: Gap.s) {
+                IconView(.list, size: 13).foregroundStyle(Theme.dim).frame(width: 16)
+                Text(current?.content ?? active.name).foregroundStyle(Theme.fg).lineLimit(1)
+                Spacer(minLength: Gap.xs)
+                HStack(spacing: Gap.xs) {
+                    Text("\(name(active, in: phases, numbered: numbered)) \(active.done)/\(active.tasks.count)")
+                        .monospacedDigit().lineLimit(1)
+                    IconView(.chevronRight, size: 11).rotationEffect(.degrees(todoOpen ? 90 : 0))
                 }
-                Spacer(minLength: 0)
-                Image(systemName: todoOpen ? "chevron.down" : "chevron.up").font(.caption2).foregroundStyle(Omp.dim)
+                .foregroundStyle(Theme.dim)
             }
             if todoOpen {
-                ForEach(phases) { phase in
-                    let isActive = phase.name == active.name
-                    HStack(spacing: 6) {
-                        Text("├─").foregroundStyle(Omp.dim)
-                        Text(name(phase, in: phases, numbered: numbered))
-                            .fontWeight(isActive ? .bold : .regular)
-                            .foregroundStyle(isActive ? Omp.accent : Omp.muted)
-                        Text("· \(phase.done)/\(phase.tasks.count)").foregroundStyle(Omp.dim)
-                    }
-                    if isActive {
-                        ForEach(phase.tasks) { task in
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text("│ ").foregroundStyle(Omp.dim)
-                                TodoRow(task: task)
-                            }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(phases) { phase in
+                        let isActive = phase.name == active.name
+                        if numbered {
+                            Text("\(name(phase, in: phases, numbered: numbered)) · \(phase.done)/\(phase.tasks.count)")
+                                .fontWeight(isActive ? .semibold : .regular)
+                                .foregroundStyle(isActive ? Theme.fg : Theme.dim)
+                        }
+                        if isActive {
+                            ForEach(phase.tasks) { task in TodoRow(task: task) }
                         }
                     }
                 }
-                Text("└─────").foregroundStyle(Omp.dim)
-            } else {
-                ForEach(active.tasks.filter { $0.status == "in_progress" }.prefix(2)) { task in
-                    TodoRow(task: task).padding(.leading, 4)
-                }
+                .padding(.leading, Gap.xl)
+                .padding(.vertical, 2)
             }
         }
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(.snappy) { todoOpen.toggle() } }
+        .accessibilityAddTraits(.isButton)
     }
 
     private func name(_ phase: TodoPhase, in phases: [TodoPhase], numbered: Bool) -> String {
@@ -698,25 +674,26 @@ struct AgentHUD: View {
 
     private var activity: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(timeline.jobs) { job in
-                    HStack(spacing: 6) {
-                        Text("⚙").foregroundStyle(Omp.accent)
-                        Text(job.id).foregroundStyle(Omp.accent)
-                        Text(job.label).foregroundStyle(Omp.dim).lineLimit(1).truncationMode(.middle)
-                        Spacer(minLength: 4)
-                        Text(Durations.since(job.startedAt, now: context.date)).foregroundStyle(Omp.dim)
+            VStack(alignment: .leading, spacing: Gap.xs) {
+                if timeline.running {
+                    HStack(spacing: Gap.s) {
+                        Spinner(color: Theme.work, size: 13).frame(width: 16)
+                        Text(timeline.waiting ? String(localized: "wartet auf Hintergrund-Jobs") : timeline.workingLabel ?? String(localized: "Working…"))
+                            .foregroundStyle(Theme.muted).lineLimit(1)
+                        Spacer(minLength: Gap.xs)
+                        if let start = timeline.turnStartedAt {
+                            Text(Durations.since(start, now: context.date)).monospacedDigit().foregroundStyle(Theme.dim)
+                        }
                     }
                 }
-                if timeline.running {
-                    HStack(spacing: 6) {
-                        BrailleSpinner()
-                        Text(timeline.waiting ? String(localized: "wartet auf Hintergrund-Jobs") : timeline.workingLabel ?? String(localized: "Working…"))
-                            .foregroundStyle(Omp.accent).lineLimit(1)
-                        Spacer(minLength: 4)
-                        if let start = timeline.turnStartedAt {
-                            Text(Durations.since(start, now: context.date)).foregroundStyle(Omp.dim)
-                        }
+                ForEach(timeline.jobs) { job in
+                    HStack(spacing: Gap.s) {
+                        Image(systemName: "gearshape").font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.dim).frame(width: 16)
+                        Text(job.id).font(Typo.monoSmall).foregroundStyle(Theme.muted)
+                        Text(job.label).foregroundStyle(Theme.dim).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: Gap.xs)
+                        Text(Durations.since(job.startedAt, now: context.date)).monospacedDigit().foregroundStyle(Theme.dim)
                     }
                 }
             }
@@ -724,40 +701,40 @@ struct AgentHUD: View {
     }
 }
 
+/// One TODO task (hud__row): a small box, ticked when done; the running one in the work colour.
 struct TodoRow: View {
     let task: TodoTask
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(task.status == "completed" ? "☑" : "☐").foregroundStyle(color)
+        HStack(alignment: .firstTextBaseline, spacing: Gap.s) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(boxColor, lineWidth: 1.5)
+                .frame(width: 13, height: 13)
+                .overlay { if task.status == "completed" { IconView(.check, size: 9).foregroundStyle(Theme.dim) } }
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
             Text(task.content + (task.status == "blocked" ? " (blocked)" : ""))
-                .strikethrough(task.status == "completed" || task.status == "abandoned", color: color)
+                .strikethrough(task.isClosed, color: color)
                 .foregroundStyle(color)
                 .lineLimit(2)
         }
-        .font(Omp.monoSmall)
+        .font(Typo.sm)
     }
 
     private var color: Color {
         switch task.status {
-        case "completed": return Omp.success
-        case "in_progress": return Omp.accent
-        case "abandoned": return Omp.error
-        case "blocked": return Omp.warning
-        default: return Omp.dim
+        case "completed": return Theme.dim
+        case "in_progress": return Theme.fg
+        case "abandoned": return Theme.red
+        case "blocked": return Theme.warn
+        default: return Theme.muted
         }
     }
-}
 
-/// omp's "(Recommended)" marker.
-struct RecommendedBadge: View {
-    var body: some View {
-        Text("Empfohlen")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Omp.accent.opacity(0.18), in: Capsule())
-            .foregroundStyle(Omp.accent)
-            .fixedSize()
-            .accessibilityLabel("Empfohlen")
+    private var boxColor: Color {
+        switch task.status {
+        case "in_progress": return Theme.work
+        case "blocked": return Theme.warn
+        default: return Theme.dim
+        }
     }
 }

@@ -187,6 +187,14 @@ struct TerminalScreen: View {
     }
 }
 
+/// The terminal emulator's own canvas (xterm.js draws on it, sess__term): a fixed near-black whatever the
+/// palette, like a real terminal window – the only colours here that don't come from `Theme`.
+enum TerminalCanvas {
+    static var uiBackground: UIColor { UIColor(red: 0.06, green: 0.07, blue: 0.09, alpha: 1) }
+    static var uiText: UIColor { UIColor(red: 0.84, green: 0.85, blue: 0.88, alpha: 1) }
+    static var background: Color { Color(uiColor: uiBackground) }
+}
+
 /// The terminal itself – full screen or next to the chat (iPhone in landscape): the session's pane,
 /// or the phone's own shell in the same folder (sized to the phone, scrolls).
 struct TerminalPanel: View {
@@ -196,16 +204,18 @@ struct TerminalPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Terminal", selection: $mode) {
-                Text("Session").tag(TerminalSession.Mode.pane.rawValue)
-                Text("Eigene Shell").tag(TerminalSession.Mode.shell.rawValue)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 8).padding(.vertical, 5)
+            Segmented(label: String(localized: "Terminal"),
+                      options: [(value: TerminalSession.Mode.pane.rawValue, title: String(localized: "Session")),
+                                (value: TerminalSession.Mode.shell.rawValue, title: String(localized: "Eigene Shell"))],
+                      selection: $mode)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Gap.s).padding(.vertical, 6)
+                .background(Theme.bg)
+                .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
             TerminalBody(ref: ref, mode: TerminalSession.Mode(rawValue: mode) ?? .pane, showsToolbar: showsToolbar)
                 .id(mode)
         }
-        .background(Color(red: 0.06, green: 0.07, blue: 0.09))
+        .background(TerminalCanvas.background)
     }
 }
 
@@ -268,36 +278,53 @@ private struct TerminalBody: View {
                                 })
                 switch session.phase {
                 case .connecting:
-                    ProgressView("Verbinde …").tint(.white).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    HStack(spacing: Gap.s) {
+                        Spinner(color: Theme.accent)
+                        Text("Verbinde …")
+                    }
+                    .font(Typo.note)
+                    .foregroundStyle(Theme.fg)
+                    .padding(.horizontal, Gap.m).padding(.vertical, Gap.s)
+                    .background(Theme.side, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case let .closed(message):
                     VStack(spacing: 10) {
-                        Text(message ?? String(localized: "Verbindung beendet.")).foregroundStyle(.white.opacity(0.8))
-                        Button("Neu verbinden") { session.stop(); session.start() }.buttonStyle(.borderedProminent)
+                        Text(message ?? String(localized: "Verbindung beendet."))
+                            .font(Typo.md).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                        Button { session.stop(); session.start() } label: { Label("Neu verbinden", icon: .refresh) }
+                            .buttonStyle(.hollr(.primary))
                     }
-                    .padding()
-                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 14))
+                    .padding(Gap.l)
+                    .background(Theme.side, in: RoundedRectangle(cornerRadius: Radius.dialog, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.dialog, style: .continuous).strokeBorder(Theme.border, lineWidth: 1))
+                    .padding(Gap.l)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .reconnecting:
                     // the last screen stays readable – the connection comes back by itself
-                    Label("Verbinde neu …", systemImage: "arrow.triangle.2.circlepath")
-                        .font(.footnote)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(8)
+                    HStack(spacing: 6) {
+                        Spinner(color: Theme.warn, size: 12)
+                        Text("Verbinde neu …")
+                    }
+                    .font(Typo.note)
+                    .foregroundStyle(Theme.fg)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Theme.side, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(Gap.s)
                 case .open:
-                    if !showsToolbar && !embedded { overlayButtons.padding(8) }
+                    if !showsToolbar && !embedded { overlayButtons.padding(Gap.s) }
                 }
             }
             if !embedded || keyboard { keyBar }
         }
-        .background(Color(red: 0.06, green: 0.07, blue: 0.09))
+        .background(TerminalCanvas.background)
         .toolbar {
             if showsToolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { keyboard.toggle() } label: { Image(systemName: keyboard ? "keyboard.chevron.compact.down" : "keyboard") }.accessibilityLabel("Tastatur")
+                    Button { keyboard.toggle() } label: { Image(systemName: keyboard ? "keyboard.chevron.compact.down" : "keyboard") }
+                        .accessibilityLabel("Tastatur")
                 }
                 if mode == .pane, (session.screen?.cols ?? 0) > 120 {
                     ToolbarItem(placement: .primaryAction) { readableButton }
@@ -337,20 +364,21 @@ private struct TerminalBody: View {
 
     /// embedded (no navigation bar): keyboard and readable as small floating buttons
     private var overlayButtons: some View {
-        HStack(spacing: 6) {
-            if mode == .pane, (session.screen?.cols ?? 0) > 120 { readableButton }
-            Button { keyboard.toggle() } label: { Image(systemName: keyboard ? "keyboard.chevron.compact.down" : "keyboard") }.accessibilityLabel("Tastatur")
+        HStack(spacing: 2) {
+            if mode == .pane, (session.screen?.cols ?? 0) > 120 { readableButton.buttonStyle(.icon(size: 36)) }
+            Button { keyboard.toggle() } label: { Image(systemName: keyboard ? "keyboard.chevron.compact.down" : "keyboard") }
+                .buttonStyle(.icon(active: keyboard, size: 36))
+                .accessibilityLabel("Tastatur")
         }
-        .font(.footnote)
-        .padding(6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .foregroundStyle(.white)
+        .padding(2)
+        .background(Theme.side, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
     }
 
-    /// Moshi-style row above the keyboard: the keys a phone keyboard doesn't have.
+    /// Moshi-style row above the keyboard: the keys a phone keyboard doesn't have (composer__key).
     private var keyBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Gap.xs) {
                 key("esc") { session.type("\u{1b}") }
                 key("tab") { session.type("\t") }
                 key("ctrl", on: ctrl) { ctrl.toggle() }
@@ -365,9 +393,10 @@ private struct TerminalBody: View {
                 key("-") { session.type("-") }
                 key("⏎") { session.type("\r") }
             }
-            .padding(.horizontal, 8).padding(.vertical, 6)
+            .padding(.horizontal, Gap.s)
         }
-        .background(.ultraThinMaterial)
+        .background(Theme.side)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
     private func key(_ title: String, on: Bool = false, action: @escaping () -> Void) -> some View {
@@ -375,14 +404,16 @@ private struct TerminalBody: View {
             Haptics.tap(.light)
             action()
         } label: {
-            Text(title)
-                .font(.system(.callout, design: .monospaced).weight(.medium))
-                .frame(minWidth: 38, minHeight: 34)
-                .padding(.horizontal, 4)
-                .background(on ? Theme.accent : Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                .foregroundStyle(on ? Theme.onAccent : .white)
+            KeyCap(text: title)
+                .background(on ? Theme.accentSoft : .clear, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .overlay {
+                    if on { RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(Theme.accent, lineWidth: 1) }
+                }
+                .frame(minWidth: 38, minHeight: Metric.touch)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
@@ -636,8 +667,8 @@ private struct SelectableText: UIViewRepresentable {
         view.isSelectable = true
         view.dataDetectorTypes = [.link]
         view.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-        view.textColor = UIColor(red: 0.84, green: 0.85, blue: 0.88, alpha: 1)
-        view.backgroundColor = UIColor(red: 0.06, green: 0.07, blue: 0.09, alpha: 1)
+        view.textColor = TerminalCanvas.uiText
+        view.backgroundColor = TerminalCanvas.uiBackground
         view.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 24, right: 8)
         view.delegate = context.coordinator
         view.text = content.text

@@ -29,86 +29,123 @@ struct PairView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                switch state {
-                case .scanning:
-                    ScrollView {
-                        VStack(spacing: 20) { scanner }
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                case .pairing(let label):
-                    Spacer()
-                    ProgressView("Kopple mit \(label) …")
-                    Label(mode.title, systemImage: mode == .tailscale ? "globe" : "wifi")
-                        .font(.subheadline).foregroundStyle(.secondary)
+        DialogScaffold(icon: .server, title: String(localized: "Server koppeln"), onClose: onDone) {
+            switch state {
+            case .scanning:
+                scanner
+            case .pairing(let label):
+                VStack(spacing: Gap.s) {
+                    Spinner(color: Theme.accent, size: 22)
+                        .frame(width: 48, height: 48)
+                        .background(Theme.accent.opacity(0.14), in: Circle())
+                    Text("Kopple mit \(label) …").font(Typo.lg)
+                    networkLabel
                     Text("Falls der Rechner fragt: dort mit „J“ bestätigen.")
-                        .font(.footnote).foregroundStyle(.tertiary).multilineTextAlignment(.center)
-                    Spacer()
-                case .done(let label):
-                    Spacer()
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundStyle(Theme.live)
-                    Text("\(label) ist gekoppelt").font(.title3.bold())
-                    Label(mode.title, systemImage: mode == .tailscale ? "globe" : "wifi")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(Typo.sm).foregroundStyle(Theme.dim)
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Gap.xl)
+            case .done(let label):
+                VStack(spacing: Gap.s) {
+                    resultTile(.check, color: Theme.green)
+                    Text("\(label) ist gekoppelt").font(Typo.lg)
+                    networkLabel
                     if mode == .tailscale, !Tailscale.isActiveOnDevice {
                         Text("Für unterwegs: Tailscale-App auf dem iPhone installieren und mit demselben Konto anmelden.")
-                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            .font(Typo.sm).foregroundStyle(Theme.dim)
                     }
-                    Spacer()
-                    Button("Fertig", action: onDone).buttonStyle(.borderedProminent).controlSize(.large)
-                case .failed(let message):
-                    Spacer()
-                    Image(systemName: "xmark.octagon.fill").font(.system(size: 56)).foregroundStyle(Theme.warn)
-                    Text(message).multilineTextAlignment(.center)
-                    Spacer()
-                    Button(method == .code ? "Nochmal versuchen" : "Nochmal scannen") { state = .scanning }.buttonStyle(.bordered)
                 }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Gap.l)
+            case .failed(let message):
+                VStack(spacing: Gap.s) {
+                    resultTile(.alert, color: Theme.red)
+                    Text(message).font(Typo.md)
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Gap.l)
             }
-            .padding()
-            .navigationTitle("Server koppeln")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen", action: onDone) }
+        } footer: {
+            switch state {
+            case .scanning:
+                Button("Abbrechen", action: onDone).buttonStyle(.hollr())
+                if method == .code {
+                    Button("Koppeln", action: pairWithCode)
+                        .buttonStyle(.hollr(.primary))
+                        .disabled(PairingCode.decode(code) == nil)
+                }
+            case .pairing:
+                Button("Abbrechen", action: onDone).buttonStyle(.hollr())
+            case .done:
+                Button("Fertig", action: onDone).buttonStyle(.hollr(.primary))
+            case .failed:
+                Button("Abbrechen", action: onDone).buttonStyle(.hollr())
+                Button(method == .code ? "Nochmal versuchen" : "Nochmal scannen") { state = .scanning }
+                    .buttonStyle(.hollr(.primary))
             }
-            .task {
-                if let initialLink { pair(initialLink) }
-            }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .dialogSheet()
+        .task {
+            if let initialLink { pair(initialLink) }
         }
     }
 
+    /// How the pairing connects (from the QR code / link).
+    private var networkLabel: some View {
+        Label(mode.title, systemImage: mode == .tailscale ? HIcon.globe.symbol : "wifi")
+            .font(Typo.note).foregroundStyle(Theme.muted)
+    }
+
+    /// Round result tile of the pairing dialog (pair__ok-ico).
+    private func resultTile(_ icon: HIcon, color: Color) -> some View {
+        IconView(icon, size: 22)
+            .foregroundStyle(color)
+            .frame(width: 48, height: 48)
+            .background(color.opacity(0.14), in: Circle())
+            .accessibilityHidden(true)
+    }
+
     @ViewBuilder private var scanner: some View {
-        Picker("Methode", selection: $method) {
-            Label("QR-Code scannen", systemImage: "qrcode.viewfinder").tag(Method.scan)
-            Label("Code eingeben", systemImage: "keyboard").tag(Method.code)
-        }
-        .pickerStyle(.segmented)
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Gerätename").font(.caption).foregroundStyle(.secondary)
+        Segmented(label: String(localized: "Methode"),
+                  options: [(Method.scan, String(localized: "QR-Code scannen")), (Method.code, String(localized: "Code eingeben"))],
+                  selection: $method, boxed: true)
+        DialogField(label: String(localized: "Gerätename")) {
             TextField("Gerätename", text: $deviceName)
-                .padding(12)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
+                .fieldStyle()
             Text("So erscheint dein iPhone in `hollr devices` auf dem Server.")
-                .font(.caption2).foregroundStyle(.secondary)
+                .font(Typo.sm).foregroundStyle(Theme.dim)
         }
         if method == .code {
             codeEntry
         } else if scannerAvailable {
             #if !targetEnvironment(macCatalyst)
             QRScanner { pair($0) }
-                .frame(height: 360)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.accent.opacity(0.6), lineWidth: 2))
+                .frame(height: 340)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous).strokeBorder(Theme.accent, lineWidth: 2))
             #endif
         } else {
-            ContentUnavailableView(
-                "Kamera nicht verfügbar", systemImage: "camera",
-                description: Text("Den Link aus `hollr pair --link` kopieren und unten einfügen.")
-            )
+            VStack(spacing: Gap.s) {
+                Image(systemName: "camera")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.card, in: Circle())
+                Text("Kamera nicht verfügbar").font(Typo.lg)
+                Text("Den Link aus `hollr pair --link` kopieren und unten einfügen.")
+                    .font(Typo.md).foregroundStyle(Theme.muted)
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Gap.m)
         }
         if method == .scan {
             Text("Auf dem Server `hollr pair` ausführen (oder im herdr-Menü „Hollr: iPhone koppeln“) und den QR-Code scannen.")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Typo.sm).foregroundStyle(Theme.dim)
             PasteButton(payloadType: String.self) { strings in
                 if let link = strings.first { Task { @MainActor in pair(link) } }
             }
@@ -118,28 +155,20 @@ struct PairView: View {
     }
 
     @ViewBuilder private var codeEntry: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Pairing-Code").font(.caption).foregroundStyle(.secondary)
+        DialogField(label: String(localized: "Pairing-Code")) {
             TextField("XXXX-XXXX-XXXX-XXXX", text: $code)
-                .font(.system(.title2, design: .monospaced).weight(.semibold))
                 .multilineTextAlignment(.center)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
                 .keyboardType(.asciiCapable)
                 .focused($codeFocused)
-                .padding(14)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
+                .font(.system(.title3, design: .monospaced, weight: .semibold))
+                .fieldStyle(focused: codeFocused)
                 .onChange(of: code) { _, new in
                     let formatted = PairingCode.format(new)
                     if formatted != new { code = formatted }
                 }
                 .onSubmit(pairWithCode)
-            Button(action: pairWithCode) {
-                Label("Koppeln", systemImage: "link").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(PairingCode.decode(code) == nil)
             // code copied from a message: paste and pair in one tap (no paste prompt)
             PasteButton(payloadType: String.self) { strings in
                 guard let text = strings.first else { return }
@@ -151,7 +180,7 @@ struct PairView: View {
             .labelStyle(.titleAndIcon)
             .frame(maxWidth: .infinity)
             Text("Am Rechner `hollr pair` ausführen – der Code steht unter dem QR-Code, gilt 10 Minuten und nur einmal. Von unterwegs: am Rechner „Tailscale / Fernzugriff“ wählen und Tailscale auf dem iPhone verbinden.")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Typo.sm).foregroundStyle(Theme.dim)
         }
         .onAppear { codeFocused = true }
     }
@@ -259,39 +288,40 @@ struct SetupCommands: View {
         "curl -fsSL https://raw.githubusercontent.com/\(repo)/main/install.sh | bash && ~/.local/bin/\(pair)"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Server einrichten").font(.headline)
-            Picker("", selection: $os) {
-                ForEach(OS.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
+        VStack(alignment: .leading, spacing: Gap.m) {
+            Text("Server einrichten").font(Typo.lg)
+            Segmented(label: String(localized: "Server einrichten"),
+                      options: OS.allCases.map { ($0, $0.rawValue) }, selection: $os, boxed: true)
             if os == .mac {
                 step(String(localized: "Entfernte Anmeldung (SSH) einschalten"), "sudo systemsetup -setremotelogin on")
             }
             step(String(localized: "Auf dem Server ausführen"), Self.install)
             step(String(localized: "Schon installiert? Nur koppeln:"), Self.pair)
         }
-        .padding(.top, 12)
+        .padding(.top, Gap.s)
     }
 
     private func step(_ title: String, _ command: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline).foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: 8) {
-                Text(command)
-                    .font(.system(.caption, design: .monospaced))
+        DialogField(label: title) {
+            HStack(alignment: .top, spacing: Gap.s) {
+                Text(verbatim: command)
+                    .font(Typo.monoSmall)
                     .textSelection(.enabled)
+                    .padding(.vertical, 7)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
                     UIPasteboard.general.string = command
                     copied = command
                 } label: {
-                    Image(systemName: copied == command ? "checkmark" : "doc.on.doc")
+                    IconView(copied == command ? .check : .copy, size: 14)
+                        .foregroundStyle(copied == command ? Theme.green : Theme.muted)
                 }
+                .buttonStyle(.icon(size: 32))
                 .accessibilityLabel("Befehl kopieren")
             }
-            .padding(10)
-            .background(Theme.fg.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, Gap.xs).padding(.leading, 10).padding(.trailing, Gap.xs)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.md, style: .continuous).strokeBorder(Theme.border, lineWidth: 1))
         }
     }
 }

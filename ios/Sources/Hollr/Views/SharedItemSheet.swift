@@ -18,33 +18,45 @@ struct SharedItemSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Geteilt") {
-                    if item.file != nil { Label(item.fileName ?? "Bild / Datei", systemImage: "photo") }
-                    if !item.text.isEmpty { Text(item.text).font(.footnote).lineLimit(8) }
+                Section {
+                    if item.file != nil { Label(item.fileName ?? "Bild / Datei", icon: .image) }
+                    if !item.text.isEmpty { Text(item.text).font(Typo.note).lineLimit(8) }
+                } header: {
+                    SectionHeader(title: String(localized: "Geteilt"))
                 }
-                if let error { Section { Text(error).foregroundStyle(Theme.warn) } }
-                Section("An welchen Agent?") {
+                .listRowBackground(Theme.card)
+                if let error {
+                    Section { Label(error, icon: .alert).font(Typo.sm).foregroundStyle(Theme.warn) }
+                        .listRowBackground(Theme.card)
+                }
+                Section {
                     ForEach(agents) { ref in
                         Button { Task { await send(to: ref) } } label: {
                             HStack {
                                 AgentRow(ref: ref, showServer: store.servers.count > 1)
-                                if sending == ref.id { ProgressView() }
+                                if sending == ref.id { Spinner(color: Theme.accent) }
                             }
                         }
                         .disabled(sending != nil)
                     }
-                    if agents.isEmpty { Text("Keine Agents erreichbar.").foregroundStyle(.secondary) }
+                    if agents.isEmpty { Text("Keine Agents erreichbar.").foregroundStyle(Theme.muted) }
+                } header: {
+                    SectionHeader(title: String(localized: "An welchen Agent?"))
                 }
+                .listRowBackground(Theme.card)
             }
+            .themedList()
             .navigationTitle("Teilen an …")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Später") { done() } }
                 ToolbarItem(placement: .destructiveAction) {
                     Button("Verwerfen", role: .destructive) { SharedItem.remove(item); done() }
+                        .foregroundStyle(Theme.red)
                 }
             }
         }
+        .presentationBackground(Theme.bg)
     }
 
     private func send(to ref: AgentRef) async {

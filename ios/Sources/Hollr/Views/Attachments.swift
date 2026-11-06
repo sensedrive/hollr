@@ -15,19 +15,20 @@ struct AttachButton: View {
 
     var body: some View {
         Menu {
-            Button { showPhotos = true } label: { Label("Foto oder Bildschirmfoto", systemImage: "photo") }
-            Button { showFiles = true } label: { Label("Datei", systemImage: "doc") }
+            Button { showPhotos = true } label: { Label("Foto oder Bildschirmfoto", icon: .image) }
+            Button { showFiles = true } label: { Label("Datei", icon: .file) }
             if UIPasteboard.general.hasImages {
                 Button { pasteImage() } label: { Label("Bild aus der Zwischenablage", systemImage: "doc.on.clipboard") }
             }
         } label: {
             Group {
-                if uploading { ProgressView() } else { Image(systemName: "paperclip") }
+                if uploading { Spinner(color: Theme.muted) } else { IconView(.paperclip, size: 16) }
             }
-            .frame(width: 30, height: 38)
+            .foregroundStyle(Theme.muted)
+            .frame(width: Metric.touch, height: Metric.touch)
+            .contentShape(Rectangle())
         }
         .disabled(uploading)
-        .foregroundStyle(.primary)
         .accessibilityLabel("Anhang")
         .photosPicker(isPresented: $showPhotos, selection: $photo, matching: .images)
         .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in

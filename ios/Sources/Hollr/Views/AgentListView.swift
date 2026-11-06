@@ -29,30 +29,28 @@ struct AgentListView: View {
     }
 
     @ViewBuilder private var rows: some View {
-            Group {
+        Group {
             ForEach(store.servers) { server in
                 if let error = herdr.errors[server.id] {
-                    Label("\(server.label): \(error)", systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote).foregroundStyle(Theme.warn)
+                    Label("\(server.label): \(error)", icon: .alert)
+                        .font(Typo.note).foregroundStyle(Theme.warn)
                 }
             }
             switch grouping {
             case .status:
                 let agents = herdr.allAgents(store.servers, includeShells: showShells)
-                ForEach(agents) { ref in row(ref, showServer: store.servers.count > 1) }
+                ForEach(agents) { ref in row(ref, showServer: store.servers.count > 1, showWorkspace: true) }
             case .workspace:
                 ForEach(store.servers) { server in
                     ForEach(herdr.trees[server.id] ?? []) { ws in workspaceSection(server, ws) }
                 }
             }
             if herdr.loaded && herdr.allAgents(store.servers, includeShells: showShells).isEmpty {
-                ContentUnavailableView(
-                    "Keine Agents", systemImage: "rectangle.split.3x1",
-                    description: Text("Starte in herdr eine omp-Session.")
-                )
+                EmptyState(icon: .terminal, title: String(localized: "Keine Agents"),
+                           text: String(localized: "Starte in herdr eine omp-Session."))
             }
         }
-            .listRowBackground(Theme.card)
+        .listRowBackground(Theme.card)
     }
 
     // own functions with explicit types: one big nested expression made the Release compiler give
@@ -68,17 +66,19 @@ struct AgentListView: View {
         if !refs.isEmpty {
             let title: String = store.servers.count > 1 ? "\(server.label) · \(ws.label)" : ws.label
             Section {
-                ForEach(refs) { ref in row(ref, showServer: false) }
+                ForEach(refs) { ref in row(ref, showServer: false, showWorkspace: false) }
             } header: {
-                Text(title)
+                SectionHeader(title: title, trailing: "\(refs.count)", dot: Theme.identity(ws.label))
+                    .textCase(nil)
             }
         }
     }
 
     @State private var closing: AgentRef?
 
-    @ViewBuilder private func rowLink(_ ref: AgentRef, showServer: Bool) -> some View {
-        let label = AgentRow(ref: ref, showServer: showServer, live: sessions.sessions[ref.id]?.isLive == true)
+    @ViewBuilder private func rowLink(_ ref: AgentRef, showServer: Bool, showWorkspace: Bool) -> some View {
+        let label = AgentRow(ref: ref, showServer: showServer, showWorkspace: showWorkspace, branch: herdr.branch(of: ref),
+                             live: sessions.sessions[ref.id]?.isLive == true)
         if selection != nil {
             label.tag(ref.id)
         } else {
@@ -86,8 +86,8 @@ struct AgentListView: View {
         }
     }
 
-    private func row(_ ref: AgentRef, showServer: Bool) -> some View {
-        rowLink(ref, showServer: showServer)
+    private func row(_ ref: AgentRef, showServer: Bool, showWorkspace: Bool) -> some View {
+        rowLink(ref, showServer: showServer, showWorkspace: showWorkspace)
         .contextMenu {
             if let openBeside {
                 Button { openBeside(ref.id) } label: { Label("Rechts daneben öffnen", systemImage: "rectangle.split.2x1") }
@@ -112,100 +112,65 @@ struct AgentListView: View {
     }
 }
 
+/// One session as a row (molecule WorkRow): agent badge, status dot and name, branch or folder on the right,
+/// the status in its colour and what it works on.
 struct AgentRow: View {
     let ref: AgentRef
     var showServer = false
+    /// the workspace in the status line (off inside a project card or workspace section, which names it already)
+    var showWorkspace = true
+    /// the space's git branch, when known (else the folder)
+    var branch: String? = nil
     var live = false
 
+    private var isShell: Bool { ref.pane.agent == nil }
+
+    private var state: String { isShell ? String(localized: "Terminal") : Theme.statusLabel(ref.pane.status) }
+
+    /// server, workspace (like herdr's sidebar group) and what the agent works on (omp session title)
+    private var detail: String {
+        var parts: [String] = []
+        if showServer { parts.append(ref.server.label) }
+        if showWorkspace && ref.title != ref.workspace { parts.append(ref.workspace) }
+        if !isShell && !ref.pane.title.isEmpty && ref.pane.title != ref.title { parts.append(ref.pane.title) }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             AgentBadge(pane: ref.pane)
-                .overlay(alignment: .leading) {
-                    // the workspace's color, like a tab color
-                    Capsule().fill(Theme.identity(ref.workspace)).frame(width: 3).padding(.vertical, 4).offset(x: -8)
-                }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    // workspace (and server) like herdr's sidebar group
-                    Text([showServer ? ref.server.label : nil, ref.title == ref.workspace ? nil : ref.workspace]
-                        .compactMap { $0 }.joined(separator: " · ").ifEmpty(ref.pane.agentName))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    StatusPill(status: ref.pane.status, isShell: ref.pane.agent == nil)
-                }
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Gap.s) {
+                    StatusDot(status: ref.pane.status, agent: !isShell, size: 7, pulse: ref.pane.status == "working")
                     // the tab name you gave it in herdr
-                    Text(ref.title)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(2)
+                    Text(ref.title).font(Typo.md.weight(.semibold)).lineLimit(1).layoutPriority(1)
                     if live {
-                        Image(systemName: "waveform").foregroundStyle(Theme.live).symbolEffect(.variableColor.iterative)
+                        Image(.activity).font(Typo.xs).foregroundStyle(Theme.live).symbolEffect(.variableColor.iterative)
                     } else if ref.pane.live {
-                        Image(systemName: "waveform").font(.caption).foregroundStyle(Theme.live.opacity(0.7))
+                        Image(.activity).font(Typo.xs).foregroundStyle(Theme.live.opacity(0.7))
                     }
+                    Spacer(minLength: Gap.xs)
+                    Text(verbatim: branch ?? ref.pane.folder)
+                        .font(Typo.monoXS).foregroundStyle(Theme.dim)
+                        .lineLimit(1).truncationMode(.middle)
                 }
-                // what the agent is working on (omp session title)
-                Text(ref.pane.agent == nil ? "Shell · \(ref.pane.folder)" : "\(ref.pane.agentName) · \(ref.pane.title)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                (Text(verbatim: state).foregroundStyle(isShell ? Theme.muted : Theme.statusColor(ref.pane.status))
+                    + Text(verbatim: detail.isEmpty ? "" : " · \(detail)").foregroundStyle(Theme.muted))
+                    .font(Typo.sm)
                     .lineLimit(1)
             }
         }
-        .padding(.vertical, 3)
-        .opacity(ref.pane.agent == nil ? 0.55 : 1)
+        .padding(.vertical, 2)
+        .opacity(isShell ? 0.6 : 1)
     }
 }
 
-struct StatusPill: View {
-    let status: String
-    var isShell = false
-
-    var body: some View {
-        if !isShell {
-            Text(Theme.statusLabel(status))
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 7).padding(.vertical, 2)
-                .background(Theme.statusColor(status).opacity(0.18), in: Capsule())
-                .foregroundStyle(Theme.statusColor(status))
-        }
+extension HerdrStore {
+    /// The git branch of the space a pane runs in, once the spaces are loaded.
+    func branch(of ref: AgentRef) -> String? {
+        let ws = ref.pane.pane.split(separator: ":").first.map(String.init) ?? ""
+        return spaces[ref.server.id]?.first { $0.id == ws }?.git?.branch
     }
-}
-
-struct AgentBadge: View {
-    let pane: Pane
-
-    var body: some View {
-        Text(short)
-            .font(.system(.caption2, design: .rounded).weight(.bold))
-            .foregroundStyle(color)
-            .frame(width: 40, height: 40)
-            .background(color.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    private var short: String {
-        switch pane.agent {
-        case "omp": return "omp"
-        case "claude": return "CC"
-        case "codex": return "CX"
-        case nil: return "$_"
-        case let other?: return String(other.prefix(3))
-        }
-    }
-
-    private var color: Color {
-        switch pane.agent {
-        case "omp": return Theme.live
-        case "claude": return Color(red: 0.85, green: 0.47, blue: 0.34)
-        case nil: return .gray
-        default: return Theme.accent
-        }
-    }
-}
-
-extension String {
-    func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
 }
 
 /// Title, toolbar and refresh around the agent list (both list variants).
@@ -225,7 +190,8 @@ private struct ListChrome: ViewModifier {
             .refreshable { await herdr.refresh(store.servers, force: true) }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onNewChat) { Image(systemName: "square.and.pencil") }
+                    Button(action: onNewChat) { Image(.plus) }
+                        .buttonStyle(.icon())
                         .accessibilityLabel("Neuer Chat")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -235,8 +201,10 @@ private struct ListChrome: ViewModifier {
                         }
                         Toggle("Shells anzeigen", isOn: $showShells)
                     } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
+                        Image(.sliders).foregroundStyle(Theme.muted)
                     }
+                    .buttonStyle(.icon())
+                    .accessibilityLabel("Ansicht")
                 }
             }
     }

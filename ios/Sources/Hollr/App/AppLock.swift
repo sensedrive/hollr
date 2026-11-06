@@ -41,20 +41,33 @@ private struct AppLockModifier: ViewModifier {
         content
             .overlay {
                 if enabled && locked {
-                    ZStack {
-                        Rectangle().fill(.ultraThickMaterial).ignoresSafeArea()
-                        VStack(spacing: 18) {
-                            Image(systemName: "lock.fill").font(.system(size: 44)).foregroundStyle(Theme.accent)
-                            Text("Hollr ist gesperrt").font(.title3.weight(.semibold))
-                            Button {
-                                Task { await unlock() }
-                            } label: {
-                                Label("Mit \(AppLock.biometryName) entsperren", systemImage: "faceid")
-                                    .padding(.horizontal, 8)
-                            }
-                            .buttonStyle(.borderedProminent)
+                    // opaque page background: nothing of the app shows through (organisms/Overlays AppLock)
+                    VStack(spacing: 14) {
+                        IconView(.lock, size: 26)
+                            .foregroundStyle(Theme.fg)
+                            .frame(width: 64, height: 64)
+                            .background(Theme.card, in: Circle())
+                            .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
+                            .accessibilityHidden(true)
+                        Text("Hollr ist gesperrt").font(.title3.weight(.semibold))
+                        Text("Agents arbeiten weiter. Mitteilungen zeigen nur, dass etwas wartet – nicht was.")
+                            .font(Typo.note)
+                            .foregroundStyle(Theme.muted)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 300)
+                        Button {
+                            Task { await unlock() }
+                        } label: {
+                            Label("Mit \(AppLock.biometryName) entsperren", icon: .key)
                         }
+                        .buttonStyle(.hollr(.primary))
+                        .padding(.top, Gap.xs)
                     }
+                    .padding(Gap.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.bg.ignoresSafeArea())
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAddTraits(.isModal)
                     .transition(.opacity)
                 }
             }

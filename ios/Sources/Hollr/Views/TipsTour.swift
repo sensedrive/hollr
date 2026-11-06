@@ -62,42 +62,62 @@ struct TipsTour: View {
     @State private var page = 0
 
     var body: some View {
-        VStack(spacing: 18) {
-            HStack {
-                Text("Neu und praktisch").font(.headline)
-                Spacer()
-                Button("Fertig") { close() }.bold()
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                IconView(.sparkle, size: 12)
+                Text("Neu und praktisch").textCase(.uppercase)
+                Text(verbatim: "· \(page + 1)/\(tips.count)").monospacedDigit()
             }
-            .padding(.horizontal, 20).padding(.top, 18)
+            .font(Typo.xs.weight(.semibold))
+            .tracking(0.8)
+            .foregroundStyle(Theme.accent)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Gap.xl).padding(.top, Gap.xl)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             TabView(selection: $page) {
                 ForEach(Array(tips.enumerated()), id: \.element.id) { index, tip in
-                    VStack(spacing: 18) {
+                    VStack(spacing: Gap.l) {
                         Spacer(minLength: 0)
                         Image(systemName: tip.icon)
-                            .font(.system(size: 54, weight: .semibold))
+                            .font(.system(size: 40, weight: .medium))
                             .foregroundStyle(Theme.accent)
-                            .frame(width: 110, height: 110)
-                            .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-                        Text(tip.title).font(.title2.bold()).multilineTextAlignment(.center)
-                        Text(tip.text).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            .padding(.horizontal, 28)
+                            .frame(width: 96, height: 96)
+                            .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.xl + 8, style: .continuous))
+                            .accessibilityHidden(true)
+                        Text(tip.title).font(Typo.xl).multilineTextAlignment(.center)
+                        Text(tip.text).font(Typo.md).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                            .padding(.horizontal, Gap.xxl)
                         Spacer(minLength: 0)
                     }
                     .tag(index)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
-            Button {
-                if page < tips.count - 1 { withAnimation { page += 1 } } else { close() }
-            } label: {
-                Text(page < tips.count - 1 ? String(localized: "Weiter") : String(localized: "Los geht’s"))
-                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            HStack(spacing: 6) {
+                HStack(spacing: 5) {
+                    ForEach(tips.indices, id: \.self) { index in
+                        Circle().fill(index == page ? Theme.accent : Theme.border).frame(width: 6, height: 6)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement()
+                .accessibilityLabel(Text("Seite \(page + 1) von \(tips.count)"))
+                if page < tips.count - 1 {
+                    Button("Überspringen") { close() }.buttonStyle(.hollr(.ghost))
+                }
+                Button {
+                    if page < tips.count - 1 { withAnimation { page += 1 } } else { close() }
+                } label: {
+                    Text(page < tips.count - 1 ? String(localized: "Weiter") : String(localized: "Los geht’s"))
+                }
+                .buttonStyle(.hollr(.primary))
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal, 20).padding(.bottom, 20)
+            .padding(.horizontal, Gap.xl).padding(.vertical, Gap.m)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
         }
         .themedPage()
+        .dialogSheet()
     }
 
     private func close() {
