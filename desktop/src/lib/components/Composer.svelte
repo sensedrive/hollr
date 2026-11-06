@@ -19,7 +19,7 @@
   import Icon from "./git/Icon.svelte";
 
   let {
-    placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, meta, quick = true, value = $bindable(""),
+    placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, meta, quick = true, chips = true, value = $bindable(""),
     sent = $bindable([]), server, ws, dictationKey, micBlocked = false, vocabulary,
   }: {
     placeholder: string;
@@ -37,6 +37,8 @@
     meta?: Snippet;
     /** the row of single keys (Esc ↑ ↓ …) – in the chat they wait behind >_ */
     quick?: boolean;
+    /** the prompt snippets above the text (off while a fresh session's start offers its first steps) */
+    chips?: boolean;
     value?: string;
     /** ↑ history, newest first (bind it to keep it beyond this component) */
     sent?: string[];
@@ -65,7 +67,7 @@
   let focused = $state(false);
   let recall = -1;
   const trimmed = $derived(value.trim());
-  const showSnippets = $derived(snippets.list.length > 0 && (focused || !value) && !disabled);
+  const showSnippets = $derived(chips && snippets.list.length > 0 && (focused || !value) && !disabled);
 
   export function focus() {
     area?.focus();

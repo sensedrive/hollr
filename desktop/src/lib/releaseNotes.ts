@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 31,
+    version: "0.43.0",
+    date: "06.11.2026",
+    items: [
+      { icon: "✦", text: "Neue Sitzung: statt endloser Platzhalter ein Startbild mit Agent und Version, Modell, Kontext, Ordner, Branch, MCP-Status, Update-Hinweis und ersten Schritten – vorher hing der Chat, bis das erste Wort fiel" },
+      { icon: "⑂", text: "Git-Verlauf zeigt auch Remote-Branches (abschaltbar), lange Branch-Namen werden gekürzt" },
+      { icon: "▥", text: "Seitenbereich, Git-Tab und Chat/Terminal bleiben, wie du sie zuletzt hattest, auch beim Wechsel von Space oder Worktree" },
+    ],
+  },
+  {
     build: 30,
     version: "0.42.0",
     date: "06.11.2026",

@@ -7,9 +7,10 @@
  *   {"t":"ping"}  every 20 s · {"t":"error","error":"not_found"} when the pane is gone
  */
 import { createHash } from "node:crypto";
-import { type FSWatcher, watch } from "node:fs";
+import { existsSync, type FSWatcher, watch } from "node:fs";
 import { type ClaudeUsage, claudeFooter, claudeLive, readClaudeLog } from "./claudelog";
 import { execHerdr, type Herdr } from "./herdr";
+import { parseStartScreen } from "./startscreen";
 import { readTimeline, type Timeline, type TimelineItem } from "./timeline";
 
 type Snapshot = Record<string, unknown> & { items: TimelineItem[] };
@@ -52,8 +53,9 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
   let watcher: FSWatcher | undefined;
   let dirty = true;
   let lastStatus = "";
-  let lastFooterAt = 0;
-  let footer = "";
+  let lastScreenAt = 0;
+  /** omp: its footer – the whole screen while the session is fresh (its start screen); Claude: its screen */
+  let screen = "";
   let lastPing = Date.now();
   /** parsed log, re-read only when it was written (a 7 MB log costs ~20 ms per read) */
   let cached: Timeline | undefined;
@@ -68,51 +70,72 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
     } catch {
       return undefined;
     }
-    const f = agent.sessionFile;
+    // herdr's hook names the session file before the agent writes it: watch it once it exists (watching a
+    // missing file throws, which ended the stream before its first line – the app showed skeletons forever)
+    const f = agent.sessionFile && existsSync(agent.sessionFile) ? agent.sessionFile : undefined;
     if (f !== file) {
       cached = undefined;
       watcher?.close();
-      file = f;
-      // a write to the session log = something to show (debounced by the loop)
-      watcher = f
-        ? watch(f, () => {
+      watcher = undefined;
+      file = undefined;
+      if (f) {
+        try {
+          // a write to the session log = something to show (debounced by the loop)
+          watcher = watch(f, () => {
             dirty = true;
-          })
-        : undefined;
+          });
+          file = f;
+        } catch {
+          // gone again – next round
+        }
+      }
     }
     const claude = agent.kind === "claude";
     if (!cached || changed) {
       if (claude) {
-        const log = f
-          ? await readClaudeLog(f, limit)
+        const log = file
+          ? await readClaudeLog(file, limit)
           : { timeline: { agent: "claude" as const, items: [], jobs: [], running: false, waiting: false }, usage: {} };
         cached = log.timeline;
         usage = log.usage;
-      } else cached = f ? await readTimeline(f, limit) : { items: [], jobs: [], running: false, waiting: false };
+      } else cached = file ? await readTimeline(file, limit) : { items: [], jobs: [], running: false, waiting: false };
     }
+    /** nothing said yet: the agent's start screen is the chat's start (version, MCP, update …) */
+    const fresh = cached.items.length === 0;
+    const due = changed || agent.status !== lastStatus || Date.now() - lastScreenAt > 5000;
     if (claude) {
-      // Claude's permission/trust dialogs are only on its screen: read it while herdr says it waits
-      const screen = agent.status === "blocked" ? await herdr.screen(pane, 40).catch(() => "") : undefined;
-      const timeline = claudeLive(cached, agent.status, screen);
+      // Claude's permission/trust dialogs are only on its screen: read it while herdr says it waits; a fresh
+      // session's banner (version, model, plan) sits at its top
+      const blocked = agent.status === "blocked";
+      if (blocked || (fresh && due)) {
+        screen = await herdr.screen(pane, blocked ? 40 : 80).catch(() => "");
+        lastScreenAt = Date.now();
+      }
+      const timeline = claudeLive(cached, agent.status, blocked ? screen : undefined);
+      const start = fresh ? parseStartScreen("claude", screen) : undefined;
       lastStatus = agent.status;
       return {
         ...timeline,
         status: agent.status,
         line: statusLineOf(agent.cwd, "", timeline.model, claudeFooter(usage)),
+        ...(start ? { start } : {}),
       } as Snapshot;
     }
     const timeline = cached;
     // omp's footer (model, context, cost) – it changes with the log or the status, else every 5 s
-    if (changed || agent.status !== lastStatus || Date.now() - lastFooterAt > 5000) {
-      const screen = await execHerdr(["agent", "read", pane, "--source", "visible", "--lines", "4"]).catch(() => "");
-      footer = typeof screen === "string" ? screen : "";
-      lastFooterAt = Date.now();
+    if (due) {
+      const lines = fresh ? "80" : "4";
+      const read = await execHerdr(["agent", "read", pane, "--source", "visible", "--lines", lines]).catch(() => "");
+      screen = typeof read === "string" ? read : "";
+      lastScreenAt = Date.now();
     }
+    const start = fresh ? parseStartScreen("omp", screen) : undefined;
     lastStatus = agent.status;
     return {
       ...timeline,
       status: agent.status,
-      line: statusLineOf(agent.cwd, footer, timeline.model),
+      line: statusLineOf(agent.cwd, screen, timeline.model),
+      ...(start ? { start } : {}),
     } as Snapshot;
   };
 

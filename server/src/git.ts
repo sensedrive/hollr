@@ -30,8 +30,13 @@ export interface GraphCommit {
   refs?: string;
 }
 
-/** HEAD history in topological order (the client lays out the lanes). */
-export function graph(root: string, limit = 150, run: Run = gitRun) {
+/**
+ * History in topological order (the client lays out the lanes): HEAD, plus every remote-tracking
+ * branch with `remotes` (never the `<remote>/HEAD` symrefs), so commits that exist only on a
+ * remote show up too. `remotes` lists the remote names, so clients can tell `origin/x` from a
+ * local `feature/x` in the `%D` decorations. No fetch: what the repo knows is what's shown.
+ */
+export function graph(root: string, limit = 150, remotes = false, run: Run = gitRun) {
   const out = run(
     [
       "git",
@@ -39,6 +44,9 @@ export function graph(root: string, limit = 150, run: Run = gitRun) {
       "--topo-order",
       `-${Math.min(limit, 400)}`,
       `--format=%H${SEP}%P${SEP}%s${SEP}%an${SEP}%ct${SEP}%D`,
+      ...(remotes
+        ? ["--decorate-refs-exclude=refs/remotes/*/HEAD", "HEAD", "--exclude=*/HEAD", "--remotes", "--"]
+        : []),
     ],
     root,
   ).out;
@@ -57,7 +65,8 @@ export function graph(root: string, limit = 150, run: Run = gitRun) {
         refs: refs || undefined,
       };
     });
-  return { commits, changes: changesSummary(root, run) };
+  const names = run(["git", "remote"], root).out.split("\n").filter(Boolean);
+  return { commits, remotes: names, changes: changesSummary(root, run) };
 }
 
 interface NumstatFile {

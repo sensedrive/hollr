@@ -166,6 +166,8 @@ export interface FsRequest {
   all?: boolean;
   path?: string;
   limit?: number;
+  /** graph: include remote-tracking branches */
+  remotes?: boolean;
   hash?: string;
   /** diff: the staged version instead of the working tree */
   staged?: boolean;
@@ -220,7 +222,7 @@ export async function spaceFs(req: FsRequest, exec: Exec = execHerdr): Promise<u
       return fileDiff(root, relative(root, file), req.staged === true);
     }
     case "graph":
-      return graph(root, req.limit ?? 150);
+      return graph(root, req.limit ?? 150, req.remotes === true);
     case "commit":
       if (!HASH_RE.test(req.hash ?? "")) throw new Error("ungültiger Commit");
       return commitDetails(root, req.hash ?? "");
@@ -298,7 +300,19 @@ export interface StatusLine {
   dirty?: number;
   context?: string;
   cost?: string;
+  /** omp's thinking level (its footer's glyph before the model: ◒ = high) */
+  thinking?: string;
 }
+
+/** omp's thinking-level glyphs (unicode, nerd-font and ascii symbol presets) → level id */
+const THINKING: [RegExp, string][] = [
+  [/(?:○|\u{F0A9E}|\[min\])\s*$/u, "minimal"],
+  [/(?:◔|\u{F0A9F}|\[low\])\s*$/u, "low"],
+  [/(?:◑|\u{F0AA1}|\[med\])\s*$/u, "medium"],
+  [/(?:◒|\u{F0AA3}|\[high\])\s*$/u, "high"],
+  [/(?:◕|\u{F0AA5}|\[xhi\])\s*$/u, "xhigh"],
+  [/(?:◉|\u{F06D}|\[max\])\s*$/u, "max"],
+];
 
 /** Parses omp's footer, e.g. "󰵗 · 󰪣 Opus 5.5 ·  my-app ·  main *1 · 1.6%/1M 󰁨 · 󰙺 0.10". */
 export function parseFooter(screen: string): StatusLine {
@@ -312,7 +326,12 @@ export function parseFooter(screen: string): StatusLine {
   const model = line.match(
     /(Opus|Sonnet|Haiku|Fable|GPT[-\s][\w.]+|o\d[\w-]*|Gemini[\w .-]*|Grok[\w .-]*|Kimi[\w .-]*|Qwen[\w .-]*)\s*[\d.]*/i,
   );
-  if (model) out.model = model[0].trim();
+  if (model) {
+    out.model = model[0].trim();
+    const before = line.slice(0, model.index);
+    const level = THINKING.find(([re]) => re.test(before));
+    if (level) out.thinking = level[1];
+  }
   return out;
 }
 
@@ -325,6 +344,7 @@ export function statusLine(cwd: string, footer: StatusLine, modelId?: string): S
     dirty: git?.dirty,
     context: footer.context,
     cost: footer.cost,
+    thinking: footer.thinking,
   };
 }
 

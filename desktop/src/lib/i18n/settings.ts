@@ -161,6 +161,12 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Neue Sitzung: statt endloser Platzhalter ein Startbild mit Agent und Version, Modell, Kontext, Ordner, Branch, MCP-Status, Update-Hinweis und ersten Schritten – vorher hing der Chat, bis das erste Wort fiel":
+    "New session: instead of endless placeholders a start screen with agent and version, model, context, folder, branch, MCP status, update hint and first steps – the chat used to hang until the first word",
+  "Git-Verlauf zeigt auch Remote-Branches (abschaltbar), lange Branch-Namen werden gekürzt":
+    "Git history also shows remote branches (can be turned off), long branch names are shortened",
+  "Seitenbereich, Git-Tab und Chat/Terminal bleiben, wie du sie zuletzt hattest, auch beim Wechsel von Space oder Worktree":
+    "Side panel, git tab and chat/terminal stay as you last had them, also when switching space or worktree",
   "iPhone-App im neuen Design: Übersicht mit „Braucht dich“ und „Läuft gerade“ (Alle / Arbeitet / Neu), „neues Ergebnis“ in Blau, flache Werkzeugschritte, Modell und Kontext im Eingabefeld, Linien-Icons, helles Thema „Hollr Hell“":
     "iPhone app in the new design: overview with “Needs you” and “Running now” (All / Working / New), “new result” in blue, flat tool steps, model and context in the composer, line icons, light theme “Hollr Light”",
   "Dialoge, Menüs, App-Sperre, Dateivorschau und Vorlese-Leiste im neuen Overlay-Stil; „Nachfragen“ (⌘⇧K) zu markiertem Text":

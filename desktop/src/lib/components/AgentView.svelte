@@ -31,6 +31,7 @@
   import { jobViews, shortCommand } from "../chatTools";
   import MsgActions from "./MsgActions.svelte";
   import TimelineView from "./TimelineView.svelte";
+  import SessionStart from "./SessionStart.svelte";
   import TerminalView from "./TerminalView.svelte";
   import TimeStrip from "./TimeStrip.svelte";
   import Composer from "./Composer.svelte";
@@ -40,7 +41,8 @@
   import GitPanel from "./GitPanel.svelte";
   import Modal from "./Modal.svelte";
   import LiveBar from "./LiveBar.svelte";
-  import { rememberViewPrefs, viewPrefsOf, type ViewMode } from "../viewPrefs";
+  import { initialView, rememberViewPrefs, viewPrefsOf, type ViewMode } from "../viewPrefs";
+  import { parseSidePanel, SIDE_PANEL_KEY, sidePanelFor, type SidePanel } from "../layoutPrefs";
   import { parsePathHref } from "../paths";
   import FilePreview from "./FilePreview.svelte";
 
@@ -101,9 +103,15 @@
   const waitingForUser = $derived(status === "blocked" || askShown);
   const working = $derived(!!timeline?.running && !waitingForUser);
   /** the log has something to show as chat – omp's always does; a Claude timeline stays empty on servers
-   *  without its parser (then the screen card is the chat, like for codex). Still loading: the chat's skeleton. */
-  const chat = $derived(isOmp || (hasTimeline && (!loaded || !!timeline?.items.length)));
+   *  without its parser (then the screen card is the chat, like for codex) – a fresh one from newer servers brings
+   *  its start screen. Still loading: the session start (SessionStart, at most a few seconds). */
+  const chat = $derived(isOmp || (hasTimeline && (!loaded || !!timeline?.items.length || !!timeline?.start)));
   const showsScreen = $derived((!chat || status === "blocked") && !askShown);
+  /** omp / Claude before the first prompt: the start (agent, model, MCP, update, first steps) instead of an empty chat */
+  const startAgent = $derived(chat && (pane.agent === "omp" || pane.agent === "claude") ? pane.agent : undefined);
+  const freshStart = $derived.by(
+    () => !!startAgent && mode === "chat" && !timeline?.items.length && !pending.length && livePhase !== "connecting" && livePhase !== "live",
+  );
   let screenOpen = $state(false);
   /** when this view saw the agent start waiting – fallback for "since when" when the log has no time.
    *  Only a change seen here counts: waiting already on open has an unknown start (no made-up "4s"). */
@@ -201,8 +209,9 @@
     busy = true;
     try {
       if (hasTimeline) {
-        // the stream brings the timeline; polled only from servers without `follow`
-        if (!streaming) {
+        // the stream brings the timeline; polled from servers without `follow` – and when the stream brought
+        // nothing by the start timeout (servers ≤ 0.42 ended it on a fresh session whose log didn't exist yet)
+        if (!streaming || (!timeline && loaded)) {
           // unchanged → the server answers a few bytes instead of the whole timeline
           const tl = await api.timeline(server, pane.pane, timeline?.etag);
           if (tl) setTimeline(tl);
@@ -231,6 +240,8 @@
 
   let ticks = 0;
   let poll: ReturnType<typeof setInterval> | undefined;
+  /** waits for the first timeline: after this the chat counts as loaded (the start with what's known, no skeleton) */
+  let startTimer: ReturnType<typeof setTimeout> | undefined;
   onMount(() => {
     tick();
     poll = setInterval(() => {
@@ -239,8 +250,16 @@
       if (document.visibilityState !== "visible" && ticks % 4) return;
       tick();
     }, hasTimeline ? 2000 : 3000);
+    startTimer = setTimeout(() => {
+      if (loaded) return;
+      loaded = true;
+      tick();
+    }, 4000);
   });
-  onDestroy(() => clearInterval(poll));
+  onDestroy(() => {
+    clearInterval(poll);
+    clearTimeout(startTimer);
+  });
 
   // elapsed times in the HUD
   let now = $state(Date.now());
@@ -259,22 +278,28 @@
 
   // ------------------------------------------------------------ view state
 
-  // chat or terminal and zen as last left in this session (a dashboard "Terminal" click wins)
+  // chat or terminal and zen as last left in this session (a dashboard "Terminal" click wins); a session never
+  // set opens as the last choice made in any session
   const prefs = untrack(() => viewPrefsOf(`${server}|${pane.pane}`));
-  // a chat with context always opens as a chat (also while its agent still starts), and a reused pane id may carry an old "terminal"
-  let mode = $state<ViewMode>(untrack(() => (open === "terminal" || !pane.agent ? (pane.fork && pane.agent !== "shell" ? "chat" : "terminal")
-    : pane.fork ? "chat" : (prefs.view ?? "chat"))));
+  let mode = $state<ViewMode>(untrack(() =>
+    initialView({ open, agent: pane.agent, fork: !!pane.fork, saved: prefs.view, last: settings.viewMode })));
+  let modeShown = untrack(() => mode);
   $effect(() => {
-    if (pane.agent) rememberViewPrefs(`${server}|${pane.pane}`, { view: mode });
+    if (!pane.agent) return;
+    rememberViewPrefs(`${server}|${pane.pane}`, { view: mode });
+    // only a choice made here counts as "last" (not a quick action's or a chat with context's fixed view)
+    if (mode !== modeShown && !pane.fork) settings.viewMode = mode;
+    modeShown = mode;
   });
   let zen = $state(prefs.zen ?? false);
   $effect(() => {
     // only "on" is kept: every session opened once would otherwise take a slot
     rememberViewPrefs(`${server}|${pane.pane}`, { zen: zen || undefined });
   });
-  let panel = $state<"" | "chats" | "git" | "browser" | "info">(untrack(() => (open === "git" || open === "browser" ? open : "")));
+  // the side panel as last left in any session (one choice for all: switching session, space or worktree keeps it)
+  let panel = $state<SidePanel>(untrack(() => sidePanelFor(parseSidePanel(localStorage.getItem(SIDE_PANEL_KEY)), open, !!pane.fork)));
   /** browser stays mounted (tunnels open) until its ✕, even while another panel tab shows */
-  let browserOpen = $state(untrack(() => open === "browser"));
+  let browserOpen = $state(untrack(() => panel === "browser"));
   let browserRequest = $state<{ url: string } | null>(untrack(() => (open === "browser" && url ? { url } : null)));
   let menu = $state(false);
   let showModels = $state(false);
@@ -290,6 +315,18 @@
   let toast = $state("");
   let composer: Composer | undefined = $state();
   let term: TerminalView | undefined = $state();
+  /** a fresh session: the cursor waits in the composer (once – later clicks elsewhere stay) */
+  let startFocused = false;
+  $effect(() => {
+    if (!freshStart || !composer || startFocused) return;
+    startFocused = true;
+    composer.focus();
+  });
+  /** a first step of the start: into the composer to edit, not sent */
+  function suggest(text: string) {
+    drafts.setText(key, text);
+    composer?.focus();
+  }
 
   const PW = "hollr.agent.panelWidth";
   let panelWidth = $state(Number(localStorage.getItem(PW)) || 460);
@@ -313,6 +350,15 @@
     panel = panel === p ? "" : p;
     zen = false;
   }
+  // only what is chosen here is remembered (not a chat with context's Git stand-in for "Nachfragen")
+  let panelShown = untrack(() => panel);
+  $effect(() => {
+    if (panel === panelShown) return;
+    panelShown = panel;
+    try {
+      localStorage.setItem(SIDE_PANEL_KEY, panel);
+    } catch {}
+  });
 
   function startResize(e: PointerEvent) {
     const startX = e.clientX;
@@ -786,7 +832,7 @@
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
           bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
-          {server} {ws} top={liveStrip} trailing={liveButton} meta={mode === "chat" && !zen ? statusMeta : undefined} quick={mode === "terminal"} dictationKey={key} micBlocked={liveActive()}
+          {server} {ws} top={liveStrip} trailing={liveButton} meta={mode === "chat" && !zen ? statusMeta : undefined} quick={mode === "terminal"} chips={!freshStart} dictationKey={key} micBlocked={liveActive()}
           vocabulary={() => sessionTerms([title, pane.cwd.split("/").pop() ?? "", timeline?.title ?? ""], timeline?.items ?? [])} />
       </div>
 
@@ -834,23 +880,24 @@
 </section>
 
 {#snippet emptyHint()}
-  <div class="empty">
-    {#if !loaded && !isShell}
-      <div class="sk">{#each [80, 55, 70, 40, 65, 50] as w, i}<div class="skeleton" style:width="{w}%" style:align-self={i % 3 === 0 ? "flex-end" : "flex-start"}></div>{/each}</div>
-    {:else if livePhase === "connecting"}
-      <div>{t("omp /live wird gestartet …")}</div>
-    {:else if livePhase === "live"}
-      <div>{t("Ich höre zu …")}</div>
-    {:else if pane.live}
-      <div>{t("Klicke auf „Live“ und sprich mit omp.")}</div>
-      <div class="small">{t("Was du sagst, landet direkt in dieser Session – wie /live am Rechner.")}</div>
-    {:else if pane.agent}
-      <div>{t("Sprechen geht bisher nur mit omp.")}</div>
-      <div class="small">{t("An {agent} kannst du unten Text schicken.", { agent: agentName })}</div>
-    {:else}
-      <div>{t("Hier läuft kein Agent, nur eine Shell.")}</div>
-    {/if}
-  </div>
+  {#if freshStart && startAgent}
+    <SessionStart {server} agent={startAgent} cwd={pane.cwd} {timeline} loading={!loaded} live={!!pane.live} onSuggest={suggest} />
+  {:else}
+    <div class="empty">
+      {#if !loaded && !isShell}
+        <div class="sk">{#each [80, 55, 70, 40, 65, 50] as w, i}<div class="skeleton" style:width="{w}%" style:align-self={i % 3 === 0 ? "flex-end" : "flex-start"}></div>{/each}</div>
+      {:else if livePhase === "connecting"}
+        <div>{t("omp /live wird gestartet …")}</div>
+      {:else if livePhase === "live"}
+        <div>{t("Ich höre zu …")}</div>
+      {:else if pane.agent}
+        <div>{t("Sprechen geht bisher nur mit omp.")}</div>
+        <div class="small">{t("An {agent} kannst du unten Text schicken.", { agent: agentName })}</div>
+      {:else}
+        <div>{t("Hier läuft kein Agent, nur eine Shell.")}</div>
+      {/if}
+    </div>
+  {/if}
 {/snippet}
 
 {#snippet info()}

@@ -17,7 +17,8 @@ export interface FileChange { path: string; status: string; add: number; del: nu
 export interface Changes { branch: string; staged: FileChange[]; unstaged: FileChange[] }
 export interface GraphCommit { hash: string; parents: string[]; subject: string; author: string; at: number; refs?: string }
 export interface ChangesSummary { files: number; add: number; del: number }
-export interface Graph { commits: GraphCommit[]; changes: ChangesSummary }
+/** `remotes`: the repo's remote names (older servers don't send them) */
+export interface Graph { commits: GraphCommit[]; remotes?: string[]; changes: ChangesSummary }
 export interface CommitDetail { hash: string; author: string; email: string; at: number; subject: string; body: string; merge: boolean; files: FileChange[] }
 export interface PullRequest { number: number; state: string; draft: boolean; checks?: string }
 export interface Branch { name: string; subject: string; at: number; current: boolean; ahead: number; behind: number; pr?: PullRequest }
@@ -32,7 +33,9 @@ export const changes = (s: string, ws: string) => fs<Changes>(s, { op: "changes"
 export const diff = (s: string, ws: string, path: string, staged: boolean) =>
   fs<{ text: string }>(s, { op: "diff", ws, path, staged }).then((r) => r.text);
 export const stage = (s: string, ws: string, path: string, on: boolean) => fs(s, { op: on ? "stage" : "unstage", ws, path });
-export const graph = (s: string, ws: string, limit = 200) => fs<Graph>(s, { op: "graph", ws, limit });
+/** history of HEAD; `remotes` adds the remote-tracking branches (commits only on a remote too) */
+export const graph = (s: string, ws: string, limit = 200, remotes = false) =>
+  fs<Graph>(s, { op: "graph", ws, limit, ...(remotes ? { remotes } : {}) });
 export const commit = (s: string, ws: string, hash: string) => fs<CommitDetail>(s, { op: "commit", ws, hash });
 export const commitDiff = (s: string, ws: string, hash: string, path?: string) =>
   fs<{ text: string }>(s, { op: "commitdiff", ws, hash, ...(path ? { path } : {}) }).then((r) => r.text);
@@ -102,22 +105,6 @@ export const statusColor = (s: string) =>
 
 export const sumAdd = (files: FileChange[]) => files.reduce((n, f) => n + f.add, 0);
 export const sumDel = (files: FileChange[]) => files.reduce((n, f) => n + f.del, 0);
-
-/** `%D` decoration → chips: "HEAD -> main, origin/main, tag: v1" */
-export interface Ref { name: string; kind: "head" | "local" | "remote" | "tag" }
-export function parseRefs(refs?: string): Ref[] {
-  if (!refs) return [];
-  const out: Ref[] = [];
-  for (const raw of refs.split(", ")) {
-    const r = raw.trim();
-    if (!r || r === "HEAD" || r.endsWith("/HEAD")) continue;
-    if (r.startsWith("HEAD -> ")) out.push({ name: r.slice(8), kind: "head" });
-    else if (r.startsWith("tag: ")) out.push({ name: r.slice(5), kind: "tag" });
-    else if (r.includes("/")) out.push({ name: r, kind: "remote" });
-    else out.push({ name: r, kind: "local" });
-  }
-  return out;
-}
 
 // ------------------------------------------------------------ file icons
 

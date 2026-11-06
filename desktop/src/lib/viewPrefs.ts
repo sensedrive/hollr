@@ -48,6 +48,17 @@ const prefs = load();
 
 export const viewPrefsOf = (id: string): ViewPrefs => prefs.get(id) ?? {};
 
+/**
+ * Chat or terminal when a session opens: a dashboard "Terminal" click wins; plain shells show the
+ * terminal; a chat with context is always a chat (also while its agent still starts – a reused pane id
+ * may carry an old "terminal"); otherwise as last left in this session, and a session never set
+ * uses the last choice made in any session (`last`), so switching space or worktree keeps it.
+ */
+export function initialView(o: { open?: string; agent?: string; fork: boolean; saved?: ViewMode; last: ViewMode }): ViewMode {
+  if (o.open === "terminal" || !o.agent) return o.fork && o.agent !== "shell" ? "chat" : "terminal";
+  return o.fork ? "chat" : (o.saved ?? o.last);
+}
+
 /** Merges `patch` into the session's prefs; the session becomes the most recently used. */
 export function rememberViewPrefs(id: string, patch: ViewPrefs) {
   const cur = prefs.get(id) ?? {};

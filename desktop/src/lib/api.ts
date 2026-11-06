@@ -134,6 +134,27 @@ export interface StatusLine {
   dirty?: number;
   context?: string;
   cost?: string;
+  /** omp's thinking level id (newer servers): minimal, low, medium, high, xhigh, max */
+  thinking?: string;
+}
+/** An agent's start screen before the first prompt (server/src/startscreen.ts; newer servers, fresh sessions only). */
+export interface StartInfo {
+  version?: string;
+  /** Claude: model and subscription from its banner */
+  model?: string;
+  plan?: string;
+  /** Claude: effort level */
+  effort?: string;
+  tip?: string;
+  /** a newer version the agent announced */
+  update?: string;
+  mcp?: {
+    connected: string[];
+    failed: { name: string; error?: string; config?: string }[];
+    pending: string[];
+    /** Claude only reports a count */
+    failedCount?: number;
+  };
 }
 export interface Timeline {
   /** which session log the timeline comes from (older servers: omp only, field missing) */
@@ -148,6 +169,8 @@ export interface Timeline {
   model?: string;
   status?: string;
   line?: StatusLine;
+  /** nothing said yet: what the agent's start screen shows */
+  start?: StartInfo;
   /** content fingerprint – sent back on the next poll */
   etag?: string;
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
   // Moshi-style repo browser for one space: files, changes, history graph, branches.
   // List and detail side by side (draggable splitter) or stacked (list on top, detail below);
-  // "auto" stacks when narrow. The list can make way for the detail. Layout remembered per place.
+  // "auto" stacks when narrow. The list can make way for the detail. Layout and tab remembered per place.
+  import { untrack } from "svelte";
   import { t } from "../i18n";
   import { GIT_LAYOUT, clamp, gitKey, loadLayout, nextArrange, resolveArrange, saveLayout, type GitPlace } from "../layoutPrefs";
   import Splitter from "./Splitter.svelte";
@@ -16,21 +17,26 @@
   import { detailKey, type Detail, type Tab } from "./git/nav";
 
   /** `openFile`: a file (or folder) to show in the files tab – the file preview's "Im Git-Panel öffnen"; a new `n` opens it again */
-  let { server, ws, title = "", initialTab = "changes", place = "side", openFile }:
-    { server: string; ws: string; title?: string; initialTab?: Tab; place?: GitPlace;
+  let { server, ws, title = "", place = "side", openFile }:
+    { server: string; ws: string; title?: string; place?: GitPlace;
       openFile?: { path: string; dir: boolean; n: number } | null } = $props();
 
   // svelte-ignore state_referenced_locally
-  let tab = $state<Tab>(initialTab);
+  const key = gitKey(place);
+  let layout = $state(loadLayout(key, GIT_LAYOUT));
+  const save = () => saveLayout(key, layout);
+  /** the tab as last left in this place (all sessions' side panels share one) */
+  let tab = $state<Tab>(untrack(() => layout.tab));
+  $effect(() => {
+    if (tab === untrack(() => layout.tab)) return;
+    layout.tab = tab;
+    save();
+  });
   let rev = $state(0);
   let width = $state(0);
   let height = $state(0);
   let listWidth = $state(0);
   let details = $state<Record<Tab, Detail[]>>({ files: [], changes: [], history: [], branches: [] });
-  // svelte-ignore state_referenced_locally
-  const key = gitKey(place);
-  let layout = $state(loadLayout(key, GIT_LAYOUT));
-  const save = () => saveLayout(key, layout);
 
   const arrange = $derived(resolveArrange(layout.arrange, width));
   const wide = $derived(arrange === "side");

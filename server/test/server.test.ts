@@ -635,6 +635,54 @@ describe("git views", () => {
     rmSync(repo, { recursive: true, force: true });
     // a real repo with many git calls: slow CI runners need more than the 5 s default
   }, 20_000);
+
+  test("graph with remote-tracking branches: remote-only commits, no <remote>/HEAD", async () => {
+    const git = await import("../src/git");
+    const repo = mkdtempSync(join(tmpdir(), "hollr-git-"));
+    const sh = (...cmd: string[]) => {
+      const r = Bun.spawnSync(cmd, {
+        cwd: repo,
+        env: {
+          ...Bun.env,
+          GIT_AUTHOR_NAME: "T",
+          GIT_AUTHOR_EMAIL: "t@x",
+          GIT_COMMITTER_NAME: "T",
+          GIT_COMMITTER_EMAIL: "t@x",
+        },
+      });
+      if (r.exitCode !== 0) throw new Error(`${cmd.join(" ")}: ${r.stderr}`);
+      return r.stdout.toString().trim();
+    };
+    sh("git", "init", "-q", "-b", "main");
+    sh("git", "remote", "add", "origin", "https://example.invalid/repo.git");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    sh("git", "add", ".");
+    sh("git", "commit", "-qm", "first");
+    sh("git", "update-ref", "refs/remotes/origin/main", "HEAD");
+    sh("git", "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+    // a commit that only exists on origin/topic (its local branch is gone)
+    sh("git", "checkout", "-qb", "topic");
+    writeFileSync(join(repo, "b.txt"), "x\n");
+    sh("git", "add", ".");
+    sh("git", "commit", "-qm", "remote only");
+    sh("git", "update-ref", "refs/remotes/origin/topic", "HEAD");
+    sh("git", "checkout", "-q", "main");
+    sh("git", "branch", "-qD", "topic");
+    // a local branch with a slash that isn't a remote
+    sh("git", "branch", "feature/x");
+
+    const local = git.graph(repo);
+    expect(local.commits.map((c) => c.subject)).toEqual(["first"]);
+    expect(local.remotes).toEqual(["origin"]);
+
+    const all = git.graph(repo, 150, true);
+    expect(all.commits.map((c) => c.subject)).toEqual(["remote only", "first"]);
+    expect(all.commits[0]?.refs).toBe("origin/topic");
+    // origin/HEAD stays out of the decorations, origin/main and the local slash branch stay in
+    expect(all.commits[1]?.refs).toBe("HEAD -> main, origin/main, feature/x");
+    expect(all.remotes).toEqual(["origin"]);
+    rmSync(repo, { recursive: true, force: true });
+  }, 20_000);
 });
 
 describe("space deletion safety", () => {

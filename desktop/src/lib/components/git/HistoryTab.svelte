@@ -1,7 +1,9 @@
 <script lang="ts">
   // History graph: uncommitted-changes row on top, lanes with colors, ref chips, search; commits open in the detail pane.
+  // "Remote-Branches" (remembered, on by default) adds the remote-tracking branches – as of the last fetch, none here.
   import { onDestroy } from "svelte";
   import * as git from "../../git";
+  import { parseRefs } from "../../gitRefs";
   import { t } from "../../i18n";
   import GraphCell from "./GraphCell.svelte";
   import Icon from "./Icon.svelte";
@@ -19,6 +21,7 @@
   let data = $state<git.Graph | null>(null);
   let error = $state("");
   let filter = $state("");
+  let remotes = $state(git.pref("remotes", true));
   let sel = $state(-1);
   let list: HTMLElement | undefined = $state();
 
@@ -26,16 +29,21 @@
   async function load() {
     const n = ++seq;
     try {
-      const r = await git.graph(server, ws, 200);
+      const r = await git.graph(server, ws, 200, remotes);
       if (n === seq) { data = r; error = ""; }
     } catch (e) { if (n === seq) error = String(e); }
   }
   let lastWs = "";
   $effect(() => {
     void rev;
+    void remotes;
     if (ws !== lastWs) { data = null; lastWs = ws; }
     load();
   });
+  function toggleRemotes() {
+    remotes = !remotes;
+    git.setPref("remotes", remotes);
+  }
 
   const dirty = $derived((data?.changes.files ?? 0) > 0);
   const rows = $derived(data ? git.graphRows(data.commits, dirty) : []);
@@ -68,6 +76,9 @@
       <Icon name="search" size={13} />
       <input bind:value={filter} placeholder={t("Commits durchsuchen …")} spellcheck="false" oninput={() => (sel = -1)} />
     </label>
+    <button class="tb" class:on={remotes} aria-pressed={remotes} onclick={toggleRemotes}
+      title={remotes ? t("Remote-Branches ausblenden") : t("Remote-Branches zeigen (Stand des letzten Fetch)")}>
+      <Icon name="branch" size={13} /> {t("Remote-Branches")}</button>
   </div>
 
   {#if error}<div class="state err">{error}</div>{/if}
@@ -90,15 +101,20 @@
     {/if}
     {#each shown as r, i (r.commit.hash)}
       {@const open_ = openKey === `commit:${r.commit.hash}`}
+      {@const refs = parseRefs(r.commit.refs, data.remotes)}
       <button class="row" data-i={i} class:sel={i === sel} class:open={open_} onclick={() => open(i)} title={r.commit.subject}>
         {#if q}
           <span class="qdot" style="background:{git.laneColor(r.node)}"></span>
         {:else}
           <GraphCell row={r} width={laneWidth} height={H} selected={open_} />
         {/if}
-        {#each git.parseRefs(r.commit.refs) as ref}
-          <span class="ref {ref.kind}">{#if ref.kind === "tag"}<Icon name="tag" size={10} />{/if}{ref.name}</span>
-        {/each}
+        {#if refs.length}
+          <span class="refs">
+            {#each refs as ref}
+              <span class="ref {ref.kind}" title={ref.name}>{#if ref.kind === "tag"}<Icon name="tag" size={10} />{/if}{#if ref.remote}<span class="rp">{ref.remote}/</span>{ref.name.slice(ref.remote.length + 1)}{:else}{ref.name}{/if}</span>
+            {/each}
+          </span>
+        {/if}
         <span class="subject" class:merge={r.commit.parents.length > 1}>{r.commit.subject}</span>
         {#if wide}<span class="author">{r.commit.author}</span>{/if}
         <span class="hash">{r.commit.hash.slice(0, 7)}</span>
@@ -131,12 +147,21 @@
   .author { color: var(--muted); font-size: 12px; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
   .hash { font-family: var(--mono); font-size: 11.5px; color: var(--dim); flex: none; }
   .age { font-size: 11.5px; color: var(--dim); width: 30px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
-  .ref { flex: none; display: inline-flex; align-items: center; gap: 3px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font: 600 10.5px/1 var(--mono); padding: 3px 6px; border-radius: 5px; border: 1px solid; }
+  /* chips give way (ellipsis, full name on hover; the rest clipped) before the subject drops below a fifth of the row */
+  .subject:not(.wipt) { min-width: 20%; }
+  .refs { flex: 0 1 auto; min-width: 0; display: flex; gap: 6px; overflow: hidden; }
+  .ref { flex: 0 1 auto; min-width: 36px; display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 600 10.5px/1 var(--mono); padding: 3px 6px; border-radius: 5px; border: 1px solid; text-align: center; }
+  .ref :global(svg) { vertical-align: -1.5px; margin-right: 3px; }
   .ref.head { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
   .ref.local { color: var(--purple); border-color: color-mix(in srgb, var(--purple) 45%, transparent); }
-  .ref.remote { color: var(--muted); border-color: var(--border); }
+  .ref.remote { color: var(--muted); border-color: var(--border); border-style: dashed; background: transparent; }
+  .ref.remote .rp { color: var(--dim); font-weight: 500; }
   .ref.tag { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
   .state { padding: 12px 16px; }
   .small { font-size: 11.5px; }
+  .tb { flex: none; display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid transparent; border-radius: 7px;
+    padding: 4px 8px; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
+  .tb:hover { border-color: var(--border); color: var(--fg); }
+  .tb.on { background: var(--card); border-color: var(--border); color: var(--fg); }
 </style>

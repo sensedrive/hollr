@@ -67,6 +67,7 @@ import {
 import { webPorts } from "./ports";
 import { runFollow } from "./follow";
 import { runAttach, runShell } from "./shell";
+import { parseStartScreen } from "./startscreen";
 import { runTerm } from "./term";
 import { saveUpload, UPLOAD_LIMIT } from "./uploads";
 import {
@@ -99,7 +100,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.42.0";
+export const VERSION = "0.43.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -276,30 +277,39 @@ async function gate(): Promise<number> {
       if (agent.kind === "claude") {
         // Claude's transcript; its dialogs come from the screen, model/context/cost from the log
         const { timeline, usage } = await paneTimeline(herdr, agent, Number(rest[0] ?? 150));
+        // nothing said yet: its banner (version, model, plan) is the chat's start
+        const start = timeline.items.length
+          ? undefined
+          : parseStartScreen("claude", await herdr.screen(pane, 80).catch(() => ""));
         full = {
           ...timeline,
           status: agent.status,
           line: statusLine(agent.cwd, claudeFooter(usage), timeline.model),
+          ...(start ? { start } : {}),
         };
       } else {
         const file = agent.sessionFile;
         const timeline = file
           ? await readTimeline(file, Number(rest[0] ?? 150))
           : { items: [], jobs: [], running: false, waiting: false };
-        const screen = await execHerdr([
+        // the footer; while nothing is said yet the whole screen – omp's start (version, tip, MCP, update)
+        const fresh = timeline.items.length === 0;
+        const read = await execHerdr([
           "agent",
           "read",
           pane,
           "--source",
           "visible",
           "--lines",
-          "4",
+          fresh ? "80" : "4",
         ]).catch(() => "");
-        const footer = parseFooter(typeof screen === "string" ? screen : "");
+        const screen = typeof read === "string" ? read : "";
+        const start = fresh ? parseStartScreen("omp", screen) : undefined;
         full = {
           ...timeline,
           status: agent.status,
-          line: statusLine(agent.cwd, footer, (timeline as { model?: string }).model),
+          line: statusLine(agent.cwd, parseFooter(screen), (timeline as { model?: string }).model),
+          ...(start ? { start } : {}),
         };
       }
       // the app polls often: with its last etag, an unchanged timeline is a few bytes, not ~100 KB

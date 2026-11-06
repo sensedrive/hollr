@@ -1,0 +1,23 @@
+
+                                            ████████████
+                                               ██  ██       ▄▀▀▄ █▀▄▀▄ █▀▀▄
+                                               ██  ██       ▀▄▄▀ █ █ █ █▄▄▀
+                                               ▒▒  ██                  █
+                                                   ██       v18.16.0
+
+                       Tip: Try starting your prompt with a ->, and writing a list (1. Do X, 2.
+                                             Do Y)
+
+Failed: context-mode [config: ~/PhpstormProjects/leicht+luftig/tackline/tendr/.codex/config.toml]: ENOENT: no such file or directory, posix_spawn '~/PhpstormProjects/leicht+lufti… Still connecting: shadcn, mcp-atlassian, storybook…
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Update Available
+ New version 18.17.0 is available. Run: omp update
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+MCP finished with failures. Connected: shadcn, mcp-atlassian, storybook. Failed: context-mode [config: ~/PhpstormProjects/leicht+luftig/tackline/tendr/.codex/config.toml]: ENOENT: no such file or directory, posix_spawn '~/PhpstormProjects/leicht+lufti…
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                          ⇧⇥ to change thinking effort
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ π · ◒ Opus 5.5 · 🗑 tendr · ⑂ main *2 ?1 · ◫ 3.3%/1M ⟲ · (sub)
