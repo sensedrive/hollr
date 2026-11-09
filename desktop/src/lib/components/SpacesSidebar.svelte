@@ -7,7 +7,7 @@
   import { onMount } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import Icon from "./git/Icon.svelte";
-  import { allPanes, app, dialogs, go, nav, pollSpaces, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, go, lastTabRoute, nav, pollSpaces, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
   import { groupSpaces, type FullSpace } from "$lib/views/spaces/spaces";
@@ -76,8 +76,12 @@
     return "";
   });
 
+  /** back to the tab selected there last; a space never visited opens the session that needs you first */
   function open(server: string, sp: FullSpace) {
-    const first = sp.missing ? undefined : panesOf(server, sp.id)[0];
+    if (sp.missing) return go({ view: "space", server, ws: sp.id });
+    const last = lastTabRoute(server, sp.id);
+    if (last) return go(last);
+    const first = panesOf(server, sp.id)[0];
     if (first) go({ view: "agent", server, pane: first.pane.pane });
     else go({ view: "space", server, ws: sp.id });
   }

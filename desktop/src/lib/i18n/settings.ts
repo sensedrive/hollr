@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Jeder Space merkt sich seinen Tab: Zurück aus einem anderen Space landest du wieder auf dem Tab, den du dort zuletzt offen hattest – auch nach einem Neustart":
+    "Every space remembers its tab: coming back from another space lands on the tab you last had open there – also after a restart",
   "Git-Stand sofort aktuell: pull, fetch, commit oder checkout – auch in einem normalen Terminal oder außerhalb von Hollr – zeigen ↑/↓ und Änderungen nach wenigen Sekunden":
     "Git state up to date right away: pull, fetch, commit or checkout – also in a plain terminal or outside Hollr – show ↑/↓ and changes within seconds",
   "Letzte Sitzung eines Space lässt sich schließen – der Space bleibt mit einem leeren Terminal; scheitert das Schließen, siehst du warum":

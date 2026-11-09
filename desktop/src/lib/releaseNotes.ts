@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 33,
+    version: "0.44.1",
+    date: "07.11.2026",
+    items: [
+      { icon: "▢", text: "Jeder Space merkt sich seinen Tab: Zurück aus einem anderen Space landest du wieder auf dem Tab, den du dort zuletzt offen hattest – auch nach einem Neustart" },
+    ],
+  },
+  {
     build: 32,
     version: "0.44.0",
     date: "06.11.2026",

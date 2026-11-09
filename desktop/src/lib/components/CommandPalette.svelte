@@ -5,7 +5,7 @@
   // choose, ↩ runs, Esc closes.
   import { tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
-  import { allPanes, app, dialogs, findPane, go, nav, tabName } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, findPane, go, lastTabRoute, nav, tabName } from "$lib/store.svelte";
   import { canFork, startContextChat } from "$lib/contextChat.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
   import { statusRank } from "$lib/views/dashboard/util";
@@ -30,7 +30,7 @@
   const spaces = $derived(
     ((app.spaces[currentServer()] ?? []) as FullSpace[]).map((sp): Item => ({
       id: `w:${sp.id}`, label: sp.label, icon: "space", sub: [app.servers.find((s) => s.id === currentServer())?.label, sp.git?.branch].filter(Boolean).join(" · "),
-      run: () => go({ view: "space", server: currentServer(), ws: sp.id }),
+      run: () => go(lastTabRoute(currentServer(), sp.id) ?? { view: "space", server: currentServer(), ws: sp.id }),
     })),
   );
   /** the session on screen, when a chat with its context can be started */

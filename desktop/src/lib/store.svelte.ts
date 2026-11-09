@@ -6,6 +6,7 @@ import type { Pane, Server, Workspace } from "./api";
 import { type Space, spaces as loadSpaces } from "./git";
 import * as d from "./drafts";
 import { chatLabel } from "./contextChatText";
+import { LAST_TAB_KEY, lastTabKey, parseLastTabs, restoreTab } from "./lastTab";
 
 export const app = $state({
   servers: [] as Server[],
@@ -42,12 +43,47 @@ export function go(route: Route) {
   nav.history = [...nav.history.slice(-30), nav.route];
   nav.route = route;
   if (route.view === "agent") mySessions.touch(`${route.server}|${route.pane}`);
+  rememberTab(route);
+}
+
+// ---- the tab each space had selected last (its overview or a session): switching spaces comes back to it
+const lastTabs: Record<string, string> = (() => {
+  try {
+    return parseLastTabs(localStorage.getItem(LAST_TAB_KEY));
+  } catch {
+    return {};
+  }
+})();
+
+function rememberTab(route: Route) {
+  let key: string;
+  let value: string;
+  if (route.view === "space") [key, value] = [lastTabKey(route.server, route.ws), ""];
+  else if (route.view === "agent") {
+    const ref = findPane(route.server, route.pane);
+    if (!ref) return;
+    [key, value] = [lastTabKey(route.server, ref.workspace.id), route.pane];
+  } else return;
+  if (lastTabs[key] === value) return;
+  lastTabs[key] = value;
+  try {
+    localStorage.setItem(LAST_TAB_KEY, JSON.stringify(lastTabs));
+  } catch {}
+}
+
+/** the tab to show when switching to a space: the one selected there last, if it still exists */
+export function lastTabRoute(server: string, ws: string): Route | undefined {
+  const panes = allPanes(server).filter((r) => r.workspace.id === ws).map((r) => r.pane.pane);
+  const hit = restoreTab(lastTabs[lastTabKey(server, ws)], panes);
+  if (!hit) return undefined;
+  return "pane" in hit ? { view: "agent", server, pane: hit.pane } : { view: "space", server, ws };
 }
 
 export function back() {
   const prev = nav.history.at(-1);
   nav.history = nav.history.slice(0, -1);
   nav.route = prev ?? { view: "dashboard" };
+  rememberTab(nav.route);
 }
 
 export const openAgent = (server: string, pane: string) => go({ view: "agent", server, pane });
