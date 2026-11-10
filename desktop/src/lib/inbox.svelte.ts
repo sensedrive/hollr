@@ -108,6 +108,14 @@ export function markSeen(id: string, now = Date.now()) {
   inbox.seen[id] = now;
 }
 
+/** A finished session whose window was open after it finished. A newer result (status flipped again) counts fresh. */
+export function resultSeen(id: string): boolean {
+  const seen = inbox.seen[id];
+  if (seen === undefined) return false;
+  const since = inbox.since[id];
+  return since === undefined || seen >= since;
+}
+
 /** Optimistically hide, then refresh that pane soon (it comes back if the agent still waits). */
 async function act(e: InboxEntry & { ref: PaneRef }, send: () => Promise<unknown>): Promise<boolean> {
   inbox.answered[e.key] = Date.now();

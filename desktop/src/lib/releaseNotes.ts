@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 40,
+    version: "0.44.8",
+    date: "10.11.2026",
+    items: [
+      { icon: "●", text: "Der blaue Punkt (fertig) verschwindet, sobald du das Fenster offen hattest. Ein neues Ergebnis danach setzt ihn wieder." },
+    ],
+  },
+  {
     build: 39,
     version: "0.44.7",
     date: "10.11.2026",

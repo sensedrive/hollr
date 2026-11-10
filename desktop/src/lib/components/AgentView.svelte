@@ -16,6 +16,7 @@
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
+  import { resultSeen } from "../inbox.svelte";
   import {
     live, liveAbout, liveActive, startLive as startLiveOn, stopLiveOn,
   } from "../live.svelte";
@@ -747,7 +748,7 @@
                 <div class="mscroll">
                   {#each others as r (r.id)}
                     <button class="mi" onclick={() => { menu = false; go({ view: "agent", server: r.server.id, pane: r.pane.pane }); }}>
-                      <span class="dot" class:working={r.pane.status === "working"} class:blocked={r.pane.status === "blocked"} class:done={r.pane.status === "done"}></span>
+                      <span class="dot" class:working={r.pane.status === "working"} class:blocked={r.pane.status === "blocked"} class:done={r.pane.status === "done" && !resultSeen(r.id)}></span>
                       <span class="ellipsis">{tabName(r.tab.label, r.workspace.label)}</span><span class="dim small">{r.pane.agent ?? t("Terminal")}</span>
                     </button>
                   {/each}

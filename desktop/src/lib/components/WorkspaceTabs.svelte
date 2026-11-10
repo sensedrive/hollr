@@ -13,6 +13,7 @@
   import { t } from "$lib/i18n";
   import type { Workspace } from "$lib/api";
   import { dialogs, go, mySessions, refresh } from "$lib/store.svelte";
+  import { resultSeen } from "$lib/inbox.svelte";
   import ConfirmDialog from "$lib/views/dashboard/ConfirmDialog.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import type { MenuItem } from "$lib/views/dashboard/util";
@@ -171,7 +172,7 @@
               onclick={() => openTab(pane)}
               onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
               ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
-              <span class="dot {pane.status}"></span>
+              <span class="dot {pane.status === "done" && resultSeen(`${server}|${pane.pane}`) ? "idle" : pane.status}"></span>
               {#if pane.fork}<span class="derived"><Icon name="corner" size={12} /></span>{/if}
               <span class="name ellipsis">{nameOf(tab, pane)}</span>
               <LiveMark {server} pane={pane.pane} />

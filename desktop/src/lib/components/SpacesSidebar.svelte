@@ -15,6 +15,7 @@
   import OpenWorktree from "./OpenWorktree.svelte";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
+  import { resultSeen } from "$lib/inbox.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
 
   const FOLDED = "hollr.sidebar.folded";
@@ -53,8 +54,11 @@
   /** live status from the sessions (fresher than the space list), else what the server reported */
   function statusOf(server: string, sp: FullSpace): string {
     const panes = panesOf(server, sp.id);
-    for (const s of ["blocked", "working", "done", "idle"]) if (panes.some((r) => r.pane.status === s)) return s;
-    return sp.status ?? "unknown";
+    for (const s of ["blocked", "working", "done", "idle"])
+      if (panes.some((r) => r.pane.status === s && (s !== "done" || !resultSeen(r.id)))) return s;
+    const reported = sp.status ?? "unknown";
+    if (reported === "done" && panes.length && panes.every((r) => r.pane.status !== "done" || resultSeen(r.id))) return "idle";
+    return reported;
   }
 
   // only the current remote (the server tabs above switch it)
