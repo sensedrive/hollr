@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 35,
+    version: "0.44.3",
+    date: "10.11.2026",
+    items: [
+      { icon: "☰", text: "Rechtsklick auf einen Space zeigt nur noch die Aktionen – die Sitzungsliste ist weg, die Tabs bleiben in der Leiste" },
+    ],
+  },
+  {
     build: 34,
     version: "0.44.2",
     date: "10.11.2026",

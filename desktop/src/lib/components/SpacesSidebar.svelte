@@ -7,7 +7,7 @@
   import { onMount, tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import Icon from "./git/Icon.svelte";
-  import { allPanes, app, dialogs, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
   import { groupSpaces, space, type FullSpace } from "$lib/views/spaces/spaces";
@@ -92,16 +92,10 @@
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   function rowMenu(e: MouseEvent, server: string, sp: FullSpace) {
     e.preventDefault();
-    const sessions: MenuItem[] = panesOf(server, sp.id).map((r: PaneRef) => ({
-      label: `${tabName(r.tab.label, r.workspace.label)} · ${r.pane.agent ?? t("Terminal")}`,
-      icon: r.pane.agent ? "↗" : ">_",
-      action: () => go({ view: "agent", server, pane: r.pane.pane }),
-    }));
     menu = {
       x: e.clientX, y: e.clientY,
       items: [
         ...(sp.missing ? [{ label: t("Ordner fehlt – schließen …"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
-        ...sessions,
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
         ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
         ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),

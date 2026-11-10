@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Rechtsklick auf einen Space zeigt nur noch die Aktionen – die Sitzungsliste ist weg, die Tabs bleiben in der Leiste":
+    "Right-clicking a space shows only the actions – the session list is gone, the tabs stay in the bar",
   "Neuer Worktree direkt im Rechtsklick eines Space: Branch-Name, Enter – der Worktree entsteht und omp startet darin":
     "New worktree straight from a space's right-click: branch name, Enter – the worktree is created and omp starts in it",
   "Jeder Space merkt sich seinen Tab: Zurück aus einem anderen Space landest du wieder auf dem Tab, den du dort zuletzt offen hattest – auch nach einem Neustart":
