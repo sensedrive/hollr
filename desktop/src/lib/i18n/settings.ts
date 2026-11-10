@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Vorlesen-Leiste an der Markierung: ✕ oder ein Klick daneben blendet sie aus. Dieselbe Markierung holt sie nicht zurück.":
+    "The read-aloud bar on a selection: ✕ or a click beside it hides it. The same selection does not bring it back.",
   "„Worktrees einklappen“ zeigt einen Pfeil statt des abgeschnittenen Icon-Namens":
     "“Collapse worktrees” shows an arrow instead of the clipped icon name",
   "Der blaue Punkt (fertig) verschwindet, sobald du das Fenster offen hattest. Ein neues Ergebnis danach setzt ihn wieder.":

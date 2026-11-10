@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 42,
+    version: "0.44.10",
+    date: "10.11.2026",
+    items: [
+      { icon: "✕", text: "Vorlesen-Leiste an der Markierung: ✕ oder ein Klick daneben blendet sie aus. Dieselbe Markierung holt sie nicht zurück." },
+    ],
+  },
+  {
     build: 41,
     version: "0.44.9",
     date: "10.11.2026",

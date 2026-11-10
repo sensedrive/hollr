@@ -11,7 +11,7 @@
   // own ⌘⇧ keys are F G B I M T, ⌘⇧Z is redo – ⌘⌥⇧S is free in the app and in macOS.
   import { t } from "$lib/i18n";
   import {
-    LANG_NAMES, offerSelection, PHONON_MODELS, selection, shortModel, SPEED, speaker, speech, withdrawSelection,
+    dismissSelection, LANG_NAMES, offerSelection, PHONON_MODELS, selection, shortModel, SPEED, speaker, speech, withdrawSelection,
   } from "$lib/speech.svelte";
   import { speakable } from "$lib/speechText";
   import { go, nav } from "$lib/store.svelte";
@@ -175,7 +175,12 @@
 <!-- capture: the terminal's scroll-selection stops its mouseup from going further -->
 <svelte:document onselectionchange={onSelectionChange} />
 <svelte:window onkeydowncapture={onKey} onscrollcapture={onScroll} onresize={onScroll}
-  onmousedowncapture={(e) => e.button === 0 && (dragging = true)} onmouseupcapture={onMouseUp} />
+  onmousedowncapture={(e) => {
+    if (e.button !== 0) return;
+    dragging = true;
+    const t = e.target;
+    if (selection.offer && !(t instanceof Element && t.closest(".offer"))) dismissSelection();
+  }} onmouseupcapture={onMouseUp} />
 
 {#if place && speech.button && !speaker.busy}
   <!-- mousedown would drop the chat selection before the click -->
@@ -200,6 +205,8 @@
         {t("Zusammenfassung")}
       </button>
     {/if}
+    <span class="sep" aria-hidden="true"></span>
+    <button class="x" title={t("Schließen")} aria-label={t("Schließen")} onmousedown={(e) => e.preventDefault()} onclick={dismissSelection}>✕</button>
   </div>
 {/if}
 
@@ -253,6 +260,7 @@
   .offer button:hover { color: var(--accent); }
   .offer .ask { color: var(--accent); }
   .offer .sep { width: 1px; align-self: stretch; margin: 5px 0; background: var(--border); }
+  .offer .x { padding: 4px 9px; color: var(--muted); }
   /* design: Magic Fink "ReadAloudPanel" – a card at the bottom centre, above the composer */
   .panel, .pill { position: fixed; z-index: 45; left: 50%; bottom: 96px; translate: -50% 0; font-size: 12.5px;
     background: var(--side); border: 1px solid var(--border); box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38); animation: rise 0.14s ease-out; }

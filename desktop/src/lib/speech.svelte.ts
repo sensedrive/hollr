@@ -167,9 +167,20 @@ export interface Offer {
 /** selected text that can be read (one at a time: the last selection made) */
 export const selection = $state<{ offer: Offer | null }>({ offer: null });
 
+/** the text whose offer button was clicked away; the same selection doesn't bring it back */
+let dismissed = "";
+
 export function offerSelection(offer: Offer) {
+  if (offer.text === dismissed) return;
+  dismissed = "";
   selection.offer = offer;
   speaker.prewarm(offer.text);
+}
+
+/** hide the button; the selection itself stays */
+export function dismissSelection() {
+  dismissed = selection.offer?.text ?? dismissed;
+  selection.offer = null;
 }
 
 /** `source` let go of its selection */
