@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Rechtsklick wie in herdr: Umbenennen, Gruppe schließen, Worktree öffnen (alle Checkouts, Tippen filtert) und Worktrees einklappen":
+    "Right-click like herdr: rename, close group, open worktree (every checkout, typing filters) and collapse worktrees",
   "Übersicht: ✕ blendet die Meldung aus. Die Sitzung läuft weiter. Beenden geht nur noch über das Menü der Karte.":
     "Overview: ✕ hides the notice. The session keeps running. Ending it is only in the card's menu.",
   "Neuer Space unten in der Seitenleiste: öffnet ein Terminal, die Beschriftung folgt dem Ordner, sobald du das Projekt wechselst":

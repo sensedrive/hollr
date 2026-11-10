@@ -85,6 +85,7 @@ import {
 import { readHistory } from "./sessionlog";
 import {
   type FsRequest,
+  listCheckouts,
   listSpaces,
   manageSpace,
   parseFooter,
@@ -101,7 +102,7 @@ import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.44.5";
+export const VERSION = "0.44.6";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -475,7 +476,7 @@ async function gate(): Promise<number> {
     case "space": {
       const req = JSON.parse((await readStdinLine()) || "{}") as SpaceRequest;
       try {
-        json(await manageSpace(req));
+        json(req.op === "worktrees" ? { worktrees: await listCheckouts(req.ws ?? "") } : await manageSpace(req));
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }

@@ -12,6 +12,7 @@
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
   import { groupSpaces, space, type FullSpace } from "$lib/views/spaces/spaces";
   import CloseSpaceDialog from "$lib/views/spaces/CloseSpaceDialog.svelte";
+  import OpenWorktree from "./OpenWorktree.svelte";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
@@ -92,13 +93,21 @@
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   function rowMenu(e: MouseEvent, server: string, sp: FullSpace) {
     e.preventDefault();
+    const spaces = (app.spaces[server] ?? []) as FullSpace[];
+    const main = sp.isWorktree ? spaces.find((s) => !s.isWorktree && !!s.repo && s.repo === sp.repo) : sp;
+    const trees = main ? spaces.filter((s) => s.isWorktree && !!s.repo && s.repo === main.repo) : [];
+    const fkey = main ? `${server}|${main.id}` : "";
     menu = {
       x: e.clientX, y: e.clientY,
       items: [
         ...(sp.missing ? [{ label: t("Ordner fehlt – schließen …"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
+        { label: t("Umbenennen …"), icon: "✎", action: () => { ren = { x: e.clientX, y: e.clientY, server, ws: sp.id }; name = sp.label; renErr = ""; } },
+        ...(!sp.isWorktree && sp.git ? [{ label: t("Gruppe schließen"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
+        ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),
+        ...(sp.git && !sp.missing && main ? [{ label: t("Worktree öffnen …"), icon: "❒", action: () => (picker = { server, ws: main.id }) }] : []),
+        ...(trees.length ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: "chevronD", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
         ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
-        ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),
         { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hiddenSpaces.hide(server, sp.id) },
       ],
     };
@@ -109,6 +118,26 @@
     if (!sp.isWorktree) return { ws: sp.id };
     const main = ((app.spaces[server] ?? []) as FullSpace[]).find((s) => !s.isWorktree && !!s.repo && s.repo === sp.repo);
     return main ? { ws: main.id, base: sp.git?.branch } : undefined;
+  }
+  let picker = $state<{ server: string; ws: string } | null>(null);
+  let ren = $state<{ x: number; y: number; server: string; ws: string } | null>(null);
+  let name = $state("");
+  let renErr = $state("");
+  let renBusy = $state(false);
+  async function renameSpace() {
+    if (!ren || renBusy) return;
+    const label = name.trim();
+    if (!label) { renErr = t("Name fehlt"); return; }
+    renBusy = true; renErr = "";
+    const { server, ws } = ren;
+    try {
+      await space(server, { op: "rename", ws, label });
+      await refreshSpaces(server);
+      ren = null;
+    } catch (e) {
+      renErr = e instanceof Error ? e.message : String(e);
+    }
+    renBusy = false;
   }
   let wt = $state<{ x: number; y: number; server: string; ws: string; base?: string; label: string } | null>(null);
   let branch = $state("");
@@ -215,6 +244,19 @@
 
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+{/if}
+{#if ren}
+  <button class="wt-back" aria-label={t("Schließen")} onclick={() => (ren = null)}></button>
+  <form class="wt" style="left:{Math.min(ren.x, innerWidth - 300)}px; top:{Math.min(ren.y, innerHeight - 92)}px"
+    onsubmit={(e) => { e.preventDefault(); void renameSpace(); }}>
+    <div class="wt-h">{t("Umbenennen …")}</div>
+    <input bind:value={name} disabled={renBusy} use:focus
+      onkeydown={(e) => { if (e.key === "Escape") { e.preventDefault(); ren = null; } }} />
+    {#if renErr}<div class="wt-err">{renErr}</div>{/if}
+  </form>
+{/if}
+{#if picker}
+  <OpenWorktree server={picker.server} ws={picker.ws} onClose={() => (picker = null)} />
 {/if}
 {#if wt}
   <button class="wt-back" aria-label={t("Schließen")} onclick={() => (wt = null)}></button>

@@ -49,7 +49,7 @@ export interface CloseInfo {
 }
 
 export interface SpaceRequest {
-  op: "create" | "worktree" | "close" | "info";
+  op: "create" | "worktree" | "close" | "info" | "rename" | "worktrees" | "open";
   cwd?: string;
   label?: string;
   ws?: string;
@@ -65,7 +65,18 @@ export interface SpaceRequest {
   group?: boolean;
 }
 
+export interface WorktreeCheckout {
+  branch: string;
+  label: string;
+  path: string;
+  /** set when that checkout already has a space */
+  open?: string;
+  linked: boolean;
+}
+
 export const space = (server: string, req: SpaceRequest) => gate<{ ws?: string; pane?: string }>(server, "space", req);
+export const worktreeCheckouts = (server: string, ws: string) =>
+  gate<{ worktrees: WorktreeCheckout[] }>(server, "space", { op: "worktrees", ws });
 export const closeInfo = (server: string, ws: string) => gate<CloseInfo>(server, "space", { op: "info", ws });
 
 export const folderOf = (root: string) => root.split("/").filter(Boolean).pop() ?? root;

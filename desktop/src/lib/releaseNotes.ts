@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 38,
+    version: "0.44.6",
+    date: "10.11.2026",
+    items: [
+      { icon: "⑂", text: "Rechtsklick wie in herdr: Umbenennen, Gruppe schließen, Worktree öffnen (alle Checkouts, Tippen filtert) und Worktrees einklappen" },
+    ],
+  },
+  {
     build: 37,
     version: "0.44.5",
     date: "10.11.2026",

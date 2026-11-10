@@ -497,8 +497,8 @@ export async function usageLimits(
 // ---------------------------------------------------------------- create / close spaces
 
 export interface SpaceRequest {
-  op: "create" | "worktree" | "close" | "info";
-  /** create: folder on the server (absolute or ~/…) */
+  op: "create" | "worktree" | "close" | "info" | "rename" | "worktrees" | "open";
+  /** create: folder on the server (absolute or ~/…); open: checkout path from `worktrees` */
   cwd?: string;
   label?: string;
   /** worktree: repo workspace to branch from; close: workspace to close */
@@ -628,6 +628,30 @@ function rootPaneOf(created: unknown): string | undefined {
   return c.root_pane?.pane_id ?? c.pane?.pane_id;
 }
 
+export interface WorktreeCheckout {
+  branch: string;
+  label: string;
+  path: string;
+  /** workspace id when this checkout is already open */
+  open?: string;
+  linked: boolean;
+}
+
+/** Every checkout of the space's repo, including ones without a Hollr space yet (herdr's "Open worktree"). */
+export async function listCheckouts(ws: string, exec: Exec = execHerdr): Promise<WorktreeCheckout[]> {
+  if (!ws) throw new Error("Space fehlt");
+  const listed = (await exec(["worktree", "list", "--workspace", ws])) as {
+    worktrees?: Array<Record<string, unknown>>;
+  };
+  return (listed.worktrees ?? []).map((w) => ({
+    branch: String(w.branch ?? ""),
+    label: String(w.label ?? ""),
+    path: String(w.path ?? ""),
+    ...(w.open_workspace_id ? { open: String(w.open_workspace_id) } : {}),
+    linked: w.is_linked_worktree === true,
+  }));
+}
+
 export async function manageSpace(
   req: SpaceRequest,
   exec: Exec = execHerdr,
@@ -663,6 +687,19 @@ export async function manageSpace(
       if (req.base && BRANCH_RE.test(req.base)) args.push("--base", req.base);
       if (label) args.push("--label", label);
       created = await exec(args);
+      break;
+    }
+    case "rename": {
+      if (!req.ws) throw new Error("Space fehlt");
+      if (!label) throw new Error("Name fehlt");
+      await exec(["workspace", "rename", req.ws, label]);
+      return {};
+    }
+    case "open": {
+      if (!req.ws) throw new Error("Space fehlt");
+      const path = (req.cwd ?? "").trim();
+      if (!path.startsWith("/")) throw new Error("Ordner muss absolut sein");
+      created = await exec(["worktree", "open", "--workspace", req.ws, "--path", path, "--no-focus"]);
       break;
     }
     case "info":
