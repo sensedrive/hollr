@@ -9,7 +9,7 @@
   import { hiddenLong, hideLong } from "./dashboard/hiddenLong.svelte";
   import { t } from "$lib/i18n";
   import {
-    allPanes, app, dialogs, findPane, go, mySessions, refresh, type AgentOpen, type PaneRef,
+    allPanes, app, dialogs, findPane, go, mySessions, nav, refresh, type AgentOpen, type PaneRef,
   } from "$lib/store.svelte";
   import { answer, dismiss, fetchInbox, inboxEntries, type InboxEntry } from "$lib/inbox.svelte";
   import { hiddenSpaces, isHidden } from "$lib/hiddenSpaces.svelte";
@@ -144,7 +144,7 @@
         { label: t("Git & Dateien"), icon: "⑂", action: () => open(r, "git") },
         ...row.ports.map((p) => ({ label: t("Im Browser öffnen") + ` :${p.port}`, icon: "◍", action: () => open(r, "browser", `http://localhost:${p.port}`) })),
         ...(mineSet.has(r.id) ? [{ label: t("Aus der Übersicht nehmen"), icon: "◌", action: () => mySessions.remove(r.id) }] : []),
-        { label: t("Space aus der Liste nehmen"), icon: "◌", action: () => hiddenSpaces.hide(r.server.id, r.workspace.id) },
+        { label: t("Space aus der Liste nehmen"), icon: "◌", action: () => { hiddenSpaces.hide(r.server.id, r.workspace.id); const route = nav.route; if (route.view === "agent" && route.server === r.server.id && route.pane === r.pane.pane) go({ view: "dashboard" }); } },
         { label: t("Sitzung beenden"), icon: "✕", danger: true, action: () => (ending = r) },
       ],
     };

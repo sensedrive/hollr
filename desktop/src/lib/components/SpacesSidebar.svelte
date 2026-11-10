@@ -7,7 +7,7 @@
   import { onMount, tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import Icon from "./git/Icon.svelte";
-  import { allPanes, app, dialogs, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, findPane, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
   import { groupSpaces, space, type FullSpace } from "$lib/views/spaces/spaces";
@@ -108,7 +108,7 @@
         ...(trees.length ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: "chevronD", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
         ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
-        { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hiddenSpaces.hide(server, sp.id) },
+        { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hideSpace(server, sp.id) },
       ],
     };
   }
@@ -181,6 +181,15 @@
     adding = false;
   }
 
+  /** off the list and, if that space is on screen, off the screen too */
+  function hideSpace(server: string, id: string) {
+    hiddenSpaces.hide(server, id);
+    const r = nav.route;
+    const showing = (r.view === "space" && r.server === server && r.ws === id)
+      || (r.view === "agent" && r.server === server && findPane(server, r.pane)?.workspace.id === id);
+    if (showing) go({ view: "dashboard" });
+  }
+
   const hiddenCount = $derived(
     ((app.spaces[currentServer()] ?? []) as FullSpace[]).filter((sp) => hiddenSpaces.has(currentServer(), sp.id)).length,
   );
@@ -225,7 +234,7 @@
               <Icon name={open_ ? "chevronD" : "chevronR"} size={13} />{#if !open_}<span>{trees.length}</span>{/if}</button>
           {/if}
           <button class="hide" title={t("Aus der Liste nehmen")} aria-label={t("Aus der Liste nehmen")}
-            onclick={() => hiddenSpaces.hide(sec.server.id, sp.id)}><Icon name="x" size={12} /></button>
+            onclick={() => hideSpace(sec.server.id, sp.id)}><Icon name="x" size={12} /></button>
         </div>
       {/each}
     {/each}

@@ -95,6 +95,18 @@
   let palette = $state(false);
 
   const current = $derived(nav.route.view === "agent" ? findPane(nav.route.server, nav.route.pane) : undefined);
+  // the space was closed or taken off the list: don't keep its terminal on screen
+  $effect(() => {
+    const r = nav.route;
+    if (r.view === "agent") {
+      if (!app.loaded[r.server]) return;
+      void app.trees[r.server];
+      if (!findPane(r.server, r.pane)) untrack(() => go({ view: "dashboard" }));
+    } else if (r.view === "space") {
+      const list = app.spaces[r.server] as { id: string }[] | undefined;
+      if (list && !list.some((s) => s.id === r.ws)) untrack(() => go({ view: "dashboard" }));
+    }
+  });
   /** the space view's herdr workspace, for its tab bar (none while the tree loads or nothing runs there) */
   const spaceWs = $derived.by(() => {
     const r = nav.route;

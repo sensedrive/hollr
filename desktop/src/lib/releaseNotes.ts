@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 39,
+    version: "0.44.7",
+    date: "10.11.2026",
+    items: [
+      { icon: "✕", text: "Space aus der Liste nehmen oder schließen blendet auch seine offene Session aus. Die Session selbst läuft weiter, wenn du sie nur aus der Liste nimmst." },
+    ],
+  },
+  {
     build: 38,
     version: "0.44.6",
     date: "10.11.2026",
