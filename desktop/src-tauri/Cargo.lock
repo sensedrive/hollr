@@ -2430,7 +2430,7 @@ dependencies = [
 
 [[package]]
 name = "hollr-desktop"
-version = "0.44.1"
+version = "0.44.2"
 dependencies = [
  "aes-gcm",
  "anyhow",

@@ -82,6 +82,8 @@ export default {
   "Neuer Branch, z. B. feature/PROJ-123-login": "New branch, e.g. feature/PROJ-123-login",
   "Neuer Space": "New space",
   "Neuer Worktree …": "New worktree …",
+  "Neuer Worktree": "New worktree",
+  "Ungültiger Branch-Name": "Invalid branch name",
   "Nur schließen": "Just close",
   Nutzungslimits: "Usage limits",
   "Ohne diesen Haken bricht das Entfernen ab, solange Änderungen offen sind.":

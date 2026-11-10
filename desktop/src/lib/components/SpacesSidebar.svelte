@@ -4,13 +4,13 @@
   // A click jumps straight into the session that needs you most; ✕ / right-click hides a space here and on the
   // dashboard (it comes back by itself as soon as it needs you). 〰 shows where a live call runs. A space whose
   // folder is gone (a worktree removed outside herdr) says so and offers closing.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import Icon from "./git/Icon.svelte";
-  import { allPanes, app, dialogs, go, lastTabRoute, nav, pollSpaces, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
+  import { allPanes, app, dialogs, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces, tabName, type PaneRef } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
-  import { groupSpaces, type FullSpace } from "$lib/views/spaces/spaces";
+  import { groupSpaces, space, type FullSpace } from "$lib/views/spaces/spaces";
   import CloseSpaceDialog from "$lib/views/spaces/CloseSpaceDialog.svelte";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
@@ -104,11 +104,42 @@
         ...sessions,
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
         ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
+        ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),
         { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hiddenSpaces.hide(server, sp.id) },
       ],
     };
   }
+  /** herdr's one step: branch name, Enter. A worktree branches off its own branch, from the repo's main space. */
+  function repoOf(server: string, sp: FullSpace): { ws: string; base?: string } | undefined {
+    if (!sp.git || sp.missing) return undefined;
+    if (!sp.isWorktree) return { ws: sp.id };
+    const main = ((app.spaces[server] ?? []) as FullSpace[]).find((s) => !s.isWorktree && !!s.repo && s.repo === sp.repo);
+    return main ? { ws: main.id, base: sp.git?.branch } : undefined;
+  }
+  let wt = $state<{ x: number; y: number; server: string; ws: string; base?: string; label: string } | null>(null);
+  let branch = $state("");
+  let wtBusy = $state(false);
+  let wtErr = $state("");
+  const BRANCH_RE = /^[\w][\w./-]{0,120}$/;
+  async function createWt() {
+    if (!wt || wtBusy) return;
+    const name = branch.trim();
+    if (!BRANCH_RE.test(name)) { wtErr = t("Ungültiger Branch-Name"); return; }
+    wtBusy = true; wtErr = "";
+    const { server, ws, base } = wt;
+    try {
+      const r = await space(server, { op: "worktree", ws, branch: name, ...(base ? { base } : {}), agent: "omp" });
+      await Promise.all([refreshSpaces(server), refresh()]);
+      wt = null; branch = "";
+      if (r.pane) go({ view: "agent", server, pane: r.pane });
+      else if (r.ws) go({ view: "space", server, ws: r.ws });
+    } catch (e) {
+      wtErr = e instanceof Error ? e.message : String(e);
+    }
+    wtBusy = false;
+  }
 
+  const focus = (node: HTMLInputElement) => { void tick().then(() => node.focus()); };
   const hiddenCount = $derived(
     ((app.spaces[currentServer()] ?? []) as FullSpace[]).filter((sp) => hiddenSpaces.has(currentServer(), sp.id)).length,
   );
@@ -169,6 +200,17 @@
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
 {/if}
+{#if wt}
+  <button class="wt-back" aria-label={t("Schließen")} onclick={() => (wt = null)}></button>
+  <form class="wt" style="left:{Math.min(wt.x, innerWidth - 300)}px; top:{Math.min(wt.y, innerHeight - 92)}px"
+    onsubmit={(e) => { e.preventDefault(); void createWt(); }}>
+    <div class="wt-h">{t("Neuer Worktree")}<span>{wt.label}</span></div>
+    <input bind:value={branch} placeholder={t("Neuer Branch, z. B. feature/PROJ-123-login")} disabled={wtBusy}
+      use:focus
+      onkeydown={(e) => { if (e.key === "Escape") { e.preventDefault(); wt = null; } }} />
+    {#if wtErr}<div class="wt-err">{wtErr}</div>{/if}
+  </form>
+{/if}
 {#if closing}
   {@const c = closing}
   <CloseSpaceDialog server={c.server} space={c.space} onClose={() => (closing = null)}
@@ -215,4 +257,13 @@
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .restore { all: unset; cursor: pointer; display: block; margin: 10px 10px 0; font-size: 12px; color: var(--dim); }
   .restore:hover, .restore:focus-visible { color: var(--fg); }
+  .wt-back { all: unset; position: fixed; inset: 0; z-index: 40; }
+  .wt { position: fixed; z-index: 41; width: 280px; display: grid; gap: 6px; padding: 10px; border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border); box-shadow: 0 12px 40px color-mix(in srgb, #000 35%, transparent); }
+  .wt-h { display: flex; gap: 8px; align-items: baseline; font-size: 12px; font-weight: 600; }
+  .wt-h span { font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wt input { width: 100%; box-sizing: border-box; font: 13px var(--mono); padding: 6px 8px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
+  .wt input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .wt-err { font-size: 12px; color: var(--orange); }
 </style>

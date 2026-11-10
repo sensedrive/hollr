@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 34,
+    version: "0.44.2",
+    date: "10.11.2026",
+    items: [
+      { icon: "⑂", text: "Neuer Worktree direkt im Rechtsklick eines Space: Branch-Name, Enter – der Worktree entsteht und omp startet darin" },
+    ],
+  },
+  {
     build: 33,
     version: "0.44.1",
     date: "07.11.2026",
