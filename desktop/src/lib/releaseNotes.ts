@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 43,
+    version: "0.44.11",
+    date: "10.11.2026",
+    items: [
+      { icon: "▢", text: "Doppelklick auf einen Space öffnet den Space selbst. Ein Klick bleibt beim zuletzt offenen Tab." },
+    ],
+  },
+  {
     build: 42,
     version: "0.44.10",
     date: "10.11.2026",

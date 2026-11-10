@@ -81,6 +81,17 @@
     return "";
   });
 
+  // one click waits a moment, so a double click can open the space itself instead
+  let clickTimer: ReturnType<typeof setTimeout> | undefined;
+  function onRowClick(server: string, sp: FullSpace) {
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => open(server, sp), 220);
+  }
+  function onRowDblClick(server: string, sp: FullSpace) {
+    clearTimeout(clickTimer);
+    go({ view: "space", server, ws: sp.id });
+  }
+
   /** back to the tab selected there last; a space never visited opens the session that needs you first */
   function open(server: string, sp: FullSpace) {
     if (sp.missing) return go({ view: "space", server, ws: sp.id });
@@ -222,7 +233,8 @@
         {@const nested = i > 0}
         {@const busy = st === "working" || st === "blocked" || st === "done"}
         <div class="srow" class:sel={currentWs === `${sec.server.id}|${sp.id}`} class:nested>
-          <button class="item" onclick={() => open(sec.server.id, sp)} oncontextmenu={(e) => rowMenu(e, sec.server.id, sp)}
+          <button class="item" onclick={() => onRowClick(sec.server.id, sp)} ondblclick={() => onRowDblClick(sec.server.id, sp)}
+            oncontextmenu={(e) => rowMenu(e, sec.server.id, sp)}
             title={[sp.label, sp.git?.branch, statusLabel(st), sp.root].filter(Boolean).join(" · ")}>
             <span class="dotbox">{#if busy}<span class="dot {st}"></span>{/if}</span>
             <span class="name ellipsis" class:gone={sp.missing}>{sp.label}</span>
