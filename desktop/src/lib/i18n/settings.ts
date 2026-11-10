@@ -161,6 +161,8 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Worktrees in der Seitenleiste lassen sich per Ziehen umsortieren. Die Reihenfolge bleibt auf diesem Mac.":
+    "Worktrees in the sidebar can be reordered by dragging. The order stays on this Mac.",
   "Doppelklick auf einen Space öffnet den Space selbst. Ein Klick bleibt beim zuletzt offenen Tab.":
     "Double-clicking a space opens the space itself. One click still returns to the tab you last had open.",
   "Vorlesen-Leiste an der Markierung: ✕ oder ein Klick daneben blendet sie aus. Dieselbe Markierung holt sie nicht zurück.":

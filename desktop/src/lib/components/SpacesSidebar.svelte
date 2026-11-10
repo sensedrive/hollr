@@ -15,10 +15,12 @@
   import OpenWorktree from "./OpenWorktree.svelte";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
+  import { sortable } from "$lib/sortable";
   import { resultSeen } from "$lib/inbox.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
 
   const FOLDED = "hollr.sidebar.folded";
+  const WTORDER = "hollr.sidebar.wtorder";
   const loadSet = (key: string) => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(key) ?? "[]"));
@@ -27,6 +29,26 @@
     }
   };
   let folded = $state(loadSet(FOLDED));
+  let wtOrder = $state<Record<string, string[]>>({});
+  try {
+    const raw = JSON.parse(localStorage.getItem(WTORDER) ?? "{}");
+    wtOrder = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch {
+    wtOrder = {};
+  }
+  /** dragged order within one repo group; unknown ids stay at the end, then by label */
+  function sortTrees(key: string, trees: FullSpace[]) {
+    const rank = new Map((wtOrder[key] ?? []).map((id, i) => [id, i]));
+    return [...trees].sort((a, b) => (rank.get(a.id) ?? 9999) - (rank.get(b.id) ?? 9999) || a.label.localeCompare(b.label));
+  }
+  function saveOrder(key: string, ids: string[]) {
+    wtOrder = { ...wtOrder, [key]: ids };
+    try {
+      localStorage.setItem(WTORDER, JSON.stringify(wtOrder));
+    } catch {
+      /* private mode: order lasts this session only */
+    }
+  }
   const persist = (key: string, set: Set<string>) => {
     try {
       localStorage.setItem(key, JSON.stringify([...set]));
@@ -70,6 +92,27 @@
       return { server: s, loaded: app.spaces[s.id] !== undefined, groups: groupSpaces(visible) };
     }),
   );
+
+  /** drop a worktree in front of `before` (null: end of its own repo group) */
+  function reorder(id: string, before: string | null) {
+    for (const sec of sections) {
+      for (const g of sec.groups) {
+        const repo = g.spaces[0];
+        if (!repo) continue;
+        const key = `${sec.server.id}|${repo.id}`;
+        const trees = sortTrees(key, g.spaces.slice(1));
+        if (!trees.some((t) => t.id === id)) continue;
+        const ids = trees.map((t) => t.id);
+        const from = ids.indexOf(id);
+        ids.splice(from, 1);
+        const to = before == null ? ids.length : ids.indexOf(before);
+        if (to < 0) return;
+        ids.splice(to, 0, id);
+        saveOrder(key, ids);
+        return;
+      }
+    }
+  }
 
   const currentWs = $derived.by(() => {
     const r = nav.route;
@@ -225,14 +268,15 @@
     <div class="spaces" class:stale={!!app.errors[sec.server.id]}>
     {#each sec.groups as g (g.key)}
       {@const repo = g.spaces[0]!}
-      {@const trees = g.spaces.slice(1)}
       {@const fkey = `${sec.server.id}|${repo.id}`}
+      {@const trees = sortTrees(fkey, g.spaces.slice(1))}
       {@const open_ = !folded.has(fkey)}
-      {#each open_ ? g.spaces : [repo] as sp, i (sp.id)}
+      <div class="grp" use:sortable={{ axis: "y", onMove: reorder }}>
+      {#each open_ ? [repo, ...trees] : [repo] as sp, i (sp.id)}
         {@const st = statusOf(sec.server.id, sp)}
         {@const nested = i > 0}
         {@const busy = st === "working" || st === "blocked" || st === "done"}
-        <div class="srow" class:sel={currentWs === `${sec.server.id}|${sp.id}`} class:nested>
+        <div class="srow" class:sel={currentWs === `${sec.server.id}|${sp.id}`} class:nested data-sort-id={nested ? sp.id : undefined}>
           <button class="item" onclick={() => onRowClick(sec.server.id, sp)} ondblclick={() => onRowDblClick(sec.server.id, sp)}
             oncontextmenu={(e) => rowMenu(e, sec.server.id, sp)}
             title={[sp.label, sp.git?.branch, statusLabel(st), sp.root].filter(Boolean).join(" · ")}>
@@ -245,14 +289,15 @@
             <LiveMark server={sec.server.id} ws={sp.id} />
           </button>
           {#if !nested && trees.length}
-            <button class="fold" title={open_ ? t("Worktrees einklappen") : t("Worktrees zeigen")} aria-label={open_ ? t("Worktrees einklappen") : t("Worktrees zeigen")}
+            <button class="fold" data-sort-ignore title={open_ ? t("Worktrees einklappen") : t("Worktrees zeigen")} aria-label={open_ ? t("Worktrees einklappen") : t("Worktrees zeigen")}
               aria-expanded={open_} onclick={() => (folded = toggle(folded, FOLDED, fkey, open_))}>
               <Icon name={open_ ? "chevronD" : "chevronR"} size={13} />{#if !open_}<span>{trees.length}</span>{/if}</button>
           {/if}
-          <button class="hide" title={t("Aus der Liste nehmen")} aria-label={t("Aus der Liste nehmen")}
+          <button class="hide" data-sort-ignore title={t("Aus der Liste nehmen")} aria-label={t("Aus der Liste nehmen")}
             onclick={() => hideSpace(sec.server.id, sp.id)}><Icon name="x" size={12} /></button>
         </div>
       {/each}
+      </div>
     {/each}
     </div>
   {/each}
@@ -310,7 +355,9 @@
   .note:focus-visible { outline: 2px solid var(--accent); }
   .nhead { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--orange); }
   .ntext { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .grp { position: relative; }
   .srow { position: relative; border-radius: 8px; }
+  .srow[data-sort-id] { cursor: grab; }
   .srow:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
   .srow.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
   .srow.sel .name { font-weight: 600; color: var(--fg); }

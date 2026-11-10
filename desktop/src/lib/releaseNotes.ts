@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 44,
+    version: "0.44.12",
+    date: "10.11.2026",
+    items: [
+      { icon: "↕", text: "Worktrees in der Seitenleiste lassen sich per Ziehen umsortieren. Die Reihenfolge bleibt auf diesem Mac." },
+    ],
+  },
+  {
     build: 43,
     version: "0.44.11",
     date: "10.11.2026",
