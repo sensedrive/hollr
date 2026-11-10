@@ -109,7 +109,7 @@
         ...(!sp.isWorktree && sp.git ? [{ label: t("Gruppe schließen"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
         ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),
         ...(sp.git && !sp.missing && main ? [{ label: t("Worktree öffnen …"), icon: "❒", action: () => (picker = { server, ws: main.id }) }] : []),
-        ...(trees.length ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: "chevronD", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
+        ...(trees.length ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: folded.has(fkey) ? "▸" : "▾", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
         ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
         { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hideSpace(server, sp.id) },

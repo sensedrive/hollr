@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 41,
+    version: "0.44.9",
+    date: "10.11.2026",
+    items: [
+      { icon: "▾", text: "„Worktrees einklappen“ zeigt einen Pfeil statt des abgeschnittenen Icon-Namens" },
+    ],
+  },
+  {
     build: 40,
     version: "0.44.8",
     date: "10.11.2026",
