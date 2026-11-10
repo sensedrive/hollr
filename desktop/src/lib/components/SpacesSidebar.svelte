@@ -329,13 +329,24 @@
   <OpenWorktree server={picker.server} ws={picker.ws} onClose={() => (picker = null)} />
 {/if}
 {#if wt}
-  <button class="wt-back" aria-label={t("Schließen")} onclick={() => (wt = null)}></button>
+  <button class="wt-back" aria-label={t("Schließen")} onclick={() => { if (!wtBusy) wt = null; }}></button>
   <form class="wt" style="left:{Math.min(wt.x, innerWidth - 300)}px; top:{Math.min(wt.y, innerHeight - 92)}px"
     onsubmit={(e) => { e.preventDefault(); void createWt(); }}>
     <div class="wt-h">{t("Neuer Worktree")}<span>{wt.label}</span></div>
     <input bind:value={branch} placeholder={t("Neuer Branch, z. B. feature/PROJ-123-login")} disabled={wtBusy}
       use:focus
-      onkeydown={(e) => { if (e.key === "Escape") { e.preventDefault(); wt = null; } }} />
+      onpaste={(e) => {
+        const text = e.clipboardData?.getData("text") ?? "";
+        if (!/\s/.test(text)) return;
+        e.preventDefault();
+        const clean = text.replace(/\s+/g, "");
+        const el = e.currentTarget as HTMLInputElement;
+        const a = el.selectionStart ?? branch.length;
+        const b = el.selectionEnd ?? a;
+        branch = branch.slice(0, a) + clean + branch.slice(b);
+      }}
+      onkeydown={(e) => { if (e.key === "Escape" && !wtBusy) { e.preventDefault(); wt = null; } }} />
+    {#if wtBusy}<div class="wt-wait">{t("Worktree wird angelegt …")}</div>{/if}
     {#if wtErr}<div class="wt-err">{wtErr}</div>{/if}
   </form>
 {/if}
@@ -401,4 +412,5 @@
     border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
   .wt input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .wt-err { font-size: 12px; color: var(--orange); }
+  .wt-wait { font-size: 12px; color: var(--muted); }
 </style>

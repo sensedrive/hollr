@@ -4,7 +4,7 @@
   import { t } from "$lib/i18n";
   import { settings } from "$lib/settings.svelte";
   import {
-    app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName,
+    allPanes, app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName,
   } from "$lib/store.svelte";
   import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
   import WorkspaceTabs from "$lib/components/WorkspaceTabs.svelte";
@@ -85,9 +85,13 @@
   $effect(() => {
     const r = nav.route;
     void inbox.now;
-    if (r.view !== "agent") return;
+    if (r.view !== "agent" && r.view !== "space") return;
     void app.trees[r.server];
-    if (document.visibilityState === "visible") untrack(() => markSeen(`${r.server}|${r.pane}`));
+    if (document.visibilityState !== "visible") return;
+    untrack(() => {
+      if (r.view === "agent") markSeen(`${r.server}|${r.pane}`);
+      else for (const p of allPanes(r.server)) if (p.workspace.id === r.ws) markSeen(p.id);
+    });
   });
 
   // Übersicht and ⌘K are the whole navigation: sessions and spaces live in the sidebar below, the old "Agents" and

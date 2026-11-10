@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 45,
+    version: "0.44.13",
+    date: "10.11.2026",
+    items: [
+      { icon: "⑂", text: "Neuer Worktree: eingefügte Leerzeichen fallen weg. Während er angelegt wird, zeigt das Feld „wird angelegt“ und nimmt keinen zweiten an." },
+      { icon: "●", text: "Der blaue Punkt an einem Space bleibt weg, nachdem du ihn angesehen hast – auch nach einem Neustart. Ein neues Ergebnis bringt ihn zurück." },
+    ],
+  },
+  {
     build: 44,
     version: "0.44.12",
     date: "10.11.2026",

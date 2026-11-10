@@ -161,6 +161,10 @@ export default {
   "Deine Agents auf dem Server – per SSH, ohne Zusatzdienst.": "Your agents on the server – over SSH, no extra service.",
   "Hollr ist Open Source (MIT) – github.com/sensedrive/hollr": "Hollr is open source (MIT) – github.com/sensedrive/hollr",
   "Desktop-App mit allen Funktionen der iPhone-App": "Desktop app with all features of the iPhone app",
+  "Neuer Worktree: eingefügte Leerzeichen fallen weg. Während er angelegt wird, zeigt das Feld „wird angelegt“ und nimmt keinen zweiten an.":
+    "New worktree: pasted whitespace is removed. While it is being created the field says so and will not take another.",
+  "Der blaue Punkt an einem Space bleibt weg, nachdem du ihn angesehen hast – auch nach einem Neustart. Ein neues Ergebnis bringt ihn zurück.":
+    "The blue dot on a space stays gone after you have looked at it, including after a restart. A new result brings it back.",
   "Worktrees in der Seitenleiste lassen sich per Ziehen umsortieren. Die Reihenfolge bleibt auf diesem Mac.":
     "Worktrees in the sidebar can be reordered by dragging. The order stays on this Mac.",
   "Doppelklick auf einen Space öffnet den Space selbst. Ein Klick bleibt beim zuletzt offenen Tab.":

@@ -9,13 +9,47 @@ import { isHidden } from "./hiddenSpaces.svelte";
 
 export type { InboxEntry } from "./inbox";
 
+const SEEN_KEY = "hollr.inbox.seen";
+const SINCE_KEY = "hollr.inbox.since";
+const STATUS_KEY = "hollr.inbox.status";
+
+function loadNums(key: string): Record<string, number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? "{}");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) if (typeof v === "number") out[k] = v;
+    return out;
+  } catch {
+    return {};
+  }
+}
+function loadStrings(key: string): Record<string, string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? "{}");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) if (typeof v === "string") out[k] = v;
+    return out;
+  } catch {
+    return {};
+  }
+}
+const persist = (key: string, value: object) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode: seen state lasts this session only */
+  }
+};
+
 export const inbox = $state({
   details: {} as Record<string, InboxDetail | undefined>,
   /** "serverId|pane" → when it was first seen waiting/finished */
-  since: {} as Record<string, number | undefined>,
+  since: loadNums(SINCE_KEY) as Record<string, number | undefined>,
   dismissed: {} as Record<string, boolean | undefined>,
   /** "serverId|pane" → last time that session was open in front of the user (see markSeen) */
-  seen: {} as Record<string, number | undefined>,
+  seen: loadNums(SEEN_KEY) as Record<string, number | undefined>,
   answered: {} as Record<string, number | undefined>,
   /** a failed answer, per entry key */
   errors: {} as Record<string, string | undefined>,
@@ -26,7 +60,7 @@ export const inbox = $state({
 /** not reactive: fetch bookkeeping per pane */
 const etags: Record<string, string | undefined> = {};
 const lastFetch: Record<string, number | undefined> = {};
-const lastStatus: Record<string, string | undefined> = {};
+const lastStatus: Record<string, string | undefined> = loadStrings(STATUS_KEY);
 const inflight = new Set<string>();
 
 const agentPanes = () => allPanes().filter((r) => r.pane.agent);
@@ -44,6 +78,7 @@ export function inboxEntries(): (InboxEntry & { ref: PaneRef })[] {
 /** After a tree refresh: note when panes started waiting, forget the details of the rest. Call untracked. */
 export function trackInbox(now = Date.now()) {
   const seen = new Set<string>();
+  let dirty = false;
   for (const r of agentPanes()) {
     seen.add(r.id);
     const status = r.pane.status;
@@ -51,17 +86,24 @@ export function trackInbox(now = Date.now()) {
       lastStatus[r.id] = status;
       if (wantsYou(status)) inbox.since[r.id] = now;
       else forget(r.id);
+      dirty = true;
       // a status change means a new turn may be there – fetch on the next round
       lastFetch[r.id] = undefined;
     }
   }
-  for (const id of Object.keys(lastStatus)) if (!seen.has(id)) forget(id), delete lastStatus[id];
+  for (const id of Object.keys(lastStatus)) if (!seen.has(id)) forget(id), delete lastStatus[id], (dirty = true);
   inbox.now = now;
+  if (dirty) {
+    persist(SINCE_KEY, inbox.since);
+    persist(SEEN_KEY, inbox.seen);
+    persist(STATUS_KEY, lastStatus);
+  }
 }
 
 function forget(id: string) {
   delete inbox.details[id];
   delete inbox.since[id];
+  delete inbox.seen[id];
   delete etags[id];
   delete lastFetch[id];
 }
@@ -105,7 +147,10 @@ export const dismiss = (e: InboxEntry) => (inbox.dismissed[e.key] = true);
 
 /** The user has this session open right now: its result (done / error) up to now counts as seen. */
 export function markSeen(id: string, now = Date.now()) {
+  const prev = inbox.seen[id];
+  if (prev !== undefined && prev >= (inbox.since[id] ?? 0)) return;
   inbox.seen[id] = now;
+  persist(SEEN_KEY, inbox.seen);
 }
 
 /** A finished session whose window was open after it finished. A newer result (status flipped again) counts fresh. */
