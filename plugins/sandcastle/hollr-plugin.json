@@ -1,0 +1,1 @@
+{ "id": "sandcastle", "name": "Sandcastle", "description": "Issue-Board und Sandcastle-Läufe", "version": "0.1.0", "entry": "server.ts" }

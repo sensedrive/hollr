@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 46,
+    version: "0.45.0",
+    date: "10.11.2026",
+    items: [
+      { icon: "▤", text: "Neu: Plugins. Ein Server-Plugin bringt seine eigene Oberfläche mit, Hollr zeigt sie in der Seitenleiste unter „Plugins“. Auf dem Server einschalten mit: hollr plugin link <ordner>" },
+      { icon: "⛱", text: "Erstes Plugin „Sandcastle“: Issue-Board eines lul-workr-Projekts mit Warteschlange zum Ziehen und einer Ansicht für Sandcastle-Läufe." },
+    ],
+  },
+  {
     build: 45,
     version: "0.44.13",
     date: "10.11.2026",

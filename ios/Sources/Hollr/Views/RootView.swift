@@ -25,7 +25,7 @@ struct RootView: View {
     private var wide: Bool { sizeClass == .regular }
     @Environment(MySessions.self) private var mySessions
 
-    enum RootTab { case home, spaces, agents, settings }
+    enum RootTab { case home, spaces, agents, plugins, settings }
 
     var body: some View {
         content.environment(\.zoomNamespace, zoom)
@@ -66,6 +66,13 @@ struct RootView: View {
         }
     }
 
+    private var pluginsTab: some View {
+        NavigationStack {
+            PluginsView()
+                .navigationDestination(for: PluginRoute.self) { PluginView(server: $0.server, plugin: $0.plugin) }
+        }
+    }
+
     private var content: some View {
         Group {
             if store.servers.isEmpty {
@@ -87,6 +94,10 @@ struct RootView: View {
                     .safeAreaInset(edge: .bottom) { LiveBar(path: $agentPath, tab: $tab) }
                     .tabItem { TabLabel(title: "Agents", icon: .message) }
                     .tag(RootTab.agents)
+
+                    pluginsTab
+                    .tabItem { TabLabel(title: "Plugins", icon: .list) }
+                    .tag(RootTab.plugins)
 
                     NavigationStack { SettingsView(onPair: { pairing = PairingRequest() }) }
                         .tabItem { TabLabel(title: "Einstellungen", icon: .sliders) }

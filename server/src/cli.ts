@@ -99,10 +99,11 @@ import { restartWatcher, sysinfo } from "./sysinfo";
 import { readTimeline } from "./timeline";
 import { claudeFooter, paneTimeline, readClaudeHistory } from "./claudelog";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
+import { linkPlugin, listPlugins, loadRegistry, openPlugin, runningPid, stopPlugin, unlinkPlugin } from "./plugins";
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.44.13";
+export const VERSION = "0.45.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -132,6 +133,76 @@ function flag(args: string[], name: string): string[] {
   for (let i = 0; i < args.length; i++)
     if (args[i] === name && args[i + 1]) values.push(args[++i] ?? "");
   return values;
+}
+
+/** argv that runs this hollr again: the compiled binary alone, `bun src/cli.ts` in development. */
+function hollrCli(): string[] {
+  return Bun.argv[1]?.startsWith("/$bunfs/") ? [process.execPath] : [process.execPath, Bun.argv[1] ?? ""];
+}
+
+/** `hollr session new …`: a new herdr workspace with an agent, optionally sent a first prompt. */
+async function sessionNew(args: string[]): Promise<number> {
+  const kind = flag(args, "--kind")[0] ?? "";
+  const cwd = flag(args, "--cwd")[0];
+  const label = flag(args, "--label")[0];
+  const prompt = flag(args, "--prompt")[0];
+  if (!kind || !cwd || !label) {
+    console.error("hollr session new --kind omp|claude|codex|shell --cwd <dir> --label <text> [--prompt <text>]");
+    return 2;
+  }
+  const kinds: string[] = installedKinds();
+  if (!kinds.includes(kind)) throw new Error(`Agent ${kind} ist nicht installiert (${kinds.join(", ")})`);
+  if (!existsSync(cwd)) throw new Error(`Ordner ${cwd} gibt es nicht`);
+  const herdr = new Herdr();
+  const pane = await newChat(herdr, execHerdr, { kind: kind as NewChatRequest["kind"], cwd, label });
+  if (prompt) {
+    // the agent needs a moment after `agent start` before it takes prompts
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await herdr.prompt(pane, prompt);
+        break;
+      } catch (err) {
+        const waiting =
+          err instanceof HerdrError && ["agent_not_ready", "agent_blocked"].includes(err.code);
+        if (!waiting || attempt >= 20) throw err;
+        await Bun.sleep(1000);
+      }
+    }
+  }
+  console.log(JSON.stringify({ pane }));
+  return 0;
+}
+
+function pluginCmd(args: string[]): number {
+  const [sub = "", arg = ""] = args;
+  if (sub === "link" && arg) {
+    const m = linkPlugin(arg);
+    console.log(`Plugin ${m.name} (${m.id}) verknüpft: ${loadRegistry().find((e) => e.id === m.id)?.dir}`);
+    return 0;
+  }
+  if (sub === "unlink" && arg) {
+    const ok = unlinkPlugin(arg);
+    console.log(ok ? `Plugin ${arg} entfernt.` : `Plugin ${arg} ist nicht verknüpft.`);
+    return ok ? 0 : 1;
+  }
+  if (sub === "stop" && arg) {
+    const ok = stopPlugin(arg);
+    console.log(ok ? `Plugin ${arg} gestoppt.` : `Plugin ${arg} lief nicht.`);
+    return 0;
+  }
+  if (sub === "list") {
+    const infos = new Map(listPlugins().map((p) => [p.id, p]));
+    const reg = loadRegistry();
+    if (!reg.length) console.log("Keine Plugins. → hollr plugin link <ordner>");
+    for (const e of reg) {
+      const info = infos.get(e.id);
+      const extra = info?.error ? `  (${info.error})` : runningPid(e.id) ? "  [läuft]" : "";
+      console.log(`${e.id}  ${info?.name ?? e.id}  ${e.dir}${extra}`);
+    }
+    return 0;
+  }
+  console.log("hollr plugin link <ordner> | unlink <id> | list | stop <id>");
+  return 2;
 }
 
 /** The pane's agent, or undefined after answering {"error": …} (a closed pane is "not_found"). */
@@ -183,6 +254,7 @@ async function gate(): Promise<number> {
       "events",
       "dirs",
       "follow",
+      "plugins",
     ].includes(cmd)
   )
     log("gate", original);
@@ -374,6 +446,18 @@ async function gate(): Promise<number> {
         }
         const latest = await latestVersions(req.op === "check");
         json({ tools: toolStates(VERSION, latest, toLang(req.lang)) });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "plugins": {
+      const req = JSON.parse((await readStdinLine()) || "{}") as { op?: string; id?: string };
+      try {
+        if (req.op === "open") {
+          log("gate", `plugins open ${req.id}`);
+          json(await openPlugin(req.id ?? "", hollrCli()));
+        } else json({ plugins: listPlugins() });
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -575,7 +659,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins",
       });
       return 2;
   }
@@ -873,6 +957,12 @@ async function main(argv: string[]): Promise<number> {
       process.stdout.write(res.stdout.toString() || "(noch keine Logs)\n");
       return 0;
     }
+    case "plugin":
+      return pluginCmd(args);
+    case "session":
+      if (args[0] === "new") return sessionNew(args.slice(1));
+      console.log("hollr session new --kind K --cwd D --label L [--prompt T]");
+      return 2;
     case "agents":
       json(await new Herdr().agents());
       return 0;
@@ -893,7 +983,9 @@ async function main(argv: string[]): Promise<number> {
   hollr logs [n]                                                letzte Log-Zeilen
   hollr push setup <key.p8> <KEY_ID> <TEAM_ID>                  Push-Mitteilungen einrichten
   hollr push [status|test]                                      Push prüfen
-  hollr watch                                                   Wächter (läuft als systemd-Dienst)`);
+  hollr watch                                                   Wächter (läuft als systemd-Dienst)
+  hollr plugin link|unlink|list|stop …                          Plugins verwalten
+  hollr session new --kind K --cwd D --label L [--prompt T]     neue Agent-Sitzung in herdr`);
       return cmd === "help" || cmd === "--help" ? 0 : 2;
   }
 }

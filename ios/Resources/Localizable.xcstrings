@@ -2483,6 +2483,16 @@
         }
       }
     },
+    "Erneut versuchen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
     "Error: %@": {
       "localizations": {
         "en": {
@@ -3073,6 +3083,16 @@
         }
       }
     },
+    "Hollr auf diesem Server ist zu alt für Plugins – in Werkzeuge aktualisieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr on this server is too old for plugins – update it in Tools."
+          }
+        }
+      }
+    },
     "Hollr Desktop: der Chat kommt jetzt ebenfalls als Datenstrom – sofort und nur mit den Änderungen": {
       "localizations": {
         "en": {
@@ -3369,6 +3389,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "No panes"
+          }
+        }
+      }
+    },
+    "Keine Plugins. Auf dem Server: hollr plugin link <ordner>": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plugins. On the server: hollr plugin link <folder>"
           }
         }
       }
@@ -4239,6 +4269,16 @@
         }
       }
     },
+    "Neu laden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload"
+          }
+        }
+      }
+    },
     "NVIDIA, 25 Sprachen, Deutsch + Englisch im selben Satz": {
       "localizations": {
         "en": {
@@ -4915,6 +4955,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose folder"
+          }
+        }
+      }
+    },
+    "Plugin nicht erreichbar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plugin not reachable"
+          }
+        }
+      }
+    },
+    "Plugins": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plugins"
           }
         }
       }

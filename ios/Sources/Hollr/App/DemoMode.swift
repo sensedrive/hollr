@@ -36,6 +36,7 @@ enum DemoMode {
         case "close": json = ["ok": true]
         case "fs": json = fs(body["op"] as? String ?? "")
         case "space": json = (body["op"] as? String) == "info" ? ["agents": 2, "dirty": 3, "unpushed": 1, "isWorktree": false, "linkedWorktrees": 2] : [:]
+        case "plugins": json = ["plugins": []]
         default: json = [:]
         }
         return (try? JSONSerialization.data(withJSONObject: json)) ?? Data("{}".utf8)

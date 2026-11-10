@@ -20,6 +20,8 @@
   import Settings from "$lib/views/Settings.svelte";
   import ServerInfo from "$lib/views/ServerInfo.svelte";
   import Tools from "$lib/views/Tools.svelte";
+  import Plugins from "$lib/views/Plugins.svelte";
+  import PluginView from "$lib/views/PluginView.svelte";
   import NewSpaceDialog from "$lib/views/NewSpaceDialog.svelte";
   import Notifier from "$lib/views/Notifier.svelte";
   import AppLock from "$lib/components/AppLock.svelte";
@@ -162,6 +164,9 @@
       <button class="nav" onclick={() => (palette = true)}>
         <span class="ico"><Icon name="find" size={15} /></span><span class="grow">{t("Suchen …")}</span><kbd>{mod}K</kbd>
       </button>
+      <button class="nav" class:active={nav.route.view === "plugins" || nav.route.view === "plugin"} onclick={() => go({ view: "plugins" })}>
+        <span class="ico"><Icon name="list" size={15} /></span><span class="grow">{t("Plugins")}</span>
+      </button>
     </nav>
     <ServerTabs />
     <div class="list">
@@ -205,6 +210,12 @@
         <ServerInfo server={nav.route.server} />
       {:else if nav.route.view === "tools"}
         <Tools server={nav.route.server} />
+      {:else if nav.route.view === "plugins"}
+        <Plugins />
+      {:else if nav.route.view === "plugin"}
+        {#key `${nav.route.server}|${nav.route.id}`}
+          <PluginView server={nav.route.server} id={nav.route.id} />
+        {/key}
       {:else}
         <Dashboard />
       {/if}

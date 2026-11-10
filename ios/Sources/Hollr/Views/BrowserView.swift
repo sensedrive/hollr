@@ -170,7 +170,7 @@ private struct BrowserStart: View {
 }
 
 @Observable @MainActor
-final class BrowserModel: NSObject, WKNavigationDelegate {
+final class BrowserModel: NSObject, WKNavigationDelegate, WKUIDelegate {
     let webView: WKWebView
     var address = ""
     /// the page as the user knows it (localhost:3000/… for tunneled pages)
@@ -185,11 +185,15 @@ final class BrowserModel: NSObject, WKNavigationDelegate {
     private var tunnels: [Int: Int] = [:]
     private var start: URL?
     private var observers: [NSKeyValueObservation] = []
+    /// false: pages aren't added to the recent list (plugin URLs carry a token)
+    private let remembers: Bool
 
     var tunneled: Bool { current.map(ServerLocal.isLoopback) ?? false }
 
-    init(start: URL?) {
+    /// `popupsOutside`: window.open / target=_blank to public pages opens Safari (embedded plugin UIs)
+    init(start: URL?, remembers: Bool = true, popupsOutside: Bool = false) {
         self.start = start
+        self.remembers = remembers
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         webView = WKWebView(frame: .zero, configuration: config)
@@ -197,6 +201,7 @@ final class BrowserModel: NSObject, WKNavigationDelegate {
         webView.isInspectable = true
         super.init()
         webView.navigationDelegate = self
+        if popupsOutside { webView.uiDelegate = self }
         observers = [
             webView.observe(\.estimatedProgress) { [weak self] view, _ in
                 Task { @MainActor in self?.progress = view.isLoading ? view.estimatedProgress : 1 }
@@ -235,7 +240,7 @@ final class BrowserModel: NSObject, WKNavigationDelegate {
         error = nil
         current = url
         address = Self.display(url)
-        remember(url)
+        if remembers { remember(url) }
         guard ServerLocal.isLoopback(url) else {
             webView.load(URLRequest(url: url))
             return
@@ -294,6 +299,17 @@ final class BrowserModel: NSObject, WKNavigationDelegate {
         return .cancel
     }
 
+    // MARK: WKUIDelegate (only with popupsOutside)
+
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                 for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = action.request.url, let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme),
+           !ServerLocal.isLoopback(url) {
+            UIApplication.shared.open(url)
+        }
+        return nil
+    }
+
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         report(error)
     }
@@ -332,7 +348,7 @@ final class BrowserModel: NSObject, WKNavigationDelegate {
     }
 }
 
-private struct WebViewHost: UIViewRepresentable {
+struct WebViewHost: UIViewRepresentable {
     let model: BrowserModel
     func makeUIView(context: Context) -> WKWebView { model.webView }
     func updateUIView(_ view: WKWebView, context: Context) {}

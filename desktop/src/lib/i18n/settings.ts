@@ -165,6 +165,10 @@ export default {
     "New worktree: pasted whitespace is removed. While it is being created the field says so and will not take another.",
   "Der blaue Punkt an einem Space bleibt weg, nachdem du ihn angesehen hast – auch nach einem Neustart. Ein neues Ergebnis bringt ihn zurück.":
     "The blue dot on a space stays gone after you have looked at it, including after a restart. A new result brings it back.",
+  "Neu: Plugins. Ein Server-Plugin bringt seine eigene Oberfläche mit, Hollr zeigt sie in der Seitenleiste unter „Plugins“. Auf dem Server einschalten mit: hollr plugin link <ordner>":
+    "New: plugins. A server plugin brings its own interface; Hollr shows it in the sidebar under “Plugins”. Turn one on on the server with: hollr plugin link <folder>",
+  "Erstes Plugin „Sandcastle“: Issue-Board eines lul-workr-Projekts mit Warteschlange zum Ziehen und einer Ansicht für Sandcastle-Läufe.":
+    "First plugin “Sandcastle”: an issue board for a lul-workr project with a drag-and-drop queue and a view of Sandcastle runs.",
   "Worktrees in der Seitenleiste lassen sich per Ziehen umsortieren. Die Reihenfolge bleibt auf diesem Mac.":
     "Worktrees in the sidebar can be reordered by dragging. The order stays on this Mac.",
   "Doppelklick auf einen Space öffnet den Space selbst. Ein Klick bleibt beim zuletzt offenen Tab.":

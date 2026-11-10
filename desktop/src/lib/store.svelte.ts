@@ -32,7 +32,9 @@ export type Route =
   | { view: "agent"; server: string; pane: string; open?: AgentOpen; url?: string }
   | { view: "settings"; page?: "design" | "servers" | "notes" | "about" | "dictation" | "speech" }
   | { view: "serverinfo"; server: string }
-  | { view: "tools"; server: string };
+  | { view: "tools"; server: string }
+  | { view: "plugins" }
+  | { view: "plugin"; server: string; id: string };
 
 export type AgentOpen = "terminal" | "git" | "browser";
 

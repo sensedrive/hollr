@@ -84,8 +84,16 @@ for 10 minutes, once, and 5 wrong tries end it. `n` + Enter in `hollr pair` make
 | `hollr devices` / `hollr revoke <id\|name>` | list / remove paired devices |
 | `hollr doctor` | check the setup, with fixes |
 | `hollr push status\|test` | push notifications (the key is imported once in the iPhone app) |
+| `hollr plugin link <dir>` / `unlink <id>` / `list` / `stop <id>` | Hollr plugins (see below) |
+| `hollr session new --kind K --cwd D --label L [--prompt T]` | start an agent session in herdr (prints `{"pane":…}`) |
 
 `--host` is for servers behind NAT or reached by a DNS name.
+
+**Plugins.** A plugin is a folder with `hollr-plugin.json` (`id`, `name`, `version`, `entry`) and a Bun script that serves its own
+web UI on `127.0.0.1`. `hollr plugin link <dir>` enables it on that server; the apps list it under *Plugins* and open it through
+their SSH tunnel. Hollr starts it on demand – the hollr binary runs the script itself, no Bun or Node needed on the server – and hands
+it a per-start token that travels only in the URL fragment. The repo ships one: [`plugins/sandcastle/`](plugins/sandcastle/), an
+issue board for lul-workr projects with a Sandcastle queue and run view (`hollr plugin link plugins/sandcastle`).
 
 ## Apps
 
@@ -136,6 +144,7 @@ the Mac DMGs and the Linux packages and attaches them to the release.
 | `ios/` | iPhone and Mac app |
 | `desktop/` | Linux desktop app (Tauri) |
 | `plugin/` | herdr plugin |
+| `plugins/` | Hollr plugins (`sandcastle/`: issue board and Sandcastle runs) |
 | `install.sh` | server installer |
 
 ## License

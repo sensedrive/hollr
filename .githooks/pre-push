@@ -27,6 +27,14 @@ if grep -qE '^(server/|install\.sh|\.github/)' <<<"$changed"; then
   bash -n "$root/install.sh"
 fi
 
+if grep -qE '^plugins/' <<<"$changed"; then
+  echo "▸ plugins/sandcastle: types · lint · tests"
+  cd "$root/plugins/sandcastle"
+  bun run check-types
+  bun run lint
+  bun test
+fi
+
 if grep -qE '^ios/' <<<"$changed"; then
   echo "▸ ios: build"
   cd "$root/ios"

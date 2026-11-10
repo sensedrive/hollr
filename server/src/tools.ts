@@ -12,8 +12,11 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 
 const STATE = () => join(Bun.env.HOME ?? homedir(), ".local", "state", "hollr", "tools");
 const BIN = () => join(Bun.env.HOME ?? homedir(), ".local", "bin");
-const PATH_PREFIX =
-  'export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH";';
+const PATH_DIRS = ["$HOME/.local/bin", "$HOME/.bun/bin", "$HOME/.claude/local", "/opt/homebrew/bin", "/usr/local/bin"];
+const PATH_PREFIX = `export PATH="${PATH_DIRS.join(":")}:$PATH";`;
+
+/** The directories installers use (what PATH_PREFIX puts in front), with $HOME resolved. */
+export const toolPathDirs = () => PATH_DIRS.map((d) => d.replace("$HOME", Bun.env.HOME ?? homedir()));
 
 const TITLES: Record<ToolName, string> = {
   herdr: "herdr",
@@ -23,7 +26,7 @@ const TITLES: Record<ToolName, string> = {
   hollr: "Hollr-Server",
 };
 
-function which(name: string): string | undefined {
+export function which(name: string): string | undefined {
   for (const dir of [
     BIN(),
     join(Bun.env.HOME ?? "", ".bun", "bin"),
