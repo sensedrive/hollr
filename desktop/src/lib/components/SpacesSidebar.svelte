@@ -134,6 +134,24 @@
   }
 
   const focus = (node: HTMLInputElement) => { void tick().then(() => node.focus()); };
+  let adding = $state(false);
+  let addErr = $state("");
+  /** herdr's new main space: a terminal in ~, no agent. herdr renames it to the folder as soon as you cd. */
+  async function newMain() {
+    const server = currentServer();
+    if (!server || adding) return;
+    adding = true;
+    addErr = "";
+    try {
+      const r = await space(server, { op: "create", cwd: "~" });
+      await Promise.all([refreshSpaces(server), refresh()]);
+      if (r.pane) go({ view: "agent", server, pane: r.pane });
+    } catch (e) {
+      addErr = e instanceof Error ? e.message : String(e);
+    }
+    adding = false;
+  }
+
   const hiddenCount = $derived(
     ((app.spaces[currentServer()] ?? []) as FullSpace[]).filter((sp) => hiddenSpaces.has(currentServer(), sp.id)).length,
   );
@@ -189,6 +207,10 @@
       {t("{n} ausgeblendet – alle zeigen", { n: hiddenCount })}
     </button>
   {/if}
+  <button class="addspace" disabled={!currentServer() || adding} onclick={() => void newMain()}>
+    <Icon name="plus" size={14} /> {t("Neuer Space")}
+  </button>
+  {#if addErr}<div class="adderr">{addErr}</div>{/if}
 </div>
 
 {#if menu}
@@ -251,6 +273,11 @@
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .restore { all: unset; cursor: pointer; display: block; margin: 10px 10px 0; font-size: 12px; color: var(--dim); }
   .restore:hover, .restore:focus-visible { color: var(--fg); }
+  .addspace { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; margin: 8px 10px 0;
+    padding: 6px 8px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+  .addspace:hover, .addspace:focus-visible { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }
+  .addspace:disabled { opacity: .5; cursor: default; }
+  .adderr { margin: 4px 12px 0; font-size: 12px; color: var(--orange); }
   .wt-back { all: unset; position: fixed; inset: 0; z-index: 40; }
   .wt { position: fixed; z-index: 41; width: 280px; display: grid; gap: 6px; padding: 10px; border-radius: 10px;
     background: var(--card); border: 1px solid var(--border); box-shadow: 0 12px 40px color-mix(in srgb, #000 35%, transparent); }

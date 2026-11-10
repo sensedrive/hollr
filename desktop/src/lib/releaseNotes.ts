@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 36,
+    version: "0.44.4",
+    date: "10.11.2026",
+    items: [
+      { icon: "＋", text: "Neuer Space unten in der Seitenleiste: öffnet ein Terminal, die Beschriftung folgt dem Ordner, sobald du das Projekt wechselst" },
+    ],
+  },
+  {
     build: 35,
     version: "0.44.3",
     date: "10.11.2026",
