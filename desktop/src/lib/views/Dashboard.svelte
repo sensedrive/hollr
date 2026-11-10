@@ -217,7 +217,7 @@
       b: () => open(r, "browser", row.ports[0] ? `http://localhost:${row.ports[0].port}` : undefined),
       r: () => (sel?.startsWith("f:") ? cards[r.id]?.focusReply() : open(r)),
       e: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" && hideLong(selFocus.ref.id, selFocus.since)),
-      x: () => (ending = r),
+      x: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" ? hideLong(selFocus.ref.id, selFocus.since) : (ending = r)),
     };
     const action = actions[k];
     if (action) {
@@ -235,7 +235,7 @@
     ["g", "Git & Dateien"],
     ["b", "Browser (Port des Projekts)"],
     ["e", "Als gesehen markieren"],
-    ["x", "Sitzung beenden"],
+    ["x", "Benachrichtigung ausblenden"],
     ["esc", "Auswahl aufheben"],
   ];
 </script>
@@ -281,7 +281,7 @@
             {@const row = rowOf(f.ref)}
             <FocusCard bind:this={cards[f.ref.id]} kind={f.kind} since={f.since} ref={f.ref} entry={f.entry} ctx={row.ctx}
               project={row.project} ports={row.ports} selected={sel === `f:${f.ref.id}`}
-              onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)} onEnd={() => (ending = f.ref)}
+              onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)}
               onHide={() => hideLong(f.ref.id, f.since)} />
           {/each}
         </div>

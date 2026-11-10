@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 37,
+    version: "0.44.5",
+    date: "10.11.2026",
+    items: [
+      { icon: "✕", text: "Übersicht: ✕ blendet die Meldung aus. Die Sitzung läuft weiter. Beenden geht nur noch über das Menü der Karte." },
+    ],
+  },
+  {
     build: 36,
     version: "0.44.4",
     date: "10.11.2026",

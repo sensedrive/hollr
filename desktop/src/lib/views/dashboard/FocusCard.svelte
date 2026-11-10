@@ -16,7 +16,7 @@
   import AskCard from "$lib/components/AskCard.svelte";
   import { agentName, refTitle, relTime } from "./util";
 
-  let { kind, since, ref, entry, ctx, project, ports, selected, onOpen, onEnd, onSelect, onHide }: {
+  let { kind, since, ref, entry, ctx, project, ports, selected, onOpen, onSelect, onHide }: {
     kind: FocusKind;
     since: number;
     ref: PaneRef;
@@ -27,7 +27,6 @@
     ports: WebPort[];
     selected: boolean;
     onOpen: (open?: AgentOpen, url?: string) => void;
-    onEnd: () => void;
     onSelect: () => void;
     /** a long-running turn: take it out of the list (the session keeps running) */
     onHide: () => void;
@@ -174,7 +173,7 @@
       <button class="btn" onclick={() => onOpen("browser", `http://localhost:${p.port}`)} title={p.title ?? p.process ?? ""}><Icon name="◍" size={15} /> :{p.port}</button>
     {/each}
     <span class="grow"></span>
-    <button class="btn danger" onclick={onEnd} title={t("Sitzung beenden")}><Icon name="✕" size={15} /></button>
+    <button class="btn" onclick={() => (entry ? dismiss(entry) : onHide())} title={t("Benachrichtigung ausblenden")}><Icon name="✕" size={15} /></button>
   </div>
   {#if error}<div class="small err">{t("Senden fehlgeschlagen: {e}", { e: error })}</div>{/if}
 </div>
@@ -216,7 +215,6 @@
   .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .actions .btn { padding: 3px 10px; font-size: 12px; }
   .dirty { margin-left: 5px; font-size: 10.5px; color: var(--orange); }
-  .danger:hover { color: var(--red); border-color: var(--red); }
   .err { color: var(--red); }
   .grow { flex: 1; min-width: 0; }
 </style>

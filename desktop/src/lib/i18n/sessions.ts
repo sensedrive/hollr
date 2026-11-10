@@ -176,6 +176,7 @@ export default {
   "{agent} ist fertig": "{agent} is done",
   "{agent} arbeitet seit {d}": "{agent} working for {d}",
   "Als gesehen markieren": "Mark as seen",
+  "Benachrichtigung ausblenden": "Hide notification",
   "Chat öffnen": "Open chat",
   "Terminal öffnen": "Open terminal",
   "Im Browser öffnen": "Open in browser",
