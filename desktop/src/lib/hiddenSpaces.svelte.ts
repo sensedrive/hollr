@@ -1,5 +1,5 @@
-// Spaces taken off the list ("Aus der Liste nehmen", "serverId|workspaceId"): gone from the sidebar and the
-// dashboard alike, per computer. A session there that waits for you shows up anyway.
+// Spaces hidden with „Verstecken" (serverId|workspaceId): off the sidebar and dashboard, herdr keeps running.
+// „Aus der Liste nehmen" closes the workspace in herdr instead. Blocked sessions still show when hidden.
 import type { PaneRef } from "./store.svelte";
 
 const KEY = "hollr.sidebar.hidden";
@@ -17,6 +17,13 @@ class HiddenSpaces {
   has = (server: string, ws: string) => this.ids.has(`${server}|${ws}`);
   hide(server: string, ws: string) {
     this.set(new Set(this.ids).add(`${server}|${ws}`));
+  }
+  unhide(server: string, ws: string) {
+    const key = `${server}|${ws}`;
+    if (!this.ids.has(key)) return;
+    const next = new Set(this.ids);
+    next.delete(key);
+    this.set(next);
   }
   /** shows a server's hidden spaces again */
   showAll(server: string) {

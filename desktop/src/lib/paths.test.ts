@@ -79,3 +79,13 @@ describe("path hrefs", () => {
     expect(parsePathHref("hollr-file:")).toBeUndefined();
   });
 });
+
+describe("omp local:// artifacts", () => {
+  test("found in text, without trailing punctuation, and routed to the preview", () => {
+    const text = "Übergabe (local://bpg-franzoesisch-uebergabe.md). Und src/a.ts:3";
+    const found = findPaths(text);
+    expect(found.map((p) => p.path)).toEqual(["local://bpg-franzoesisch-uebergabe.md", "src/a.ts"]);
+    expect(parsePathHref("local://bpg-franzoesisch-uebergabe.md")).toEqual({ path: "local://bpg-franzoesisch-uebergabe.md" });
+    expect(parsePathHref(pathHref("local://x/y.md"))).toEqual({ path: "local://x/y.md" });
+  });
+});

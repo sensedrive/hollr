@@ -69,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
                         t.0 += 1;
                         let id = t.0;
                         t.1.insert(id, tx);
-                        let command = term::command(&s("mode"), &s("pane"), a["cols"].as_u64().unwrap_or(80) as u16, a["rows"].as_u64().unwrap_or(24) as u16);
+                        let command = term::command(&s("pane"), a["cols"].as_u64().unwrap_or(80) as u16, a["rows"].as_u64().unwrap_or(24) as u16);
                         let (hollr, server, events) = (hollr.clone(), s("server"), events.clone());
                         tokio::spawn(async move {
                             term::run_stream(&hollr, &server, command, rx, |e| {

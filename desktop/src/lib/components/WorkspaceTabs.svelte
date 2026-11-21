@@ -13,7 +13,7 @@
   import { t } from "$lib/i18n";
   import type { Workspace } from "$lib/api";
   import { dialogs, go, mySessions, refresh } from "$lib/store.svelte";
-  import { resultSeen } from "$lib/inbox.svelte";
+  import { dotStatus, markUnread } from "$lib/inbox.svelte";
   import ConfirmDialog from "$lib/views/dashboard/ConfirmDialog.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import type { MenuItem } from "$lib/views/dashboard/util";
@@ -121,11 +121,12 @@
       items: [
         { label: t("Öffnen"), icon: "↗", action: () => openTab(pane) },
         { label: t("Umbenennen …"), icon: "✎", action: () => startRename(tab) },
-        { label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: ws.id }) },
+        { label: t("Neues Terminal hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: ws.id }) },
+        { label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(tab.panes.map((p) => `${server}|${p.pane}`)) },
         ...(canFork(pane) && !contextChat.busy
           ? [{ label: t("Neuer Chat mit Kontext"), icon: "chat-plus", action: () => void startContextChat(server, pane.pane) }]
           : []),
-        { label: t("Schließen"), icon: "✕", danger: true, action: () => askClose(tab, pane) },
+        { sep: true, label: t("Schließen"), icon: "✕", danger: true, action: () => askClose(tab, pane) },
       ],
     };
   }
@@ -172,7 +173,7 @@
               onclick={() => openTab(pane)}
               onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
               ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
-              <span class="dot {pane.status === "done" && resultSeen(`${server}|${pane.pane}`) ? "idle" : pane.status}"></span>
+              <span class="dot {dotStatus(`${server}|${pane.pane}`, pane.status)}"></span>
               {#if pane.fork}<span class="derived"><Icon name="corner" size={12} /></span>{/if}
               <span class="name ellipsis">{nameOf(tab, pane)}</span>
               <LiveMark {server} pane={pane.pane} />

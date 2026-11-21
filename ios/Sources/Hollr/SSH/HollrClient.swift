@@ -371,9 +371,26 @@ actor SSHPool {
     static let shared = SSHPool()
     private var clients: [UUID: SSHClient] = [:]
     private var connecting: [UUID: Task<SSHClient, Error>] = [:]
+    /// when the connection last answered a command
+    private var lastOK: [UUID: Date] = [:]
+    /// a connection idle longer than this is checked before use
+    private static let idleCheck: TimeInterval = 30
 
     func client(for server: Server) async throws -> SSHClient {
-        if let existing = clients[server.id], existing.isConnected { return existing }
+        if let existing = clients[server.id], existing.isConnected {
+            if let ok = lastOK[server.id], Date().timeIntervalSince(ok) < Self.idleCheck { return existing }
+            // idle for a while (phone locked, Tailscale idle, network switched): a half-open connection still
+            // looks connected and would hold the next command for its whole deadline – a quick check instead
+            if await Self.answers(existing) {
+                lastOK[server.id] = Date()
+                return existing
+            }
+            HollrLog.error("pool: \(server.label) did not answer the check – reconnecting")
+            if clients[server.id] === existing {
+                clients[server.id] = nil
+                Task { try? await existing.close() }
+            }
+        }
         clients[server.id] = nil
         if let pending = connecting[server.id] { return try await pending.value }
         let task = Task { try await HollrClient.connect(server) }
@@ -381,11 +398,31 @@ actor SSHPool {
         defer { connecting[server.id] = nil }
         let client = try await task.value
         clients[server.id] = client
+        lastOK[server.id] = Date()
         HollrLog.info("pool: connected \(server.label)")
         return client
     }
 
+    /// A command answered on this server's connection.
+    func alive(_ server: Server) {
+        lastOK[server.id] = Date()
+    }
+
+    /// A cheap command within 4 s: does the connection still carry anything?
+    private static func answers(_ client: SSHClient) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { (try? await client.executeCommand("kinds")) != nil }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(4))
+                return false
+            }
+            defer { group.cancelAll() }
+            return await group.next() ?? false
+        }
+    }
+
     func invalidate(_ server: Server) async {
+        lastOK[server.id] = nil
         // closing a half-open connection can take long – don't make the caller wait for it
         if let client = clients.removeValue(forKey: server.id) { Task { try? await client.close() } }
     }
@@ -394,6 +431,7 @@ actor SSHPool {
     func closeAll() async {
         for client in clients.values { Task { try? await client.close() } }
         clients.removeAll()
+        lastOK.removeAll()
     }
 
     /// Runs one command with a deadline. A connection that went half-open (Mac asleep, Wi-Fi → mobile)
@@ -413,6 +451,7 @@ actor SSHPool {
                 await SSHPool.shared.invalidate(server)
                 throw HollrError.unreachable(String(localized: "keine Antwort (Zeitüberschreitung)"))
             }
+            await SSHPool.shared.alive(server)
             return value
         }
     }

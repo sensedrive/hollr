@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { openJob } from "$lib/jobs.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   // wait: like omp's "ℹ waiting on 1 job" – the intent, which jobs it waits on (while running: the running jobs, they
   // are what a wait waits for) and, once back, how long it waited and how each reported job ended.
@@ -48,7 +49,7 @@
   {#each rows as r, i (r.id)}
     <div class="hrow job" title={r.full ?? r.title}>
       <span class="tree">{i === rows.length - 1 ? "└─" : "├─"}</span>
-      {#if !hashId(r.id)}<span class="id">{r.id}</span>{/if}
+      {#if !hashId(r.id)}<button class="id jobid" title={t("Details und Ausgabe")} onclick={() => openJob(r.id)}>{r.id}</button>{/if}
       <span class="ellipsis grow"><span class="fgs">{r.title}</span>{#if r.command}<span class="dim gap">{r.command}</span>{/if}</span>
       {#if r.outcome === "done"}<span class="ok nowrap"><Icon name="✓" size={15} /> {t("fertig")}</span>
       {:else if r.outcome === "failed"}<span class="err nowrap"><Icon name="✘" size={15} /> {t("fehlgeschlagen")}</span>
@@ -65,4 +66,6 @@
   .fgs { color: color-mix(in srgb, var(--fg) 85%, transparent); }
   .gap { margin-left: 1.5ch; }
   .nowrap { flex: none; font-variant-numeric: tabular-nums; }
+  .jobid { all: unset; cursor: pointer; }
+  .jobid:hover { color: var(--accent); text-decoration: underline; }
 </style>

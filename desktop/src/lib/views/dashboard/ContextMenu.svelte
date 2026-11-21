@@ -31,8 +31,9 @@
 <div class="shield" role="presentation" onclick={onClose} oncontextmenu={(e) => { e.preventDefault(); onClose(); }}></div>
 <div class="menu" role="menu" bind:this={el} style="left:{pos.left}px; top:{pos.top}px">
   {#each items as item}
+    {#if item.sep}<div class="sep" role="separator"></div>{/if}
     <button role="menuitem" class:danger={item.danger} onclick={() => { onClose(); item.action(); }}>
-      <span class="ico">{#if item.icon && (GLYPHS[item.icon] || /^[a-z][a-z-]*$/.test(item.icon))}<Icon name={item.icon} size={14} />{:else}{item.icon ?? ""}{/if}</span>{item.label}
+      <span class="ico">{#if item.icon && (GLYPHS[item.icon] || /^[a-z][a-z-]*$/.test(item.icon))}<Icon name={item.icon} size={14} />{:else}{item.icon ?? ""}{/if}</span><span class="txt">{item.label}{#if item.hint}<span class="hint">{item.hint}</span>{/if}</span>
     </button>
   {/each}
 </div>
@@ -45,6 +46,8 @@
   button:hover, button:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .danger { color: var(--red); }
+  .sep { border-top: 1px solid var(--border); margin: 5px 4px; }
+  .hint { display: block; font-size: 11px; color: var(--dim); font-weight: 400; }
   .ico { width: 16px; display: grid; place-items: center; color: var(--muted); flex: none; }
   .danger .ico { color: var(--red); }
 </style>

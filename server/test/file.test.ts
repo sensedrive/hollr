@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,6 +17,7 @@ import {
   paneContext,
   readPath,
   refusal,
+  resolveLocal,
   TEXT_LIMIT,
 } from "../src/file";
 
@@ -192,5 +201,36 @@ describe("file: pane context from herdr", () => {
     };
     expect(await paneContext("w1:p1", exec)).toEqual({ cwd: join(project, "src"), root: project });
     expect(await paneContext("", exec)).toEqual({});
+  });
+});
+
+describe("local:// artifacts", () => {
+  test("found in the pane's session, else the newest of the project's sessions", () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "hollr-local-")));
+    try {
+      const project = join(home, ".omp", "agent", "sessions", "-proj");
+      const old = join(project, "s1");
+      const newer = join(project, "s2");
+      mkdirSync(join(old, "local"), { recursive: true });
+      mkdirSync(join(newer, "local"), { recursive: true });
+      writeFileSync(join(old, "local", "own.md"), "# own\n");
+      writeFileSync(join(newer, "local", "a.md"), "# newer\n");
+      writeFileSync(join(old, "local", "a.md"), "# older\n");
+      utimesSync(join(old, "local", "a.md"), new Date(2000, 0, 1), new Date(2000, 0, 1));
+
+      expect(resolveLocal("local://own.md", old)).toBe(join(old, "local", "own.md"));
+      // herdr still names an earlier session: the artifact of the newer one is found
+      const other = join(project, "s0");
+      expect(resolveLocal("local://a.md", other)).toBe(join(newer, "local", "a.md"));
+      expect(resolveLocal("local://../x", old)).toBeUndefined();
+
+      const r = readPath("local://own.md", { home, tmp: [], session: old });
+      expect(r.kind === "text" && r.text).toContain("# own");
+      expect(() => readPath("local://missing.md", { home, tmp: [], session: old })).toThrow(
+        "not_found",
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

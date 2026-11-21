@@ -2483,6 +2483,16 @@
         }
       }
     },
+    "Erneut senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send again"
+          }
+        }
+      }
+    },
     "Erneut versuchen": {
       "localizations": {
         "en": {
@@ -8405,6 +8415,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Staged"
+          }
+        }
+      }
+    },
+    "Nicht gesendet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not sent"
+          }
+        }
+      }
+    },
+    "Nicht gesendet: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not sent: %@"
           }
         }
       }

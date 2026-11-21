@@ -70,10 +70,9 @@ pub fn parse_line(line: &str) -> Option<TermEvent> {
     }
 }
 
-/// `attach` / `shell` command line for the gate.
-pub fn command(mode: &str, pane: &str, cols: u16, rows: u16) -> String {
-    let verb = if mode == "shell" { "shell" } else { "attach" };
-    format!("{verb} {pane} {cols} {rows}")
+/// `attach` command line for the gate: the pane's own terminal.
+pub fn command(pane: &str, cols: u16, rows: u16) -> String {
+    format!("attach {pane} {cols} {rows}")
 }
 
 pub enum Cmd {

@@ -7,8 +7,8 @@ describe("parsePrefs", () => {
     expect([...m]).toEqual([["s|w1:p1", { view: "terminal" }], ["s|w1:p2", { view: "chat" }]]);
   });
   test("the new store wins over the old one", () => {
-    const m = parsePrefs(JSON.stringify([["s|w1:p1", { term: "shell", zen: true }]]), JSON.stringify([["s|w1:p1", "chat"]]));
-    expect(m.get("s|w1:p1")).toEqual({ term: "shell", zen: true });
+    const m = parsePrefs(JSON.stringify([["s|w1:p1", { view: "terminal", zen: true }]]), JSON.stringify([["s|w1:p1", "chat"]]));
+    expect(m.get("s|w1:p1")).toEqual({ view: "terminal", zen: true });
   });
   test("broken data: empty", () => {
     expect(parsePrefs("{nope", null).size).toBe(0);

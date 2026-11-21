@@ -39,7 +39,7 @@
     error = "";
     try {
       const r = await space(server, { op: "open", ws, cwd: row.path });
-      await Promise.all([refreshSpaces(server), refresh()]);
+      await Promise.all([refreshSpaces(server), refresh(server)]);
       onClose();
       if (r.pane) go({ view: "agent", server, pane: r.pane });
       else if (r.ws) go({ view: "space", server, ws: r.ws });

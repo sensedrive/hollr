@@ -12,6 +12,7 @@
   import { applyMention, insertAt, mentionAt } from "../assist";
   import { attach } from "../attach";
   import { files as findFiles } from "../git";
+  import { gate } from "../api";
   import { snippets } from "../snippets.svelte";
   import { drafts } from "../store.svelte";
   import { dictation as dictationSettings, dictator, prewarm } from "../dictation.svelte";
@@ -20,8 +21,12 @@
 
   let {
     placeholder, keysTitle, translucent = false, disabled = false, onSend, onKeys, top, trailing, meta, quick = true, chips = true, value = $bindable(""),
-    sent = $bindable([]), server, ws, dictationKey, micBlocked = false, vocabulary,
+    sent = $bindable([]), server, ws, dictationKey, micBlocked = false, vocabulary, skillsPane, skillPrefix = "/skill:",
   }: {
+    /** "/" suggests the skills the agent in this pane can call */
+    skillsPane?: string;
+    /** how a skill is called: omp "/skill:name", Claude Code "/name" */
+    skillPrefix?: string;
     placeholder: string;
     keysTitle: string;
     translucent?: boolean;
@@ -146,6 +151,38 @@
     edit(applyMention(value, caret, start, path));
   }
 
+  // ------------------------------------------------------------ "/" skills
+
+  type SkillHit = { name: string; description: string };
+  let skills: SkillHit[] = [];
+  let skillsFor = "";
+  let skillHits = $state<SkillHit[]>([]);
+  let skillPick = $state(0);
+  const skillsOpen = $derived(skillHits.length > 0);
+
+  /** the text is "/frag" (a command at the very start): the skills whose name contains frag */
+  async function checkSkills() {
+    if (!server || !skillsPane || !area) return (skillHits = []);
+    const m = area.value.slice(0, area.selectionStart).match(/^\/(?:skill:)?([\w-]*)$/);
+    if (!m) return (skillHits = []);
+    const key = `${server}|${skillsPane}`;
+    if (skillsFor !== key) {
+      skillsFor = key;
+      skills = (await gate<{ skills: SkillHit[] }>(server, `skills ${skillsPane}`).catch(() => ({ skills: [] }))).skills;
+    }
+    const q = (m[1] ?? "").toLowerCase();
+    const starts = skills.filter((s) => s.name.toLowerCase().startsWith(q));
+    const rest = skills.filter((s) => !s.name.toLowerCase().startsWith(q) && s.name.toLowerCase().includes(q));
+    skillHits = [...starts, ...rest].slice(0, 8);
+    skillPick = 0;
+  }
+
+  function chooseSkill(s: SkillHit) {
+    const after = value.slice(area?.selectionStart ?? value.length);
+    skillHits = [];
+    void edit({ text: `${skillPrefix}${s.name} ${after.trimStart()}`, caret: skillPrefix.length + s.name.length + 1 });
+  }
+
   // ------------------------------------------------------------ attachments
 
   let uploading = $state(0);
@@ -211,6 +248,25 @@
 
   function onKey(e: KeyboardEvent) {
     if (e.isComposing) return;
+    if (skillsOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        skillPick = (skillPick + (e.key === "ArrowDown" ? 1 : skillHits.length - 1)) % skillHits.length;
+        return;
+      }
+      if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+        e.preventDefault();
+        const s = skillHits[skillPick];
+        if (s) chooseSkill(s);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        skillHits = [];
+        return;
+      }
+    }
     if (mentionOpen) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -354,7 +410,17 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="composer" class:translucent class:dragging ondragover={onDragOver} ondragleave={() => (dragging = false)} ondrop={onDrop}>
   {#if top}{@render top()}{/if}
-  {#if mentionOpen}
+  {#if skillsOpen}
+    <div class="mentions" role="listbox" aria-label={t("Skills")}>
+      {#each skillHits as s, i (s.name)}
+        <button class="mention skill" class:on={i === skillPick} role="option" aria-selected={i === skillPick}
+          onmousedown={(e) => e.preventDefault()} onmouseenter={() => (skillPick = i)} onclick={() => chooseSkill(s)}>
+          <span class="base mono">{skillPrefix}{s.name}</span>
+          {#if s.description}<span class="desc">{s.description}</span>{/if}
+        </button>
+      {/each}
+    </div>
+  {:else if mentionOpen}
     <div class="mentions" role="listbox" aria-label={t("Dateien")}>
       {#each found as f, i (f)}
         <!-- mousedown: keep the caret in the text field -->
@@ -379,7 +445,7 @@
     </div>
   {/if}
   <textarea bind:this={area} bind:value rows="1" {placeholder} {disabled} spellcheck="false" onkeydown={onKey} class:gone={dictating && !!split}
-    oninput={checkMention} onkeyup={(e) => !["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(e.key) && checkMention()}
+    oninput={() => { checkMention(); void checkSkills(); }} onkeyup={(e) => !["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(e.key) && (checkMention(), void checkSkills())}
     onclick={checkMention} onfocus={() => (focused = true)} onblur={() => { focused = false; lastCaret = area?.selectionStart ?? null; closeMention(); }}
     onpaste={onPaste}></textarea>
   {#if uploadError}
@@ -523,4 +589,6 @@
   .stopsq { width: 11px; height: 11px; border-radius: 2px; background: #fff; }
   .micx { all: unset; cursor: pointer; color: var(--muted); padding: 0 4px; font-size: 13px; }
   .micx:hover { color: var(--fg); }
+  .mention.skill { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .mention .desc { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 </style>

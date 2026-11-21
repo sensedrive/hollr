@@ -184,8 +184,19 @@ function runInfo(run: RunView): HTMLElement {
           "button",
           {
             class: "btn",
-            onclick: async () => {
-              if (!confirm("Gibt die Sperre frei, beendet die Sitzung nicht.")) return;
+            title: "Gibt die Sperre frei, beendet die Sitzung nicht.",
+            // no window.confirm: embedded webviews answer it with "no" without showing anything
+            onclick: async (e: Event) => {
+              const btn = e.currentTarget as HTMLButtonElement;
+              if (btn.dataset.armed !== "1") {
+                btn.dataset.armed = "1";
+                btn.textContent = "Wirklich freigeben? (Sitzung läuft weiter)";
+                setTimeout(() => {
+                  btn.dataset.armed = "";
+                  btn.textContent = "Lauf freigeben";
+                }, 4000);
+                return;
+              }
               try {
                 await api("/api/run/release", {});
               } catch (err) {

@@ -16,8 +16,13 @@
   import ChatFind from "./chat/ChatFind.svelte";
   import ChatRuler from "./chat/ChatRuler.svelte";
   import { provideReveal } from "./chat/reveal";
+  import type { JumpNote } from "../jumpNotes.svelte";
 
-  let { timeline, root, onAnswer, onLink, onResend, scroller, overview = true, onFinding, pinnedAsk }: {
+  let { timeline, root, onAnswer, onLink, onResend, scroller, overview = true, onFinding, pinnedAsk, notes = [], onNote, onNoteMenu }: {
+    /** jump notes, highlighted in the overview ruler */
+    notes?: JumpNote[];
+    onNote?: (note: JumpNote) => void;
+    onNoteMenu?: (note: JumpNote, x: number, y: number) => void;
     timeline: Timeline;
     /** the open question's id: it hangs above the composer (AgentView), not in the scrolling log */
     pinnedAsk?: string;
@@ -139,7 +144,7 @@
   <div hidden>
     <div class="deck" style:--ruler-w="{overview ? RULER_W : 0}px" {@attach overScroller}>
       <ChatFind bind:this={find} {scroller} root={list} {marks} {units} bind:reveal bind:matches bind:current {onFinding} />
-      {#if overview}<ChatRuler {scroller} root={list} {matches} {current} onPick={(i) => find?.show(i)} />{/if}
+      {#if overview}<ChatRuler {scroller} root={list} {matches} {current} onPick={(i) => find?.show(i)} {notes} {onNote} {onNoteMenu} />{/if}
     </div>
   </div>
 {/if}

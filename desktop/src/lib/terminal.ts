@@ -5,7 +5,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 /** pane: the session's own terminal · shell: an own shell in the pane's folder */
-export type TermMode = "pane" | "shell";
 
 /** What a `hollr-term` event carries (TermEvent in term.rs). */
 export type TermEvent =
@@ -36,7 +35,7 @@ export type TermPhase =
   | { kind: "closed"; end: TermEnd };
 
 export interface TermBackend {
-  start(a: { server: string; pane: string; mode: TermMode; cols: number; rows: number }): Promise<number>;
+  start(a: { server: string; pane: string; cols: number; rows: number }): Promise<number>;
   write(id: number, data: string): Promise<void>;
   resize(id: number, cols: number, rows: number): Promise<void>;
   stop(id: number): Promise<void>;
@@ -96,7 +95,6 @@ export class TermSession {
     private readonly opts: {
       server: string;
       pane: string;
-      mode: TermMode;
       onOutput: (data: string) => void;
       onPhase: (phase: TermPhase) => void;
       backend?: TermBackend;
@@ -186,10 +184,10 @@ export class TermSession {
     this.starting = true;
     this.early = [];
     this.startedAt = this.now();
-    const { server, pane, mode } = this.opts;
+    const { server, pane } = this.opts;
     let id: number;
     try {
-      id = await this.backend.start({ server, pane, mode, ...this.size });
+      id = await this.backend.start({ server, pane, ...this.size });
     } catch {
       if (!this.starting) return;
       this.starting = false;

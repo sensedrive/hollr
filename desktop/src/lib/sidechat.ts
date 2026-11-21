@@ -9,14 +9,19 @@ const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** what goes to the agent with the first question: the quote, then the question */
 export const FIRST_PREFIX = "Nachfrage zu diesem Ausschnitt aus unserem Gespräch:";
+/** a sidechat without a selected piece (FIRST_PLAIN: the question alone, the note keeps the agent hands-off) */
+export const FIRST_PLAIN = "Rückfrage zu unserem Gespräch:";
 export function firstPrompt(quote: string, question: string) {
+  if (!quote.trim() && question.trim().startsWith("/")) return question.trim();
+  if (!quote.trim()) return `${FIRST_PLAIN}\n\n${question.trim()}\n\n(Nur eine Rückfrage – bitte nichts ändern, nur antworten.)`;
   const quoted = quote.trim().split("\n").map((l) => `> ${l}`).join("\n");
   return `${FIRST_PREFIX}\n\n${quoted}\n\n${question.trim()}\n\n(Nur eine Rückfrage – bitte nichts ändern, nur antworten.)`;
 }
 /** the question alone, from the first prompt (the panel shows the quote itself above) */
 export function questionOf(text: string): string {
-  if (!text.startsWith(FIRST_PREFIX)) return text;
-  const rest = text.slice(FIRST_PREFIX.length).split("\n").filter((l) => !l.startsWith(">"));
+  const prefix = text.startsWith(FIRST_PREFIX) ? FIRST_PREFIX : text.startsWith(FIRST_PLAIN) ? FIRST_PLAIN : "";
+  if (!prefix) return text;
+  const rest = text.slice(prefix.length).split("\n").filter((l) => !l.startsWith(">"));
   return rest.join("\n").replace(/\n*\([^)]*\)\s*$/, "").trim();
 }
 

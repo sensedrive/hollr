@@ -128,6 +128,32 @@ export interface FileContext {
   home?: string;
   /** allowed besides home (tests inject; default /tmp and the per-user temp folder) */
   tmp?: string[];
+  /** the pane's omp session folder (`local://` artifacts live in its `local/`) */
+  session?: string;
+}
+
+/**
+ * omp's `local://name` artifacts: `<session>/local/name`. herdr may still point at an earlier session of the pane,
+ * so a file missing there is looked up in the project's other sessions (the newest wins).
+ */
+export function resolveLocal(raw: string, session?: string): string | undefined {
+  const name = raw.replace(/^local:\/\/+/i, "").split(/[?#]/)[0] ?? "";
+  if (!name || name.split("/").some((s) => s === ".." || s === "")) return undefined;
+  if (!session) return undefined;
+  const own = join(session, "local", name);
+  if (existsSync(own)) return own;
+  const project = dirname(session);
+  let best: { path: string; mtime: number } | undefined;
+  try {
+    for (const d of readdirSync(project)) {
+      const p = join(project, d, "local", name);
+      try {
+        const m = statSync(p).mtimeMs;
+        if (!best || m > best.mtime) best = { path: p, mtime: m };
+      } catch {}
+    }
+  } catch {}
+  return best?.path ?? own;
 }
 
 /** realpath; a path that doesn't exist (yet) gets its nearest existing parent resolved (/tmp → /private/tmp). */
@@ -176,9 +202,11 @@ export function readPath(raw: string, ctx: FileContext = {}): FileResult {
   const home = real(ctx.home ?? homedir());
   const tmp = (ctx.tmp ?? ["/tmp", tmpdir()]).map(real);
   const cwd = ctx.cwd || home;
+  const local = /^local:\/\//i.test(raw.trim());
+  if (local && !resolveLocal(raw, ctx.session)) throw new FileRefused("not_found");
   // a relative path from a tool card may be space-relative while the agent sits in a subfolder
-  const candidates = [expandPath(raw, cwd, home)];
-  if (ctx.root && ctx.root !== cwd) candidates.push(expandPath(raw, ctx.root, home));
+  const candidates = local ? [resolveLocal(raw, ctx.session) ?? ""] : [expandPath(raw, cwd, home)];
+  if (!local && ctx.root && ctx.root !== cwd) candidates.push(expandPath(raw, ctx.root, home));
   const found = candidates.find((c) => existsSync(c));
   // refuse lexically first, so a missing file outside home answers "outside", not "not_found"
   const lexical = found ?? candidates[0] ?? "";
@@ -281,7 +309,12 @@ function listing(dir: string): Pick<FileResult, "kind" | "mime" | "truncated" | 
 export async function paneContext(pane: string, exec: Exec = execHerdr): Promise<FileContext> {
   if (!pane) return {};
   const out = (await exec(["pane", "get", pane])) as {
-    pane?: { foreground_cwd?: string; cwd?: string; workspace_id?: string };
+    pane?: {
+      foreground_cwd?: string;
+      cwd?: string;
+      workspace_id?: string;
+      agent_session?: { kind?: string; value?: string };
+    };
   };
   const p = out?.pane;
   const cwd = [p?.foreground_cwd, p?.cwd].find((c) => c && existsSync(c));
@@ -289,5 +322,8 @@ export async function paneContext(pane: string, exec: Exec = execHerdr): Promise
   try {
     root = (await listSpaces(exec)).find((s) => s.id === p?.workspace_id)?.root || undefined;
   } catch {}
-  return { cwd, root };
+  // omp's session log …/<id>.jsonl → its folder …/<id>/ (artifacts in local/)
+  const log = p?.agent_session?.kind === "path" ? p.agent_session.value : undefined;
+  const session = log?.endsWith(".jsonl") ? log.slice(0, -".jsonl".length) : undefined;
+  return { cwd, root, ...(session ? { session } : {}) };
 }

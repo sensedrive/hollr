@@ -135,6 +135,15 @@
   </div>
   <p class="foot">{t("Ohne Kopfhörer schaltet Hollr das Mikrofon stumm, solange omp spricht (sonst hört omp sich selbst) – nur deutlich lauteres Reinreden kommt durch. Mit Kopfhörern kannst du jederzeit unterbrechen. Gilt sofort, auch mitten im Gespräch.")}</p>
 
+  <div class="section">{t("Composer")}</div>
+  <div class="rows">
+    <label class="row">
+      <span class="grow">{t("Prompt-Bausteine über dem Eingabefeld")}</span>
+      <input type="checkbox" class="toggle" bind:checked={settings.composerChips} />
+    </label>
+  </div>
+  <p class="foot">{t("Die Chips („Lass die Tests laufen …“ usw.) ein- oder ausblenden.")}</p>
+
   <Snippets />
 
   <div class="section">{t("Mehr")}</div>

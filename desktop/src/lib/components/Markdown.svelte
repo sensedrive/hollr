@@ -99,7 +99,10 @@
   const html = $derived.by(() => {
     // a language that finished loading renders its blocks again, now highlighted
     void highlighter.version;
-    const clean = DOMPurify.sanitize(md.parse(long && !expanded ? preview(text) : text, { async: false }) as string);
+    const clean = DOMPurify.sanitize(md.parse(long && !expanded ? preview(text) : text, { async: false }) as string, {
+      // omp's "local://…" artifacts stay links (the preview opens them); DOMPurify's default list drops them
+      ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|local|file):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+    });
     return onLink ? linkPaths(clean) : clean;
   });
 
@@ -176,9 +179,12 @@
   .md :global(li.task:has(input:checked)) { color: var(--muted); }
   .md :global(a) { color: var(--accent); text-decoration: none; cursor: pointer; }
   .md :global(a:hover) { text-decoration: underline; }
-  .md :global(strong) { font-weight: 600; }
+  /* colours like omp's terminal: bold in magenta, inline code green, table heads yellow, headings magenta */
+  .md :global(strong) { font-weight: 650; color: var(--purple); }
+  .md :global(em) { color: color-mix(in srgb, var(--fg) 70%, var(--purple)); }
+  .md :global(:is(h1, h2, h3, h4)) { color: var(--purple); }
   .md :global(code) { font-family: var(--mono); font-size: 0.86em; }
-  .md :global(:not(pre) > code) { background: color-mix(in srgb, var(--fg) 9%, transparent); padding: 1px 5px; border-radius: 5px;
+  .md :global(:not(pre) > code) { color: var(--green); background: color-mix(in srgb, var(--fg) 9%, transparent); padding: 1px 5px; border-radius: 5px;
     border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent); overflow-wrap: anywhere; }
   /* a file name or identifier in a table cell stays whole – the table scrolls instead */
   .md :global(td code) { overflow-wrap: normal; white-space: nowrap; }
@@ -216,7 +222,7 @@
   .md :global(.tablewrap) { margin: 0 0 10px; max-width: 100%; max-height: 460px; overflow: auto; border-radius: 8px;
     border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); }
   .md :global(table) { border-collapse: separate; border-spacing: 0; font-size: 0.86em; min-width: 100%; }
-  .md :global(th) { position: sticky; top: 0; z-index: 1; font-weight: 600; white-space: nowrap;
+  .md :global(th) { position: sticky; top: 0; z-index: 1; font-weight: 600; white-space: nowrap; color: var(--yellow);
     background: color-mix(in srgb, var(--fg) 9%, var(--card)); }
   .md :global(th:not([align])) { text-align: left; }
   .md :global(td), .md :global(th) { padding: 4px 10px; border-bottom: 1px solid color-mix(in srgb, var(--fg) 9%, transparent); vertical-align: top; }

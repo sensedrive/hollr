@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { alertAsk } from "$lib/ask.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   // Übersicht (DashboardView.swift, laid out for a wide window): usage limits, "Braucht dich" ordered by urgency
   // with everything answerable in place, "Läuft gerade" grouped by project (Alle / Arbeitet / Neu), the sessions you
@@ -9,8 +10,9 @@
   import { hiddenLong, hideLong } from "./dashboard/hiddenLong.svelte";
   import { t } from "$lib/i18n";
   import {
-    allPanes, app, dialogs, findPane, go, mySessions, nav, refresh, type AgentOpen, type PaneRef,
+    allPanes, app, dialogs, findPane, go, mySessions, nav, refresh, refreshSpaces, type AgentOpen, type PaneRef,
   } from "$lib/store.svelte";
+  import { ejectSpace } from "./spaces/spaces";
   import { answer, dismiss, fetchInbox, inboxEntries, type InboxEntry } from "$lib/inbox.svelte";
   import { hiddenSpaces, isHidden } from "$lib/hiddenSpaces.svelte";
   import SessionCard from "./dashboard/SessionCard.svelte";
@@ -144,7 +146,8 @@
         { label: t("Git & Dateien"), icon: "⑂", action: () => open(r, "git") },
         ...row.ports.map((p) => ({ label: t("Im Browser öffnen") + ` :${p.port}`, icon: "◍", action: () => open(r, "browser", `http://localhost:${p.port}`) })),
         ...(mineSet.has(r.id) ? [{ label: t("Aus der Übersicht nehmen"), icon: "◌", action: () => mySessions.remove(r.id) }] : []),
-        { label: t("Space aus der Liste nehmen"), icon: "◌", action: () => { hiddenSpaces.hide(r.server.id, r.workspace.id); const route = nav.route; if (route.view === "agent" && route.server === r.server.id && route.pane === r.pane.pane) go({ view: "dashboard" }); } },
+        { sep: true, label: t("Space ausblenden"), icon: "◌", action: () => { hiddenSpaces.hide(r.server.id, r.workspace.id); const route = nav.route; if (route.view === "agent" && route.server === r.server.id && route.pane === r.pane.pane) go({ view: "dashboard" }); } },
+        { label: t("Space beenden"), hint: t("Tabs und Agenten enden, Dateien und Branch bleiben"), icon: "⏹", danger: true, action: () => void ejectWorkspace(r) },
         { label: t("Sitzung beenden"), icon: "✕", danger: true, action: () => (ending = r) },
       ],
     };
@@ -154,7 +157,18 @@
     await api.closePane(r.server.id, r.pane.pane);
     mySessions.remove(r.id);
     ending = null;
-    await refresh();
+    await refresh(r.server.id);
+  }
+
+  async function ejectWorkspace(r: PaneRef) {
+    try {
+      await ejectSpace(r.server.id, r.workspace.id, r.workspace.label);
+      await Promise.all([refreshSpaces(r.server.id), refresh(r.server.id)]);
+      const route = nav.route;
+      if (route.view === "agent" && route.server === r.server.id && route.pane === r.pane.pane) go({ view: "dashboard" });
+    } catch (e) {
+      void alertAsk(t("Fehler"), e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function reload() {
@@ -215,7 +229,7 @@
       t: () => open(r, "terminal"),
       g: () => open(r, "git"),
       b: () => open(r, "browser", row.ports[0] ? `http://localhost:${row.ports[0].port}` : undefined),
-      r: () => (sel?.startsWith("f:") ? cards[r.id]?.focusReply() : open(r)),
+      r: () => open(r),
       e: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" && hideLong(selFocus.ref.id, selFocus.since)),
       x: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" ? hideLong(selFocus.ref.id, selFocus.since) : (ending = r)),
     };
@@ -280,7 +294,7 @@
           {#each focus as f (f.ref.id)}
             {@const row = rowOf(f.ref)}
             <FocusCard bind:this={cards[f.ref.id]} kind={f.kind} since={f.since} ref={f.ref} entry={f.entry} ctx={row.ctx}
-              project={row.project} ports={row.ports} selected={sel === `f:${f.ref.id}`}
+              project={row.project} selected={sel === `f:${f.ref.id}`}
               onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)}
               onHide={() => hideLong(f.ref.id, f.since)} />
           {/each}

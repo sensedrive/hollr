@@ -1,6 +1,9 @@
 // Spaces = herdr workspaces with repo / worktree info (server: `hollr gate spaces` / `space`).
 import { gate } from "$lib/api";
 import type { Space } from "$lib/git";
+import { t } from "$lib/i18n";
+import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
+import { confirmAsk } from "$lib/ask.svelte";
 
 /** the fields the server sends beyond `Space` in git.ts */
 export type FullSpace = Space & {
@@ -78,5 +81,26 @@ export const space = (server: string, req: SpaceRequest) => gate<{ ws?: string; 
 export const worktreeCheckouts = (server: string, ws: string) =>
   gate<{ worktrees: WorktreeCheckout[] }>(server, "space", { op: "worktrees", ws });
 export const closeInfo = (server: string, ws: string) => gate<CloseInfo>(server, "space", { op: "info", ws });
+
+/** herdr workspace close – all tabs and agents in the space end (and grouped worktrees when needed). */
+export async function ejectSpace(server: string, ws: string, label: string): Promise<boolean> {
+  const info = await closeInfo(server, ws);
+  const agents = info.agents + (info.group ?? []).reduce((n, g) => n + g.agents, 0);
+  const group = info.group ?? [];
+  if (agents > 0 || group.length) {
+    const ok = await confirmAsk(t("„{name}“ beenden?", { name: label }), {
+      text: [
+        t("Alle Tabs und Agenten werden beendet, Dateien und Branch bleiben."),
+        group.length ? t("Beendet mit: {names}", { names: group.map((g) => g.label).join(", ") }) : "",
+      ].filter(Boolean).join("\n"),
+      ok: t("Space beenden"),
+      danger: true,
+    });
+    if (!ok) return false;
+  }
+  await space(server, { op: "close", ws, ...(info.group?.length ? { group: true } : {}) });
+  hiddenSpaces.unhide(server, ws);
+  return true;
+}
 
 export const folderOf = (root: string) => root.split("/").filter(Boolean).pop() ?? root;

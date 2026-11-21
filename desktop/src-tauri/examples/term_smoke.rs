@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         drop(tx); // stop
     });
     let bytes = std::cell::Cell::new(0usize);
-    run_stream(&hollr, &server, command(&args.get(4).cloned().unwrap_or_default(), &pane, 80, 24), rx, |e| match e {
+    run_stream(&hollr, &server, command(&pane, 80, 24), rx, |e| match e {
         TermEvent::Out { data } => {
             bytes.set(bytes.get() + data.len());
             let plain: String = data.chars().filter(|c| !c.is_control() || *c == '\n').collect();

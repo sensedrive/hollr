@@ -64,7 +64,7 @@
     await api.closePane(r.server.id, r.pane.pane);
     mySessions.remove(r.id);
     closing = null;
-    await refresh();
+    await refresh(r.server.id);
   }
 
   function onKey(e: KeyboardEvent) {

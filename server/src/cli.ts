@@ -21,6 +21,9 @@ import { type AskPick, answerAsk, answerWithText } from "./ask";
 import { closePane } from "./close";
 import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
+import { jobDetail } from "./jobs";
+import { listSkills } from "./skills";
+import { miniLines } from "./minimap";
 import { runEvents } from "./events";
 import { paneContext, readPath } from "./file";
 import { type ForkRequest, forkPane } from "./fork";
@@ -99,11 +102,19 @@ import { restartWatcher, sysinfo } from "./sysinfo";
 import { readTimeline } from "./timeline";
 import { claudeFooter, paneTimeline, readClaudeHistory } from "./claudelog";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
-import { linkPlugin, listPlugins, loadRegistry, openPlugin, runningPid, stopPlugin, unlinkPlugin } from "./plugins";
+import {
+  linkPlugin,
+  listPlugins,
+  loadRegistry,
+  openPlugin,
+  runningPid,
+  stopPlugin,
+  unlinkPlugin,
+} from "./plugins";
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.45.0";
+export const VERSION = "0.46.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -137,7 +148,9 @@ function flag(args: string[], name: string): string[] {
 
 /** argv that runs this hollr again: the compiled binary alone, `bun src/cli.ts` in development. */
 function hollrCli(): string[] {
-  return Bun.argv[1]?.startsWith("/$bunfs/") ? [process.execPath] : [process.execPath, Bun.argv[1] ?? ""];
+  return Bun.argv[1]?.startsWith("/$bunfs/")
+    ? [process.execPath]
+    : [process.execPath, Bun.argv[1] ?? ""];
 }
 
 /** `hollr session new …`: a new herdr workspace with an agent, optionally sent a first prompt. */
@@ -147,14 +160,21 @@ async function sessionNew(args: string[]): Promise<number> {
   const label = flag(args, "--label")[0];
   const prompt = flag(args, "--prompt")[0];
   if (!kind || !cwd || !label) {
-    console.error("hollr session new --kind omp|claude|codex|shell --cwd <dir> --label <text> [--prompt <text>]");
+    console.error(
+      "hollr session new --kind omp|claude|codex|shell --cwd <dir> --label <text> [--prompt <text>]",
+    );
     return 2;
   }
   const kinds: string[] = installedKinds();
-  if (!kinds.includes(kind)) throw new Error(`Agent ${kind} ist nicht installiert (${kinds.join(", ")})`);
+  if (!kinds.includes(kind))
+    throw new Error(`Agent ${kind} ist nicht installiert (${kinds.join(", ")})`);
   if (!existsSync(cwd)) throw new Error(`Ordner ${cwd} gibt es nicht`);
   const herdr = new Herdr();
-  const pane = await newChat(herdr, execHerdr, { kind: kind as NewChatRequest["kind"], cwd, label });
+  const pane = await newChat(herdr, execHerdr, {
+    kind: kind as NewChatRequest["kind"],
+    cwd,
+    label,
+  });
   if (prompt) {
     // the agent needs a moment after `agent start` before it takes prompts
     for (let attempt = 1; ; attempt++) {
@@ -177,7 +197,9 @@ function pluginCmd(args: string[]): number {
   const [sub = "", arg = ""] = args;
   if (sub === "link" && arg) {
     const m = linkPlugin(arg);
-    console.log(`Plugin ${m.name} (${m.id}) verknüpft: ${loadRegistry().find((e) => e.id === m.id)?.dir}`);
+    console.log(
+      `Plugin ${m.name} (${m.id}) verknüpft: ${loadRegistry().find((e) => e.id === m.id)?.dir}`,
+    );
     return 0;
   }
   if (sub === "unlink" && arg) {
@@ -254,6 +276,10 @@ async function gate(): Promise<number> {
       "events",
       "dirs",
       "follow",
+      "scrollinfo",
+      "scrollmap",
+      "job",
+      "skills",
       "plugins",
     ].includes(cmd)
   )
@@ -303,7 +329,57 @@ async function gate(): Promise<number> {
         json({ error: `${req.kind} ist auf diesem Server nicht installiert.` });
         return 2;
       }
-      json({ pane: await newChat(herdr, execHerdr, req) });
+      try {
+        json({ pane: await newChat(herdr, execHerdr, req) });
+      } catch (err) {
+        // an answer either way: an empty reply reads as "no pane" in the apps
+        log("gate", `new failed: ${err}`);
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "scrollinfo": {
+      // herdr's scrollback of the pane (the desktop's terminal overview scrolls it with wheel events)
+      const res = (await execHerdr(["pane", "get", pane])) as {
+        pane?: {
+          scroll?: {
+            max_offset_from_bottom?: number;
+            offset_from_bottom?: number;
+            viewport_rows?: number;
+          };
+        };
+      };
+      const s = res.pane?.scroll ?? {};
+      json({
+        max: s.max_offset_from_bottom ?? 0,
+        offset: s.offset_from_bottom ?? 0,
+        rows: s.viewport_rows ?? 0,
+      });
+      return 0;
+    }
+    case "scrollmap": {
+      // the pane's scrollback in miniature (desktop terminal overview): per line its length and first colour,
+      // as far as herdr keeps text (the newest ~1000 lines), aligned to the bottom of `total` lines
+      const [info, text] = await Promise.all([
+        execHerdr(["pane", "get", pane]) as Promise<{
+          pane?: {
+            scroll?: {
+              max_offset_from_bottom?: number;
+              offset_from_bottom?: number;
+              viewport_rows?: number;
+            };
+          };
+        }>,
+        execHerdr(["pane", "read", pane, "--source", "recent", "--lines", "5000", "--ansi"]),
+      ]);
+      const s = info.pane?.scroll ?? {};
+      const rows = s.viewport_rows ?? 0;
+      json({
+        total: (s.max_offset_from_bottom ?? 0) + rows,
+        offset: s.offset_from_bottom ?? 0,
+        rows,
+        lines: miniLines(typeof text === "string" ? text : ""),
+      });
       return 0;
     }
     case "screen": {
@@ -339,7 +415,10 @@ async function gate(): Promise<number> {
       if (!agent) return 0;
       try {
         const fork = await forkPane(execHerdr, agent, req);
-        log("gate", `fork ${pane} → ${fork.pane} (${fork.kind})${req.replace ? ` replacing ${req.replace}` : ""}`);
+        log(
+          "gate",
+          `fork ${pane} → ${fork.pane} (${fork.kind})${req.replace ? ` replacing ${req.replace}` : ""}`,
+        );
         json({ pane: fork.pane, tab: fork.tab, kind: fork.kind, at: fork.at });
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
@@ -348,8 +427,11 @@ async function gate(): Promise<number> {
     }
     case "follow":
       // the chat as a stream (only changes) – replaces polling `timeline`
-      return runFollow(new Herdr(), pane, Number(rest[0] ?? 150) || 150, (cwd, screen, model, fromLog) =>
-        statusLine(cwd, fromLog ?? parseFooter(screen), model),
+      return runFollow(
+        new Herdr(),
+        pane,
+        Number(rest[0] ?? 150) || 150,
+        (cwd, screen, model, fromLog) => statusLine(cwd, fromLog ?? parseFooter(screen), model),
       );
     case "timeline": {
       // a pane that is gone: an answer the app understands, not empty output
@@ -496,8 +578,7 @@ async function gate(): Promise<number> {
           log("gate", "push key exported to a paired device");
           json({ ...config, key: readFileSync(join(pushDir(), "apns.p8"), "utf8") });
           return 0;
-        }
-        else if (req.op === "test") {
+        } else if (req.op === "test") {
           const sent = await sendNotice({
             title: "Hollr",
             subtitle: (await import("node:os")).hostname(),
@@ -529,7 +610,10 @@ async function gate(): Promise<number> {
       return runTerm(pane);
     case "upload": {
       // a photo / file from the phone for the agent: stored outside the repo, the path goes into the prompt
-      const req = JSON.parse((await readStdinLine(UPLOAD_LIMIT * 1.4)) || "{}") as { name?: string; data?: string };
+      const req = JSON.parse((await readStdinLine(UPLOAD_LIMIT * 1.4)) || "{}") as {
+        name?: string;
+        data?: string;
+      };
       try {
         json({ path: saveUpload(req.name ?? "", req.data ?? "") });
       } catch (err) {
@@ -560,7 +644,11 @@ async function gate(): Promise<number> {
     case "space": {
       const req = JSON.parse((await readStdinLine()) || "{}") as SpaceRequest;
       try {
-        json(req.op === "worktrees" ? { worktrees: await listCheckouts(req.ws ?? "") } : await manageSpace(req));
+        json(
+          req.op === "worktrees"
+            ? { worktrees: await listCheckouts(req.ws ?? "") }
+            : await manageSpace(req),
+        );
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -570,13 +658,42 @@ async function gate(): Promise<number> {
       if (pane === "history") json(usageHistory(Number(rest[0] ?? 7)));
       else json(await usageLimits(pane === "refresh"));
       return 0;
+    case "skills": {
+      // what "/" suggests in the composer: the skills the pane's agent can call from its folder
+      const agent = await herdr.agent(pane).catch(() => undefined);
+      const cwd =
+        agent?.cwd ||
+        (await herdr.tree())
+          .flatMap((w) => w.tabs.flatMap((t) => t.panes))
+          .find((p) => p.pane === pane)?.cwd;
+      json({ skills: cwd ? listSkills(cwd) : [] });
+      return 0;
+    }
+    case "job": {
+      // one background job of the pane's omp session: its start and, once done, its output
+      const agent = await agentOrError(herdr, pane);
+      if (!agent) return 0;
+      if (!agent.sessionFile) {
+        json({ error: "no_session" });
+        return 0;
+      }
+      try {
+        json(jobDetail(agent.sessionFile, rest[0] ?? ""));
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     case "history": {
       const agent = await agentOrError(herdr, pane);
       if (!agent) return 0;
       const file = agent.sessionFile;
       json({
         events: file
-          ? await (agent.kind === "claude" ? readClaudeHistory : readHistory)(file, Number(rest[0] ?? 60))
+          ? await (agent.kind === "claude" ? readClaudeHistory : readHistory)(
+              file,
+              Number(rest[0] ?? 60),
+            )
           : [],
         status: agent.status,
       });
@@ -622,7 +739,10 @@ async function gate(): Promise<number> {
       // {"id":"<ask call>","picks":[{"options":[1]},{"text":"…"}]} – one pick per question
       const req = JSON.parse((await readStdinLine()) || "{}") as { id?: string; picks?: AskPick[] };
       try {
-        await answerAsk(herdr, pane, { id: req.id, picks: Array.isArray(req.picks) ? req.picks : [] });
+        await answerAsk(herdr, pane, {
+          id: req.id,
+          picks: Array.isArray(req.picks) ? req.picks : [],
+        });
         json({ ok: true });
         return 0;
       } catch (err) {

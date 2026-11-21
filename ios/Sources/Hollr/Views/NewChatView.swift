@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Open a new session (organism NewSessionDialog): server, agent (omp / Claude / ChatGPT-Codex) or a plain
-/// terminal, model, and where it runs.
+/// Opens a plain terminal tab on the server – start omp, Claude Code, etc. inside it.
 struct NewChatView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
@@ -9,31 +8,17 @@ struct NewChatView: View {
     let onCreated: (Server, String) -> Void
 
     @State private var serverId: UUID?
-    @State private var kind = "omp"
-    @State private var installed: [String] = []
     @State private var workspace: String = Self.home
     @State private var folder = ""
     @State private var label = ""
     @State private var busy = false
     @State private var error: String?
-    @State private var installing: String?
-    @State private var model: String?
-    @State private var level: String?
-    @State private var pickModel = false
     @FocusState private var field: Field?
 
     private enum Field { case folder, label }
 
     private static let newWorkspace = "__new__"
-    /// no project: a new workspace in the home directory
     private static let home = "__home__"
-
-    static let agents: [(kind: String, name: String, note: String)] = [
-        ("omp", "omp", String(localized: "Oh My Pi – mit Live-Sprachmodus")),
-        ("claude", "Claude Code", "Text-Chat"),
-        ("codex", "ChatGPT (Codex)", "Text-Chat"),
-        ("shell", String(localized: "Terminal"), String(localized: "Shell ohne Agent")),
-    ]
 
     private var server: Server? { store.servers.first { $0.id == serverId } ?? store.servers.first }
 
@@ -49,23 +34,8 @@ struct NewChatView: View {
                     }
                 }
             }
-            DialogField(label: String(localized: "Was")) {
-                VStack(spacing: 6) {
-                    ForEach(Self.agents, id: \.kind) { agent in kindRow(agent) }
-                }
-            }
-            if kind != "shell", server != nil {
-                DialogField(label: String(localized: "Modell"),
-                            note: String(localized: "Mit Suche, zuletzt genutzten Modellen und \(kind == "omp" ? "Thinking" : "Effort")-Stufe.")) {
-                    Button { pickModel = true } label: {
-                        Label([model ?? String(localized: "Standard"), level].compactMap { $0 }.joined(separator: " · "), icon: .cpu)
-                            .truncationMode(.middle)
-                    }
-                    .buttonStyle(.hollr())
-                    .accessibilityLabel("Modell")
-                    .accessibilityValue([model ?? String(localized: "Standard"), level].compactMap { $0 }.joined(separator: " · "))
-                }
-            }
+            Text(String(localized: "Öffnet ein Terminal. omp, Claude Code oder Codex startest du dort selbst."))
+                .font(Typo.sm).foregroundStyle(Theme.dim)
             DialogField(label: String(localized: "Wo"), note: whereNote) {
                 Menu {
                     Picker("Workspace", selection: $workspace) {
@@ -95,7 +65,7 @@ struct NewChatView: View {
                         .fieldStyle(focused: field == .folder)
                         .font(Typo.mono)
                 }
-                TextField("Name (optional)", text: $label, prompt: Text("Name (optional)").foregroundStyle(Theme.dim))
+                TextField("Tab-Name (optional)", text: $label, prompt: Text("Tab-Name (optional)").foregroundStyle(Theme.dim))
                     .focused($field, equals: .label)
                     .fieldStyle(focused: field == .label)
             }
@@ -114,48 +84,6 @@ struct NewChatView: View {
             .disabled(busy)
         }
         .dialogSheet()
-        .onChange(of: kind) { _, _ in model = nil; level = nil }
-        .sheet(isPresented: $pickModel) {
-            if let server {
-                ModelPicker(server: server, kind: kind, model: $model, level: $level)
-                    .dialogSheet()
-                    .presentationDetents([.large])
-            }
-        }
-        .task(id: server?.id) {
-            guard let server else { return }
-            installed = (try? await HollrClient.kinds(server)) ?? []
-            if !installed.isEmpty, !installed.contains(kind) { kind = installed[0] }
-        }
-    }
-
-    /// One agent to choose (nsd__kind): badge, name, note – or install it when it is missing.
-    private func kindRow(_ agent: (kind: String, name: String, note: String)) -> some View {
-        let available = installed.isEmpty || installed.contains(agent.kind)
-        return Button {
-            kind = agent.kind
-        } label: {
-            ChoiceRow(selected: kind == agent.kind && available) {
-                AgentBadge(agent: agent.kind == "shell" ? nil : agent.kind)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(agent.name).font(Typo.md).foregroundStyle(available ? Theme.fg : Theme.muted)
-                    Text(available ? agent.note : installing == agent.kind ? String(localized: "wird installiert …") : String(localized: "auf \(server?.label ?? "dem Server") nicht installiert"))
-                        .font(Typo.sm).foregroundStyle(Theme.dim)
-                }
-                Spacer(minLength: Gap.s)
-                if kind == agent.kind && available { IconView(.check, size: 14).foregroundStyle(Theme.accent) }
-                if !available {
-                    if installing == agent.kind {
-                        Spinner(color: Theme.accent)
-                    } else {
-                        Button("Installieren") { install(agent.kind) }
-                            .buttonStyle(.hollr(small: true))
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(!available && installing != nil)
     }
 
     private var workspaceTitle: String {
@@ -170,38 +98,10 @@ struct NewChatView: View {
 
     private var whereNote: String {
         workspace == Self.home
-            ? String(localized: "Startet im Home-Verzeichnis von \(server?.user ?? "dir") – ohne Projekt.")
+            ? String(localized: "Terminal im Home-Verzeichnis von \(server?.user ?? "dir"). Dort omp, Claude Code usw. starten.")
             : workspace == Self.newWorkspace
             ? String(localized: "Leer = Home-Verzeichnis. Ordner mit ~ werden auf dem Server aufgelöst.")
-            : String(localized: "Öffnet als neuer Tab im Ordner dieses Workspaces.")
-    }
-
-    /// Installs a missing agent on the server, then selects it.
-    private func install(_ agent: String) {
-        guard let server else { return }
-        installing = agent
-        error = nil
-        Task {
-            do {
-                _ = try await HollrClient.tools(server, run: agent)
-                for _ in 0..<150 {
-                    try await Task.sleep(for: .seconds(2))
-                    let tool = try await HollrClient.tools(server).first { $0.name == agent }
-                    if tool?.running == false {
-                        if tool?.exit == 0 {
-                            installed = (try? await HollrClient.kinds(server)) ?? installed
-                            kind = agent
-                        } else {
-                            error = "Installation fehlgeschlagen: \(tool?.log?.split(separator: "\n").last.map(String.init) ?? "")"
-                        }
-                        break
-                    }
-                }
-            } catch {
-                self.error = error.localizedDescription
-            }
-            installing = nil
-        }
+            : String(localized: "Neuer Tab in diesem Workspace – Agent startest du im Terminal.")
     }
 
     private func create() {
@@ -215,9 +115,9 @@ struct NewChatView: View {
         let name = label.trimmingCharacters(in: .whitespaces)
         Task {
             do {
-                let pane = try await HollrClient.newChat(server, kind: kind, workspace: ws, cwd: ws == nil ? cwd : nil,
-                                                         label: name.isEmpty ? (Self.agents.first { $0.kind == kind }?.name ?? kind) : name,
-                                                         model: kind == "shell" ? nil : model, level: kind == "shell" ? nil : level)
+                let pane = try await HollrClient.newChat(server, kind: "shell", workspace: ws, cwd: ws == nil ? cwd : nil,
+                                                         label: name.isEmpty ? String(localized: "Terminal") : name,
+                                                         model: nil, level: nil)
                 await herdr.refresh(store.servers)
                 onCreated(server, pane)
                 dismiss()

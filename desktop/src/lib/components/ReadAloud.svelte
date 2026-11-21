@@ -15,6 +15,8 @@
   } from "$lib/speech.svelte";
   import { speakable } from "$lib/speechText";
   import { go, nav } from "$lib/store.svelte";
+  import { jumpNotes } from "$lib/jumpNotes.svelte";
+  import { promptAsk } from "$lib/ask.svelte";
 
   /** the chat transcript (TimelineView) */
   const CHAT = ".tl";
@@ -55,7 +57,17 @@
     const r = rects[rects.length - 1] ?? range.getBoundingClientRect();
     // only the agent view shows a chat: its route names the server
     const server = nav.route.view === "agent" ? nav.route.server : undefined;
-    return { text, source: "chat" as const, server, x: r.right, y: r.bottom };
+    const scroll = el.closest(".scroll") as HTMLElement | null;
+    const itemEl = el.closest("[data-item]") as HTMLElement | null;
+    return {
+      text,
+      source: "chat" as const,
+      server,
+      x: r.right,
+      y: r.bottom,
+      itemId: itemEl?.dataset.item,
+      scrollY: scroll?.scrollTop,
+    };
   }
 
   function checkChat() {
@@ -98,6 +110,25 @@
     sidechats.start(r.server, r.pane, offer.text);
     document.getSelection()?.removeAllRanges();
     withdrawSelection("chat");
+  }
+
+  async function createNote() {
+    const offer = current();
+    const r = nav.route;
+    if (!offer || r.view !== "agent") return;
+    const hint = offer.text.trim().slice(0, 80) || t("Sprungmarke");
+    dismissSelection();
+    const label = await promptAsk(t("Notiz erstellen"), hint);
+    if (label == null || !label.trim()) return;
+    jumpNotes.add(r.server, r.pane, {
+      label: label.trim(),
+      text: offer.text.slice(0, 400),
+      itemId: offer.itemId,
+      scrollY: offer.scrollY,
+      ...(offer.source === "terminal" ? { termRow: offer.termRow } : {}),
+    });
+    document.getSelection()?.removeAllRanges();
+    dismissSelection();
   }
 
   function summarize() {
@@ -195,6 +226,12 @@
       <span class="sep" aria-hidden="true"></span>
       <button class="ask" title={t("Dazu nachfragen – kleiner Sidechat, kennt den ganzen Verlauf ({key})", { key: askShortcut })}
         onmousedown={(e) => e.preventDefault()} onclick={ask}><Icon name="message" size={13} /> {t("Nachfragen")}</button>
+    {/if}
+    {#if nav.route.view === "agent"}
+      <span class="sep" aria-hidden="true"></span>
+      <button title={t("Sprungmarke an dieser Stelle")} onmousedown={(e) => e.preventDefault()} onclick={createNote}>
+        ◆ {t("Notiz erstellen")}
+      </button>
     {/if}
     {#if selection.offer?.server}
       <span class="sep" aria-hidden="true"></span>

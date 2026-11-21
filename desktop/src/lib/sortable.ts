@@ -1,5 +1,5 @@
 // Drag & drop for a tab strip, with pointer events (WKWebView's HTML5 drag & drop is unreliable). Children
-// carry `data-sort-id`; several children with the same id (a split tab's panes) move together. A press only
+// carry `data-sort-id` (or the attribute in `attr`; an inner sortable inside an outer one takes its presses first); several children with the same id (a split tab's panes) move together. A press only
 // becomes a drag after a few pixels, so clicks, double-clicks and middle clicks stay what they were. While
 // dragging, the dragged tab is faded, a marker shows where it lands and the strip scrolls at its edges.
 export interface SortableOptions {
@@ -7,7 +7,12 @@ export interface SortableOptions {
   onMove: (id: string, before: string | null) => void;
   /** tab strips run across; a worktree list runs down */
   axis?: "x" | "y";
+  /** the data attribute that marks an item (default "sort-id"); nested sortables use different ones */
+  attr?: string;
 }
+
+/** a press an inner sortable took – the outer one (its ancestor, later in the bubble) leaves it alone */
+const claimed = new WeakSet<Event>();
 
 const THRESHOLD = 5;
 const EDGE = 28;
@@ -23,22 +28,26 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
   let lastX = 0;
   let lastY = 0;
   const vertical = () => opts.axis === "y";
+  const attr = () => opts.attr ?? "sort-id";
+  const sel = () => `[data-${attr()}]`;
+  const idOf = (el: HTMLElement) => el.getAttribute(`data-${attr()}`)!;
   let before: string | null = null;
   /** dropping now changes the order */
   let lands = false;
   let frame = 0;
 
-  const items = (id: string) => [...node.querySelectorAll<HTMLElement>(`[data-sort-id="${CSS.escape(id)}"]`)];
+  const items = (id: string) => [...node.querySelectorAll<HTMLElement>(`[data-${attr()}="${CSS.escape(id)}"]`)];
   /** every sort id in screen order with its extent along the drag axis */
   function slots() {
     const y = vertical();
     const out = new Map<string, { start: number; end: number }>();
-    for (const el of node.querySelectorAll<HTMLElement>("[data-sort-id]")) {
+    for (const el of node.querySelectorAll<HTMLElement>(sel())) {
       const r = el.getBoundingClientRect();
       const a = y ? r.top : r.left;
       const b = y ? r.bottom : r.right;
-      const s = out.get(el.dataset.sortId!);
-      out.set(el.dataset.sortId!, s ? { start: Math.min(s.start, a), end: Math.max(s.end, b) } : { start: a, end: b });
+      const id = idOf(el);
+      const s = out.get(id);
+      out.set(id, s ? { start: Math.min(s.start, a), end: Math.max(s.end, b) } : { start: a, end: b });
     }
     return [...out].map(([id, s]) => ({ id, ...s }));
   }
@@ -83,10 +92,11 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
   }
 
   function onDown(e: PointerEvent) {
-    if (e.button !== 0 || (e.target as HTMLElement).closest("input, textarea, [data-sort-ignore]")) return;
-    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-sort-id]");
+    if (e.button !== 0 || claimed.has(e) || (e.target as HTMLElement).closest("input, textarea, [data-sort-ignore]")) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>(sel());
     if (!el || !node.contains(el)) return;
-    press = { id: el.dataset.sortId!, x: e.clientX, y: e.clientY, pointer: e.pointerId };
+    claimed.add(e);
+    press = { id: idOf(el), x: e.clientX, y: e.clientY, pointer: e.pointerId };
   }
 
   function onMove(e: PointerEvent) {

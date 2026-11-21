@@ -23,11 +23,12 @@ import {
   discard,
   fileDiff,
   graph,
+  lineCount,
   openPr,
   push,
   stage,
 } from "./git";
-import { type Exec, execHerdr } from "./herdr";
+import { type Exec, execHerdr, focusCreated } from "./herdr";
 import { dedupeLimits } from "./usagehistory";
 
 export interface Space {
@@ -553,12 +554,16 @@ export async function closeInfo(ws: string, exec: Exec = execHerdr) {
         .filter((l) => l.startsWith("worktree ")).length - 1,
     );
     branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], root).out.trim() || undefined;
-    changed = run(["git", "status", "--porcelain"], root).out.split("\n").filter(Boolean).length;
+    // untracked folders count file by file, and their lines count as added (git's numstat leaves them out)
+    changed = run(["git", "status", "--porcelain", "--untracked-files=all"], root)
+      .out.split("\n")
+      .filter(Boolean).length;
     for (const line of run(["git", "diff", "HEAD", "--numstat"], root).out.split("\n")) {
       const [a, d] = line.split("\t");
       add += Number(a) || 0;
       del += Number(d) || 0;
     }
+    add += untrackedLines(root);
     unpushed =
       Number(run(["git", "rev-list", "--count", "HEAD", "--not", "--remotes"], root).out.trim()) ||
       0;
@@ -574,6 +579,24 @@ export async function closeInfo(ws: string, exec: Exec = execHerdr) {
       defaultBranch = ["main", "master", "develop"].includes(branch) || head === `origin/${branch}`;
     }
   }
+  // a worktree git forgot (its entry under .git/worktrees was pruned): the folder stays, git sees nothing.
+  // Its branch is found by name in the main repo, so it can still be deleted with the folder.
+  const mainRepo = space.repoKey?.replace(/\/\.git\/?$/, "");
+  const orphan = space.isWorktree && !space.missing && !git && !!mainRepo && existsSync(mainRepo);
+  if (orphan && mainRepo) {
+    const want = space.label.toLowerCase();
+    const heads = run(["git", "for-each-ref", "refs/heads", "--format=%(refname:short)"], mainRepo)
+      .out.split("\n")
+      .filter(Boolean);
+    branch = heads.find((b) => b.toLowerCase() === want || b.toLowerCase().endsWith(`/${want}`));
+    if (branch) {
+      remoteBranch = run(
+        ["git", "rev-parse", "--verify", "--quiet", `refs/remotes/origin/${branch}`],
+        mainRepo,
+      ).ok;
+      defaultBranch = ["main", "master", "develop"].includes(branch);
+    }
+  }
   return {
     ws,
     label: space.label,
@@ -581,6 +604,8 @@ export async function closeInfo(ws: string, exec: Exec = execHerdr) {
     isWorktree: space.isWorktree,
     git,
     branch,
+    orphan,
+    mainRepo,
     changed,
     add,
     del,
@@ -602,6 +627,23 @@ export async function closeInfo(ws: string, exec: Exec = execHerdr) {
     // never for a repo other worktrees still depend on
     canDeleteFolder: !space.isWorktree && linkedWorktrees === 0 && safeToDelete(root),
   };
+}
+
+/** Lines in untracked files (they count as added, like in the Git panel); binary and huge files count 0. */
+function untrackedLines(root: string): number {
+  let n = 0;
+  const files = run(["git", "ls-files", "--others", "--exclude-standard"], root)
+    .out.split("\n")
+    .filter(Boolean);
+  for (const f of files.slice(0, 2000)) {
+    try {
+      const path = join(root, f);
+      if (statSync(path).size > 2_000_000) continue;
+      const text = readFileSync(path);
+      if (!text.subarray(0, 8000).includes(0)) n += lineCount(text.toString("utf8"));
+    } catch {}
+  }
+  return n;
 }
 
 /** Never delete /, the home directory itself, system folders or anything outside home and /tmp. */
@@ -638,7 +680,10 @@ export interface WorktreeCheckout {
 }
 
 /** Every checkout of the space's repo, including ones without a Hollr space yet (herdr's "Open worktree"). */
-export async function listCheckouts(ws: string, exec: Exec = execHerdr): Promise<WorktreeCheckout[]> {
+export async function listCheckouts(
+  ws: string,
+  exec: Exec = execHerdr,
+): Promise<WorktreeCheckout[]> {
   if (!ws) throw new Error("Space fehlt");
   const listed = (await exec(["worktree", "list", "--workspace", ws])) as {
     worktrees?: Array<Record<string, unknown>>;
@@ -699,7 +744,15 @@ export async function manageSpace(
       if (!req.ws) throw new Error("Space fehlt");
       const path = (req.cwd ?? "").trim();
       if (!path.startsWith("/")) throw new Error("Ordner muss absolut sein");
-      created = await exec(["worktree", "open", "--workspace", req.ws, "--path", path, "--no-focus"]);
+      created = await exec([
+        "worktree",
+        "open",
+        "--workspace",
+        req.ws,
+        "--path",
+        path,
+        "--no-focus",
+      ]);
       break;
     }
     case "info":
@@ -712,14 +765,24 @@ export async function manageSpace(
         if (!info.isWorktree) throw new Error("Das ist kein Worktree");
         if (info.missing) throw new Error("Der Ordner fehlt schon – den Space nur schließen");
         // main repo, to delete the branch after the worktree is gone
-        const common = run(
-          ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-          info.root,
-        ).out.trim();
-        const mainRepo = common.replace(/\/\.git\/?$/, "");
-        const args = ["worktree", "remove", "--workspace", req.ws];
-        if (req.force) args.push("--force");
-        await exec(args);
+        const mainRepo = info.orphan
+          ? (info.mainRepo ?? "")
+          : run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], info.root)
+              .out.trim()
+              .replace(/\/\.git\/?$/, "");
+        if (info.orphan) {
+          // git can't remove what it forgot: close the space, delete the folder, let git forget it for good
+          if (!safeToDelete(info.root))
+            throw new Error("Dieser Ordner wird aus Sicherheitsgründen nicht gelöscht");
+          await exec(["workspace", "close", req.ws]);
+          const rm = Bun.spawnSync(["rm", "-rf", "--", realpathSync(info.root)]);
+          if (rm.exitCode !== 0) throw new Error("Ordner ließ sich nicht löschen");
+          run(["git", "worktree", "prune"], mainRepo);
+        } else {
+          const args = ["worktree", "remove", "--workspace", req.ws];
+          if (req.force) args.push("--force");
+          await exec(args);
+        }
         if (req.deleteBranch && info.branch && !info.defaultBranch && info.branch !== "HEAD") {
           const res = run(["git", "branch", "-D", info.branch], mainRepo);
           if (!res.ok)
@@ -754,6 +817,12 @@ export async function manageSpace(
   const ws =
     (created as { workspace?: { workspace_id?: string } }).workspace?.workspace_id ??
     pane?.split(":")[0];
+  if (pane)
+    await focusCreated(
+      exec,
+      pane,
+      created as { tab?: { tab_id?: string }; workspace?: { workspace_id?: string } },
+    );
   if (pane && req.agent && ["omp", "claude", "codex"].includes(req.agent)) {
     await Bun.sleep(400);
     await exec([

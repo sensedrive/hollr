@@ -51,6 +51,7 @@
 		6A4EB22604337DEC01BBF565 /* TimelineFollow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40922C5DC52774032423CD54 /* TimelineFollow.swift */; };
 		6ADA30076AE5DC79952AA7D8 /* SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 22537A937722D8162EB0DE68 /* SymbolsNerdFontMono-Regular.ttf */; };
 		73CD54283B0784775323AE62 /* StatusWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 579BCDD7CD8D810DF3C53517 /* StatusWidgets.swift */; };
+		78CCEBB0E72DFCAC43E32264 /* NetworkWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD595A5C80A8354EB416881 /* NetworkWatch.swift */; };
 		7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D5C6613C409FB4F134C940D7 /* WhisperKit */; };
 		7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */; };
 		7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */; };
@@ -233,6 +234,7 @@
 		B7925BF8375327A708009D82 /* xterm.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = xterm.js; sourceTree = "<group>"; };
 		B8962791A94FF32DBFE98885 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
 		BA5936D3405E68394D4F9C20 /* DraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftTests.swift; sourceTree = "<group>"; };
+		BAD595A5C80A8354EB416881 /* NetworkWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkWatch.swift; sourceTree = "<group>"; };
 		BC7D0F3B418EE3043DECA56B /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		BEB6870B888E81A9B9A29439 /* DemoMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMode.swift; sourceTree = "<group>"; };
 		C531336AADA7A34435E646E0 /* FolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderPicker.swift; sourceTree = "<group>"; };
@@ -514,6 +516,7 @@
 				1D506F45973D977B4EB1B01E /* DeviceKey.swift */,
 				9A4E25D9270177A46475CB74 /* Frames.swift */,
 				DE7893DC73A373B8B3E2FDD1 /* HollrClient.swift */,
+				BAD595A5C80A8354EB416881 /* NetworkWatch.swift */,
 				052C3A789B4E44E5370C5151 /* PairingCode.swift */,
 				0020C719F00C6559F36F7ABF /* Tunnel.swift */,
 			);
@@ -832,6 +835,7 @@
 				B28776F1C4ADDAD81C5411F6 /* LiveActivities.swift in Sources */,
 				6038A998B56A056E0EFED763 /* ModelPicker.swift in Sources */,
 				F88B8CA99190A2DA65E6C8C6 /* MySessions.swift in Sources */,
+				78CCEBB0E72DFCAC43E32264 /* NetworkWatch.swift in Sources */,
 				498256B61D0BACAEBD221152 /* NewChatView.swift in Sources */,
 				1B600C8A88DB172BF3AF81A1 /* NewSpaceView.swift in Sources */,
 				A0BF4F1DECDBFFDC1548104E /* PairView.swift in Sources */,
@@ -987,7 +991,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.45.0;
+				MARKETING_VERSION = 0.46.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1090,7 +1094,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.45.0;
+				MARKETING_VERSION = 0.46.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

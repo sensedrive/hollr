@@ -1,12 +1,8 @@
-// How a session ("serverId|pane") was left – chat or terminal, the terminal's "Session" or "Eigene Shell",
-// zen mode: switching tabs or sessions and coming back shows it the same way. Kept across restarts;
+// How a session ("serverId|pane") was left – chat or terminal, zen mode: switching tabs or sessions and coming back shows it the same way. Kept across restarts;
 // closed sessions drop out after a while.
-import type { TermMode } from "./terminal";
-
 export type ViewMode = "chat" | "terminal";
 export interface ViewPrefs {
   view?: ViewMode;
-  term?: TermMode;
   zen?: boolean;
 }
 

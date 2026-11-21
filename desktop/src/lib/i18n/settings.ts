@@ -165,6 +165,26 @@ export default {
     "New worktree: pasted whitespace is removed. While it is being created the field says so and will not take another.",
   "Der blaue Punkt an einem Space bleibt weg, nachdem du ihn angesehen hast – auch nach einem Neustart. Ein neues Ergebnis bringt ihn zurück.":
     "The blue dot on a space stays gone after you have looked at it, including after a restart. A new result brings it back.",
+  "Neue Sitzung öffnet sofort ein Terminal im aktuellen Space; omp, Claude Code & Co. startest du dort selbst. Der neue Tab wird auch in herdr aktiv.":
+    "New session opens a terminal in the current space right away; start omp, Claude Code & co. there yourself. The new tab becomes active in herdr too.",
+  "Space-Menü aufgeräumt: „Space beenden“ beendet Tabs und Agenten (Dateien und Branch bleiben), „Ausblenden“ nur aus der Liste, „Worktree löschen …“ auf Wunsch samt Branch. Spaces lassen sich per Ziehen sortieren.":
+    "Space menu tidied up: “End space” stops tabs and agents (files and branch stay), “Hide” only takes it off the list, “Delete worktree …” optionally with its branch. Spaces can be reordered by dragging.",
+  "Notizen als Sprungmarken: Text markieren, „Notiz erstellen“ – die Stelle leuchtet in der Übersichtsleiste von Chat und Terminal, ein Klick springt hin.":
+    "Notes as jump marks: select text, “Create note” – the spot lights up in the overview bar of chat and terminal, a click jumps there.",
+  "Das Terminal hat eine echte Übersicht: der Verlauf in Miniatur mit seinen Farben, klicken oder ziehen zum Scrollen. Der Umschalter „Session / Eigene Shell“ ist weg.":
+    "The terminal has a real overview: its scrollback in miniature with its colours, click or drag to scroll. The “Session / Own shell” switch is gone.",
+  "Nachfragen ohne Markierung, mit oder ohne Kontext des Hauptchats (spart Tokens), „/“ schlägt Skills vor. Die Liste lässt sich einklappen, Nachfragen umbenennen und schließen (gibt Speicher frei).":
+    "Side questions without a selection, with or without the main chat's context (saves tokens), “/” suggests skills. The list folds away, side questions can be renamed and closed (frees memory).",
+  "Hintergrund-Jobs anklicken: Befehl, Laufzeit und – wenn fertig – die Ausgabe.":
+    "Click background jobs: command, run time and – once done – the output.",
+  "Spaces und Tabs lassen sich als ungelesen markieren (blauer Punkt).":
+    "Spaces and tabs can be marked as unread (blue dot).",
+  "„Braucht dich“-Karten ohne Knöpfe: ein Klick auf die Karte öffnet die Sitzung. omp-Artefakte (local://…) öffnen sich in der Vorschau.":
+    "“Needs you” cards without buttons: a click on the card opens the session. omp artifacts (local://…) open in the preview.",
+  "Chat in Terminal-Farben (fett, Code, Tabellenköpfe). Die Prompt-Bausteine über dem Eingabefeld sind aus – in Einstellungen › Allgemein wieder einschaltbar.":
+    "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
+  "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
+    "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
   "Neu: Plugins. Ein Server-Plugin bringt seine eigene Oberfläche mit, Hollr zeigt sie in der Seitenleiste unter „Plugins“. Auf dem Server einschalten mit: hollr plugin link <ordner>":
     "New: plugins. A server plugin brings its own interface; Hollr shows it in the sidebar under “Plugins”. Turn one on on the server with: hollr plugin link <folder>",
   "Erstes Plugin „Sandcastle“: Issue-Board eines lul-workr-Projekts mit Warteschlange zum Ziehen und einer Ansicht für Sandcastle-Läufe.":
@@ -360,6 +380,10 @@ export default {
   "omp, Claude Code, Codex und Terminals öffnen, lesen, schreiben und schließen":
     "Open, read, write to and close omp, Claude Code, Codex and terminals",
   "Übersicht zeigt deine Sitzungen, gruppiert nach Maschine": "Overview shows your sessions, grouped by machine",
+  "Prompt-Bausteine über dem Eingabefeld": "Prompt snippets above the composer",
+  "Die Chips („Lass die Tests laufen …“ usw.) ein- oder ausblenden.":
+    "Show or hide the chips (“Run the tests …”, etc.) above the input field.",
+  Composer: "Composer",
   // prompt snippets
   "Nach oben": "Move up",
   "Keine Bausteine.": "No snippets.",

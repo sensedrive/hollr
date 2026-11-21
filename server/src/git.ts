@@ -45,7 +45,13 @@ export function graph(root: string, limit = 150, remotes = false, run: Run = git
       `-${Math.min(limit, 400)}`,
       `--format=%H${SEP}%P${SEP}%s${SEP}%an${SEP}%ct${SEP}%D`,
       ...(remotes
-        ? ["--decorate-refs-exclude=refs/remotes/*/HEAD", "HEAD", "--exclude=*/HEAD", "--remotes", "--"]
+        ? [
+            "--decorate-refs-exclude=refs/remotes/*/HEAD",
+            "HEAD",
+            "--exclude=*/HEAD",
+            "--remotes",
+            "--",
+          ]
         : []),
     ],
     root,
@@ -161,6 +167,12 @@ function changesSummary(root: string, run: Run) {
   return { files: new Set([...staged.keys(), ...unstaged.keys(), ...untracked]).size, add, del };
 }
 
+/** Lines of a text the way git counts them for a new file: a trailing newline ends the last line, it doesn't start one. */
+export function lineCount(text: string): number {
+  if (!text) return 0;
+  return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+}
+
 /** Uncommitted changes split into staged / unstaged (untracked count as unstaged "A"). */
 export function changes(root: string, run: Run = gitRun) {
   const branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], root).out.trim();
@@ -179,7 +191,7 @@ export function changes(root: string, run: Run = gitRun) {
       let add = 0;
       try {
         const text = readFileSync(join(root, path));
-        if (!text.subarray(0, 8000).includes(0)) add = text.toString("utf8").split("\n").length;
+        if (!text.subarray(0, 8000).includes(0)) add = lineCount(text.toString("utf8"));
       } catch {}
       unstaged.push({ path, status: "A", add, del: 0 });
       continue;
@@ -384,8 +396,13 @@ export function commit(root: string, message: string, all: boolean, run: RunErr 
 
 /** Pushes the current branch (sets the upstream the first time). */
 export function push(root: string, run: RunErr = gitRunErr) {
-  const upstream = run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], root).ok;
-  const res = upstream ? run(["git", "push"], root) : run(["git", "push", "-u", "origin", "HEAD"], root);
+  const upstream = run(
+    ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    root,
+  ).ok;
+  const res = upstream
+    ? run(["git", "push"], root)
+    : run(["git", "push", "-u", "origin", "HEAD"], root);
   if (!res.ok) throw new Error(firstLine(res.err) || "Push fehlgeschlagen");
   return { ok: true };
 }
@@ -393,10 +410,18 @@ export function push(root: string, run: RunErr = gitRunErr) {
 /** Opens a PR for the current branch with `gh` (title/body from the commits); returns its URL. */
 export function openPr(root: string, run: RunErr = gitRunErr) {
   const existing = run(["gh", "pr", "view", "--json", "url", "-q", ".url"], root);
-  if (existing.ok && existing.out.trim()) return { ok: true, url: existing.out.trim(), existed: true };
+  if (existing.ok && existing.out.trim())
+    return { ok: true, url: existing.out.trim(), existed: true };
   push(root, run);
   const res = run(["gh", "pr", "create", "--fill"], root);
-  if (!res.ok) throw new Error(firstLine(res.err) || "PR konnte nicht erstellt werden (gh installiert und angemeldet?)");
-  const url = res.out.trim().split("\n").find((l) => l.startsWith("http")) ?? res.out.trim();
+  if (!res.ok)
+    throw new Error(
+      firstLine(res.err) || "PR konnte nicht erstellt werden (gh installiert und angemeldet?)",
+    );
+  const url =
+    res.out
+      .trim()
+      .split("\n")
+      .find((l) => l.startsWith("http")) ?? res.out.trim();
   return { ok: true, url, existed: false };
 }

@@ -148,4 +148,13 @@ export function arrowNav(node: HTMLElement) {
 }
 
 
-export interface MenuItem { label: string; icon?: string; danger?: boolean; action: () => void }
+export interface MenuItem {
+  label: string;
+  icon?: string;
+  danger?: boolean;
+  /** a line above it: starts a new group */
+  sep?: boolean;
+  /** a quiet second line: what it does */
+  hint?: string;
+  action: () => void;
+}

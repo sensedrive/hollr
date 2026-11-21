@@ -10,6 +10,8 @@ struct TranscriptItem: Identifiable, Equatable {
     let kind: Kind
     var text: String
     var final = true
+    /// a typed prompt that didn't reach the server (no connection): shown as such, can be sent again
+    var failed = false
 }
 
 /// Conversation with one agent pane: history from the omp session log, typed prompts,
@@ -263,7 +265,9 @@ final class AgentSession {
             let logged = Set(fresh.filter { $0.kind == .typed }.map(\.text))
             pendingTyped.removeAll { logged.contains($0) }
             fresh += pendingTyped.map { TranscriptItem(kind: .typed, text: $0, final: false) }
-            let signature = { (list: [TranscriptItem]) in list.map { "\($0.kind)|\($0.text)|\($0.final)" } }
+            // messages that didn't go out stay with their "Erneut senden"
+            fresh += items.filter { $0.failed && !logged.contains($0.text) }
+            let signature = { (list: [TranscriptItem]) in list.map { "\($0.kind)|\($0.text)|\($0.final)|\($0.failed)" } }
             if signature(fresh) != signature(items), !(fresh.isEmpty && !items.isEmpty) { items = fresh }
             historyLoaded = true
             lastError = nil
@@ -314,20 +318,45 @@ final class AgentSession {
             }
             return
         }
-        items.append(TranscriptItem(kind: .typed, text: trimmed, final: false))
+        let item = TranscriptItem(kind: .typed, text: trimmed, final: false)
+        items.append(item)
         if phase == .live {
             send(.control(["t": "prompt", "text": trimmed]))
         } else {
-            pendingTyped.append(trimmed)
-            Task {
-                do {
-                    try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: trimmed)
-                    nudge()
-                } catch {
-                    lastError = "Senden fehlgeschlagen: \(error.localizedDescription)"
-                }
+            deliver(item.id, trimmed)
+        }
+    }
+
+    /// Sends a typed prompt. Not sent (no connection, no answer): the message says so in the chat and can be
+    /// sent again – it never looks sent while the agent didn't get it. A prompt whose answer only got lost may
+    /// still arrive: when it shows up in the log, the "not sent" mark goes away by itself (apply).
+    private func deliver(_ id: UUID, _ text: String) {
+        pendingTyped.append(text)
+        Task {
+            do {
+                try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: text)
+                nudge()
+            } catch {
+                HollrLog.error("prompt \(ref.pane.pane): \(error)")
+                if let i = pendingTyped.firstIndex(of: text) { pendingTyped.remove(at: i) }
+                if let i = items.firstIndex(where: { $0.id == id }) { items[i].failed = true }
+                lastError = String(localized: "Nicht gesendet: \(error.localizedDescription)")
+                if HollrError.isTransport(error) { await SSHPool.shared.invalidate(ref.server) }
             }
         }
+    }
+
+    /// "Erneut senden" on a message that didn't go out.
+    func resend(_ id: UUID) {
+        guard let i = items.firstIndex(where: { $0.id == id && $0.failed }) else { return }
+        items[i].failed = false
+        lastError = nil
+        deliver(id, items[i].text)
+    }
+
+    /// Drops a message that didn't go out.
+    func discard(_ id: UUID) {
+        items.removeAll { $0.id == id && $0.failed }
     }
 
     func sendKeys(_ keys: [String]) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { openJob } from "$lib/jobs.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   // bash / eval: the command (with its folder like a prompt when it ran outside the space), the last 8 output lines
   // (click for everything the server sent), a footer with wall time and exit code, or the background job while it
@@ -69,8 +70,8 @@
       {:else if c.status === "error"}<span class="chip bad">{t("Fehler")}</span>{/if}
       {#if c.ms !== undefined}<span class="dim">{duration(c.ms)}</span>{/if}
       {#if c.bg && job}
-        <span class="braille acc"></span><span class="muted">{t("läuft im Hintergrund")}</span><span class="dim">{c.bg}{job.startedAt ? ` · ${duration(now - job.startedAt)}` : ""}</span>
-      {:else if c.bg}<span class="dim">{t("im Hintergrund: {id}", { id: c.bg })}</span>{/if}
+        <span class="braille acc"></span><span class="muted">{t("läuft im Hintergrund")}</span><button class="jobid" onclick={() => openJob(c.bg!)}>{c.bg}</button><span class="dim">{job.startedAt ? ` · ${duration(now - job.startedAt)}` : ""}</span>
+      {:else if c.bg}<button class="jobid" onclick={() => openJob(c.bg!)}>{t("im Hintergrund: {id}", { id: c.bg })}</button>{/if}
       {#if open && c.path}<span class="dim ellipsis">in {shortPath(c.path)}</span>{/if}
     {/if}
     <span class="acts inline">
@@ -90,4 +91,6 @@
   .foot .acts { margin-left: auto; }
   .chip.bad { color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); }
   .chip.good { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+  .jobid { all: unset; cursor: pointer; color: var(--dim); text-decoration: underline dotted; }
+  .jobid:hover { color: var(--accent); }
 </style>

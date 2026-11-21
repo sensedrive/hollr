@@ -58,7 +58,7 @@
     if (discard) body.force = true;
     try {
       await spaceOp(server, body);
-      await Promise.all([refreshSpaces(server), refresh()]);
+      await Promise.all([refreshSpaces(server), refresh(server)]);
       onClosed?.();
       onClose();
     } catch (e) {

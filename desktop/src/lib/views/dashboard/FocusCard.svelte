@@ -1,22 +1,15 @@
 <script lang="ts">
   import Icon from "$lib/components/git/Icon.svelte";
-  // One "Braucht dich" entry (InboxSection.swift, widened for the desktop): what it is at a glance – kind, project,
-  // branch, session, the question or the agent's last words, TODO progress, since when – and everything you can do
-  // without opening the chat: pick an option (1–9), answer the whole ask (AskCard), reply (shares the chat's
-  // draft), open chat / terminal / git / a dev server, mark as seen, end the session.
-  import { tick } from "svelte";
-  import type { AskPick } from "$lib/api";
-  import { draftKey } from "$lib/drafts";
-  import { duration, type WebPort } from "$lib/agent";
+  // One "Braucht dich" entry: what it is at a glance – kind, project, branch, session, the question or the agent's
+  // last words, TODO progress, since when. A click anywhere opens the session; the ✓ marks it as seen.
+  import { duration } from "$lib/agent";
   import { identityColor, type FocusKind, type Project, type SessionContext } from "$lib/dashboard";
   import { t } from "$lib/i18n";
-  import * as api from "$lib/api";
-  import { answer, answerPicks, dismiss, inbox, reply, type InboxEntry } from "$lib/inbox.svelte";
-  import { drafts, type AgentOpen, type PaneRef } from "$lib/store.svelte";
-  import AskCard from "$lib/components/AskCard.svelte";
+  import { dismiss, type InboxEntry } from "$lib/inbox.svelte";
+  import type { AgentOpen, PaneRef } from "$lib/store.svelte";
   import { agentName, refTitle, relTime } from "./util";
 
-  let { kind, since, ref, entry, ctx, project, ports, selected, onOpen, onSelect, onHide }: {
+  let { kind, since, ref, entry, ctx, project, selected, onOpen, onSelect, onHide }: {
     kind: FocusKind;
     since: number;
     ref: PaneRef;
@@ -24,7 +17,6 @@
     entry?: InboxEntry & { ref: PaneRef };
     ctx?: SessionContext;
     project: Project;
-    ports: WebPort[];
     selected: boolean;
     onOpen: (open?: AgentOpen, url?: string) => void;
     onSelect: () => void;
@@ -32,16 +24,12 @@
     onHide: () => void;
   } = $props();
 
-  let input = $state<HTMLTextAreaElement>();
-  let sending = $state(false);
-  let sendError = $state("");
   let now = $state(Date.now());
   $effect(() => {
     const timer = setInterval(() => (now = Date.now()), 15_000);
     return () => clearInterval(timer);
   });
 
-  const key = $derived(draftKey(ref.server.id, ref.pane.pane));
   const color = $derived(
     kind === "error" ? "var(--red)" : kind === "done" ? "var(--accent)" : kind === "long" ? "var(--purple)" : "var(--orange)",
   );
@@ -55,61 +43,18 @@
     : t("{agent} arbeitet seit {d}", { agent, d: duration(now - since) }),
   );
   const title = $derived(refTitle(ref));
-  /** one-tap options (a single question); several questions / multi-select go through the AskCard */
-  const options = $derived(kind === "ask" ? (entry?.options ?? []) : []);
-  const fullAsk = $derived(kind === "ask" && !options.length && ctx?.ask ? ctx.ask : undefined);
   const body = $derived(
     kind === "ask" ? entry?.question
     : kind === "long" ? (ctx?.step ?? ctx?.last)
     : (entry?.text ?? ctx?.last ?? (kind === "error" ? t("Mit einem Fehler gestoppt") : undefined)),
   );
-  const placeholder = $derived(
-    kind === "ask" ? t("Eigene Antwort …") : kind === "done" ? t("Weiter …") : t("Nachricht an {agent} …", { agent }),
-  );
-  const text = $derived(drafts.text(key));
-  const error = $derived(sendError || (entry ? inbox.errors[entry.key] : undefined));
-  /** questions and errors want an answer – results and long runs only on request (one main action per card) */
-  let replying = $state(false);
-  // a draft waiting for this session (typed earlier here or in the chat) keeps the field open too
-  $effect.pre(() => { if (kind === "ask" || kind === "waiting" || kind === "error" || text) replying = true; });
-
-  /** opens the reply field when it waits behind "Antworten" (r on the dashboard, the button) */
-  export async function focusReply() {
-    replying = true;
-    await tick();
-    input?.focus();
-  }
-
-  export function pick(index: number) {
-    if (entry && index < options.length) answer(entry, index);
-  }
-
-  async function send() {
-    const msg = text.trim();
-    if (!msg || sending) return;
-    sending = true;
-    sendError = "";
-    drafts.setText(key, "");
-    drafts.beginSend(key, msg);
-    let ok: boolean;
-    if (entry) ok = await reply(entry, msg);
-    else
-      ok = await api.prompt(ref.server.id, ref.pane.pane, msg).then(
-        () => true,
-        (e) => ((sendError = e instanceof Error ? e.message : String(e)), false),
-      );
-    drafts.endSend(key, msg, ok);
-    sending = false;
-  }
-
-  async function answerAll(ask: string, picks: AskPick[]) {
-    return entry ? answerPicks(entry, ask, picks) : false;
-  }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- the whole card opens the session; only the ✓ in its head does something else -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <div class="focus" class:sel={selected} style:--c={color} data-fid="f:{ref.id}" tabindex="-1" role="group" aria-label={title}
-  onfocusin={onSelect} onpointerdown={onSelect}>
+  title="{t('Chat öffnen')} (↩)"
+  onfocusin={onSelect} onpointerdown={onSelect} onclick={(e) => !(e.target as Element).closest("button") && onOpen()}>
   <div class="head">
     <span class="kind"><b>{icon}</b> {label}</span>
     <span class="proj" style:--p={identityColor(project.name)} title={project.root ?? ""}>{project.name}</span>
@@ -123,25 +68,13 @@
     {/if}
   </div>
 
-  <button class="title" onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)">
+  <div class="title">
     <span class="ellipsis">{title}</span>
     {#if ctx?.title && ctx.title !== title}<span class="sub ellipsis">{ctx.title}</span>{/if}
-  </button>
+  </div>
 
   {#if body}<div class="text" class:q={kind === "ask"}>{body}</div>{/if}
 
-  {#if options.length}
-    <div class="opts">
-      {#each options as opt, i}
-        <button class="opt" onclick={() => pick(i)} title={i < 9 ? t("Taste {n}", { n: i + 1 }) : undefined}>
-          <b class="n">{i + 1}</b><span class="grow">{opt}</span>
-          {#if i === entry?.recommended}<span class="rec">{t("Empfohlen")}</span>{/if}
-        </button>
-      {/each}
-    </div>
-  {:else if fullAsk}
-    <AskCard item={fullAsk} onAnswer={answerAll} />
-  {/if}
 
   {#if ctx?.todo}
     {@const todo = ctx.todo}
@@ -152,30 +85,6 @@
     </div>
   {/if}
 
-  {#if replying}
-  <form class="reply" onsubmit={(e) => { e.preventDefault(); send(); }}>
-    <textarea bind:this={input} rows="1" value={text} {placeholder} disabled={sending}
-      oninput={(e) => drafts.setText(key, e.currentTarget.value)}
-      onkeydown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
-        else if (e.key === "Escape") { e.stopPropagation(); input?.blur(); }
-      }}></textarea>
-    <button class="btn send" type="submit" disabled={!text.trim() || sending} title={t("Senden")} aria-label={t("Senden")}>↑</button>
-  </form>
-  {/if}
-
-  <div class="actions">
-    <button class="btn" class:primary={!replying} onclick={() => onOpen()} title="{t('Chat öffnen')} (↩)"><Icon name="↗" size={15} /> {t("Chat öffnen")}</button>
-    {#if !replying}<button class="btn" onclick={() => void focusReply()} title="{t('Antworten')} (R)"><Icon name="↩" size={15} /> {t("Antworten")}</button>{/if}
-    <button class="btn" onclick={() => onOpen("terminal")} title="{t('Terminal öffnen')} (T)"><Icon name="terminal" size={14} /> {t("Terminal")}</button>
-    <button class="btn" onclick={() => onOpen("git")} title="{t('Git & Dateien')} (G)"><Icon name="⑂" size={15} /> {t("Git")}{#if project.dirty}<span class="dirty">{project.dirty}</span>{/if}</button>
-    {#each ports.slice(0, 2) as p (p.port)}
-      <button class="btn" onclick={() => onOpen("browser", `http://localhost:${p.port}`)} title={p.title ?? p.process ?? ""}><Icon name="◍" size={15} /> :{p.port}</button>
-    {/each}
-    <span class="grow"></span>
-    <button class="btn" onclick={() => (entry ? dismiss(entry) : onHide())} title={t("Benachrichtigung ausblenden")}><Icon name="✕" size={15} /></button>
-  </div>
-  {#if error}<div class="small err">{t("Senden fehlgeschlagen: {e}", { e: error })}</div>{/if}
 </div>
 
 <style>
@@ -183,6 +92,8 @@
     border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); transition: border-color .12s, box-shadow .12s; min-width: 0; }
   .focus.sel { border-color: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 30%, transparent); }
   .head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+  .focus { cursor: pointer; }
+  .focus:hover { border-color: var(--c); }
   .kind { color: var(--c); font-weight: 600; white-space: nowrap; }
   .kind b { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px;
     background: color-mix(in srgb, var(--c) 20%, transparent); }
@@ -197,24 +108,8 @@
   .text { font-size: 13px; line-height: 1.45; color: color-mix(in srgb, var(--fg) 85%, transparent); white-space: pre-wrap; user-select: text;
     display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
   .text.q { color: var(--fg); }
-  .opts { display: grid; gap: 6px; }
-  .opt { all: unset; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 10px; font-size: 13px;
-    background: color-mix(in srgb, var(--fg) 7%, transparent); }
-  .opt:hover, .opt:focus-visible { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-  .n { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; }
-  .rec { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 99px; color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .todo { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .bar { width: 90px; flex: none; height: 5px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 10%, transparent); overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--green); border-radius: 99px; }
-  .reply { display: flex; gap: 6px; align-items: flex-end; }
-  .reply textarea { flex: 1; min-width: 0; resize: none; field-sizing: content; max-height: 120px; padding: 7px 11px; font: inherit; font-size: 13px;
-    border-radius: 10px; }
-  .send { width: 32px; height: 32px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-weight: 700; }
-  .send:not(:disabled) { background: var(--accent); color: #fff; border-color: transparent; }
-  .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .actions .btn { padding: 3px 10px; font-size: 12px; }
-  .dirty { margin-left: 5px; font-size: 10.5px; color: var(--orange); }
-  .err { color: var(--red); }
   .grow { flex: 1; min-width: 0; }
 </style>

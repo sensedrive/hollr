@@ -162,6 +162,11 @@ export interface Offer {
   /** where the button goes (viewport px) */
   x: number;
   y: number;
+  /** chat: timeline item id nearest the selection */
+  itemId?: string;
+  scrollY?: number;
+  /** terminal: row in the xterm buffer when offered */
+  termRow?: number;
 }
 
 /** selected text that can be read (one at a time: the last selection made) */

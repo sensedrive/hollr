@@ -1,5 +1,6 @@
 pub mod hollr;
 pub mod feed;
+mod diag;
 mod follow;
 pub mod live;
 mod tunnel;
@@ -135,8 +136,8 @@ async fn follow_stop(follows: tauri::State<'_, follow::Follows>, id: u64) -> R<(
 
 /// A live terminal on a pane (`hollr gate attach` / `shell`) as `hollr-term` events; returns the stream id.
 #[tauri::command]
-async fn term_start(app: tauri::AppHandle, terms: tauri::State<'_, term::Terms>, server: String, pane: String, mode: String, cols: u16, rows: u16) -> R<u64> {
-    Ok(terms.start(app, server, term::command(&mode, &pane, cols, rows)).await)
+async fn term_start(app: tauri::AppHandle, terms: tauri::State<'_, term::Terms>, server: String, pane: String, cols: u16, rows: u16) -> R<u64> {
+    Ok(terms.start(app, server, term::command(&pane, cols, rows)).await)
 }
 
 #[tauri::command]
@@ -171,6 +172,7 @@ async fn applock_authenticate(reason: String) -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    diag::install_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -199,7 +201,7 @@ pub fn run() {
             notice::init(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
+        .invoke_handler(tauri::generate_handler![diag::diag_log, feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

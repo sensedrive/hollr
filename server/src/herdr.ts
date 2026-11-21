@@ -352,13 +352,37 @@ export interface NewChatRequest {
   model?: string;
   /** thinking (omp) or effort (claude, codex) */
   level?: string;
+  /** false: open in the background (a sidechat), the user stays where they are */
+  focus?: boolean;
+}
+
+/** After creating a pane, bring its workspace and tab to the front in herdr. */
+export async function focusCreated(
+  exec: Exec,
+  pane: string,
+  created?: { tab?: { tab_id?: string }; workspace?: { workspace_id?: string } },
+): Promise<void> {
+  const ws =
+    created?.workspace?.workspace_id ??
+    (pane.includes(":") ? pane.slice(0, pane.indexOf(":")) : undefined);
+  if (ws) await exec(["workspace", "focus", ws]).catch(() => {});
+  let tab = created?.tab?.tab_id;
+  if (!tab) {
+    const res = (await exec(["pane", "list"])) as {
+      result?: { panes?: Array<{ pane_id?: string; tab_id?: string }> };
+      panes?: Array<{ pane_id?: string; tab_id?: string }>;
+    };
+    const panes = res.result?.panes ?? res.panes ?? [];
+    tab = panes.find((p) => p.pane_id === pane)?.tab_id;
+  }
+  if (tab) await exec(["tab", "focus", tab]).catch(() => {});
 }
 
 export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Promise<string> {
   if (req.kind !== "shell" && !AGENT_KINDS.includes(req.kind))
     throw new HerdrError("bad_kind", `Unbekannter Agent ${req.kind}`);
   const label = (req.label ?? "")
-    .replace(/[^\p{L}\p{N} ._-]/gu, "")
+    .replace(/[^\p{L}\p{N} ._·-]/gu, "")
     .trim()
     .slice(0, 40);
   let cwd = req.cwd;
@@ -376,10 +400,13 @@ export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Pr
   const created = (await exec(args)) as {
     root_pane?: { pane_id?: string };
     pane?: { pane_id?: string };
+    tab?: { tab_id?: string };
+    workspace?: { workspace_id?: string };
   };
   const pane = created.root_pane?.pane_id ?? created.pane?.pane_id;
   if (!pane) throw new HerdrError("create_failed", "herdr hat kein Pane geliefert");
   await Bun.sleep(400); // let the shell come up
+  if (req.focus !== false) await focusCreated(exec, pane, created);
   if (req.kind === "shell") return pane;
   try {
     await exec([
@@ -397,7 +424,11 @@ export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Pr
     ]);
   } catch (err) {
     // e.g. Claude asks "trust this folder?" on first start – the chat exists and waits for the user
-    if (!(err instanceof HerdrError && err.code === "agent_not_ready")) throw err;
+    if (!(err instanceof HerdrError && err.code === "agent_not_ready")) {
+      // no agent came up: don't leave a bare shell behind that a prompt would type into
+      await exec(["pane", "close", pane]).catch(() => {});
+      throw err;
+    }
   }
   return pane;
 }

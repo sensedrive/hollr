@@ -615,7 +615,7 @@ describe("git views", () => {
     expect(c.staged).toEqual([]);
     expect(c.unstaged).toEqual([
       { path: "a.txt", status: "M", add: 1, del: 0 },
-      { path: "new.md", status: "A", add: 3, del: 0 },
+      { path: "new.md", status: "A", add: 2, del: 0 },
     ]);
     expect(git.fileDiff(repo, "a.txt", false).text).toContain("+three");
     git.stage(repo, "a.txt", true);

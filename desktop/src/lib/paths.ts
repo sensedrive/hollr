@@ -68,18 +68,27 @@ export function looksLikePath(p: string): boolean {
 }
 
 /** The paths in a (logical) line. URLs found by `findLinks` are skipped (they stay links). */
+/** omp's session artifacts ("local://handoff.md"): the server finds them in the pane's session folder */
+const LOCAL_RE = /local:\/\/[\p{L}\p{N}_.\-+@/]+/giu;
+export const isLocalRef = (p: string) => /^local:\/\//i.test(p);
+
 export function findPaths(text: string): FoundPath[] {
   const links = findLinks(text);
   const out: FoundPath[] = [];
+  for (const m of text.matchAll(LOCAL_RE)) {
+    const raw = trimEnd(m[0]);
+    if (raw.length > "local://".length) out.push({ start: m.index, end: m.index + raw.length, path: raw });
+  }
+  const locals = [...out];
   for (const m of text.matchAll(CANDIDATE_RE)) {
     const start = m.index;
     const raw = trimEnd(m[0]);
     const end = start + raw.length;
-    if (!raw || links.some((l) => start < l.end && end > l.start)) continue;
+    if (!raw || [...links, ...locals].some((l) => start < l.end && end > l.start)) continue;
     const p = splitLine(raw);
     if (looksLikePath(p.path)) out.push({ start, end, ...p });
   }
-  return out;
+  return out.sort((a, b) => a.start - b.start);
 }
 
 // Paths travel through the existing `onLink(href)` plumbing (chat, terminal) as
@@ -89,8 +98,9 @@ const SCHEME = "hollr-file:";
 export const pathHref = (path: string, line?: number) =>
   `${SCHEME}${encodeURIComponent(path)}${line ? `#${line}` : ""}`;
 
-/** The path (and line) behind a `pathHref` or a `file://` URL; undefined for anything else. */
+/** The path (and line) behind a `pathHref`, a `file://` URL or an omp `local://` artifact; undefined for anything else. */
 export function parsePathHref(href: string): { path: string; line?: number } | undefined {
+  if (isLocalRef(href)) return { path: decodeURIComponent(href) };
   if (href.startsWith(SCHEME)) {
     const [p = "", line] = href.slice(SCHEME.length).split("#");
     const path = decodeURIComponent(p);

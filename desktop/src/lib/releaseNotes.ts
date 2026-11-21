@@ -12,6 +12,23 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 47,
+    version: "0.46.0",
+    date: "21.11.2026",
+    items: [
+      { icon: "＋", text: "Neue Sitzung öffnet sofort ein Terminal im aktuellen Space; omp, Claude Code & Co. startest du dort selbst. Der neue Tab wird auch in herdr aktiv." },
+      { icon: "⏹", text: "Space-Menü aufgeräumt: „Space beenden“ beendet Tabs und Agenten (Dateien und Branch bleiben), „Ausblenden“ nur aus der Liste, „Worktree löschen …“ auf Wunsch samt Branch. Spaces lassen sich per Ziehen sortieren." },
+      { icon: "◆", text: "Notizen als Sprungmarken: Text markieren, „Notiz erstellen“ – die Stelle leuchtet in der Übersichtsleiste von Chat und Terminal, ein Klick springt hin." },
+      { icon: "▥", text: "Das Terminal hat eine echte Übersicht: der Verlauf in Miniatur mit seinen Farben, klicken oder ziehen zum Scrollen. Der Umschalter „Session / Eigene Shell“ ist weg." },
+      { icon: "💬", text: "Nachfragen ohne Markierung, mit oder ohne Kontext des Hauptchats (spart Tokens), „/“ schlägt Skills vor. Die Liste lässt sich einklappen, Nachfragen umbenennen und schließen (gibt Speicher frei)." },
+      { icon: "⚙", text: "Hintergrund-Jobs anklicken: Befehl, Laufzeit und – wenn fertig – die Ausgabe." },
+      { icon: "●", text: "Spaces und Tabs lassen sich als ungelesen markieren (blauer Punkt)." },
+      { icon: "↗", text: "„Braucht dich“-Karten ohne Knöpfe: ein Klick auf die Karte öffnet die Sitzung. omp-Artefakte (local://…) öffnen sich in der Vorschau." },
+      { icon: "Aa", text: "Chat in Terminal-Farben (fett, Code, Tabellenköpfe). Die Prompt-Bausteine über dem Eingabefeld sind aus – in Einstellungen › Allgemein wieder einschaltbar." },
+      { icon: "✓", text: "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“)." },
+    ],
+  },
+  {
     build: 46,
     version: "0.45.0",
     date: "10.11.2026",

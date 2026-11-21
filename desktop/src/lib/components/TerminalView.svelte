@@ -1,8 +1,7 @@
 <script lang="ts">
   import Icon from "$lib/components/git/Icon.svelte";
-  // A real terminal on the pane (xterm.js, like iOS TerminalView): "Session" streams the pane's own
-  // TUI sized to this panel (`hollr gate attach`), "Eigene Shell" an own shell in its folder
-  // (`hollr gate shell`). Click into it and type: keys go straight in, Cmd shortcuts stay with the app.
+  // A real terminal on the pane (xterm.js, like iOS TerminalView): the pane's own TUI sized to this panel
+  // (`hollr gate attach`). Click into it and type: keys go straight in, Cmd shortcuts stay with the app.
   // A dropped connection comes back by itself; Cmd+click opens links and file paths (the preview).
   import { untrack } from "svelte";
   import { Terminal, type ILink } from "@xterm/xterm";
@@ -11,15 +10,20 @@
   import "@xterm/xterm/css/xterm.css";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { t } from "../i18n";
-  import { settings } from "../settings.svelte";
-  import { findLinks, keySequence, linksAt, TermSession, type TermEnd, type TermMode, type TermPhase } from "../terminal";
+  import { gate } from "../api";
+  import type { JumpNote } from "../jumpNotes.svelte";
+  import TermMinimap from "./TermMinimap.svelte";
+  import { findLinks, keySequence, linksAt, TermSession, type TermEnd, type TermPhase } from "../terminal";
   import { findPaths, pathHref } from "../paths";
-  import { rememberViewPrefs, viewPrefsOf } from "../viewPrefs";
   import { cleanSelection, ScrollSelection } from "../scrollSelection";
   import { offerSelection, withdrawSelection } from "../speech.svelte";
 
-  let { server, pane, onLink }: {
+  let { server, pane, onLink, overview = false, notes = [], onNoteMenu }: {
     server: string; pane: string; onLink?: (href: string) => void;
+    /** the overview at the right edge (scrollback in miniature, jump notes as bands) */
+    overview?: boolean;
+    notes?: JumpNote[];
+    onNoteMenu?: (note: JumpNote, x: number, y: number) => void;
   } = $props();
 
   const mac = navigator.platform.includes("Mac");
@@ -85,17 +89,10 @@
   // is new on every poll, which would otherwise restart the terminal each time
   const srv = $derived(server);
   const paneId = $derived(pane);
-  // "Session" or "Eigene Shell" as last left in this session; a session never set uses the last choice made
-  let mode = $state<TermMode>(untrack(() => viewPrefsOf(`${server}|${pane}`).term ?? (settings.terminalMode === "shell" ? "shell" : "pane")));
-  function setMode(m: TermMode) {
-    mode = m;
-    settings.terminalMode = m;
-    rememberViewPrefs(`${srv}|${paneId}`, { term: m });
-  }
 
   $effect(() => {
     const el = host;
-    const target = { server: srv, pane: paneId, mode };
+    const target = { server: srv, pane: paneId };
     if (!el) return;
     return untrack(() => {
       phase = { kind: "connecting" };
@@ -181,7 +178,16 @@
           if (!x.hasSelection()) return;
           const text = cleanSelection(x.getSelection());
           void copyText(text);
-          offerSelection({ text, source: "terminal", server, x: e.clientX, y: e.clientY });
+          const buf = x.buffer.active;
+          const row = topLine() + Math.max(0, (x.getSelectionPosition()?.start.y ?? buf.viewportY) - buf.viewportY);
+          offerSelection({
+            text,
+            source: "terminal",
+            server,
+            x: e.clientX,
+            y: e.clientY,
+            termRow: row,
+          });
         }, 0);
       };
       el.addEventListener("mouseup", copyOnSelect);
@@ -258,7 +264,16 @@
         e.stopPropagation();
         const text = cleanSelection(d.sel.text(d.sel.point(d.at.row, d.at.col, x.rows)));
         void copyText(text);
-        offerSelection({ text, source: "terminal", server, x: e.clientX, y: e.clientY });
+        const buf = x.buffer.active;
+        const row = topLine() + Math.max(0, (x.getSelectionPosition()?.start.y ?? buf.viewportY) - buf.viewportY);
+        offerSelection({
+          text,
+          source: "terminal",
+          server,
+          x: e.clientX,
+          y: e.clientY,
+          termRow: row,
+        });
       }
       function stopDrag() {
         clearInterval(drag?.timer);
@@ -320,23 +335,97 @@
     term?.focus();
   }
   export const focus = () => term?.focus();
+
+  // The overview at the right edge: the whole scrollback in miniature (line lengths in their first colour), the
+  // visible part as a box, jump notes as bands. A herdr session is a full-screen TUI without scrollback in xterm –
+  // its scrollback lives in herdr (`scrollmap`, moved with mouse-wheel events); an own shell has it in xterm.
+  type MiniLine = [number, string | null];
+  type Mini = { total: number; top: number; rows: number; lines: MiniLine[] };
+  let mini = $state.raw<Mini | null>(null);
+  const inHerdr = () => !!term && term.buffer.active.type === "alternate";
+  const PALETTE = ["#1d1f21", "#cc6666", "#b5bd68", "#f0c674", "#81a2be", "#b294bb", "#8abeb7", "#c5c8c6",
+    "#666666", "#d54e53", "#b9ca4a", "#e7c547", "#7aa6da", "#c397d8", "#70c0b1", "#eaeaea"];
+  async function measureMini(): Promise<Mini | null> {
+    if (!term) return null;
+    if (inHerdr()) {
+      try {
+        const r = await gate<{ total: number; offset: number; rows: number; lines: MiniLine[] }>(srv, `scrollmap ${paneId}`);
+        mini = { total: r.total, top: Math.max(0, r.total - r.rows - r.offset), rows: r.rows, lines: r.lines };
+      } catch {
+        mini = null;
+      }
+      return mini;
+    }
+    const b = term.buffer.active;
+    const lines: MiniLine[] = [];
+    const cell = b.getNullCell();
+    for (let y = 0; y < b.length; y++) {
+      const line = b.getLine(y);
+      if (!line) { lines.push([0, null]); continue; }
+      const text = line.translateToString(true);
+      let color: string | null = null;
+      const first = text.search(/\S/);
+      if (first >= 0 && line.getCell(first, cell)) {
+        if (cell.isFgRGB()) color = `#${cell.getFgColor().toString(16).padStart(6, "0")}`;
+        else if (cell.isFgPalette()) color = PALETTE[cell.getFgColor()] ?? null;
+      }
+      lines.push([text.length, color]);
+    }
+    mini = { total: b.length, top: b.viewportY, rows: term.rows, lines };
+    return mini;
+  }
+  $effect(() => {
+    if (!overview) return;
+    void measureMini();
+    const id = setInterval(() => !document.hidden && void measureMini(), 1200);
+    return () => clearInterval(id);
+  });
+
+  /** the first line on screen, counted from the top of the whole scrollback */
+  export const topLine = () => mini?.top ?? 0;
+
+  let target = 0;
+  let scrolling = false;
+  /** Scrolls so that `line` (from the top of the scrollback) is the first one on screen. */
+  export async function scrollToTop(line: number) {
+    if (!term) return;
+    if (!inHerdr()) {
+      term.scrollToLine(Math.max(0, Math.round(line)));
+      void measureMini();
+      return;
+    }
+    // a drag asks many times a second: one loop chases the newest target
+    target = line;
+    if (scrolling) return;
+    scrolling = true;
+    try {
+      // herdr's lines per wheel step aren't known: each round measures again
+      for (let round = 0; round < 6; round++) {
+        const cur = await measureMini();
+        if (!cur || !session || !term) return;
+        const want = Math.max(0, Math.min(cur.total - cur.rows, Math.round(target)));
+        const delta = cur.top - want;
+        if (Math.abs(delta) < 2) return;
+        const steps = Math.min(400, Math.ceil(Math.abs(delta) / 3));
+        const wheel = `\x1b[<${delta > 0 ? 64 : 65};${Math.ceil(term.cols / 2)};${Math.ceil(term.rows / 2)}M`;
+        session.type(wheel.repeat(steps));
+        await new Promise((r) => setTimeout(r, 160));
+      }
+    } finally {
+      scrolling = false;
+    }
+  }
 </script>
 
 <svelte:window onfocus={onVisible} />
 <svelte:document onvisibilitychange={onVisible} />
 
 <div class="term" class:focused>
-  <div class="bar">
-    <span class="mono"><Icon name="terminal" size={14} /></span>
-    <div class="seg" role="tablist" aria-label={t("Terminal")}>
-      <button role="tab" aria-selected={mode === "pane"} class:on={mode === "pane"} onclick={() => setMode("pane")}>{t("Session")}</button>
-      <button role="tab" aria-selected={mode === "shell"} class:on={mode === "shell"} onclick={() => setMode("shell")}>{t("Eigene Shell")}</button>
-    </div>
-    <span class="grow">{focused ? t("Tippen geht direkt ans Terminal – Esc, Pfeile und Ctrl-Tasten inklusive") : t("Ins Terminal klicken, um direkt zu tippen")}</span>
-    <span class="hint" title={mac ? t("Markieren kopiert sofort · ⌥-Klick geht an das Programm im Terminal") : t("Markieren kopiert sofort · ⇧-Klick geht an das Programm im Terminal")}>{mac ? t("⌘-Klick öffnet Links und Dateien") : t("Strg-Klick öffnet Links und Dateien")}</span>
-  </div>
-  <div class="screen">
+  <div class="screen" class:ruled={overview}>
     <div class="xterm-host" bind:this={host}></div>
+    {#if overview}
+      <TermMinimap {mini} {notes} onScroll={(line) => void scrollToTop(line)} onNote={(n) => void scrollToTop((n.termRow ?? 0) - 3)} {onNoteMenu} />
+    {/if}
     {#if copied}
       {#key copied}<div class="toast" role="status"><Icon name="✓" size={15} /> {t("Auswahl kopiert")}</div>{/key}
     {/if}
@@ -359,17 +448,9 @@
   .term { display: flex; flex-direction: column; min-height: 0; height: 100%; border: 1px solid var(--border); border-radius: 12px;
     background: #0f1216; overflow: hidden; transition: border-color 0.15s; }
   .term.focused { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
-  .bar { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 11.5px; color: var(--muted);
-    border-bottom: 1px solid var(--border); min-width: 0; background: var(--raised); }
-  .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hint { white-space: nowrap; flex-shrink: 0; }
-  .mono { font-family: var(--mono); font-weight: 600; }
-  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; flex-shrink: 0; }
-  .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; padding: 2px 9px; cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--border); }
-  .seg button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
   .screen { position: relative; flex: 1; min-height: 0; }
   .xterm-host { position: absolute; inset: 6px 4px 4px 10px; }
+  .screen.ruled .xterm-host { right: 64px; }
   .xterm-host :global(.xterm) { height: 100%; }
   .center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
     color: rgba(255, 255, 255, 0.8); font-size: 13px; pointer-events: none; }

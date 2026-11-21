@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { alertAsk } from "$lib/ask.svelte";
   // Sidebar like herdr's "spaces" list, for every paired server: repos with their branch, worktrees nested
-  // below (├─ / └─, foldable), plain workspaces standalone. One status dot per space from its sessions.
-  // A click jumps straight into the session that needs you most; ✕ / right-click hides a space here and on the
-  // dashboard (it comes back by itself as soon as it needs you). 〰 shows where a live call runs. A space whose
+  // below (├─ / └─, foldable), plain workspaces standalone; spaces and worktrees reorder by dragging (kept per
+  // computer). One status dot per space from its sessions.
+  // A click jumps straight into the session that needs you most; ✕ closes the space in herdr (tabs and agents end).
+  // „Verstecken“ takes it off the list only; restore with the link below. 〰 shows where a live call runs. A space whose
   // folder is gone (a worktree removed outside herdr) says so and offers closing.
   import { onMount, tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
@@ -10,17 +12,19 @@
   import { allPanes, app, dialogs, findPane, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces } from "$lib/store.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
   import { statusRank, type MenuItem } from "$lib/views/dashboard/util";
-  import { groupSpaces, space, type FullSpace } from "$lib/views/spaces/spaces";
+  import { ejectSpace, groupSpaces, space, type FullSpace } from "$lib/views/spaces/spaces";
   import CloseSpaceDialog from "$lib/views/spaces/CloseSpaceDialog.svelte";
   import OpenWorktree from "./OpenWorktree.svelte";
   import LiveMark from "./LiveMark.svelte";
   import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
   import { sortable } from "$lib/sortable";
-  import { resultSeen } from "$lib/inbox.svelte";
+  import { dotStatus, markUnread, resultSeen } from "$lib/inbox.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
 
   const FOLDED = "hollr.sidebar.folded";
   const WTORDER = "hollr.sidebar.wtorder";
+  /** dragged order of the spaces (repo groups and standalone spaces) per server */
+  const ORDER = "hollr.sidebar.order";
   const loadSet = (key: string) => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(key) ?? "[]"));
@@ -49,6 +53,37 @@
       /* private mode: order lasts this session only */
     }
   }
+  let order = $state<Record<string, string[]>>({});
+  try {
+    const raw = JSON.parse(localStorage.getItem(ORDER) ?? "{}");
+    order = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch {
+    order = {};
+  }
+  /** groups in the dragged order; ones never dragged keep the server's order behind them */
+  function sortGroups<G extends { spaces: FullSpace[] }>(server: string, groups: G[]): G[] {
+    const rank = new Map((order[server] ?? []).map((id, i) => [id, i]));
+    return groups
+      .map((g, i) => ({ g, i }))
+      .sort((a, b) => (rank.get(a.g.spaces[0]!.id) ?? 1e6 + a.i) - (rank.get(b.g.spaces[0]!.id) ?? 1e6 + b.i))
+      .map(({ g }) => g);
+  }
+  function reorderGroups(server: string, id: string, before: string | null) {
+    const sec = sections.find((s) => s.server.id === server);
+    if (!sec) return;
+    const ids = sec.groups.map((g) => g.spaces[0]!.id);
+    const from = ids.indexOf(id);
+    if (from < 0) return;
+    ids.splice(from, 1);
+    const to = before == null ? ids.length : ids.indexOf(before);
+    if (to < 0) return;
+    ids.splice(to, 0, id);
+    order = { ...order, [server]: ids };
+    try {
+      localStorage.setItem(ORDER, JSON.stringify(order));
+    } catch {}
+  }
+
   const persist = (key: string, set: Set<string>) => {
     try {
       localStorage.setItem(key, JSON.stringify([...set]));
@@ -77,7 +112,7 @@
   function statusOf(server: string, sp: FullSpace): string {
     const panes = panesOf(server, sp.id);
     for (const s of ["blocked", "working", "done", "idle"])
-      if (panes.some((r) => r.pane.status === s && (s !== "done" || !resultSeen(r.id)))) return s;
+      if (panes.some((r) => dotStatus(r.id, r.pane.status) === s)) return s;
     const reported = sp.status ?? "unknown";
     if (reported === "done" && panes.length && panes.every((r) => r.pane.status !== "done" || resultSeen(r.id))) return "idle";
     return reported;
@@ -89,7 +124,7 @@
       const spaces = (app.spaces[s.id] ?? []) as FullSpace[];
       // hidden ones (also off the dashboard) stay away until they need you
       const visible = spaces.filter((sp) => !hiddenSpaces.has(s.id, sp.id) || statusOf(s.id, sp) === "blocked");
-      return { server: s, loaded: app.spaces[s.id] !== undefined, groups: groupSpaces(visible) };
+      return { server: s, loaded: app.spaces[s.id] !== undefined, groups: sortGroups(s.id, groupSpaces(visible)) };
     }),
   );
 
@@ -159,16 +194,32 @@
       x: e.clientX, y: e.clientY,
       items: [
         ...(sp.missing ? [{ label: t("Ordner fehlt – schließen …"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
-        { label: t("Umbenennen …"), icon: "✎", action: () => { ren = { x: e.clientX, y: e.clientY, server, ws: sp.id }; name = sp.label; renErr = ""; } },
-        ...(!sp.isWorktree && sp.git ? [{ label: t("Gruppe schließen"), icon: "✕", danger: true, action: () => (closing = { server, space: sp }) }] : []),
-        ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),
-        ...(sp.git && !sp.missing && main ? [{ label: t("Worktree öffnen …"), icon: "❒", action: () => (picker = { server, ws: main.id }) }] : []),
-        ...(trees.length ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: folded.has(fkey) ? "▸" : "▾", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
+        // open and work
+        ...(sp.missing ? [] : [{ label: t("Neues Terminal hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
         { label: t("Space öffnen"), icon: "❒", action: () => go({ view: "space", server, ws: sp.id }) },
-        ...(sp.missing ? [] : [{ label: t("Neue Sitzung hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: sp.id }) }]),
-        { label: t("Aus der Liste nehmen"), icon: "◌", action: () => hideSpace(server, sp.id) },
+        ...(repoOf(server, sp) ? [{ label: t("Neuer Worktree …"), icon: "⑂", action: () => { const hit = repoOf(server, sp)!; wt = { x: e.clientX, y: e.clientY, server, ws: hit.ws, base: hit.base, label: sp.label }; branch = ""; wtErr = ""; } }] : []),
+        ...(sp.git && !sp.missing && main ? [{ label: t("Worktree öffnen …"), icon: "❒", action: () => (picker = { server, ws: main.id }) }] : []),
+        // view
+        { sep: true, label: t("Umbenennen …"), icon: "✎", action: () => { ren = { x: e.clientX, y: e.clientY, server, ws: sp.id }; name = sp.label; renErr = ""; } },
+        ...(trees.length && !sp.isWorktree ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: folded.has(fkey) ? "▸" : "▾", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
+        ...(panesOf(server, sp.id).length ? [{ label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(panesOf(server, sp.id).map((r) => r.id)) }] : []),
+        { label: t("Space ausblenden"), hint: t("läuft weiter, unten wieder einblenden"), icon: "◌", action: () => hideSpace(server, sp.id) },
+        // end (red)
+        ...(sp.missing ? [] : [{
+          sep: true, danger: true, icon: "⏹",
+          label: !sp.isWorktree && groupOf(server, sp).length ? t("Space und Worktrees beenden ({n})", { n: groupOf(server, sp).length }) : t("Space beenden"),
+          hint: t("Tabs und Agenten enden, Dateien und Branch bleiben"),
+          action: () => void ejectFromList(server, sp),
+        }]),
+        ...(sp.isWorktree && !sp.missing ? [{ label: t("Worktree löschen …"), icon: "trash", danger: true, action: () => (closing = { server, space: sp }) }] : []),
+        ...(!sp.isWorktree && !sp.git && !sp.missing ? [{ label: t("Ordner löschen …"), icon: "trash", danger: true, action: () => (closing = { server, space: sp }) }] : []),
       ],
     };
+  }
+  /** worktree spaces that end together with a repo's main space (herdr's group) */
+  function groupOf(server: string, sp: FullSpace): FullSpace[] {
+    if (sp.isWorktree || !sp.repo) return [];
+    return ((app.spaces[server] ?? []) as FullSpace[]).filter((s) => s.isWorktree && s.repo === sp.repo);
   }
   /** herdr's one step: branch name, Enter. A worktree branches off its own branch, from the repo's main space. */
   function repoOf(server: string, sp: FullSpace): { ws: string; base?: string } | undefined {
@@ -210,7 +261,7 @@
     const { server, ws, base } = wt;
     try {
       const r = await space(server, { op: "worktree", ws, branch: name, ...(base ? { base } : {}), agent: "omp" });
-      await Promise.all([refreshSpaces(server), refresh()]);
+      await Promise.all([refreshSpaces(server), refresh(server)]);
       wt = null; branch = "";
       if (r.pane) go({ view: "agent", server, pane: r.pane });
       else if (r.ws) go({ view: "space", server, ws: r.ws });
@@ -231,7 +282,7 @@
     addErr = "";
     try {
       const r = await space(server, { op: "create", cwd: "~" });
-      await Promise.all([refreshSpaces(server), refresh()]);
+      await Promise.all([refreshSpaces(server), refresh(server)]);
       if (r.pane) go({ view: "agent", server, pane: r.pane });
     } catch (e) {
       addErr = e instanceof Error ? e.message : String(e);
@@ -239,13 +290,27 @@
     adding = false;
   }
 
-  /** off the list and, if that space is on screen, off the screen too */
+  /** hidden from the sidebar – herdr keeps running; restore with „alle zeigen“ */
   function hideSpace(server: string, id: string) {
     hiddenSpaces.hide(server, id);
+    leaveIfShowing(server, id);
+  }
+
+  function leaveIfShowing(server: string, id: string) {
     const r = nav.route;
     const showing = (r.view === "space" && r.server === server && r.ws === id)
       || (r.view === "agent" && r.server === server && findPane(server, r.pane)?.workspace.id === id);
     if (showing) go({ view: "dashboard" });
+  }
+
+  async function ejectFromList(server: string, sp: FullSpace) {
+    try {
+      await ejectSpace(server, sp.id, sp.label);
+      await Promise.all([refreshSpaces(server), refresh(server)]);
+      leaveIfShowing(server, sp.id);
+    } catch (e) {
+      void alertAsk(t("Fehler"), e instanceof Error ? e.message : String(e));
+    }
   }
 
   const hiddenCount = $derived(
@@ -265,13 +330,13 @@
     {#if !sec.loaded}
       {#each [110, 80, 130] as w}<div class="skeleton" style="height:12px; width:{w}px; margin:10px 0 10px 29px"></div>{/each}
     {/if}
-    <div class="spaces" class:stale={!!app.errors[sec.server.id]}>
+    <div class="spaces" class:stale={!!app.errors[sec.server.id]} use:sortable={{ axis: "y", attr: "sort-group", onMove: (id, before) => reorderGroups(sec.server.id, id, before) }}>
     {#each sec.groups as g (g.key)}
       {@const repo = g.spaces[0]!}
       {@const fkey = `${sec.server.id}|${repo.id}`}
       {@const trees = sortTrees(fkey, g.spaces.slice(1))}
       {@const open_ = !folded.has(fkey)}
-      <div class="grp" use:sortable={{ axis: "y", onMove: reorder }}>
+      <div class="grp" data-sort-group={repo.id} use:sortable={{ axis: "y", onMove: reorder }}>
       {#each open_ ? [repo, ...trees] : [repo] as sp, i (sp.id)}
         {@const st = statusOf(sec.server.id, sp)}
         {@const nested = i > 0}
@@ -293,8 +358,8 @@
               aria-expanded={open_} onclick={() => (folded = toggle(folded, FOLDED, fkey, open_))}>
               <Icon name={open_ ? "chevronD" : "chevronR"} size={13} />{#if !open_}<span>{trees.length}</span>{/if}</button>
           {/if}
-          <button class="hide" data-sort-ignore title={t("Aus der Liste nehmen")} aria-label={t("Aus der Liste nehmen")}
-            onclick={() => hideSpace(sec.server.id, sp.id)}><Icon name="x" size={12} /></button>
+          <button class="hide" data-sort-ignore title={t("Ausblenden – läuft weiter")} aria-label={t("Ausblenden")}
+            onclick={() => hideSpace(sec.server.id, sp.id)}><Icon name="minus" size={12} /></button>
         </div>
       {/each}
       </div>
@@ -359,7 +424,7 @@
 <style>
   /* minmax(0, 1fr): a long space name ellipsizes instead of widening the column past the sidebar */
   .tree { font-size: 13.5px; padding: 0 0 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .spaces { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .spaces { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
   .spaces.stale { opacity: .55; }
   .note { all: unset; cursor: pointer; box-sizing: border-box; display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px;
     background: var(--card); border: 1px solid var(--border); }
@@ -368,7 +433,7 @@
   .ntext { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .grp { position: relative; }
   .srow { position: relative; border-radius: 8px; }
-  .srow[data-sort-id] { cursor: grab; }
+  .srow[data-sort-id], .grp > .srow:first-child { cursor: grab; }
   .srow:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
   .srow.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
   .srow.sel .name { font-weight: 600; color: var(--fg); }

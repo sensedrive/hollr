@@ -46,6 +46,11 @@
   import { parseSidePanel, SIDE_PANEL_KEY, sidePanelFor, type SidePanel } from "../layoutPrefs";
   import { parsePathHref } from "../paths";
   import FilePreview from "./FilePreview.svelte";
+  import { jumpNotes, type JumpNote } from "../jumpNotes.svelte";
+  import NoteMenu from "./NoteMenu.svelte";
+  import { promptAsk } from "../ask.svelte";
+  import { jobOpen, openJob } from "../jobs.svelte";
+  import JobDialog from "./JobDialog.svelte";
 
   let { server, pane, workspace, title, onClosed, open, url }: {
     server: string; pane: Pane; title: string;
@@ -319,6 +324,10 @@
   let toast = $state("");
   let composer: Composer | undefined = $state();
   let term: TerminalView | undefined = $state();
+  let noteMenu = $state<{ note: JumpNote; x: number; y: number } | null>(null);
+  const openNoteMenu = (note: JumpNote, x: number, y: number) => (noteMenu = { note, x, y });
+  let editNote = $state<{ id: string; label: string } | null>(null);
+  const jumpList = $derived(jumpNotes.list(server, pane.pane));
   /** a fresh session: the cursor waits in the composer (once – later clicks elsewhere stay) */
   let startFocused = false;
   $effect(() => {
@@ -402,7 +411,7 @@
   let finding = false;
   let timelineView: TimelineView | undefined = $state();
   /** the chat with its overview ruler at the right edge (TimelineView) */
-  const ruled = $derived(settings.chatOverview && chat && !!timeline);
+  const ruled = $derived((settings.chatOverview || jumpList.length > 0) && chat && !!timeline);
 
   function onScroll() {
     if (!scroller) return;
@@ -554,10 +563,43 @@
     navigator.clipboard.writeText(url.href).catch(() => {});
   }
 
-  // ---- other sessions (the iPhone's switcher chips)
-  const others = $derived(
-    allPanes().filter((r) => r.server.id === server && r.pane.pane !== pane.pane && (r.pane.agent || settings.showShells)),
-  );
+  function jumpToNote(note: JumpNote) {
+    if (note.itemId) {
+      void showMessage(note.itemId);
+      return;
+    }
+    // a note made in the terminal, looked at in the chat: its message by the marked words
+    const words = note.text ?? (note.termRow !== undefined ? note.label : undefined);
+    if (mode === "chat" && words && inner) {
+      const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+      const want = norm(words).slice(0, 60);
+      const el = want.length >= 6
+        ? [...inner.querySelectorAll<HTMLElement>("[data-item]")].find((e) => norm(e.textContent ?? "").includes(want))
+        : undefined;
+      if (el) {
+        stick = false;
+        el.scrollIntoView({ block: "center" });
+        el.animate([{ boxShadow: "0 0 0 2px var(--orange)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1800, easing: "ease-out" });
+        return;
+      }
+    }
+    if (note.termRow !== undefined) {
+      mode = "terminal";
+      void term?.scrollToTop(note.termRow - 3);
+    } else if (note.scrollY !== undefined) {
+      mode = "chat";
+      stick = false;
+      if (scroller) scroller.scrollTop = note.scrollY;
+    }
+  }
+
+  async function noteHere() {
+    menu = false;
+    const label = await promptAsk(t("Notiz erstellen"), t("Sprungmarke"));
+    if (label == null || !label.trim()) return;
+    if (mode === "chat" && scroller) jumpNotes.add(server, pane.pane, { label: label.trim(), scrollY: scroller.scrollTop });
+    else if (term) jumpNotes.add(server, pane.pane, { label: label.trim(), termRow: term.topLine() });
+  }
 
   // ---- keyboard
   function onKey(e: KeyboardEvent) {
@@ -683,9 +725,9 @@
     {/if}
     {#each jobs as job (job.id)}
       <span class="ic job"><Icon name="⚙" size={15} /></span>
-      <span class="htxt ellipsis" title={[hashId(job.id) ? "" : job.id, job.title, job.full].filter(Boolean).join("\n")}>
+      <button class="htxt ellipsis jobbtn" title={[hashId(job.id) ? "" : job.id, job.title, job.full, t("Klicken: Details und Ausgabe")].filter(Boolean).join("\n")} onclick={() => openJob(job.id)}>
         {#if !hashId(job.id)}<span class="jid">{job.id}</span>{" "}{/if}<span>{job.title}</span>{#if job.command}<span class="dim gap">{job.command}</span>{/if}
-      </span>
+      </button>
       <span class="meta">{job.startedAt ? duration(now - job.startedAt) : ""}</span>
     {/each}
   </div>
@@ -731,8 +773,11 @@
               <button class="mi" onclick={() => { menu = false; togglePanel("git"); }}><Icon name="⑂" size={15} /> {t("Git & Dateien")}<kbd>{mod}{shift}G</kbd></button>
               <button class="mi" onclick={() => { menu = false; togglePanel("browser"); }}><Icon name="◍" size={15} /> {t("Browser")}<kbd>{mod}{shift}B</kbd></button>
               <button class="mi" onclick={() => { menu = false; zen = true; }}><Icon name="⤢" size={15} /> {t("Zen-Modus")}<kbd>{mod}{shift}F</kbd></button>
+              <button class="mi" onclick={noteHere}><Icon name="＋" size={15} /> {t("Notiz an aktueller Stelle")}</button>
               {#if mode === "chat" && chat && timeline}
                 <button class="mi" onclick={() => { menu = false; void timelineView?.openFind(); }}><Icon name="⌕" size={15} /> {t("Im Chat suchen")}<kbd>{mod}F</kbd></button>
+                <button class="mi" onclick={() => (settings.chatOverview = !settings.chatOverview)}><Icon name="▥" size={15} /> {t("Übersicht")}<kbd>{settings.chatOverview ? "✓" : ""}</kbd></button>
+              {:else if mode === "terminal"}
                 <button class="mi" onclick={() => (settings.chatOverview = !settings.chatOverview)}><Icon name="▥" size={15} /> {t("Übersicht")}<kbd>{settings.chatOverview ? "✓" : ""}</kbd></button>
               {/if}
               {#if pane.agent}
@@ -743,17 +788,6 @@
               <button class="mi" onclick={() => zoomBy(0.1)}><Icon name="zoom-in" size={15} /> {t("Größer")}<kbd>{mod}+</kbd></button>
               <button class="mi" onclick={() => zoomBy(-0.1)}><Icon name="zoom-out" size={15} /> {t("Kleiner")}<kbd>{mod}-</kbd></button>
               <button class="mi" onclick={() => zoomBy(0)}><Icon name="↺" size={15} /> {t("Standardgröße")}<kbd>{mod}0</kbd></button>
-              {#if others.length}
-                <div class="msec">{t("Wechseln zu")}</div>
-                <div class="mscroll">
-                  {#each others as r (r.id)}
-                    <button class="mi" onclick={() => { menu = false; go({ view: "agent", server: r.server.id, pane: r.pane.pane }); }}>
-                      <span class="dot" class:working={r.pane.status === "working"} class:blocked={r.pane.status === "blocked"} class:done={r.pane.status === "done" && !resultSeen(r.id)}></span>
-                      <span class="ellipsis">{tabName(r.tab.label, r.workspace.label)}</span><span class="dim small">{r.pane.agent ?? t("Terminal")}</span>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
               <div class="msep"></div>
               <button class="mi danger" onclick={() => { menu = false; confirmClose = true; }}><Icon name="✕" size={15} /> {t("Chat schließen")}</button>
             </div>
@@ -785,7 +819,8 @@
               {/if}
               {#if !shownTimeline.items.length && !pending.length}{@render emptyHint()}{/if}
               <TimelineView bind:this={timelineView} timeline={shownTimeline} {onLink} onAnswer={answerAsk} pinnedAsk={ask?.id} onResend={askShown ? undefined : resend} root={pane.cwd}
-                {scroller} overview={settings.chatOverview} onFinding={(on) => { finding = on; if (on) stick = false; else onScroll(); }} />
+                {scroller} overview={settings.chatOverview || jumpList.length > 0} notes={jumpList} onNote={jumpToNote} onNoteMenu={openNoteMenu}
+                onFinding={(on) => { finding = on; if (on) stick = false; else onScroll(); }} />
             {:else if !hasTimeline}
               {#if !bubbles.length && !pending.length && (!screen || !showsScreen)}{@render emptyHint()}{/if}
               {#each bubbles as b, i (i)}
@@ -825,7 +860,8 @@
       {:else}
         <div class="termwrap">
           {#if chat && timeline}<TimeStrip {timeline} {working} agent={agentName} onPick={showMessage} />{/if}
-          <TerminalView bind:this={term} {server} pane={pane.pane} {onLink} />
+          <TerminalView bind:this={term} {server} pane={pane.pane} {onLink}
+            overview={settings.chatOverview || jumpList.length > 0} notes={jumpList} onNoteMenu={openNoteMenu} />
           {#if error}<div class="warnline"><Icon name="⚠" size={15} /> {error}</div>{/if}
         </div>
       {/if}
@@ -837,7 +873,7 @@
         {/if}
         <Composer bind:this={composer} bind:value={() => drafts.text(key), (v) => drafts.setText(key, v)}
           bind:sent={() => drafts.recall(key), (v) => drafts.setRecall(key, v)} {placeholder} {keysTitle} translucent={zen} onSend={sendDraft} onKeys={sendKeys}
-          {server} {ws} top={liveStrip} trailing={liveButton} meta={mode === "chat" && !zen ? statusMeta : undefined} quick={mode === "terminal"} chips={!freshStart} dictationKey={key} micBlocked={liveActive()}
+          {server} {ws} skillsPane={pane.agent ? pane.pane : undefined} skillPrefix={pane.agent === "claude" ? "/" : "/skill:"} top={liveStrip} trailing={liveButton} meta={mode === "chat" && !zen ? statusMeta : undefined} quick={mode === "terminal"} chips={settings.composerChips && !freshStart} dictationKey={key} micBlocked={liveActive()}
           vocabulary={() => sessionTerms([title, pane.cwd.split("/").pop() ?? "", timeline?.title ?? ""], timeline?.items ?? [])} />
       </div>
 
@@ -867,7 +903,7 @@
         </div>
         <div class="pbody">
           {#if panel === "chats"}
-            <div class="fill"><SideChats {server} main={pane.pane} {title} bind:active={chatOpen} /></div>
+            <div class="fill"><SideChats {server} main={pane.pane} {title} agent={pane.agent ?? undefined} bind:active={chatOpen} /></div>
           {:else if panel === "git"}
             <div class="fill"><GitPanel {server} {ws} openFile={gitOpen} /></div>
           {:else if panel === "info"}
@@ -965,6 +1001,28 @@
   </Modal>
 {/if}
 
+{#if jobOpen.id}
+  <JobDialog {server} pane={pane.pane} id={jobOpen.id} onClose={() => (jobOpen.id = null)} />
+{/if}
+
+{#if noteMenu}
+  {@const n = noteMenu.note}
+  <NoteMenu note={n} x={noteMenu.x} y={noteMenu.y} onJump={() => jumpToNote(n)} onEdit={() => (editNote = { id: n.id, label: n.label })}
+    onRemove={() => jumpNotes.remove(server, pane.pane, n.id)} onClose={() => (noteMenu = null)} />
+{/if}
+
+{#if editNote}
+  <Modal icon="＋" title={t("Notiz bearbeiten")} onClose={() => (editNote = null)}>
+    {#if editNote}
+      <input bind:value={editNote.label} onkeydown={(e) => { if (e.key === "Enter" && editNote) { jumpNotes.update(server, pane.pane, editNote.id, editNote.label); editNote = null; } }} />
+    {/if}
+    <div class="mbuttons">
+      <button class="btn" onclick={() => (editNote = null)}>{t("Abbrechen")}</button>
+      <button class="btn primary" onclick={() => { if (!editNote) return; jumpNotes.update(server, pane.pane, editNote.id, editNote.label); editNote = null; }}>{t("Speichern")}</button>
+    </div>
+  </Modal>
+{/if}
+
 {#if confirmClose}
   <Modal icon="trash" tone="danger" place="center" width={420} title={t("Chat schließen?")} onClose={() => (confirmClose = false)}>
     <p>{t("Das Pane „{title}“ wird in herdr auf {server} geschlossen und {agent} beendet.", { title, server: serverLabel, agent: agentName })}{api.lastPaneOf(workspace) ? ` ${t("Der Space bleibt – mit einem leeren Terminal.")}` : ""}</p>
@@ -1033,10 +1091,6 @@
   .agent { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--bg); }
   .agent.zen { position: fixed; inset: 0; z-index: 5; }
   .actions { display: flex; gap: 4px; align-items: center; flex: none; }
-  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); margin-right: 4px; flex: none; }
-  .dot.done { background: var(--accent); }
-  .dot.working { background: var(--purple); }
-  .dot.blocked { background: var(--orange); }
   .seg { display: flex; background: var(--card); border-radius: 999px; padding: 2px; margin-right: 6px; }
   .seg button { all: unset; cursor: pointer; padding: 3px 12px; border-radius: 999px; color: var(--muted); font-size: 12.5px; }
   .seg button.on { background: var(--bg); color: var(--fg); }
@@ -1054,8 +1108,9 @@
   .mi kbd { margin-left: auto; }
   kbd { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
   .msec { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); padding: 9px 10px 3px; border-top: 1px solid var(--border); margin-top: 5px; }
+  .jobbtn { all: unset; cursor: pointer; min-width: 0; }
+  .jobbtn:hover { color: var(--accent); }
   .msep { border-top: 1px solid var(--border); margin: 5px 4px; }
-  .mscroll { max-height: 200px; overflow-y: auto; }
 
   .body { flex: 1; min-height: 0; display: flex; position: relative; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }

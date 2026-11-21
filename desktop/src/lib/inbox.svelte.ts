@@ -12,6 +12,7 @@ export type { InboxEntry } from "./inbox";
 const SEEN_KEY = "hollr.inbox.seen";
 const SINCE_KEY = "hollr.inbox.since";
 const STATUS_KEY = "hollr.inbox.status";
+const UNREAD_KEY = "hollr.inbox.unread";
 
 function loadNums(key: string): Record<string, number> {
   try {
@@ -51,6 +52,8 @@ export const inbox = $state({
   /** "serverId|pane" → last time that session was open in front of the user (see markSeen) */
   seen: loadNums(SEEN_KEY) as Record<string, number | undefined>,
   answered: {} as Record<string, number | undefined>,
+  /** "serverId|pane" → marked unread by hand (blue dot until opened again) */
+  unread: loadNums(UNREAD_KEY) as Record<string, number | undefined>,
   /** a failed answer, per entry key */
   errors: {} as Record<string, string | undefined>,
   /** bumped every few seconds so answered entries come back on time */
@@ -147,6 +150,8 @@ export const dismiss = (e: InboxEntry) => (inbox.dismissed[e.key] = true);
 
 /** The user has this session open right now: its result (done / error) up to now counts as seen. */
 export function markSeen(id: string, now = Date.now()) {
+  // marked unread by hand: stays so while it is still open – opening it again clears it (openedAgain)
+  if (inbox.unread[id] !== undefined) return;
   const prev = inbox.seen[id];
   if (prev !== undefined && prev >= (inbox.since[id] ?? 0)) return;
   inbox.seen[id] = now;
@@ -155,6 +160,7 @@ export function markSeen(id: string, now = Date.now()) {
 
 /** A finished session whose window was open after it finished. A newer result (status flipped again) counts fresh. */
 export function resultSeen(id: string): boolean {
+  if (inbox.unread[id] !== undefined) return false;
   const seen = inbox.seen[id];
   if (seen === undefined) return false;
   const since = inbox.since[id];
@@ -191,3 +197,25 @@ export const answerPicks = (e: InboxEntry & { ref: PaneRef }, ask: string, picks
 /** Sends a message like the composer does. */
 export const reply = (e: InboxEntry & { ref: PaneRef }, text: string) =>
   act(e, () => api.prompt(e.ref.server.id, e.ref.pane.pane, text));
+
+/** "Als ungelesen markieren": the blue dot comes back until the session is opened again. */
+export function markUnread(ids: string[], now = Date.now()) {
+  for (const id of ids) inbox.unread[id] = now;
+  persist(UNREAD_KEY, inbox.unread);
+}
+
+/** The user navigated to these sessions: a hand-made unread mark is used up. */
+export function openedAgain(ids: string[]) {
+  let dirty = false;
+  for (const id of ids) if (inbox.unread[id] !== undefined) delete inbox.unread[id], (dirty = true);
+  if (dirty) persist(UNREAD_KEY, inbox.unread);
+}
+
+export const isUnread = (id: string) => inbox.unread[id] !== undefined;
+
+/** The dot a session shows: a seen result is quiet, one marked unread is blue like a fresh result. */
+export function dotStatus(id: string, status: string): string {
+  if (status === "working" || status === "blocked") return status;
+  if (isUnread(id)) return "done";
+  return status === "done" && resultSeen(id) ? "idle" : status;
+}

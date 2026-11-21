@@ -189,9 +189,12 @@ private struct AgentConversation: View {
                     }
                     return
                 }
-                // the stream ended (network, pane gone, gap): reconnect, slower when it keeps failing
+                // the stream ended (network, pane gone, gap): reconnect, slower when it keeps failing –
+                // at once when the network changed (Tailscale back, Wi-Fi ↔ mobile)
                 failures = Date().timeIntervalSince(started) > 30 ? 0 : failures + 1
-                try? await Task.sleep(for: .seconds(min(Double(failures) * 2, 15)))
+                let network = NetworkWatch.shared.generation
+                await NetworkWatch.shared.pause(min(Double(failures) * 2, 15))
+                if NetworkWatch.shared.generation != network { failures = 0 }
             }
         }
         .task {
@@ -286,12 +289,12 @@ private struct AgentConversation: View {
                         }
                         // typed prompts not yet in the log, live notices
                         ForEach(session.items.filter { !$0.final || $0.kind == .info }) { item in
-                            Bubble(item: item).id(item.id)
+                            Bubble(item: item, onResend: { session.resend(item.id) }, onDiscard: { session.discard(item.id) }).id(item.id)
                         }
                     } else {
                         if session.items.isEmpty && (session.screen.isEmpty || !session.showsScreen) { emptyHint }
                         ForEach(session.items) { item in
-                            Bubble(item: item).id(item.id)
+                            Bubble(item: item, onResend: { session.resend(item.id) }, onDiscard: { session.discard(item.id) }).id(item.id)
                         }
                     }
                     // omp's question already shows as an Ask card – the raw screen would only repeat it
@@ -589,18 +592,30 @@ private struct AgentSwitcher: View {
 
 private struct Bubble: View {
     let item: TranscriptItem
+    var onResend: () -> Void = {}
+    var onDiscard: () -> Void = {}
 
     var body: some View {
         switch item.kind {
         case .voice, .typed:
-            HStack(alignment: .bottom, spacing: 6) {
-                Spacer(minLength: Gap.xxl)
-                Image(systemName: item.kind == .voice ? "waveform" : "keyboard")
-                    .font(Typo.xs).foregroundStyle(Theme.dim)
-                Text(item.text)
-                    .userBubbleStyle()
-                    // not yet in the agent's log (sess__user[data-pending])
-                    .opacity(item.final ? 1 : 0.6)
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(alignment: .bottom, spacing: 6) {
+                    Spacer(minLength: Gap.xxl)
+                    Image(systemName: item.failed ? "exclamationmark.circle" : item.kind == .voice ? "waveform" : "keyboard")
+                        .font(Typo.xs).foregroundStyle(item.failed ? Theme.warn : Theme.dim)
+                    Text(item.text)
+                        .userBubbleStyle()
+                        // not yet in the agent's log (sess__user[data-pending])
+                        .opacity(item.final ? 1 : 0.6)
+                }
+                if item.failed {
+                    // it never reached the agent (no connection): say so, and offer to send it again
+                    HStack(spacing: Gap.s) {
+                        Text("Nicht gesendet").font(Typo.sm).foregroundStyle(Theme.warn)
+                        Button("Erneut senden", action: onResend).buttonStyle(.hollr(small: true))
+                        Button("Verwerfen", role: .destructive, action: onDiscard).buttonStyle(.hollr(small: true))
+                    }
+                }
             }
         case .agent:
             AgentMarkdown(text: item.text, dimmed: !item.final)

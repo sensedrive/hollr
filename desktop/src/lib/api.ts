@@ -233,7 +233,10 @@ function answerError(e: unknown): Error {
 
 export const kinds = (s: string) => gate<{ kinds: string[] }>(s, "kinds").then((r) => r.kinds);
 export const newChat = (s: string, body: Record<string, unknown>) =>
-  gate<{ pane: string }>(s, "new", body).then((r) => r.pane);
+  gate<{ pane?: string }>(s, "new", body).then((r) => {
+    if (!r.pane) throw new Error(t("Die Sitzung ließ sich nicht starten – keine Antwort vom Server."));
+    return r.pane;
+  });
 /** Closes a session. Its space stays: for the space's last pane the server opens an empty terminal first.
  *  A refusal rejects – older servers answer nothing then (no `ok`): never a silent no-op. */
 export const closePane = (s: string, pane: string) =>

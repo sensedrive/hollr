@@ -12,6 +12,8 @@ struct RootView: View {
     @Environment(SessionStore.self) private var sessions
     @Environment(\.scenePhase) private var scenePhase
     @Binding var pairing: PairingRequest?
+    /// the network generation the last tree refresh ran under (NetworkWatch)
+    @State private var lastNetwork = 0
     @State private var tab: RootTab = .home
     @State private var sheetAgent: String?
     @State private var spacesPath = NavigationPath()
@@ -189,11 +191,15 @@ struct RootView: View {
                 if scenePhase == .background { await SSHPool.shared.closeAll() }
                 return
             }
+            NetworkWatch.shared.start()
             herdr.startFeeds(store.servers)
             while scenePhase == .active, !Task.isCancelled {
-                await herdr.refresh(store.servers)
+                let network = NetworkWatch.shared.generation
+                // after a network change a failed server is asked again right away, not after its 30 s pause
+                await herdr.refresh(store.servers, force: network != lastNetwork)
+                lastNetwork = network
                 let allLive = store.servers.allSatisfy { herdr.live.contains($0.id) }
-                try? await Task.sleep(for: .seconds(allLive ? 30 : 5))
+                await NetworkWatch.shared.pause(allLive ? 30 : 5)
             }
         }
         #if DEBUG

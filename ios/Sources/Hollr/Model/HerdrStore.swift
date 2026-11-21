@@ -196,9 +196,11 @@ final class HerdrStore {
             } catch {}
             live.remove(server.id)
             if Task.isCancelled { break }
-            // an older server without the feed: just keep polling, look again in a few minutes
-            try? await Task.sleep(for: .seconds(unsupported ? 300 : backoff))
-            backoff = min(backoff * 2, 30)
+            // an older server without the feed: just keep polling, look again in a few minutes.
+            // A network change (Tailscale back, Wi-Fi ↔ mobile) ends the wait – reconnecting is worth it now.
+            let network = NetworkWatch.shared.generation
+            await NetworkWatch.shared.pause(unsupported ? 300 : backoff)
+            backoff = NetworkWatch.shared.generation != network ? 2 : min(backoff * 2, 30)
         }
     }
 

@@ -15,6 +15,10 @@ export interface SideChat {
   pane?: string;
   /** where the fork branched off (ms) – the log before it stays hidden */
   at?: number;
+  /** a name the user gave it (else the quote / "Freie Nachfrage") */
+  name?: string;
+  /** false: a fresh agent in the same folder, without the session's history (fewer tokens) */
+  context?: boolean;
 }
 
 const KEY = "hollr.sidechats";
@@ -45,16 +49,32 @@ class SideChats {
   }
 
   /** a new one about `quote` – its fork starts with the first question */
-  start(server: string, main: string, quote: string): string {
+  start(server: string, main: string, quote = "", context = this.contextDefault): string {
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    this.all = [...this.all, { id, server, main, quote: quote.trim(), created: Date.now() }];
+    this.all = [...this.all, { id, server, main, quote: quote.trim(), created: Date.now(), context }];
     this.save();
     this.request = { server, main, id };
     return id;
   }
 
+  /** the last choice for "Kontext mitnehmen" – new sidechats start with it */
+  contextDefault = $state(localStorage.getItem("hollr.sidechats.context") !== "off");
+  setContext(id: string, on: boolean) {
+    this.all = this.all.map((c) => (c.id === id && !c.pane ? { ...c, context: on } : c));
+    this.contextDefault = on;
+    try {
+      localStorage.setItem("hollr.sidechats.context", on ? "on" : "off");
+    } catch {}
+    this.save();
+  }
+
   forked(id: string, pane: string, at: number) {
     this.all = this.all.map((c) => (c.id === id ? { ...c, pane, at } : c));
+    this.save();
+  }
+
+  rename(id: string, name: string) {
+    this.all = this.all.map((c) => (c.id === id ? { ...c, name: name.trim() || undefined } : c));
     this.save();
   }
 

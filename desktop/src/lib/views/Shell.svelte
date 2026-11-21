@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { alertAsk } from "$lib/ask.svelte";
   // Hollr desktop shell (the main window): sidebar (navigation + my sessions) and the current view on the right.
   import { onMount, untrack } from "svelte";
   import { t } from "$lib/i18n";
@@ -12,7 +13,8 @@
   import LivePill from "$lib/components/LivePill.svelte";
   import AgentView from "$lib/components/AgentView.svelte";
   import PairDialog from "$lib/components/PairDialog.svelte";
-  import NewSessionDialog from "$lib/components/NewSessionDialog.svelte";
+  import * as api from "$lib/api";
+  import { currentServer } from "$lib/currentServer.svelte";
   import Dashboard from "$lib/views/Dashboard.svelte";
   import Agents from "$lib/views/Agents.svelte";
   import Spaces from "$lib/views/Spaces.svelte";
@@ -27,10 +29,13 @@
   import AppLock from "$lib/components/AppLock.svelte";
   import TipsTour from "$lib/components/TipsTour.svelte";
   import ReadAloud from "$lib/components/ReadAloud.svelte";
+  import AskDialog from "$lib/components/AskDialog.svelte";
+  import { startDiagnostics } from "$lib/diag";
+  startDiagnostics();
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   import { pendingTips, tour } from "$lib/tips.svelte";
-  import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
+  import { inbox, inboxEntries, markSeen, openedAgain, trackInbox } from "$lib/inbox.svelte";
 
   const zoomBy = (d: number) => (settings.zoom = Math.round(Math.min(1.6, Math.max(0.7, settings.zoom + d)) * 100) / 100);
 
@@ -84,6 +89,18 @@
 
   // the session in front of the user: its result counts as seen ("Braucht dich" drops it). Re-run on every
   // tree refresh and inbox tick, so a result that comes in while it's open is seen too.
+  // navigating to a session uses up its hand-made "unread" mark (not the polls while it stays open)
+  let lastOpened = "";
+  $effect(() => {
+    const r = nav.route;
+    const key = r.view === "agent" ? `a|${r.server}|${r.pane}` : r.view === "space" ? `s|${r.server}|${r.ws}` : "";
+    if (key === lastOpened) return;
+    lastOpened = key;
+    untrack(() => {
+      if (r.view === "agent") openedAgain([`${r.server}|${r.pane}`]);
+      else if (r.view === "space") openedAgain(allPanes(r.server).filter((p) => p.workspace.id === r.ws).map((p) => p.id));
+    });
+  });
   $effect(() => {
     const r = nav.route;
     void inbox.now;
@@ -144,6 +161,27 @@
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
   }
+
+  // „Neue Sitzung“: no dialog – a terminal tab right away, in the current space (else a new one in ~)
+  let opening = false;
+  $effect(() => {
+    const req = dialogs.newSession;
+    if (!req) return;
+    untrack(() => {
+      dialogs.newSession = null;
+      if (opening) return;
+      const r = nav.route;
+      const server = req.server ?? (r.view === "agent" || r.view === "space" ? r.server : currentServer());
+      if (!server) return;
+      const ws = req.ws ?? (r.view === "space" && r.server === server ? r.ws
+        : r.view === "agent" && r.server === server ? findPane(server, r.pane)?.workspace.id : undefined);
+      opening = true;
+      api.newChat(server, { kind: "shell", label: t("Terminal"), ...(ws ? { workspace: ws } : {}) })
+        .then(async (pane) => { await refresh(server); go({ view: "agent", server, pane }); })
+        .catch((e) => void alertAsk(t("Fehler"), e instanceof Error ? e.message : String(e)))
+        .finally(() => (opening = false));
+    });
+  });
 </script>
 
 <!-- files dropped next to the composer must not replace the app with the file (drop target: Composer) -->
@@ -226,12 +264,9 @@
 <Notifier />
 <!-- read aloud: the button next to selected chat / terminal text, ⌘⇧S, the stop pill -->
 <ReadAloud />
+<AskDialog />
 {#if dialogs.pair}
   <PairDialog onClose={() => (dialogs.pair = false)} onPaired={() => { dialogs.pair = false; loadServers(); }} />
-{/if}
-{#if dialogs.newSession}
-  <NewSessionDialog servers={app.servers} trees={app.trees} onClose={() => (dialogs.newSession = null)}
-    onCreated={async (server, pane) => { dialogs.newSession = null; await refresh(); go({ view: "agent", server, pane }); }} />
 {/if}
 {#if dialogs.newSpace}
   <NewSpaceDialog preset={dialogs.newSpace} onClose={() => (dialogs.newSpace = null)} />

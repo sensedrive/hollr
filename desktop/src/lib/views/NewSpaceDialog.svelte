@@ -51,7 +51,7 @@
         ? { op: "worktree", ws: repo, branch: branch.trim(), ...(base.trim() ? { base: base.trim() } : {}), label, agent }
         : { op: "create", cwd: folder.trim(), label, agent });
       Object.assign(memory, { branch: "", base: "", folder: "~/projects/", label: "" });
-      await Promise.all([refreshSpaces(server), refresh()]);
+      await Promise.all([refreshSpaces(server), refresh(server)]);
       onClose();
       if (r.pane && agent) go({ view: "agent", server, pane: r.pane });
       else if (r.ws) go({ view: "space", server, ws: r.ws });

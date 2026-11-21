@@ -4,7 +4,7 @@ import { findLinks, keySequence, linksAt, reconnectDelay, TermSession, type Term
 /** A backend whose starts answer when the test says so. */
 function fakeBackend() {
   let emit: (e: TermEvent & { id: number }) => void = () => {};
-  const starts: { cols: number; rows: number; mode: string }[] = [];
+  const starts: { cols: number; rows: number }[] = [];
   const writes: [number, string][] = [];
   const resizes: [number, number, number][] = [];
   const stops: number[] = [];
@@ -13,7 +13,7 @@ function fakeBackend() {
   let duringStart: ((id: number) => TermEvent | undefined) | undefined;
   const backend: TermBackend = {
     async start(a) {
-      starts.push({ cols: a.cols, rows: a.rows, mode: a.mode });
+      starts.push({ cols: a.cols, rows: a.rows });
       const id = ++next;
       const e = duringStart?.(id);
       if (e) emit({ ...e, id });
@@ -45,11 +45,11 @@ const tick = async () => {
   for (let i = 0; i < 5; i++) await Promise.resolve();
 };
 
-function session(b: ReturnType<typeof fakeBackend>, mode: "pane" | "shell" = "pane") {
+function session(b: ReturnType<typeof fakeBackend>) {
   const out: string[] = [];
   const phases: TermPhase["kind"][] = [];
   const s = new TermSession({
-    server: "srv", pane: "w1:p1", mode, backend: b.backend,
+    server: "srv", pane: "w1:p1", backend: b.backend,
     onOutput: (d) => out.push(d), onPhase: (p) => phases.push(p.kind),
   });
   return { s, out, phases };
@@ -64,7 +64,7 @@ describe("TermSession", () => {
     s.resize(100, 30);
     s.type("x"); // while connecting: sent once the id is known
     await tick();
-    expect(b.starts).toEqual([{ cols: 100, rows: 30, mode: "pane" }]);
+    expect(b.starts).toEqual([{ cols: 100, rows: 30 }]);
     expect(b.writes).toEqual([[1, "x"]]);
     b.send(1, { kind: "out", data: "hi" });
     b.send(2, { kind: "out", data: "other stream" });
@@ -130,7 +130,7 @@ describe("TermSession", () => {
     expect(b.starts.length).toBe(1);
     vi.advanceTimersByTime(1);
     await tick();
-    expect(b.starts.at(-1)).toEqual({ cols: 120, rows: 40, mode: "pane" });
+    expect(b.starts.at(-1)).toEqual({ cols: 120, rows: 40 });
     expect(b.writes).toEqual([]);
     b.send(2, { kind: "error", error: "not_found" });
     expect(s.phase).toEqual({ kind: "closed", end: { why: "gone" } });
@@ -145,7 +145,7 @@ describe("TermSession", () => {
 
   test("reconnectNow skips the pause; old servers and exits are answers", async () => {
     const b = fakeBackend();
-    const { s } = session(b, "shell");
+    const { s } = session(b);
     await tick();
     s.resize(80, 24);
     await tick();
