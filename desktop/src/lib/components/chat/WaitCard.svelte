@@ -46,7 +46,7 @@
     <span class="clamp2 sel"><b>{toolTitle(c.name)}</b>{#if intent}<span class="muted">{` ${intent}`}</span>{/if}{#if summary}<span class="dim">{` · ${summary}`}</span>{/if}</span>
   </div>
   {#if c.status === "error" && c.result}<div class="err indent clamp3 sel">{c.result}</div>{/if}
-  {#each rows as r, i (r.id)}
+  {#each rows as r, i (i)}
     <div class="hrow job" title={r.full ?? r.title}>
       <span class="tree">{i === rows.length - 1 ? "└─" : "├─"}</span>
       {#if !hashId(r.id)}<button class="id jobid" title={t("Details und Ausgabe")} onclick={() => openJob(r.id)}>{r.id}</button>{/if}

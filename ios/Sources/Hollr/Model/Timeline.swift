@@ -31,6 +31,27 @@ struct Timeline: Decodable, Equatable {
         self.line = line
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case title, items, todo, jobs, running, waiting, turnStartedAt, model, status, line, etag
+    }
+
+    /// One item, job or todo the app can't read (a field a newer server sends differently) costs only that
+    /// entry – it used to fail the whole timeline, and the chat then stayed on its skeleton.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        items = try c.decode([LossyItem].self, forKey: .items).map(\.item)
+        running = try c.decode(Bool.self, forKey: .running)
+        title = try? c.decode(String.self, forKey: .title)
+        todo = try? c.decode([TodoPhase].self, forKey: .todo)
+        jobs = ((try? c.decode([Lossy<Job>].self, forKey: .jobs)) ?? []).compactMap(\.value)
+        waiting = (try? c.decode(Bool.self, forKey: .waiting)) ?? false
+        turnStartedAt = try? c.decode(Double.self, forKey: .turnStartedAt)
+        model = try? c.decode(String.self, forKey: .model)
+        status = try? c.decode(String.self, forKey: .status)
+        line = try? c.decode(StatusLine.self, forKey: .line)
+        etag = try? c.decode(String.self, forKey: .etag)
+    }
+
     /// The phase that is being worked on (first one with open tasks), like omp's TODO box.
     var activePhase: TodoPhase? {
         todo?.first { $0.tasks.contains { !$0.isClosed } } ?? todo?.last
@@ -58,6 +79,36 @@ struct Timeline: Decodable, Equatable {
     var cleanTitle: String? {
         title.map { $0.replacingOccurrences(of: #"^[^\p{L}\p{N}]+"#, with: "", options: .regularExpression) }
             .flatMap { $0.isEmpty ? nil : $0 }
+    }
+}
+
+/// An element decoded without throwing: nil when this one doesn't fit, so a list skips it instead of failing.
+struct Lossy<Element: Decodable>: Decodable {
+    let value: Element?
+    init(from decoder: Decoder) throws { value = try? Element(from: decoder) }
+}
+
+/// A timeline item that never fails to decode: one the app can't read becomes a short note with its id, so the
+/// rest of the chat shows and a delta's `order` still finds every id.
+struct LossyItem: Decodable {
+    let item: TimelineItem
+
+    private struct AnyKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        do {
+            item = try TimelineItem(from: decoder)
+        } catch {
+            HollrLog.error("timeline item: \(error)")
+            let id = try? decoder.container(keyedBy: AnyKey.self).decode(String.self, forKey: AnyKey(stringValue: "id"))
+            item = .info(id: id ?? "unreadable-\(decoder.codingPath.last?.intValue ?? 0)",
+                         text: String(localized: "Ein Eintrag ließ sich nicht anzeigen – Hollr aktualisieren."))
+        }
     }
 }
 
@@ -110,7 +161,7 @@ enum TimelineItem: Decodable, Equatable, Identifiable {
                          at: (try? c.decode(Double.self, forKey: .at)) ?? 0)
         case "thinking": self = .thinking(id: id, text: try c.decode(String.self, forKey: .text))
         case "text": self = .text(id: id, text: try c.decode(String.self, forKey: .text))
-        case "tools": self = .tools(id: id, calls: try c.decode([ToolCall].self, forKey: .calls))
+        case "tools": self = .tools(id: id, calls: try c.decode([Lossy<ToolCall>].self, forKey: .calls).compactMap(\.value))
         case "ask":
             // several questions come as a list, a single one in the item itself
             let questions = try (try? c.decode([AskQuestion].self, forKey: .questions)) ?? [AskQuestion(from: decoder)]
@@ -176,19 +227,42 @@ extension [AskQuestion] {
     var answeredByTap: Bool { count == 1 && first?.multi == false }
 }
 
-struct TodoPhase: Decodable, Equatable, Identifiable {
+struct TodoPhase: Equatable, Identifiable {
     let name: String
     let tasks: [TodoTask]
     var id: String { name }
     var done: Int { tasks.filter { $0.status == "completed" }.count }
 }
 
-struct TodoTask: Decodable, Equatable, Identifiable {
+struct TodoTask: Equatable, Identifiable {
     let content: String
     let status: String // pending | in_progress | completed | blocked | abandoned
     let blocker: String?
     var id: String { content }
     var isClosed: Bool { status == "completed" || status == "abandoned" }
+}
+
+// in extensions, so the memberwise inits stay. The server copies omp's todo arguments as they are: a phase
+// without a name or a task without a status must not take the timeline (and the chat) down.
+extension TodoPhase: Decodable {
+    private enum Keys: String, CodingKey { case name, tasks }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        tasks = ((try? c.decode([Lossy<TodoTask>].self, forKey: .tasks)) ?? []).compactMap(\.value)
+    }
+}
+
+extension TodoTask: Decodable {
+    private enum Keys: String, CodingKey { case content, status, blocker }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        content = try c.decode(String.self, forKey: .content)
+        status = (try? c.decode(String.self, forKey: .status)) ?? "pending"
+        blocker = try? c.decode(String.self, forKey: .blocker)
+    }
 }
 
 struct Job: Decodable, Equatable, Identifiable {

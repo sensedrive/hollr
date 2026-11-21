@@ -44,7 +44,7 @@
   </div>
   {#if isOpen}
     <div class="phases sel">
-      {#each phases as p (p.name)}
+      {#each phases as p, pi (pi)}
         {@const done = p.tasks.filter((x) => x.status === "completed").length}
         {@const foldable = phaseFolded(p, changed)}
         {@const folded = foldable && !openPhase[p.name] && !forced}

@@ -19,7 +19,9 @@ const KEY = "hollr.jumpNotes";
 
 function load(): Record<string, JumpNote[]> {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, JumpNote[]>;
+    const all: unknown = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    // anything but an object ("null", a list) would break every session view reading its notes
+    return all && typeof all === "object" && !Array.isArray(all) ? (all as Record<string, JumpNote[]>) : {};
   } catch {
     return {};
   }

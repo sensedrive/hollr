@@ -4,7 +4,7 @@
   // question pinned above the composer, model · context in it, live voice, zen mode and a right side
   // panel (git / in-app browser / info). "Neuer Chat mit Kontext" forks the session into a tab next to it
   // (contextChat.svelte.ts); such a chat hides the history it came with until asked.
-  import { onDestroy, onMount, untrack } from "svelte";
+  import { onDestroy, onMount, tick as flushed, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import * as api from "../api";
   import type { AskPick, Pane, Timeline, Workspace } from "../api";
@@ -94,10 +94,11 @@
   /** chat stream problem – cleared by its next timeline */
   let streamError = $state("");
   const error = $derived(actionError || (contextChat.errorFor === key ? contextChat.error : "") || pollError || streamError);
-  /** typed prompts that are not in the log yet; `seen` = how often the log had this text when it was sent
-   *  (a prompt sent again only counts as arrived once the log has one more of it). Raw: entries are
-   *  removed by identity, and a deep proxy would hand back a different object. */
-  let pending = $state.raw<{ text: string; seen: number }[]>([]);
+  /** a typed prompt not in the log yet; `seen` = the log's prompts that already matched its text when it was sent
+   *  (a prompt sent again only counts as arrived once another one turns up); `expires` = drop it then anyway */
+  type Pending = { text: string; seen: Set<string>; expires?: number };
+  /** Raw: entries are removed by identity, and a deep proxy would hand back a different object. */
+  let pending = $state.raw<Pending[]>([]);
   let lastSig = "";
   let busy = false;
 
@@ -132,14 +133,29 @@
   });
   const waitStart = $derived((timeline && waitingSince(timeline)) ?? blockedAt);
 
-  const loggedCount = (texts: string[], text: string) => texts.reduce((n, x) => n + (x === text ? 1 : 0), 0);
-  /** your prompts in the log (timeline or history) */
-  const loggedPrompts = (): string[] =>
+  /** The log's form of a sent prompt: the server trims and clips it ("…" at 400 chars for a skill call, 4000 else)
+   *  and Claude writes a shell command as "! cmd" – so compared without whitespace, a clipped one by its start. */
+  const squash = (s: string) => s.replace(/\s+/g, "");
+  function sameText(logged: string, sent: string): boolean {
+    const l = squash(logged);
+    const s = squash(sent);
+    return l === s || (logged.length >= 400 && l.endsWith("…") && s.startsWith(l.slice(0, -1)));
+  }
+  /** your prompts in the log (timeline or history), each with a key that stays while it is in view: the timeline
+   *  item's id – a count would break when the log's window (its last 150 items) drops an older equal prompt. The
+   *  history has no ids: its prompts count from the newest – a position in the whole list shifted with every tool
+   *  call or answer once its window (80 events) was full, which made an older equal prompt look new and dropped
+   *  the bubble before the message arrived. */
+  const loggedPrompts = (): { key: string; text: string }[] =>
     hasTimeline
-      ? (timeline?.items ?? []).flatMap((i) => (i.k === "user" ? [i.text] : []))
-      : bubbles.filter((b) => b.kind === "typed").map((b) => b.text);
-  function dropArrived(logged: string[]) {
-    if (pending.some((p) => loggedCount(logged, p.text) > p.seen)) pending = pending.filter((p) => loggedCount(logged, p.text) <= p.seen);
+      ? (timeline?.items ?? []).flatMap((i) => (i.k === "user" ? [{ key: i.id, text: i.text }] : []))
+      : bubbles.filter((b) => b.kind === "typed").reverse().map((b, n) => ({ key: String(n), text: b.text }));
+  const matching = (logged: { key: string; text: string }[], text: string) =>
+    new Set(logged.filter((l) => sameText(l.text, text)).map((l) => l.key));
+  function dropArrived(logged: { key: string; text: string }[]) {
+    const now = Date.now();
+    const gone = (p: Pending) => (p.expires !== undefined && p.expires < now) || logged.some((l) => !p.seen.has(l.key) && sameText(l.text, p.text));
+    if (pending.some(gone)) pending = pending.filter((p) => !gone(p));
   }
 
   function toBubbles(events: HistoryEvent[]): Bubble[] {
@@ -155,7 +171,7 @@
 
   function setTimeline(tl: Timeline) {
     timeline = tl;
-    dropArrived(tl.items.flatMap((i) => (i.k === "user" ? [i.text] : [])));
+    dropArrived(loggedPrompts());
   }
 
   // ------------------------------------------------------------ chat with context (a fork of another session)
@@ -222,6 +238,8 @@
           const tl = await api.timeline(server, pane.pane, timeline?.etag);
           if (tl) setTimeline(tl);
         }
+        // an expired bubble goes even while the log stays the same
+        if (pending.length) dropArrived(loggedPrompts());
       } else {
         const h = await loadHistory(server, pane.pane);
         const fresh = toBubbles(h.events ?? []);
@@ -230,7 +248,7 @@
           lastSig = sig;
           bubbles = fresh;
         }
-        dropArrived(fresh.filter((b) => b.kind === "typed").map((b) => b.text));
+        dropArrived(loggedPrompts());
       }
       if (showsScreen && mode === "chat") screen = cleanScreen(await api.screen(server, pane.pane, 40));
       else screen = "";
@@ -436,9 +454,23 @@
   }
   $effect(() => {
     if (!inner || !scroller) return;
+    const content = inner;
+    // a chat that mounts (opened, or back from the terminal) starts at its end: a `stick = false` left from the last
+    // one put it at its top, under a "↓" button (showMessage and note jumps scroll after this)
+    untrack(() => {
+      stick = true;
+      unseen = false;
+    });
+    let height = content.offsetHeight;
+    let width = content.offsetWidth;
     const ro = new ResizeObserver(() => {
+      // only more content is news – not the window or the composer resizing the chat, nor its text rewrapping
+      // at a new width (taller, but nothing new)
+      const grew = content.offsetHeight > height && content.offsetWidth === width;
+      height = content.offsetHeight;
+      width = content.offsetWidth;
       if (stick) toBottom();
-      else unseen = true;
+      else if (grew) unseen = true;
     });
     ro.observe(inner);
     ro.observe(scroller);
@@ -451,7 +483,12 @@
     stick = true;
     // omp waits on its question: the server makes the text the own answer – it never shows as a message
     const answering = askShown;
-    const entry = { text: msg, seen: loggedCount(loggedPrompts(), msg) };
+    const entry: Pending = { text: msg, seen: matching(loggedPrompts(), msg) };
+    // omp's own commands (/model, /compact …) run in its TUI and never reach the log, other "/…" texts do: such a
+    // bubble goes after a while instead of staying forever. Likewise any prompt to an agent whose history shows
+    // none at all (Codex: the server can't read its log, the history stays empty) – it would never arrive.
+    const unlogged = !hasTimeline && !bubbles.some((b) => b.kind === "typed");
+    if (unlogged || (pane.agent === "omp" && msg.startsWith("/") && !msg.startsWith("/skill:"))) entry.expires = Date.now() + 15_000;
     if (!isShell && !answering) pending = [...pending, entry];
     try {
       await api.prompt(server, pane.pane, msg);
@@ -585,26 +622,38 @@
     }
     if (note.termRow !== undefined) {
       mode = "terminal";
-      void term?.scrollToTop(note.termRow - 3);
+      // from the chat the terminal mounts with this change: `term` is there only after it
+      const row = note.termRow - 3;
+      void flushed().then(() => term?.scrollToTop(row));
     } else if (note.scrollY !== undefined) {
+      const y = note.scrollY;
       mode = "chat";
-      stick = false;
-      if (scroller) scroller.scrollTop = note.scrollY;
+      // from the terminal the chat mounts with this change: `scroller` is there only after it
+      void flushed().then(() => {
+        stick = false;
+        if (scroller) scroller.scrollTop = y;
+      });
     }
   }
 
   async function noteHere() {
     menu = false;
+    // where you are now, not after typing the label: meanwhile new output may have scrolled the chat (stuck to its
+    // end) or herdr's screen on
+    const scrollY = mode === "chat" && scroller ? scroller.scrollTop : undefined;
+    const termRow = scrollY === undefined ? term?.topLine() : undefined;
     const label = await promptAsk(t("Notiz erstellen"), t("Sprungmarke"));
     if (label == null || !label.trim()) return;
-    if (mode === "chat" && scroller) jumpNotes.add(server, pane.pane, { label: label.trim(), scrollY: scroller.scrollTop });
-    else if (term) jumpNotes.add(server, pane.pane, { label: label.trim(), termRow: term.topLine() });
+    if (scrollY !== undefined) jumpNotes.add(server, pane.pane, { label: label.trim(), scrollY });
+    else if (termRow) jumpNotes.add(server, pane.pane, { label: label.trim(), termRow: await termRow });
   }
 
   // ---- keyboard
   function onKey(e: KeyboardEvent) {
     const m = e.metaKey || e.ctrlKey;
     if (e.key === "Escape") {
+      // typed into the terminal: the TUI's Esc (it already has it) – not also leaving zen or closing the menu
+      if ((e.target as Element | null)?.closest?.(".xterm")) return;
       // another dialog (new session, model …) handles its own Esc – don't also leave zen
       if (!linkUrl && document.querySelector('[role="dialog"]')) return;
       if (linkUrl) linkUrl = null;
@@ -711,7 +760,8 @@
         aria-expanded={todoOpen}>{phaseName(phase, phases)} · {phaseDone(phase)}/{phase.tasks.length}<span class="chev">›</span></button>
       {#if todoOpen}
         <div class="list">
-          {#each phases as ph (ph.name)}
+          <!-- phases and jobs by position: names / ids come from the log, and a repeated key makes Svelte throw -->
+          {#each phases as ph, i (i)}
             {@const active = ph.name === phase.name}
             <div class="hrow"><span class:acc={active} class:muted={!active} class:b={active}>{phaseName(ph, phases)}</span><span class="dim">{phaseDone(ph)}/{ph.tasks.length}</span></div>
             {#if active}
@@ -723,7 +773,7 @@
         </div>
       {/if}
     {/if}
-    {#each jobs as job (job.id)}
+    {#each jobs as job, i (i)}
       <span class="ic job"><Icon name="⚙" size={15} /></span>
       <button class="htxt ellipsis jobbtn" title={[hashId(job.id) ? "" : job.id, job.title, job.full, t("Klicken: Details und Ausgabe")].filter(Boolean).join("\n")} onclick={() => openJob(job.id)}>
         {#if !hashId(job.id)}<span class="jid">{job.id}</span>{" "}{/if}<span>{job.title}</span>{#if job.command}<span class="dim gap">{job.command}</span>{/if}
@@ -955,7 +1005,7 @@
     {#if timeline?.todo?.length}
       <div class="section">TODO</div>
       <div class="card mono small">
-        {#each timeline.todo as ph (ph.name)}
+        {#each timeline.todo as ph, i (i)}
           <div class="b">{phaseName(ph, timeline.todo)} <span class="dim">· {phaseDone(ph)}/{ph.tasks.length}</span></div>
           {#each ph.tasks as task}<div class="hrow pad">{@render todoRow(task)}</div>{/each}
         {/each}
@@ -964,7 +1014,7 @@
     {#if timeline?.jobs.length}
       <div class="section">{t("Hintergrund-Jobs")}</div>
       <div class="card mono small">
-        {#each timeline.jobs as job (job.id)}<div class="hrow"><span class="acc"><Icon name="⚙" size={15} />{hashId(job.id) ? "" : ` ${job.id}`}</span><span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>{/each}
+        {#each timeline.jobs as job, i (i)}<div class="hrow"><span class="acc"><Icon name="⚙" size={15} />{hashId(job.id) ? "" : ` ${job.id}`}</span><span class="dim ellipsis grow" title={job.id}>{job.label}</span><span class="dim">{duration(now - job.startedAt)}</span></div>{/each}
       </div>
     {/if}
     <div class="section">{t("Tastenkürzel")}</div>

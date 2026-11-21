@@ -185,6 +185,12 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Der Chat bleibt nicht mehr stehen, während das Terminal weiterläuft, und „Arbeitet …“ verschwindet, wenn der Agent wirklich fertig ist (auch nach einem Absturz).":
+    "The chat no longer freezes while the terminal keeps going, and “Working …” goes away once the agent is really done (also after a crash).",
+  "Terminal: die Übersichtsleiste hängt nicht mehr und kostet weniger Verbindung, Sprung zu Notizen trifft die richtige Stelle, Kopieren über den Rand klappt auch mit Emoji.":
+    "Terminal: the overview bar no longer hangs and uses less connection, jumping to notes lands in the right place, copying past the edge works with emoji too.",
+  "Behoben: graue „Wird gesendet“-Blasen, die nie verschwanden, Chat oben statt unten nach dem Terminal, „↓ Neu“ ohne Neues, eingefrorene Ansichten nach dem Ruhezustand.":
+    "Fixed: grey “sending” bubbles that never went away, the chat at the top instead of the bottom after the terminal, “↓ New” with nothing new, frozen views after sleep.",
   "Sitzungen, deren Verlauf ein abgeschnittenes Emoji enthält, laden im Chat wieder – auf dem iPhone blieb der Chat dann leer.":
     "Sessions whose history contains a cut-off emoji load in the chat again – on the iPhone the chat stayed empty.",
   "Neu: Plugins. Ein Server-Plugin bringt seine eigene Oberfläche mit, Hollr zeigt sie in der Seitenleiste unter „Plugins“. Auf dem Server einschalten mit: hollr plugin link <ordner>":

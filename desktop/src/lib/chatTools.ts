@@ -39,7 +39,21 @@ export function chatView(all: TimelineItem[]): ChatView {
   let last: TodoPhase[] | undefined;
   let lastKey = "";
   let latestId: string | undefined;
-  for (const item of all) {
+  // the chat's {#each} blocks are keyed by these ids and Svelte throws on a duplicate key – the whole chat then
+  // stops rendering until that item leaves the log. Older servers could send an id twice (a log entry repeated
+  // on resume): a repeat gets a suffix here.
+  const unique = (used: Set<string>, id: string) => {
+    let out = id;
+    for (let n = 2; used.has(out); n++) out = `${id}~${n}`;
+    used.add(out);
+    return out;
+  };
+  const itemIds = new Set<string>();
+  /** piece ids: keys within a tools item, and of `todo` across all of them */
+  const pieceIds = new Set<string>();
+  for (const raw of all) {
+    const id = unique(itemIds, raw.id);
+    const item = id === raw.id ? raw : { ...raw, id };
     if (item.k !== "tools") {
       items.push(item);
       continue;
@@ -52,7 +66,7 @@ export function chatView(all: TimelineItem[]): ChatView {
         const run = out.at(-1);
         if (run?.kind === "todo") run.calls.push(c);
         else {
-          const id = `t-${c.id}`;
+          const id = unique(pieceIds, `t-${c.id}`);
           out.push({ kind: "todo", id, calls: [c] });
           todo.set(id, { prev: last, latest: false });
           latestId = id;
@@ -64,8 +78,8 @@ export function chatView(all: TimelineItem[]): ChatView {
       if (c.name === "todo" && c.status !== "error") continue;
       const prev = out.at(-1);
       if (c.name === "read" && prev?.kind === "reads") prev.calls.push(c);
-      else if (c.name === "read") out.push({ kind: "reads", id: `r-${c.id}`, calls: [c] });
-      else out.push({ kind: "call", id: c.id, call: c });
+      else if (c.name === "read") out.push({ kind: "reads", id: unique(pieceIds, `r-${c.id}`), calls: [c] });
+      else out.push({ kind: "call", id: unique(pieceIds, c.id), call: c });
     }
     if (!out.length) continue;
     pieces.set(item.id, out);

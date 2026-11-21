@@ -23,7 +23,7 @@ import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { jobDetail } from "./jobs";
 import { listSkills } from "./skills";
-import { wireJson } from "./wire";
+import { cut, wireJson } from "./wire";
 import { miniLines } from "./minimap";
 import { runEvents } from "./events";
 import { paneContext, readPath } from "./file";
@@ -100,7 +100,7 @@ import {
 } from "./spaces";
 import { type SummarizeRequest, summarize } from "./summarize";
 import { restartWatcher, sysinfo } from "./sysinfo";
-import { readTimeline } from "./timeline";
+import { ompLive, readTimeline } from "./timeline";
 import { claudeFooter, paneTimeline, readClaudeHistory } from "./claudelog";
 import { latestVersions, startTool, TOOL_NAMES, type ToolName, toolStates } from "./tools";
 import {
@@ -115,7 +115,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.46.1";
+export const VERSION = "0.46.2";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -454,9 +454,12 @@ async function gate(): Promise<number> {
         };
       } else {
         const file = agent.sessionFile;
-        const timeline = file
-          ? await readTimeline(file, Number(rest[0] ?? 150))
-          : { items: [], jobs: [], running: false, waiting: false };
+        const timeline = ompLive(
+          file
+            ? await readTimeline(file, Number(rest[0] ?? 150))
+            : { items: [], jobs: [], running: false, waiting: false },
+          agent.status,
+        );
         // the footer; while nothing is said yet the whole screen – omp's start (version, tip, MCP, update)
         const fresh = timeline.items.length === 0;
         const read = await execHerdr([
@@ -758,7 +761,7 @@ async function gate(): Promise<number> {
     case "rename": {
       // a herdr tab gets a name: rename <tab id>, {"label":"…"} on stdin
       const { label = "" } = JSON.parse((await readStdinLine()) || "{}") as { label?: string };
-      const name = label.replace(/\s+/g, " ").trim().slice(0, 80);
+      const name = cut(label.replace(/\s+/g, " ").trim(), 80);
       if (!name) {
         json({ error: "empty_label" });
         return 2;

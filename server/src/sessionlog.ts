@@ -44,14 +44,20 @@ function textOf(content: unknown): string {
   return "";
 }
 
-export function parseEntry(line: string, sinceMs = 0): LogEvent[] {
-  let e: Entry & { timestamp?: string };
+/** `seen`: ids of entries already reported – a rewritten file is read again from its start. */
+export function parseEntry(line: string, sinceMs = 0, seen?: Set<string>): LogEvent[] {
+  let e: Entry & { timestamp?: string; id?: string };
   try {
     e = JSON.parse(line);
   } catch {
     return [];
   }
+  if (!e || typeof e !== "object") return [];
   if (sinceMs && (!e.timestamp || Date.parse(e.timestamp) < sinceMs)) return [];
+  if (seen && typeof e.id === "string") {
+    if (seen.has(e.id)) return [];
+    seen.add(e.id);
+  }
   const custom = e.customType ?? e.message?.customType;
   if (custom === "live-delegation") {
     const text = textOf(
@@ -77,9 +83,67 @@ export function parseEntry(line: string, sinceMs = 0): LogEvent[] {
   return events;
 }
 
+const decoder = new TextDecoder();
+/** How many bytes before the end of the last read must still be the same for the file to count as grown. */
+const MARK = 64;
+
+/**
+ * A log file read as it grows: each read gives the whole lines appended since the last one. omp also rewrites
+ * its session file (atomically – a new inode – after maintenance, a rename, a title …): then `reset` says the
+ * text is the whole file again. A line still being written waits for its "\n", so a UTF-8 character is never
+ * decoded cut in half (that left U+FFFD in the text).
+ */
+export class LogTail {
+  #offset = 0;
+  #ino = -1;
+  /** the last bytes before #offset: other bytes there mean the file was rewritten, not appended to */
+  #mark = new Uint8Array(0);
+
+  constructor(readonly file: string) {}
+
+  /** `undefined` while the file is missing. */
+  async read(): Promise<{ reset: boolean; text: string } | undefined> {
+    let st: { ino: number; size: number };
+    try {
+      st = statSync(this.file);
+    } catch {
+      return undefined;
+    }
+    let reset = st.ino !== this.#ino || st.size < this.#offset;
+    if (!reset && st.size === this.#offset) return { reset, text: "" };
+    let base = reset ? 0 : this.#offset - this.#mark.length;
+    let bytes = new Uint8Array(await Bun.file(this.file).slice(base, st.size).arrayBuffer());
+    if (!reset && !sameBytes(bytes.subarray(0, this.#mark.length), this.#mark)) {
+      reset = true;
+      base = 0;
+      bytes = new Uint8Array(await Bun.file(this.file).slice(0, st.size).arrayBuffer());
+    }
+    const start = reset ? 0 : this.#mark.length;
+    if (reset) {
+      this.#offset = 0;
+      this.#mark = new Uint8Array(0);
+      this.#ino = st.ino;
+    }
+    const nl = bytes.lastIndexOf(0x0a);
+    if (nl < start) return { reset, text: "" };
+    const text = decoder.decode(bytes.subarray(start, nl + 1));
+    this.#offset = base + nl + 1;
+    this.#mark = bytes.slice(Math.max(0, nl + 1 - MARK), nl + 1);
+    return { reset, text };
+  }
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export class SessionTail {
-  private offset: number;
-  private partial = "";
+  private readonly tail: LogTail;
+  /** entries reported so far: a rewritten file is read from its start again */
+  private readonly seen = new Set<string>();
+  private polling = false;
   private timer?: ReturnType<typeof setInterval>;
 
   /** Reads the whole file but only reports entries written after `sinceMs`. */
@@ -88,7 +152,7 @@ export class SessionTail {
     private readonly onEvent: (e: LogEvent) => void,
     private readonly sinceMs = Date.now(),
   ) {
-    this.offset = 0;
+    this.tail = new LogTail(file);
   }
 
   start(intervalMs = 500) {
@@ -96,19 +160,20 @@ export class SessionTail {
   }
 
   stop() {
-    if (this.timer) clearInterval(this.timer);
+    clearInterval(this.timer);
   }
 
   async poll() {
-    if (!existsSync(this.file)) return;
-    const size = statSync(this.file).size;
-    if (size < this.offset) this.offset = 0; // file rotated / rewritten
-    if (size === this.offset) return;
-    const chunk = await Bun.file(this.file).slice(this.offset, size).text();
-    this.offset = size;
-    const lines = (this.partial + chunk).split("\n");
-    this.partial = lines.pop() ?? "";
-    for (const line of lines) for (const ev of parseEntry(line, this.sinceMs)) this.onEvent(ev);
+    // the first read of a big log outlasts the interval: a second poll on top reported everything twice
+    if (this.polling) return;
+    this.polling = true;
+    try {
+      const got = await this.tail.read();
+      for (const line of got?.text.split("\n") ?? [])
+        for (const ev of parseEntry(line, this.sinceMs, this.seen)) this.onEvent(ev);
+    } finally {
+      this.polling = false;
+    }
   }
 }
 

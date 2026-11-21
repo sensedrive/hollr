@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildTimeline, RICH_CAPS, readTimeline, type TimelineOptions, type ToolCall } from "../src/timeline";
+import {
+  buildTimeline,
+  ompLive,
+  RICH_CAPS,
+  readTimeline,
+  TimelineFile,
+  type TimelineOptions,
+  type ToolCall,
+  timelineBuilder,
+} from "../src/timeline";
 
 // Fixtures are trimmed lines of real omp session logs (the chat lab session and older ones).
 const call = (id: string, name: string, args: Record<string, unknown>) =>
@@ -441,5 +450,168 @@ describe("rich tool data (omp)", () => {
     expect(t.agent).toBe("omp");
     const c = t.items[0]?.k === "tools" ? t.items[0].calls[0] : undefined;
     expect(c).toEqual({ id: "x1", name: "lsp", label: "lsp", detail: "hover", status: "ok", ms: undefined, result: undefined, path: undefined });
+  });
+});
+
+const prompt = (id: string, text: string, timestamp = "2026-11-03T20:59:00.000Z") =>
+  JSON.stringify({ type: "message", id, timestamp, message: { role: "user", content: text } });
+const exit = JSON.stringify({
+  type: "custom",
+  id: "x1",
+  customType: "session_exit",
+  timestamp: "2026-11-03T21:05:00.000Z",
+  data: { reason: "sighup", kind: "signal" },
+});
+
+describe("timeline robustness", () => {
+  test("clipped outputs never end in half an emoji", () => {
+    const line = `${"a".repeat(RICH_CAPS.outLineChars - 1)}🔖 tail`;
+    const c = only([call("b1", "bash", { command: "echo" }), result("b1", "bash", { exitCode: 0 }, line)]);
+    expect(c.out?.[0]).toBe("a".repeat(RICH_CAPS.outLineChars - 1));
+    const thinking = JSON.stringify({
+      type: "message",
+      timestamp: "2026-11-03T21:00:00.000Z",
+      message: { role: "assistant", stopReason: "stop", content: [{ type: "thinking", thinking: `${"x".repeat(1498)}🔖🔖` }] },
+    });
+    expect(JSON.stringify(buildTimeline(thinking))).not.toMatch(/\\ud[89a-f]/i);
+  });
+
+  test("an id the log repeats (ollama numbers calls per turn) stays unique in the timeline", () => {
+    const t = buildTimeline(
+      [
+        prompt("u1", "eins"),
+        call("ollama:1:bash", "bash", { command: "ls" }),
+        result("ollama:1:bash", "bash", {}, "a"),
+        prompt("u2", "zwei", "2026-11-03T21:02:00.000Z"),
+        call("ollama:1:bash", "bash", { command: "pwd" }),
+        result("ollama:1:bash", "bash", {}, "b", true),
+      ].join("\n"),
+    );
+    const ids = t.items.map((i) => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const all = t.items.flatMap((i) => (i.k === "tools" ? i.calls : []));
+    expect(all.map((c) => [c.id, c.detail, c.status])).toEqual([
+      ["ollama:1:bash", "ls", "ok"],
+      ["ollama:1:bash~2", "pwd", "error"],
+    ]);
+  });
+
+  test("omp exiting mid-turn ends the turn: no call left running, not 'working'", () => {
+    const t = buildTimeline([prompt("u1", "los"), call("b1", "bash", { command: "sleep 99" }), exit].join("\n"));
+    expect(t.running).toBe(false);
+    const c = t.items.flatMap((i) => (i.k === "tools" ? i.calls : []))[0];
+    expect([c?.status, c?.result]).toEqual(["error", "abgebrochen"]);
+    expect(t.items.at(-1)).toMatchObject({ k: "end", status: "aborted" });
+  });
+
+  test("a new prompt settles what the last turn left without a result", () => {
+    const ask = JSON.stringify({
+      type: "message",
+      timestamp: "2026-11-03T21:00:00.000Z",
+      message: {
+        role: "assistant",
+        stopReason: "toolUse",
+        content: [{ type: "toolCall", id: "q1", name: "ask", arguments: { questions: [{ question: "Weiter?", options: [{ label: "Ja" }] }] } }],
+      },
+    });
+    const t = buildTimeline(
+      [prompt("u1", "los"), call("b1", "bash", { command: "x" }), ask, prompt("u2", "neu", "2026-11-03T22:00:00.000Z")].join("\n"),
+    );
+    const c = t.items.flatMap((i) => (i.k === "tools" ? i.calls : []))[0];
+    expect(c?.status).toBe("error");
+    expect(t.items.find((i) => i.k === "ask")).toMatchObject({ pending: false, answer: "abgebrochen" });
+  });
+
+  test("a tool result too long to parse still ends its call", () => {
+    const huge = result("b1", "bash", { trace: "x".repeat(3_100_000) }, "out", true);
+    const c = only([call("b1", "bash", { command: "x" }), huge]);
+    expect(c.status).toBe("error");
+  });
+
+  test("an entry of an unexpected shape costs only itself", () => {
+    const t = buildTimeline(
+      [
+        "null",
+        JSON.stringify({ type: "custom", customType: "tool_execution_start", data: null }),
+        JSON.stringify({ type: "message", message: { role: "assistant", stopReason: "toolUse", content: [null] } }),
+        result("t1", "todo", { phases: [null, { name: "P", tasks: [null, { status: "pending" }] }] }),
+        prompt("u1", "noch da"),
+      ].join("\n"),
+    );
+    expect(t.items.map((i) => i.k)).toEqual(["user"]);
+  });
+
+  test("the title follows omp's renames", () => {
+    const t = buildTimeline(
+      [
+        JSON.stringify({ type: "title", title: "Alt" }),
+        JSON.stringify({ type: "title_change", title: "🐝 Neu", source: "auto", timestamp: "2026-11-03T21:00:00.000Z" }),
+      ].join("\n"),
+    );
+    expect(t.title).toBe("🐝 Neu");
+  });
+
+  test("herdr saying idle beats a log whose turn never ended", () => {
+    const t = buildTimeline([prompt("u1", "los"), call("b1", "bash", { command: "x" }), result("b1", "bash", {}, "a")].join("\n"));
+    expect(t.running).toBe(true);
+    expect(ompLive(t, "working").running).toBe(true);
+    expect(ompLive(t, "idle").running).toBe(false);
+  });
+
+  test("a prompt without an answer yet is a working agent", () => {
+    const answered = JSON.stringify({
+      type: "message",
+      id: "a1",
+      timestamp: "2026-11-03T21:00:00.000Z",
+      message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "ok" }] },
+    });
+    expect(buildTimeline([prompt("u1", "eins"), answered].join("\n")).running).toBe(false);
+    const t = buildTimeline([prompt("u1", "eins"), answered, prompt("u2", "zwei", "2026-11-03T21:01:00.000Z")].join("\n"));
+    expect(t.running).toBe(true);
+  });
+
+  test("built line by line it is the same timeline as built at once", () => {
+    const lines = [
+      prompt("u1", "los"),
+      call("b1", "bash", { command: "ls" }),
+      result("b1", "bash", {}, "a"),
+      JSON.stringify({
+        type: "message",
+        id: "a2",
+        timestamp: "2026-11-03T21:01:00.000Z",
+        message: { role: "assistant", stopReason: "stop", completedAt: Date.parse("2026-11-03T21:01:00.000Z"), content: [{ type: "text", text: "fertig" }] },
+      }),
+      prompt("u2", "weiter", "2026-11-03T21:02:00.000Z"),
+    ];
+    const b = timelineBuilder();
+    const steps = lines.map((l) => {
+      b.feed(`${l}\n`);
+      return JSON.stringify(b.result());
+    });
+    expect(steps).toEqual(lines.map((_, n) => JSON.stringify(buildTimeline(lines.slice(0, n + 1).join("\n")))));
+  });
+
+  test("a followed log: appended lines, a line still being written, an atomic rewrite", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-tl-"));
+    try {
+      const file = join(dir, "s.jsonl");
+      writeFileSync(file, `${prompt("u1", "eins")}\n`);
+      const log = new TimelineFile(file);
+      expect((await log.read()).items.map((i) => i.id)).toEqual(["u1"]);
+      // a line cut inside "ü" (two bytes in UTF-8): held back until its "\n"
+      const next = Buffer.from(`${prompt("u2", "grün")}\n`);
+      const cutAt = next.indexOf(Buffer.from("ü")) + 1;
+      appendFileSync(file, next.subarray(0, cutAt));
+      expect((await log.read()).items.map((i) => i.id)).toEqual(["u1"]);
+      appendFileSync(file, next.subarray(cutAt));
+      const grown = await log.read();
+      expect(grown.items.map((i) => (i.k === "user" ? i.text : ""))).toEqual(["eins", "grün"]);
+      // omp rewrites its session atomically: a new file under the name, here without the first prompt
+      writeFileSync(join(dir, "tmp"), `${prompt("u2", "grün")}\n${prompt("u3", "drei")}\n`);
+      renameSync(join(dir, "tmp"), file);
+      expect((await log.read()).items.map((i) => i.id)).toEqual(["u2", "u3"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

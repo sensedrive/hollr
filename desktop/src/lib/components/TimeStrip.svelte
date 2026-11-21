@@ -33,7 +33,8 @@
 {#if said.length || since !== undefined}
   <div class="timestrip mono" class:closed>
     <div class="rows">
-      {#each shown as s (s.id)}
+      <!-- by position: the log's ids can repeat (older servers), and a repeated key makes Svelte throw -->
+      {#each shown as s, i (i)}
         <button class="row" title="{fullTime(s.at, lang())} · {t('Im Chat zeigen')}" onclick={() => onPick(s.id)}>
           <span class="time">{clock(s.at, lang())}</span>
           <span class="who {s.who}">{who(s)}{#if s.voice} <Icon name="🎙" size={15} />{/if}</span>

@@ -252,9 +252,11 @@ enum HollrClient {
 
     static func history(_ server: Server, pane: String, limit: Int = 80) async throws -> [LiveEvent] {
         let data = try await run("history \(pane) \(limit)", on: server)
-        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let events = obj["events"] as? [[String: Any]]
-        else { throw HollrError.badResponse }
+        // a text cut inside an emoji (lone surrogate) made the whole history unreadable: repaired instead
+        guard let obj = (try? JSONSerialization.jsonObject(with: JSONRepair.wellFormed(data))) as? [String: Any],
+              let events = obj["events"] as? [[String: Any]] else {
+            throw HollrError.badResponse
+        }
         return events.compactMap { (try? JSONSerialization.data(withJSONObject: $0)).map(LiveEvent.init(json:)) }
     }
 
@@ -425,6 +427,16 @@ actor SSHPool {
         lastOK[server.id] = nil
         // closing a half-open connection can take long – don't make the caller wait for it
         if let client = clients.removeValue(forKey: server.id) { Task { try? await client.close() } }
+    }
+
+    /// Drops `client` – and only if the pool still holds it: a stream that died on an older connection must
+    /// not close the fresh one the pool made meanwhile (a prompt running on it would fail).
+    func invalidate(_ server: Server, ifStill client: SSHClient) async {
+        guard clients[server.id] === client else {
+            Task { try? await client.close() }
+            return
+        }
+        await invalidate(server)
     }
 
     /// App in the background, network changed: connections may be dead without knowing it.

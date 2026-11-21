@@ -65,7 +65,7 @@
             {#if running}<Glyph status="running" ok="" />{:else}<span class:err={reads.some((r) => r.status === "error")}>•</span>{/if}
             <b>Read</b> <span class="dim">({reads.length})</span>
           </div>
-          {#each reads as r, i (r.id)}
+          {#each reads as r, i (i)}
             {@const rp = readPath(r)}
             {@const rt = readTarget(r)}
             <div class="hrow indent" title={tip(r)}>

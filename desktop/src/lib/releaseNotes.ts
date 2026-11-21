@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 49,
+    version: "0.46.2",
+    date: "21.11.2026",
+    items: [
+      { icon: "💬", text: "Der Chat bleibt nicht mehr stehen, während das Terminal weiterläuft, und „Arbeitet …“ verschwindet, wenn der Agent wirklich fertig ist (auch nach einem Absturz)." },
+      { icon: "▥", text: "Terminal: die Übersichtsleiste hängt nicht mehr und kostet weniger Verbindung, Sprung zu Notizen trifft die richtige Stelle, Kopieren über den Rand klappt auch mit Emoji." },
+      { icon: "✓", text: "Behoben: graue „Wird gesendet“-Blasen, die nie verschwanden, Chat oben statt unten nach dem Terminal, „↓ Neu“ ohne Neues, eingefrorene Ansichten nach dem Ruhezustand." },
+    ],
+  },
+  {
     build: 48,
     version: "0.46.1",
     date: "21.11.2026",

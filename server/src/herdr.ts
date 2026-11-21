@@ -66,13 +66,24 @@ export function herdrBin(): string {
 
 export type Exec = (args: string[]) => Promise<unknown>;
 
+/** A herdr call that hangs (herdr restarting, its socket stuck) must not hold a follow stream's pings or a
+ *  gate command forever: after this long it is killed and fails like any herdr error. */
+const HERDR_TIMEOUT_MS = 30_000;
+
 export const execHerdr: Exec = async (args) => {
   const proc = Bun.spawn([herdrBin(), ...args], { stdout: "pipe", stderr: "pipe" });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, HERDR_TIMEOUT_MS);
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
-  ]);
+  ]).finally(() => clearTimeout(timer));
   await proc.exited;
+  if (timedOut)
+    throw new HerdrError("herdr_timeout", `herdr ${args.slice(0, 2).join(" ")}: keine Antwort`);
   let json: { result?: unknown; error?: { code?: string; message?: string } };
   try {
     json = JSON.parse(stdout);
@@ -84,7 +95,10 @@ export const execHerdr: Exec = async (args) => {
       refusal = JSON.parse(stderr);
     } catch {}
     if (!refusal?.error)
-      throw new HerdrError("herdr_failed", (stderr || stdout).trim() || `herdr exit ${proc.exitCode}`);
+      throw new HerdrError(
+        "herdr_failed",
+        (stderr || stdout).trim() || `herdr exit ${proc.exitCode}`,
+      );
     json = refusal;
   }
   if (json.error)
@@ -207,7 +221,8 @@ export class Herdr {
     } else if (agent.kind === "claude" && !agent.sessionFile) {
       // herdr knows Claude's session id (its hook), the transcript lies under the folder Claude started in
       const session = res.agent.agent_session;
-      if (session?.kind === "id" && session.value) agent.sessionFile = claudeSessionFile(agent.cwd, session.value);
+      if (session?.kind === "id" && session.value)
+        agent.sessionFile = claudeSessionFile(agent.cwd, session.value);
     }
     return agent;
   }
@@ -259,7 +274,15 @@ export class Herdr {
 
   /** The visible lines at the bottom of the agent's terminal. */
   async screen(pane: string, lines: number): Promise<string> {
-    const screen = await this.exec(["agent", "read", pane, "--source", "visible", "--lines", String(lines)]);
+    const screen = await this.exec([
+      "agent",
+      "read",
+      pane,
+      "--source",
+      "visible",
+      "--lines",
+      String(lines),
+    ]);
     return typeof screen === "string" ? screen : "";
   }
 

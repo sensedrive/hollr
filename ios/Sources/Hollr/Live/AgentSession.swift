@@ -87,14 +87,25 @@ final class AgentSession {
         let server = ref.server
         let heard = Clock()
         var supported = true
+        // the connection this stream ran on: only that one is dropped when it fails
+        var used: SSHClient?
         do {
             let client = try await SSHPool.shared.client(for: server)
+            used = client
             heard.touch()
-            // the server pings every 20 s: silence = a dead connection
+            // the server pings every 20 s: silence = a dead connection. Closing the stream's own connection ends
+            // it – the pool may hold a newer one by now, and a half-open channel waits forever for its close.
             let watchdog = Task {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(10))
-                    if heard.age > 50 { await SSHPool.shared.invalidate(server); return }
+                    guard heard.age > 50 else { continue }
+                    // just back from the background: the buffered pings arrive in a moment – look again first
+                    try? await Task.sleep(for: .seconds(3))
+                    if heard.age > 50, !Task.isCancelled {
+                        HollrLog.error("follow \(pane): nothing for \(Int(heard.age))s – reconnecting")
+                        try? await client.close()
+                        return
+                    }
                 }
             }
             defer { watchdog.cancel() }
@@ -114,7 +125,7 @@ final class AgentSession {
                             supported = false
                             return
                         case .gone:
-                            self.lastError = String(localized: "Die Session gibt es nicht mehr.")
+                            self.loadError = String(localized: "Die Session gibt es nicht mehr.")
                             self.historyLoaded = true
                             return
                         case let .full(timeline):
@@ -123,6 +134,12 @@ final class AgentSession {
                             // an id we don't have (gap): reconnect for a full one
                             guard let merged = FollowEvent.merge(self.timeline, head: head, order: order, items: items) else { return }
                             self.apply(merged)
+                        case .broken:
+                            // skipping it would keep what it changed stale until that item changes again
+                            if self.timeline == nil {
+                                self.loadError = String(localized: "Der Chat ließ sich nicht lesen. Hollr auf dem Server und hier aktualisieren.")
+                            }
+                            return
                         case .other:
                             break
                         }
@@ -132,7 +149,13 @@ final class AgentSession {
         } catch is CancellationError {
         } catch {
             HollrLog.error("follow \(pane): \(error)")
-            if HollrError.isTransport(error) { await SSHPool.shared.invalidate(server) }
+            // nothing shown yet: say why, instead of a skeleton without end
+            if timeline == nil, !Task.isCancelled { loadError = Self.describe(error) }
+            if HollrError.isTransport(error) {
+                // the pool may hold a fresh connection by now (its idle check replaced this one): a prompt on it
+                // would fail if the dead stream took it down too
+                if let used { await SSHPool.shared.invalidate(server, ifStill: used) } else { await SSHPool.shared.invalidate(server) }
+            }
         }
         return supported
     }
@@ -141,15 +164,28 @@ final class AgentSession {
     private func apply(_ fresh: Timeline) {
         if fresh != timeline { timeline = fresh }
         if let status = fresh.status, !isLive { agentStatus = status }
-        // typed prompts that now show up in the log are no longer "pending"
-        let logged = Set(fresh.items.compactMap { item -> String? in
-            if case let .user(_, text, _, _) = item { return text }
+        // typed prompts that now show up in the log are no longer "pending". Each log entry settles one prompt, and
+        // only entries that weren't there when it was sent count: an earlier "weiter" doesn't settle a new one.
+        let users = fresh.items.compactMap { item -> (id: String, text: String)? in
+            if case let .user(id, text, _, _) = item { return (id, text.trimmingCharacters(in: .whitespacesAndNewlines)) }
             return nil
-        })
-        pendingTyped.removeAll { logged.contains($0) }
-        items.removeAll { $0.kind == .typed && !$0.final && logged.contains($0.text) }
+        }
+        var claimed = Set<String>()
+        var landed = Set<UUID>()
+        for sent in items where sent.kind == .typed && !sent.final {
+            let before = usersBefore[sent.id] ?? []
+            guard let entry = users.first(where: { $0.text == sent.text && !before.contains($0.id) && !claimed.contains($0.id) })
+            else { continue }
+            claimed.insert(entry.id)
+            landed.insert(sent.id)
+            usersBefore[sent.id] = nil
+        }
+        if !landed.isEmpty {
+            items.removeAll { landed.contains($0.id) }
+            notSentSettled()
+        }
         historyLoaded = true
-        lastError = nil
+        loadError = nil
     }
 
     func loadTimeline() async {
@@ -157,13 +193,13 @@ final class AgentSession {
         do {
             guard let fresh = try await HollrClient.timeline(ref.server, pane: ref.pane.pane, etag: timeline?.etag) else {
                 historyLoaded = true
-                lastError = nil
+                loadError = nil
                 return // unchanged
             }
             apply(fresh)
         } catch {
             HollrLog.error("timeline \(ref.pane.pane): \(error)")
-            lastError = error.localizedDescription
+            loadError = error.localizedDescription
             historyLoaded = true
             // a closed pane or herdr error is an answer – reconnecting would only tear down the feed
             if HollrError.isTransport(error) { await SSHPool.shared.invalidate(ref.server) }
@@ -175,6 +211,7 @@ final class AgentSession {
     func answer(ask: String, picks: [AskPick]) async -> Bool {
         do {
             try await HollrClient.answer(ref.server, pane: ref.pane.pane, ask: ask, picks: picks)
+            actionWorked()
             nudge()
             return true
         } catch {
@@ -219,13 +256,38 @@ final class AgentSession {
             }
             .joined(separator: "\n")
     }
+    /// What went wrong with something you did (send, answer, keys). Stays until the next action works – a chat
+    /// refresh no longer wipes it a second later, before you could read it. The live call has its own (`callError`).
     private(set) var lastError: String?
+    /// Why the chat doesn't load or update (stream, poll, history); cleared by the next good refresh.
+    private(set) var loadError: String?
+
+    private func actionWorked() {
+        lastError = nil
+        notSent = nil
+    }
+
+    /// The "Nicht gesendet" text in `lastError` belongs to the failed messages: once none is left (it arrived
+    /// after all, or was discarded) it would only contradict the chat.
+    private func notSentSettled() {
+        guard let notSent, !items.contains(where: \.failed) else { return }
+        if lastError == notSent { lastError = nil }
+        self.notSent = nil
+    }
+
+    /// Why the live call failed – its own error: a failed answer during the call must not turn a call that
+    /// ended normally into a failed one, nor hide why the connection dropped.
+    @ObservationIgnored private var callError: String?
+    @ObservationIgnored private var notSent: String?
 
     private var task: Task<Void, Never>?
     private var outgoing: AsyncStream<Data>.Continuation?
     private let voice = VoiceIO()
     private var finished = false
-    private var pendingTyped: [String] = []
+    /// per typed prompt, what the log already held with its text when it was sent – that doesn't settle it.
+    /// omp's timeline: those entries' ids · other agents' history (no ids): how many there were
+    @ObservationIgnored private var usersBefore: [UUID: Set<String>] = [:]
+    @ObservationIgnored private var typedBefore: [UUID: Int] = [:]
 
     init(ref: AgentRef) {
         self.ref = ref
@@ -261,19 +323,36 @@ final class AgentSession {
                 historyLoaded = true
                 return
             }
-            // typed prompts that are not in the log yet stay visible
-            let logged = Set(fresh.filter { $0.kind == .typed }.map(\.text))
-            pendingTyped.removeAll { logged.contains($0) }
-            fresh += pendingTyped.map { TranscriptItem(kind: .typed, text: $0, final: false) }
-            // messages that didn't go out stay with their "Erneut senden"
-            fresh += items.filter { $0.failed && !logged.contains($0.text) }
+            // typed prompts not in the log yet stay visible, and so do messages that didn't go out (with their
+            // "Erneut senden") – the same items, so a failing send still finds its message by id. Each log entry
+            // settles one prompt, and only entries beyond those there were when it was sent: an earlier "weiter"
+            // doesn't settle (and drop) a new one.
+            var logged: [String: Int] = [:]
+            for item in fresh where item.kind == .typed {
+                logged[item.text.trimmingCharacters(in: .whitespacesAndNewlines), default: 0] += 1
+            }
+            var settled = false
+            for sent in items where sent.kind == .typed && !sent.final {
+                let count = logged[sent.text] ?? 0
+                // older ones that left the window (the last 80 events) no longer count
+                let before = min(typedBefore[sent.id] ?? 0, count)
+                if count > before {
+                    logged[sent.text] = count - 1
+                    typedBefore[sent.id] = nil
+                    settled = true
+                } else {
+                    typedBefore[sent.id] = before
+                    fresh.append(sent)
+                }
+            }
             let signature = { (list: [TranscriptItem]) in list.map { "\($0.kind)|\($0.text)|\($0.final)|\($0.failed)" } }
             if signature(fresh) != signature(items), !(fresh.isEmpty && !items.isEmpty) { items = fresh }
+            if settled { notSentSettled() }
             historyLoaded = true
-            lastError = nil
+            loadError = nil
         } catch {
             HollrLog.error("history \(ref.pane.pane): \(error)")
-            lastError = error.localizedDescription
+            loadError = error.localizedDescription
             historyLoaded = true
         }
     }
@@ -298,10 +377,11 @@ final class AgentSession {
             Task {
                 do {
                     try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: trimmed)
+                    actionWorked()
                     try? await Task.sleep(for: .milliseconds(400))
                     await loadScreen()
                 } catch {
-                    lastError = "Senden fehlgeschlagen: \(error.localizedDescription)"
+                    lastError = String(localized: "Senden fehlgeschlagen: \(error.localizedDescription)")
                 }
             }
             return
@@ -311,6 +391,7 @@ final class AgentSession {
             Task {
                 do {
                     try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: trimmed)
+                    actionWorked()
                     nudge()
                 } catch {
                     lastError = String(localized: "Antwort nicht gesendet: \(error.localizedDescription)")
@@ -320,6 +401,16 @@ final class AgentSession {
         }
         let item = TranscriptItem(kind: .typed, text: trimmed, final: false)
         items.append(item)
+        if usesTimeline {
+            usersBefore[item.id] = Set((timeline?.items ?? []).compactMap { entry -> String? in
+                if case let .user(id, text, _, _) = entry, text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed { return id }
+                return nil
+            })
+        } else {
+            typedBefore[item.id] = items.filter { logged in
+                logged.kind == .typed && logged.final && logged.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed
+            }.count
+        }
         if phase == .live {
             send(.control(["t": "prompt", "text": trimmed]))
         } else {
@@ -331,16 +422,20 @@ final class AgentSession {
     /// sent again – it never looks sent while the agent didn't get it. A prompt whose answer only got lost may
     /// still arrive: when it shows up in the log, the "not sent" mark goes away by itself (apply).
     private func deliver(_ id: UUID, _ text: String) {
-        pendingTyped.append(text)
         Task {
             do {
                 try await HollrClient.prompt(ref.server, pane: ref.pane.pane, text: text)
+                actionWorked()
                 nudge()
             } catch {
                 HollrLog.error("prompt \(ref.pane.pane): \(error)")
-                if let i = pendingTyped.firstIndex(of: text) { pendingTyped.remove(at: i) }
-                if let i = items.firstIndex(where: { $0.id == id }) { items[i].failed = true }
-                lastError = String(localized: "Nicht gesendet: \(error.localizedDescription)")
+                // gone already: it showed up in the log, only the answer got lost – it did arrive
+                if let i = items.firstIndex(where: { $0.id == id }) {
+                    items[i].failed = true
+                    let message = String(localized: "Nicht gesendet: \(error.localizedDescription)")
+                    notSent = message
+                    lastError = message
+                }
                 if HollrError.isTransport(error) { await SSHPool.shared.invalidate(ref.server) }
             }
         }
@@ -357,6 +452,9 @@ final class AgentSession {
     /// Drops a message that didn't go out.
     func discard(_ id: UUID) {
         items.removeAll { $0.id == id && $0.failed }
+        usersBefore[id] = nil
+        typedBefore[id] = nil
+        notSentSettled()
     }
 
     func sendKeys(_ keys: [String]) {
@@ -366,6 +464,7 @@ final class AgentSession {
             Task {
                 do {
                     try await HollrClient.keys(ref.server, pane: ref.pane.pane, keys: keys)
+                    actionWorked()
                     nudge() // show omp's reaction right away instead of on the next poll
                 } catch { lastError = String(localized: "Tasten senden fehlgeschlagen: \(error.localizedDescription)") }
             }
@@ -379,6 +478,7 @@ final class AgentSession {
         phase = .connecting
         finished = false
         lastError = nil
+        callError = nil
         task = Task { await run() }
     }
 
@@ -456,8 +556,8 @@ final class AgentSession {
                         if heard.age > 20 {
                             HollrLog.error("live: nothing from the server for \(Int(heard.age))s – connection lost")
                             await MainActor.run {
-                                if self?.lastError == nil {
-                                    self?.lastError = String(localized: "Verbindung verloren – keine Antwort vom Server.")
+                                if self?.callError == nil {
+                                    self?.callError = String(localized: "Verbindung verloren – keine Antwort vom Server.")
                                 }
                             }
                             try? await client.close()
@@ -490,13 +590,13 @@ final class AgentSession {
                 HollrLog.info("live: closed after end (\(error))")
             } else {
                 HollrLog.error("live: failed \(error)")
-                if lastError == nil { lastError = Self.describe(error) }
+                if callError == nil { callError = Self.describe(error) }
             }
         }
-        if !finished, phase != .ending, lastError == nil {
-            lastError = String(localized: "Verbindung zum Server wurde unerwartet beendet.")
+        if !finished, phase != .ending, callError == nil {
+            callError = String(localized: "Verbindung zum Server wurde unerwartet beendet.")
         }
-        if let lastError { phase = .failed(lastError) } else { phase = .idle }
+        if let callError { phase = .failed(callError) } else { phase = .idle }
         speakerMuted = false
         ompState = nil
         continuation.finish()
@@ -531,18 +631,18 @@ final class AgentSession {
                     #endif
                 } catch {
                     HollrLog.error("live: audio start failed \(error)")
-                    lastError = String(localized: "Audio konnte nicht starten: \(error.localizedDescription)")
+                    callError = String(localized: "Audio konnte nicht starten: \(error.localizedDescription)")
                     send(.control(["t": "stop"]))
                 }
             case "ended":
                 finished = true
                 if reason == "live_stopped" {
                     items.append(TranscriptItem(kind: .info, text: String(localized: "Live wurde am Rechner beendet.")))
-                } else if lastError == nil, phase != .ending {
+                } else if callError == nil, phase != .ending {
                     // the server ended the call on its own: say why
                     switch reason {
-                    case "start_failed": lastError = String(localized: "Live konnte auf dem Server nicht starten.")
-                    case "disconnected": lastError = String(localized: "Verbindung unterbrochen – bitte neu starten.")
+                    case "start_failed": callError = String(localized: "Live konnte auf dem Server nicht starten.")
+                    case "disconnected": callError = String(localized: "Verbindung unterbrochen – bitte neu starten.")
                     default: break
                     }
                 }
@@ -556,7 +656,7 @@ final class AgentSession {
         case let .error(code, message):
             HollrLog.error("live: server error \(code) \(message)")
             finished = true
-            lastError = message
+            callError = message
             return true
         case .delegation, .user, .tool, .answer:
             if case let .user(text) = event, let i = items.lastIndex(where: { $0.kind == .typed && $0.text == text && !$0.final }) {

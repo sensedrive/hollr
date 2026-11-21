@@ -1297,7 +1297,7 @@ describe("follow", () => {
     expect(first.order).toEqual(["1", "2"]);
     const b2 = { k: "tools", id: "2", calls: [{ id: "x", name: "bash", label: "ls", status: "ok" }] };
     const c = { k: "text", id: "3", text: "fertig" };
-    const next = diffTimeline({ items: [a, b], running: true } as never, { items: [a, b2, c], running: false } as never);
+    const next = diffTimeline(first.sent, { items: [a, b2, c], running: false } as never);
     expect(next.full).toBe(false);
     expect(next.items.map((i) => i.id)).toEqual(["2", "3"]); // "1" unchanged: not sent again
     expect(next.order).toEqual(["1", "2", "3"]);
@@ -1325,15 +1325,81 @@ describe("follow", () => {
     const b = buildTimeline(`${user}\n${reply}`) as never;
     // as the stream sends it: one JSON line per snapshot
     const wire = (o: object) => JSON.parse(JSON.stringify(o));
-    const full = wire(diffTimeline(undefined, a));
-    expect(full.items).toEqual([{ k: "user", id: "u1", text: "Los", source: "typed", at: t0 }]);
-    const delta = wire(diffTimeline(a, b));
+    const full = diffTimeline(undefined, a);
+    expect(wire(full).items).toEqual([{ k: "user", id: "u1", text: "Los", source: "typed", at: t0 }]);
+    const delta = wire(diffTimeline(full.sent, b));
     expect(delta.full).toBe(false);
     expect(delta.items.map((i: { k: string; at: number }) => [i.k, i.at])).toEqual([
       ["text", t0 + 88_000],
       ["end", t0 + 88_000],
     ]);
     // the time is stable: rebuilding the same log changes nothing
-    expect(diffTimeline(b, buildTimeline(`${user}\n${reply}`) as never).items).toEqual([]);
+    expect(diffTimeline(diffTimeline(undefined, b).sent, buildTimeline(`${user}\n${reply}`) as never).items).toEqual([]);
+  });
+
+  test("a timeline built as the log grows: changes made in place still go out", async () => {
+    const { diffTimeline } = await import("../src/follow");
+    const { timelineBuilder } = await import("../src/timeline");
+    const call = JSON.stringify({
+      type: "message",
+      id: "a1",
+      timestamp: "2026-11-21T10:00:00Z",
+      message: { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } }] },
+    });
+    const result = JSON.stringify({
+      type: "message",
+      id: "r1",
+      timestamp: "2026-11-21T10:00:01Z",
+      message: { role: "toolResult", toolCallId: "t1", toolName: "bash", content: [{ type: "text", text: "a" }] },
+    });
+    const builder = timelineBuilder();
+    builder.feed(`${call}\n`);
+    const first = diffTimeline(undefined, builder.result() as never);
+    builder.feed(`${result}\n`);
+    // the group object is the same one the first snapshot held – it changed in place
+    const next = diffTimeline(first.sent, builder.result() as never);
+    const group = next.items.find((i) => i.k === "tools") as { calls: Array<{ status: string }> } | undefined;
+    expect(group?.calls[0]?.status).toBe("ok");
+  });
+
+  test("only a pane or agent herdr doesn't know is gone", async () => {
+    const { paneGone } = await import("../src/follow");
+    const { HerdrError } = await import("../src/herdr");
+    expect(paneGone(new HerdrError("agent_not_found", "x"))).toBe(true);
+    expect(paneGone(new HerdrError("pane_not_found", "x"))).toBe(true);
+    // herdr restarting or busy: tried again, the chat is not closed
+    expect(paneGone(new HerdrError("server_unavailable", "x"))).toBe(false);
+    expect(paneGone(new HerdrError("herdr_failed", "x"))).toBe(false);
+    expect(paneGone(new Error("EACCES"))).toBe(false);
+  });
+
+  test("a failing herdr is asked once a second, not on every round, and the stream stays up", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "hollr-follow-"));
+    try {
+      const script = join(dir, "run.ts");
+      writeFileSync(
+        script,
+        `import { runFollow } from ${JSON.stringify(join(import.meta.dir, "../src/follow"))};
+import { HerdrError } from ${JSON.stringify(join(import.meta.dir, "../src/herdr"))};
+let calls = 0;
+const herdr = { agent: async () => { calls++; throw new HerdrError("server_unavailable", "herdr startet neu"); } };
+// the follow loop's own pacing (Bun.sleep in a subprocess) is what is measured: no fake clock reaches it
+setTimeout(() => { console.error("calls=" + calls); process.exit(0); }, 2500);
+await runFollow(herdr as never, "w1:p1", 150, () => "");
+console.error("ended");
+`,
+      );
+      const proc = Bun.spawn([process.execPath, script], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+      const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+      await proc.exited;
+      expect(out).toBe(""); // no not_found, no error line
+      expect(err).not.toContain("ended");
+      const calls = Number(/calls=(\d+)/.exec(err)?.[1]);
+      // a retry on every round (60 ms while the log counts as written) asked ~40 times in 2.5 s
+      expect(calls).toBeGreaterThanOrEqual(2);
+      expect(calls).toBeLessThanOrEqual(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -2,11 +2,21 @@
 // in xterm, so a drag above/below the screen makes Hollr scroll herdr (mouse wheel) and collect the text
 // that scrolls by. Each new screen is placed in the text collected so far by its matching lines.
 
-/** a position in the collected text */
+/** a position in the collected text (`col`: a terminal cell, not a string index) */
 export interface Cell {
   line: number;
   col: number;
 }
+
+/**
+ * One screen row: its cells' characters (a wide character's second cell is "") – or plain text, one cell
+ * per code point. Cells, not a string: a wide character takes two cells but one or two UTF-16 units, so a
+ * string index is not a column – slicing by it shifted the text and could cut an emoji in half (a lone
+ * surrogate, which the clipboard refuses).
+ */
+export type Row = string | readonly string[];
+
+const cellsOf = (row: Row): string[] => (typeof row === "string" ? Array.from(row) : [...row]);
 
 /** share of the overlapping non-blank lines that must match for a screen to count as scrolled */
 const MATCH = 0.8;
@@ -16,13 +26,16 @@ const MIN_MATCHES = 3;
 export class ScrollSelection {
   /** the text so far, top to bottom */
   readonly lines: string[];
+  /** the same lines as cells */
+  private readonly cells: string[][];
   /** where the screen's first row is in `lines` */
   top = 0;
   readonly anchor: Cell;
 
   /** `screen`: the rows on screen when the drag left it; the drag started at `row`/`col` */
-  constructor(screen: string[], row: number, col: number) {
-    this.lines = screen.slice();
+  constructor(screen: Row[], row: number, col: number) {
+    this.cells = screen.map(cellsOf);
+    this.lines = this.cells.map((c) => c.join(""));
     this.anchor = { line: row, col };
   }
 
@@ -30,16 +43,23 @@ export class ScrollSelection {
    * A newly drawn screen: placed by its lines that match the text so far (scrolled up or down), the lines
    * new to it added. False: it matches nowhere – a frame half drawn, or the program redrew everything.
    */
-  update(screen: string[]): boolean {
-    const top = this.place(screen);
+  update(screen: Row[]): boolean {
+    const cells = screen.map(cellsOf);
+    const text = cells.map((c) => c.join(""));
+    const top = this.place(text);
     if (top === null) return false;
     if (top < 0) {
-      this.lines.unshift(...screen.slice(0, -top));
+      this.lines.unshift(...text.slice(0, -top));
+      this.cells.unshift(...cells.slice(0, -top));
       this.anchor.line -= top;
       this.top = 0;
     } else this.top = top;
-    const end = this.top + screen.length;
-    if (end > this.lines.length) this.lines.push(...screen.slice(screen.length - (end - this.lines.length)));
+    const end = this.top + text.length;
+    if (end > this.lines.length) {
+      const from = text.length - (end - this.lines.length);
+      this.lines.push(...text.slice(from));
+      this.cells.push(...cells.slice(from));
+    }
     return true;
   }
 
@@ -81,12 +101,9 @@ export class ScrollSelection {
   text(p: Cell): string {
     const [s, e] = this.range(p);
     const end = e === this.anchor ? e.col : e.col + 1;
-    if (s.line === e.line) return this.lines[s.line].slice(s.col, end);
-    return [
-      this.lines[s.line].slice(s.col),
-      ...this.lines.slice(s.line + 1, e.line),
-      this.lines[e.line].slice(0, end),
-    ].join("\n");
+    const cut = (line: number, from: number, to?: number) => (this.cells[line] ?? []).slice(from, to).join("");
+    if (s.line === e.line) return cut(s.line, s.col, end);
+    return [cut(s.line, s.col), ...this.lines.slice(s.line + 1, e.line), cut(e.line, 0, end)].join("\n");
   }
 }
 

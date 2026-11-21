@@ -32,6 +32,7 @@ import {
   type TodoPhase,
   type ToolCall,
 } from "./timeline";
+import { cut } from "./wire";
 
 // ---------------------------------------------------------------- session file
 
@@ -358,7 +359,7 @@ function grepMatches(res: Record<string, unknown>): MatchFile[] | undefined {
       if (f && f.lines.length < RICH_CAPS.matchLines)
         f.lines.push({
           n: Number(m[2]) || 0,
-          text: redact((m[3] ?? "").slice(0, RICH_CAPS.matchText)),
+          text: cut(redact(m[3] ?? ""), RICH_CAPS.matchText),
         });
     }
   } else if (Array.isArray(res.filenames)) {
@@ -393,10 +394,31 @@ function splitExit(text: string): { exit?: number; text: string } {
 const lastLines = (text: string) => {
   const lines = text.replace(/\s+$/, "").split("\n");
   return {
-    out: lines.slice(-RICH_CAPS.outLines).map((l) => redact(l).slice(0, RICH_CAPS.outLineChars)),
+    out: lines.slice(-RICH_CAPS.outLines).map((l) => cut(redact(l), RICH_CAPS.outLineChars)),
     outTotal: lines.length,
   };
 };
+
+/** Longest log line parsed – a longer one is only skimmed for the tool results it carries. */
+const MAX_LINE = 3_000_000;
+
+/** What a log line too long to parse still says: the tool results in it end their calls – skipped whole, a call
+ *  stayed "running" for good. */
+function skimLine(line: string): Entry | undefined {
+  const head = line.slice(0, 8192);
+  if (!head.includes('"type":"user"') || !head.includes('"tool_result"')) return undefined;
+  const ids = [...head.matchAll(/"tool_use_id":"([^"]+)"/g)].map((m) => m[1] ?? "");
+  if (!ids.length) return undefined;
+  return {
+    type: "user",
+    uuid: /"uuid":"([^"]+)"/.exec(line)?.[1],
+    timestamp: /"timestamp":"([^"]+)"/.exec(line)?.[1],
+    message: {
+      role: "user",
+      content: ids.map((id) => ({ type: "tool_result", tool_use_id: id, content: "Ausgabe zu groß für den Chat" })),
+    },
+  };
+}
 
 /** tools whose `description` input is the intent shown as the call's label */
 const DESCRIBED: Record<string, true> = { Bash: true, Task: true, Agent: true, Monitor: true };
@@ -944,34 +966,37 @@ export function parseClaudeLog(jsonl: string, maxItems = 150, now = Date.now()):
     }
   };
 
-  for (const line of jsonl.split("\n")) {
-    if (!line || line.length > 3_000_000) continue;
-    let e: Entry;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
+  const feedLine = (line: string) => {
+    if (!line) return;
+    let e: Entry | undefined;
+    if (line.length > MAX_LINE) e = skimLine(line);
+    else
+      try {
+        e = JSON.parse(line);
+      } catch {
+        return;
+      }
+    if (!e || typeof e !== "object") return;
     // subagents' own conversation: their result arrives as the Task/Agent call's result
-    if (e.isSidechain) continue;
+    if (e.isSidechain) return;
     if (e.uuid) {
-      if (seen.has(e.uuid)) continue;
+      if (seen.has(e.uuid)) return;
       seen.add(e.uuid);
     }
     const at = (e.timestamp ? Date.parse(e.timestamp) : NaN) || now;
     switch (e.type) {
       case "ai-title":
         aiTitle = str(e.aiTitle) || aiTitle;
-        continue;
+        return;
       case "custom-title":
         customTitle = str(e.customTitle) || customTitle;
-        continue;
+        return;
       case "summary":
         aiTitle ??= str(e.summary);
-        continue;
+        return;
       case "cost-state":
         usage.cost = num(e.totalCostUSD) ?? usage.cost;
-        continue;
+        return;
       case "system":
         switch (e.subtype) {
           case "compact_boundary":
@@ -1014,27 +1039,34 @@ export function parseClaudeLog(jsonl: string, maxItems = 150, now = Date.now()):
             userText(e, str(e.content) ?? "", at, false);
             break;
         }
-        continue;
+        return;
       case "attachment": {
         const a = e.attachment;
         // a message typed (or a job's report delivered) while Claude was working
         if (a?.type === "queued_command") userText(e, textOf(a.prompt), at, true);
-        continue;
+        return;
       }
       case "user": {
-        if (e.isMeta || e.isCompactSummary) continue;
+        if (e.isMeta || e.isCompactSummary) return;
         const content = e.message?.content;
         if (Array.isArray(content)) {
           const results = content.filter((b) => b?.type === "tool_result");
           for (const b of results) toolResult(e, b, at);
-          if (results.length) continue;
+          if (results.length) return;
         }
         userText(e, textOf(content), at, false);
-        continue;
+        return;
       }
       case "assistant":
         assistant(e, at);
-        continue;
+        return;
+    }
+  };
+  for (const line of jsonl.split("\n")) {
+    try {
+      feedLine(line);
+    } catch {
+      // one entry of an unexpected shape must not cost the whole chat – the next lines still count
     }
   }
   closeTurn();

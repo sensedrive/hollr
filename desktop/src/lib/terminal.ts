@@ -185,18 +185,24 @@ export class TermSession {
     this.early = [];
     this.startedAt = this.now();
     const { server, pane } = this.opts;
+    const size = this.size;
     let id: number;
     try {
-      id = await this.backend.start({ server, pane, ...this.size });
+      id = await this.backend.start({ server, pane, ...size });
     } catch {
       if (!this.starting) return;
       this.starting = false;
+      // typed for a connection that never came: not for the next one (like typing while reconnecting)
+      this.outbox = "";
       return this.dropped();
     }
     // stopped / restarted meanwhile: this start is stale
     if (!this.starting || this.disposed) return void this.backend.stop(id).catch(() => {});
     this.starting = false;
     this.id = id;
+    // resized while the start was under way (the panel's layout settling): the PTY still has the old size
+    if (this.size.cols !== size.cols || this.size.rows !== size.rows)
+      this.backend.resize(id, this.size.cols, this.size.rows).catch(() => {});
     this.pump();
     for (const e of this.early.splice(0)) if (e.id === id) this.handle(e);
   }

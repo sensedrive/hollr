@@ -56,6 +56,14 @@ enum Theme {
     static var work: Color { purple }
     /// waits for you (question, confirmation, warning)
     static var warn: Color { orange }
+    /// italics in agent answers: text tinted 30 % towards purple (desktop `color-mix(fg 70%, purple)`)
+    static var emphasis: Color { Color(hex: Palette.mix(p.fg, p.purple, 0.3)) }
+    /// A hue as text in agent answers (bold, headings, inline code, table heads): mixed towards the text colour
+    /// where it reads below 4.5:1 on the page – Latte's yellow (2.3:1) or Solarized Light's green (3:1) were
+    /// hard to read. Hues that already read well (Hollr, Hollr Hell, GitHub Light) stay as they are.
+    static func ink(_ hue: KeyPath<Palette, UInt32>) -> Color {
+        Color(hex: Palette.readable(p[keyPath: hue], text: p.fg, on: p.bg))
+    }
 
     /// A workspace's own colour (same name → same colour on every device): the project bar on cards and rows.
     static func identity(_ name: String) -> Color {
@@ -186,5 +194,30 @@ extension Palette {
             return UInt32((x * (1 - t) + y * t).rounded()) << shift
         }
         return channel(16) | channel(8) | channel(0)
+    }
+
+    /// WCAG relative luminance of an sRGB colour.
+    static func luminance(_ c: UInt32) -> Double {
+        func linear(_ shift: UInt32) -> Double {
+            let v = Double((c >> shift) & 0xFF) / 255
+            return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        let r: Double = linear(16), g: Double = linear(8), b: Double = linear(0)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    /// WCAG contrast ratio (1…21).
+    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    /// `hue`, mixed towards `text` in 10 % steps until it reads at 4.5:1 on `page` (`text` itself at the latest).
+    static func readable(_ hue: UInt32, text: UInt32, on page: UInt32) -> UInt32 {
+        for step in 0..<10 {
+            let c = mix(hue, text, Double(step) / 10)
+            if contrast(c, page) >= 4.5 { return c }
+        }
+        return text
     }
 }

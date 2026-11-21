@@ -43,6 +43,17 @@ describe("ScrollSelection", () => {
     const sel = new ScrollSelection(["a", "", "", "", "b"], 0, 0);
     expect(sel.update(["", "", "", "", ""])).toBe(false);
   });
+
+  test("columns are cells: wide characters neither shift the text nor get cut in half", () => {
+    // ⚡ (one UTF-16 unit) and 🚀 (two) each take two cells; the second cell is empty
+    const rows = [["a", "⚡", "", "b", "🚀", "", "c"], ["z", "w", "e", "i"]];
+    const sel = new ScrollSelection(rows, 0, 3); // anchor on "b"
+    expect(sel.lines[0]).toBe("a⚡b🚀c");
+    expect(sel.text({ line: 0, col: 6 })).toBe("b🚀c");
+    // started on the rocket's second cell: the rocket stays out, never a lone surrogate
+    const half = new ScrollSelection(rows, 0, 5);
+    expect(half.text({ line: 1, col: 1 })).toBe("c\nzw");
+  });
 });
 
 describe("cleanSelection", () => {

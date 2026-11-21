@@ -113,6 +113,48 @@ describe("TermSession", () => {
     s.dispose();
   });
 
+  test("a resize while the start is under way reaches the PTY", async () => {
+    const b = fakeBackend();
+    const started = Promise.withResolvers<number>();
+    b.backend.start = async (a) => {
+      b.starts.push({ cols: a.cols, rows: a.rows });
+      return started.promise;
+    };
+    const { s } = session(b);
+    await tick();
+    s.resize(80, 24);
+    s.resize(100, 30); // the layout settled after the first fit
+    started.resolve(1);
+    await tick();
+    expect(b.starts).toEqual([{ cols: 80, rows: 24 }]);
+    expect(b.resizes).toEqual([[1, 100, 30]]);
+    s.dispose();
+  });
+
+  test("typing during a failed start is not sent to the next connection", async () => {
+    vi.useFakeTimers();
+    const b = fakeBackend();
+    let fail = true;
+    const start = b.backend.start;
+    b.backend.start = async (a) => {
+      if (fail) throw new Error("down");
+      return start(a);
+    };
+    const { s } = session(b);
+    await tick();
+    s.resize(80, 24);
+    s.type("\r");
+    await tick();
+    expect(s.phase.kind).toBe("reconnecting");
+    fail = false;
+    vi.advanceTimersByTime(reconnectDelay(1));
+    await tick();
+    expect(b.starts.length).toBe(1);
+    expect(b.writes).toEqual([]);
+    s.dispose();
+    vi.useRealTimers();
+  });
+
   test("a dropped stream reconnects with the latest size, an answer closes", async () => {
     vi.useFakeTimers();
     const b = fakeBackend();

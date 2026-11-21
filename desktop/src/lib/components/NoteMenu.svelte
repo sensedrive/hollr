@@ -9,6 +9,9 @@
   } = $props();
 </script>
 
+<!-- Esc closes the menu – before AgentView's window listener takes it for leaving zen, and before the terminal gets it -->
+<svelte:window onkeydowncapture={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); } }} />
+
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={onClose} oncontextmenu={(e) => { e.preventDefault(); onClose(); }}>
   <div class="menu" style:left="{Math.min(x, innerWidth - 220)}px" style:top="{Math.min(y, innerHeight - 140)}px"

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { wireJson } from "../src/wire";
+import { cut, wireJson } from "../src/wire";
 
 describe("wireJson", () => {
   test("a string cut inside an emoji stays valid for strict JSON parsers", () => {
@@ -10,5 +10,14 @@ describe("wireJson", () => {
   });
   test("whole emoji and plain text are untouched", () => {
     expect(wireJson({ a: "🔖 ok", b: 1 })).toBe(JSON.stringify({ a: "🔖 ok", b: 1 }));
+  });
+});
+
+describe("cut", () => {
+  test("never ends in half an emoji", () => {
+    expect(cut("ab🔖cd", 3)).toBe("ab");
+    expect(cut("ab🔖cd", 4)).toBe("ab🔖");
+    expect(cut("abc", 5)).toBe("abc");
+    expect(cut("🔖", 1)).toBe("");
   });
 });

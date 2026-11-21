@@ -6,19 +6,20 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use russh::ChannelMsg;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{interval, MissedTickBehavior};
 
 use crate::hollr::Hollr;
 
 /// The server pings every 20 s: this long without a line = the connection is dead.
 const WATCHDOG: Duration = Duration::from_secs(50);
+const WATCHDOG_CHECK: Duration = Duration::from_secs(5);
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 /// The server takes at most 8192 characters (UTF-16) per `in` message.
 const INPUT_CHUNK: usize = 4000;
@@ -163,12 +164,16 @@ pub async fn run_stream(
         }
     }
     let mut buf = Vec::<u8>::new();
-    let mut deadline = Instant::now() + WATCHDOG;
+    // wall clock, not tokio's: its clock stands still while the Mac sleeps, so after waking a connection that
+    // died meanwhile would hold the frozen screen for another 50 s awake; checked every few seconds instead
+    let mut last_line = SystemTime::now();
+    let mut check = interval(WATCHDOG_CHECK);
+    check.set_missed_tick_behavior(MissedTickBehavior::Delay);
     while dropped.is_none() && !answered {
         tokio::select! {
             m = channel.wait() => match m {
                 Some(ChannelMsg::Data { data }) => {
-                    deadline = Instant::now() + WATCHDOG;
+                    last_line = SystemTime::now();
                     buf.extend_from_slice(&data);
                     // the output of one chunk as one event
                     let mut out = String::new();
@@ -204,10 +209,12 @@ pub async fn run_stream(
                     break;
                 }
             },
-            _ = sleep_until(deadline) => {
+            _ = check.tick() => {
                 // no ping for too long: the connection is dead, the next start opens a new one
-                hollr.invalidate(server).await;
-                dropped = Some("keine Antwort vom Server".to_string());
+                if last_line.elapsed().unwrap_or_default() >= WATCHDOG {
+                    hollr.invalidate(server).await;
+                    dropped = Some("keine Antwort vom Server".to_string());
+                }
             }
         }
     }

@@ -68,3 +68,89 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(obj?["b"], "🔖")
     }
 }
+
+final class TimelineDecodeTests: XCTestCase {
+    /// One item the app can't read must not take the whole chat down (it stayed on its skeleton).
+    func testUnreadableItemBecomesNote() throws {
+        let raw = #"""
+        {"items":[{"k":"text","id":"a","text":"Hallo"},{"k":"text","id":"b","text":42},
+          {"k":"tools","id":"c","calls":[{"id":"t1","name":"read","label":"a.ts","status":"ok"},{"id":"t2","name":"bash"}]}],
+         "todo":[{"tasks":[{"content":"Bauen"},{"status":"pending"}]}],
+         "jobs":[{"id":"j"}],"running":false,"waiting":false}
+        """#
+        let tl = try JSONDecoder().decode(Timeline.self, from: Data(raw.utf8))
+        XCTAssertEqual(tl.items.map(\.id), ["a", "b", "c"])
+        guard case .info = tl.items[1] else { return XCTFail("placeholder for the unreadable item") }
+        guard case let .tools(_, calls) = tl.items[2] else { return XCTFail("tools") }
+        XCTAssertEqual(calls.map(\.id), ["t1"])
+        XCTAssertEqual(tl.todo?.first?.tasks.map(\.content), ["Bauen"])
+        XCTAssertEqual(tl.todo?.first?.tasks.first?.status, "pending")
+        XCTAssertEqual(tl.jobs.count, 0)
+    }
+
+    /// A server error is not an empty chat.
+    func testErrorAnswerIsNoTimeline() {
+        XCTAssertNil(try? JSONDecoder().decode(Timeline.self, from: Data(#"{"error":"not_found"}"#.utf8)))
+    }
+
+    func testFollowLines() throws {
+        let full = Data(#"{"t":"full","items":[{"k":"text","id":"a","text":"x\ud83d"}],"jobs":[],"running":true,"waiting":false,"etag":"e1"}"#.utf8)
+        guard case let .full(tl) = FollowEvent.decode(full) else { return XCTFail("full with a lone surrogate") }
+        XCTAssertEqual(tl.etag, "e1")
+        // repaired, not swallowed into a placeholder by the lenient item decoding
+        XCTAssertEqual(tl.items.first, .text(id: "a", text: "x\u{FFFD}"))
+
+        // a changed item the app can't read keeps its id: the delta still merges instead of reconnecting forever
+        let delta = Data(#"{"t":"delta","head":{"jobs":[],"running":false,"waiting":false},"order":["a","b"],"items":[{"k":"text","id":"b"}],"etag":"e2"}"#.utf8)
+        guard case let .delta(head, order, items) = FollowEvent.decode(delta) else { return XCTFail("delta") }
+        let merged = try XCTUnwrap(FollowEvent.merge(tl, head: head, order: order, items: items))
+        XCTAssertEqual(merged.items.map(\.id), ["a", "b"])
+        XCTAssertEqual(merged.etag, "e2")
+        XCTAssertFalse(merged.running)
+
+        // an id the app never saw: nil = reconnect for a full timeline
+        XCTAssertNil(FollowEvent.merge(tl, head: head, order: ["a", "zz"], items: []))
+
+        guard case .other = FollowEvent.decode(Data(#"{"t":"ping"}"#.utf8)) else { return XCTFail("ping") }
+        guard case .gone = FollowEvent.decode(Data(#"{"t":"error","error":"not_found"}"#.utf8)) else { return XCTFail("gone") }
+        guard case .unsupported = FollowEvent.decode(Data(#"{"error":"not_allowed"}"#.utf8)) else { return XCTFail("old server") }
+        guard case .broken = FollowEvent.decode(Data(#"{"t":"full","items":"#.utf8)) else { return XCTFail("cut line") }
+    }
+
+    /// The placeholder keeps the item's id: once the server sends that item in a readable form, it takes its place.
+    func testPlaceholderIsReplacedByReadableItem() throws {
+        let full = Data(#"{"t":"full","items":[{"k":"text","id":"a","text":"x"},{"k":"text","id":"b","text":7}],"jobs":[],"running":true,"waiting":false}"#.utf8)
+        guard case let .full(tl) = FollowEvent.decode(full) else { return XCTFail("full") }
+        guard case .info = tl.items[1] else { return XCTFail("placeholder") }
+        let delta = Data(#"{"t":"delta","head":{"jobs":[],"running":true,"waiting":false},"order":["a","b"],"items":[{"k":"text","id":"b","text":"jetzt lesbar"}]}"#.utf8)
+        guard case let .delta(head, order, items) = FollowEvent.decode(delta) else { return XCTFail("delta") }
+        let merged = try XCTUnwrap(FollowEvent.merge(tl, head: head, order: order, items: items))
+        XCTAssertEqual(merged.items.last, .text(id: "b", text: "jetzt lesbar"))
+    }
+
+    /// An escaped backslash before "ud83d" is text, not a surrogate: the repair leaves the line as it is.
+    func testEscapedBackslashIsNoSurrogate() {
+        let raw = Data(#"{"t":"full","items":[{"k":"text","id":"a","text":"C:\\ud83d\\x"}],"jobs":[],"running":false,"waiting":false}"#.utf8)
+        XCTAssertEqual(JSONRepair.wellFormed(raw), raw)
+        guard case let .full(tl) = FollowEvent.decode(raw) else { return XCTFail("full") }
+        XCTAssertEqual(tl.items.first, .text(id: "a", text: #"C:\ud83d\x"#))
+    }
+}
+
+final class PaletteContrastTests: XCTestCase {
+    /// Markdown hues: too pale ones (Latte's yellow 2.3:1) reach 4.5:1, readable ones stay untouched.
+    func testReadableHues() {
+        for palette in Palette.all {
+            for hue in [palette.purple, palette.green, palette.yellow] {
+                let ink = Palette.readable(hue, text: palette.fg, on: palette.bg)
+                XCTAssertGreaterThanOrEqual(Palette.contrast(ink, palette.bg), 4.5, palette.name)
+            }
+        }
+        XCTAssertLessThan(Palette.contrast(Palette.latte.yellow, Palette.latte.bg), 3)
+        for palette in [Palette.hollr, .hollrLight, .githubLight] {
+            for hue in [palette.purple, palette.green, palette.yellow] {
+                XCTAssertEqual(Palette.readable(hue, text: palette.fg, on: palette.bg), hue, palette.name)
+            }
+        }
+    }
+}

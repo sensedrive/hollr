@@ -40,6 +40,21 @@ describe("chatView", () => {
     const v = chatView([{ k: "tools", id: "g", calls: [call("t", "todo", { status: "error", result: "no such task" })] }]);
     expect(v.pieces.get("g")?.[0]?.kind).toBe("call");
   });
+
+  test("repeated ids get a suffix: the chat's keyed {#each} would throw on a duplicate", () => {
+    const items: TimelineItem[] = [
+      { k: "user", id: "u", text: "hi", source: "typed" },
+      { k: "tools", id: "g", calls: [call("c", "bash"), call("c", "bash"), call("r", "read")] },
+      { k: "user", id: "u", text: "hi", source: "typed" },
+      { k: "tools", id: "g", calls: [call("r", "read")] },
+    ];
+    const v = chatView(items);
+    expect(v.items.map((i) => i.id)).toEqual(["u", "g", "u~2", "g~2"]);
+    expect(v.pieces.get("g")?.map((p) => p.id)).toEqual(["c", "c~2", "r-r"]);
+    expect(v.pieces.get("g~2")?.map((p) => p.id)).toEqual(["r-r~2"]);
+    // the input stays untouched (it is the app's timeline state)
+    expect(items[2]!.id).toBe("u");
+  });
 });
 
 test("cardKind maps canonical names (Claude's mapped ones too)", () => {

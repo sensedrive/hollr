@@ -44,6 +44,9 @@ private struct AgentConversation: View {
     @State private var gitSpace: Space?
     @State private var switchModel = false
     @State private var showTerminal = false
+    /// herdr allows one attach per terminal: the full-screen terminal takes the pane over, and the one in the chat
+    /// (or the landscape side) ended with "Neu verbinden" – bumped on closing it, they attach again
+    @State private var terminalGeneration = 0
     /// keyboard is up → hide everything but transcript and composer
     @State private var editing = false
     /// reading mode → transcript only, full screen
@@ -107,13 +110,14 @@ private struct AgentConversation: View {
                 conversation
                 if landscape {
                     Rectangle().fill(Theme.border).frame(width: 1)
-                    SidePanel(ref: ref)
+                    // the chat already shows the terminal on the left: a second attach would take it over
+                    SidePanel(ref: ref, terminalGeneration: terminalGeneration, offersTerminal: !terminalView)
                         .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
                 }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reading)
-        .fullScreenCover(isPresented: $showTerminal) { TerminalScreen(ref: ref) }
+        .fullScreenCover(isPresented: $showTerminal, onDismiss: { terminalGeneration += 1 }) { TerminalScreen(ref: ref) }
         // the zen composer goes away with the keyboard up: its focus change never arrives
         .onChange(of: reading) { _, zen in
             editing = false
@@ -175,7 +179,9 @@ private struct AgentConversation: View {
         .alert("Chat ließ sich nicht schließen", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
             Button("OK") { closeError = nil }
         } message: { Text(closeError ?? "") }
-        .task {
+        // keyed: omp started in a plain shell pane (or left it) switches between stream and history polling –
+        // a task that had returned early never streamed the new omp chat
+        .task(id: session.usesTimeline) {
             // omp: the chat streams in (`gate follow`); older servers are polled
             guard session.usesTimeline else { return }
             var failures = 0
@@ -266,10 +272,21 @@ private struct AgentConversation: View {
         else { proxy.scrollTo("bottom", anchor: .bottom) }
     }
 
-    private func settleAtBottom(_ proxy: ScrollViewProxy) {
+    /// Once the layout has settled: to the end – or, when you were reading further up, back to that entry
+    /// (zen on/off used to throw a reader to the end of the chat).
+    private func settleAtBottom(_ proxy: ScrollViewProxy, keepReading: Bool = false) {
+        let anchor = keepReading && !following ? readingAnchor : nil
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
+            if let anchor {
+                proxy.scrollTo(anchor, anchor: .top)
+                return
+            }
             proxy.scrollTo("bottom", anchor: .bottom)
+            // at the end now: new output follows again – iOS 18 only reports a change of that, and a chat rebuilt
+            // at its end (back from the terminal view) kept "not following" and its ↓ button until you scrolled
+            following = true
+            unseen = 0
         }
     }
 
@@ -309,7 +326,7 @@ private struct AgentConversation: View {
                         Label(message, icon: .alert)
                             .font(Typo.note).foregroundStyle(Theme.warn)
                             .frame(maxWidth: .infinity)
-                    } else if let error = session.lastError {
+                    } else if let error = session.lastError ?? session.loadError {
                         Text(error).font(Typo.note).foregroundStyle(Theme.warn).frame(maxWidth: .infinity)
                     }
                     Color.clear.frame(height: 1).id("bottom")
@@ -355,12 +372,14 @@ private struct AgentConversation: View {
             // list scrolls – scroll once the new layout has settled
             // zen on/off swaps the composer, and a restored multi-line draft makes it tall from the start:
             // the lazy list then sits past its end (blank) – scroll to the end once the layout has settled
-            .onChange(of: reading) { settleAtBottom(proxy) }
+            .onChange(of: reading) { settleAtBottom(proxy, keepReading: true) }
             .onChange(of: session.historyLoaded) { settleAtBottom(proxy) }
             .task { settleAtBottom(proxy) }
             // the waiting screen redraws every second: follow it without animation, and never count it as new
             .onChange(of: session.screen) { if following { proxy.scrollTo("bottom", anchor: .bottom) } }
-            .onChange(of: session.timeline?.items.count) { follow(proxy) }
+            // the last entry, not just the count: a tool group gaining calls and output grows in place – iOS 18
+            // keeps the top on size changes, so the end slid out of view while you followed
+            .onChange(of: session.timeline?.items.last) { follow(proxy) }
             .onChange(of: session.items.count) { follow(proxy) }
         }
     }
@@ -451,6 +470,7 @@ private struct AgentConversation: View {
             // the TUI draws its own input line and footer: the composer sits below, not over it
             VStack(spacing: 0) {
                 AgentTerminalView(ref: ref)
+                    .id(terminalGeneration)
                     .overlay(alignment: .topTrailing) { if reading { readingBar } }
                 if reading { zenComposer } else { controls }
             }
@@ -695,6 +715,10 @@ struct StatusLineView: View {
 /// Landscape: the right half – the live terminal or the uncommitted changes of this chat's repo.
 private struct SidePanel: View {
     let ref: AgentRef
+    /// new attach after the full-screen terminal took the pane over
+    var terminalGeneration = 0
+    /// false while the chat itself shows the terminal: only the changes here
+    var offersTerminal = true
     @Environment(HerdrStore.self) private var herdr
     @AppStorage("landscape.panel") private var panel = "terminal"
 
@@ -705,22 +729,21 @@ private struct SidePanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Segmented(label: String(localized: "Ansicht"),
-                      options: [(value: "terminal", title: String(localized: "Terminal")),
-                                (value: "changes", title: String(localized: "Änderungen"))],
-                      selection: $panel)
-                .padding(6)
-            switch panel {
-            case "changes":
-                if let space {
-                    ChangesTab(server: ref.server, space: space)
-                } else {
-                    EmptyState(icon: .branch, title: String(localized: "Kein Git-Repo"),
-                               text: String(localized: "Dieser Chat arbeitet nicht in einem Git-Repo."))
-                        .frame(maxHeight: .infinity)
-                }
-            default:
-                TerminalPanel(ref: ref).id(ref.id)
+            if offersTerminal {
+                Segmented(label: String(localized: "Ansicht"),
+                          options: [(value: "terminal", title: String(localized: "Terminal")),
+                                    (value: "changes", title: String(localized: "Änderungen"))],
+                          selection: $panel)
+                    .padding(6)
+            }
+            if offersTerminal && panel != "changes" {
+                TerminalPanel(ref: ref).id("\(ref.id)#\(terminalGeneration)")
+            } else if let space {
+                ChangesTab(server: ref.server, space: space)
+            } else {
+                EmptyState(icon: .branch, title: String(localized: "Kein Git-Repo"),
+                           text: String(localized: "Dieser Chat arbeitet nicht in einem Git-Repo."))
+                    .frame(maxHeight: .infinity)
             }
         }
         .task { if space == nil { await herdr.refreshSpaces([ref.server]) } }

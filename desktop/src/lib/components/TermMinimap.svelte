@@ -35,7 +35,8 @@
   const bands = $derived(
     notes
       .filter((n) => n.termRow !== undefined)
-      .map((n) => ({ note: n, y: Math.max(0, yOf(n.termRow ?? 0)), older: (n.termRow ?? 0) < base })),
+      // a note below the known lines (a scrollback cleared since) stays on the bar instead of below it
+      .map((n) => ({ note: n, y: Math.min(Math.max(0, height - 6), Math.max(0, yOf(n.termRow ?? 0))), older: (n.termRow ?? 0) < base })),
   );
 
   $effect(() => {
@@ -45,28 +46,27 @@
     height = el.clientHeight;
     return () => ro.disconnect();
   });
-
   $effect(() => {
     const c = canvas;
     const m = mini;
-    if (!c || !m || !height) return;
+    if (!c || !height) return;
     const dpr = devicePixelRatio || 1;
     const w = c.clientWidth;
     c.width = Math.round(w * dpr);
     c.height = Math.round(height * dpr);
     const g = c.getContext("2d");
-    if (!g) return;
+    // no map (another pane, an old server): resizing the canvas above already cleared the last one's lines
+    if (!g || !m) return;
     g.scale(dpr, dpr);
     g.clearRect(0, 0, w, height);
     const fallback = getComputedStyle(c).color;
-    const first = base;
     const lineH = Math.max(1, scale - (scale >= 2 ? 0.5 : 0));
     for (let i = 0; i < m.lines.length; i++) {
       const [len, color] = m.lines[i]!;
       if (!len) continue;
       g.fillStyle = color ?? fallback;
       g.globalAlpha = color ? 0.85 : 0.45;
-      g.fillRect(4, (first + i - base) * scale, Math.max(1.5, Math.min(1, len / 160) * (w - 8)), lineH);
+      g.fillRect(4, i * scale, Math.max(1.5, Math.min(1, len / 160) * (w - 8)), lineH);
     }
     g.globalAlpha = 1;
   });

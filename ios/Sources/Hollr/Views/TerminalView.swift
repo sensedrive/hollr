@@ -30,6 +30,10 @@ final class TerminalSession {
     private(set) var screen: (ansi: String, rows: Int, cols: Int)?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var outgoing: AsyncStream<Data>.Continuation?
+    /// the current connection – closed on stop: a half-open one would otherwise hold its stream forever
+    @ObservationIgnored private var client: SSHClient?
+    /// when the server last sent anything (it pings every 20 s)
+    @ObservationIgnored private let heard = Clock()
 
     init(ref: AgentRef, mode: Mode = .pane) {
         self.ref = ref
@@ -55,6 +59,8 @@ final class TerminalSession {
         task?.cancel()
         task = nil
         outgoing?.finish()
+        if let client { Task { try? await client.close() } }
+        client = nil
     }
 
     /// The view is back: connect again unless a first size is still awaited (resize starts that one).
@@ -64,10 +70,24 @@ final class TerminalSession {
         start()
     }
 
-    /// Back in the foreground: a dropped connection retries right away instead of after its pause.
+    /// Back in the foreground: a dropped connection retries right away instead of after its pause. One that
+    /// still looks open gets a moment for the pings buffered while the phone slept – silent after that, it is
+    /// dead without knowing it (the screen froze, typing went nowhere) and reconnects too.
     func reconnectNow() {
-        guard phase == .reconnecting else { return }
+        if phase == .reconnecting {
+            restart()
+            return
+        }
+        guard phase == .open else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            if phase == .open, task != nil, heard.age > 25 { restart() }
+        }
+    }
+
+    private func restart() {
         stop()
+        phase = .reconnecting
         task = Task { await run() }
     }
 
@@ -105,7 +125,28 @@ final class TerminalSession {
         outgoing = continuation
         do {
             let client = try await HollrClient.connect(ref.server)
+            guard !Task.isCancelled else {
+                try? await client.close()
+                return nil
+            }
+            self.client = client
+            // silence = a dead connection (network switched, Mac asleep): closing it ends the stream, run() reconnects
+            let heard = self.heard
+            heard.touch()
             defer { Task { try? await client.close() } }
+            let watchdog = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(10))
+                    guard heard.age > 50 else { continue }
+                    // just back from the background: the buffered pings arrive in a moment – look again first
+                    try? await Task.sleep(for: .seconds(3))
+                    if heard.age > 50, !Task.isCancelled {
+                        try? await client.close()
+                        return
+                    }
+                }
+            }
+            defer { watchdog.cancel() }
             let pane = ref.pane.pane
             let command = mode == .shell ? "shell \(pane) \(size.cols) \(size.rows)"
                 : legacy ? "term \(pane)" : "attach \(pane) \(size.cols) \(size.rows)"
@@ -117,11 +158,12 @@ final class TerminalSession {
                 var buffer = Data()
                 for try await output in inbound {
                     guard case .stdout(let bytes) = output else { continue }
+                    heard.touch()
                     buffer.append(contentsOf: bytes.readableBytesView)
                     while let nl = buffer.firstIndex(of: 0x0a) {
-                        let line = buffer[buffer.startIndex..<nl]
+                        let line = Data(buffer[buffer.startIndex..<nl])
                         buffer.removeSubrange(buffer.startIndex...nl)
-                        guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+                        guard let obj = Self.message(line) else { continue }
                         await MainActor.run { self.handle(obj) }
                     }
                 }
@@ -142,6 +184,12 @@ final class TerminalSession {
         }
     }
 
+    /// One line of the stream; a line with a lone surrogate (text cut inside an emoji) is repaired, not dropped
+    /// with the output in it.
+    nonisolated private static func message(_ line: Data) -> [String: Any]? {
+        (try? JSONSerialization.jsonObject(with: JSONRepair.wellFormed(line))) as? [String: Any]
+    }
+
     private func handle(_ obj: [String: Any]) {
         switch obj["t"] as? String {
         case "screen":
@@ -151,7 +199,9 @@ final class TerminalSession {
             if let d = obj["d"] as? String { onOutput?(d) }
             phase = .open
         case "exit":
-            phase = .closed(String(localized: "Shell beendet."))
+            // attach: herdr allows one view per terminal – another one (the full-screen terminal, the Mac) took it
+            phase = .closed(mode == .shell ? String(localized: "Shell beendet.")
+                            : String(localized: "Terminal getrennt – es ist jetzt anderswo geöffnet oder wurde beendet."))
         case "error":
             phase = .closed(obj["error"] as? String == "not_found"
                             ? String(localized: "Die Session gibt es nicht mehr.") : obj["error"] as? String)

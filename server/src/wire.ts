@@ -13,3 +13,15 @@ export function wireJson(data: unknown): string {
     typeof value === "string" ? value.toWellFormed() : value,
   );
 }
+
+/**
+ * The first `max` UTF-16 units of `text` – one less when the last would be the first half of a surrogate pair:
+ * cutting a text right inside an emoji is where those lone surrogates come from. Every clip of text for the
+ * apps goes through here (wireJson only repairs what slipped through).
+ */
+export function cut(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const end = Math.max(0, max);
+  const last = text.charCodeAt(end - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end);
+}

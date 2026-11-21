@@ -43,7 +43,9 @@
 
   function closedText(end: TermEnd): string {
     switch (end.why) {
-      case "exit": return t("Shell beendet.");
+      // herdr's attach ended – mostly taken over by another view (iPhone, another window) or the pane closed; herdr
+      // prints why on the screen behind. Not a shell that ended: this view never runs one.
+      case "exit": return t("Verbindung beendet.");
       case "gone": return t("Die Session gibt es nicht mehr.");
       case "closed": return t("Die Sitzung wurde geschlossen.");
       case "unsupported": return t("Hollr auf dem Server ist zu alt – unter Server › Werkzeuge aktualisieren.");
@@ -96,6 +98,12 @@
     if (!el) return;
     return untrack(() => {
       phase = { kind: "connecting" };
+      // another pane: the overview of the last one is not this one's
+      mini = null;
+      noMap = false;
+      dirty = true;
+      let framed!: () => void;
+      ready = new Promise<void>((r) => (framed = r));
       const css = getComputedStyle(document.documentElement);
       const x = new Terminal({
         fontFamily: css.getPropertyValue("--mono").trim() || "Menlo, monospace",
@@ -179,17 +187,22 @@
           const text = cleanSelection(x.getSelection());
           void copyText(text);
           const buf = x.buffer.active;
-          const row = topLine() + Math.max(0, (x.getSelectionPosition()?.start.y ?? buf.viewportY) - buf.viewportY);
-          offerSelection({
-            text,
-            source: "terminal",
-            server,
-            x: e.clientX,
-            y: e.clientY,
-            termRow: row,
-          });
+          offerAt(text, e, Math.max(0, (x.getSelectionPosition()?.start.y ?? buf.viewportY) - buf.viewportY));
         }, 0);
       };
+      let offers = 0;
+      /** Offers a selection starting on screen row `row` for reading aloud and as a jump note – with its row in the
+       *  whole scrollback, measured now: the overview's last measurement may be old, or missing when it is off. */
+      function offerAt(text: string, e: MouseEvent, row: number) {
+        const n = ++offers;
+        // a scroll selection may lie wholly off screen (nothing highlighted) – only a highlight cleared meanwhile cancels
+        const shown = x.hasSelection();
+        void topLine().then((top) => {
+          // a newer selection, or this one gone meanwhile
+          if (n !== offers || term !== x || (shown && !x.hasSelection())) return;
+          offerSelection({ text, source: "terminal", server, x: e.clientX, y: e.clientY, termRow: Math.max(0, top + row) });
+        });
+      }
       el.addEventListener("mouseup", copyOnSelect);
       const selectionGone = x.onSelectionChange(() => x.hasSelection() || withdrawSelection("terminal"));
       // herdr asks for every pointer motion (any-event mouse tracking), and xterm counts each motion report as
@@ -213,9 +226,19 @@
           col: Math.min(x.cols - 1, Math.max(0, Math.floor(((e.clientX - box.left) / box.width) * x.cols))),
         };
       }
+      /** the rows on screen as cells (a wide character's second cell ""): ScrollSelection counts columns in cells */
       function screenRows() {
         const buf = x.buffer.active;
-        return Array.from({ length: x.rows }, (_, r) => buf.getLine(buf.viewportY + r)?.translateToString(true) ?? "");
+        const cell = buf.getNullCell();
+        return Array.from({ length: x.rows }, (_, r) => {
+          const line = buf.getLine(buf.viewportY + r);
+          const cells: string[] = [];
+          for (let c = 0; line && c < x.cols && line.getCell(c, cell); c++)
+            cells.push(cell.getWidth() === 0 ? "" : cell.getChars() || " ");
+          // the blanks a TUI pads its rows with
+          while (cells.length && !cells[cells.length - 1]!.trim()) cells.pop();
+          return cells;
+        });
       }
       /** the part of the selection on screen */
       function highlight(d: Drag, sel: ScrollSelection) {
@@ -232,13 +255,26 @@
         const wheel = `\x1b[<${drag.speed < 0 ? 64 : 65};${Math.ceil(x.cols / 2)};${Math.ceil(x.rows / 2)}M`;
         s.type(wheel.repeat(Math.min(3, Math.abs(drag.speed))));
       }
+      let first = true;
       const parsed = x.onWriteParsed(() => {
+        lastWrite = performance.now();
+        dirty = true;
+        // the first frame shows what the terminal is (herdr's alternate screen): the overview measured on mount saw
+        // xterm's empty buffer – the next poll measures again instead of waiting out the 4 s throttle
+        if (first) measuredAt = 0;
+        first = false;
+        framed();
         if (drag?.sel?.update(screenRows())) highlight(drag, drag.sel);
       });
+      // an own shell scrolled in xterm: the overview's box moves
+      const scrolled = x.onScroll(() => (dirty = true));
       function dragMove(e: MouseEvent) {
         const d = drag;
         const box = screenBox();
         if (!d || !box || !e.isTrusted) return;
+        // the button was let go where no mouseup reached us (outside the window): the drag is over, the
+        // scroll timer must not go on wheeling the pane
+        if (!(e.buttons & 1)) return stopDrag();
         d.at = cellOf(e, box);
         const over = e.clientY < box.top ? e.clientY - box.top : e.clientY > box.bottom ? e.clientY - box.bottom : 0;
         if (!d.sel) {
@@ -262,18 +298,11 @@
         highlight(d, d.sel);
         // copied here in full – copyOnSelect would take only the part on screen
         e.stopPropagation();
-        const text = cleanSelection(d.sel.text(d.sel.point(d.at.row, d.at.col, x.rows)));
+        const p = d.sel.point(d.at.row, d.at.col, x.rows);
+        const text = cleanSelection(d.sel.text(p));
         void copyText(text);
-        const buf = x.buffer.active;
-        const row = topLine() + Math.max(0, (x.getSelectionPosition()?.start.y ?? buf.viewportY) - buf.viewportY);
-        offerSelection({
-          text,
-          source: "terminal",
-          server,
-          x: e.clientX,
-          y: e.clientY,
-          termRow: row,
-        });
+        // the selection's first line, which may lie above the screen by now
+        offerAt(text, e, d.sel.range(p)[0].line - d.sel.top);
       }
       function stopDrag() {
         clearInterval(drag?.timer);
@@ -281,7 +310,11 @@
         window.removeEventListener("mousemove", dragMove, true);
         window.removeEventListener("mouseup", dragEnd, true);
       }
-      const input = x.onData((data) => s.type(data));
+      const input = x.onData((data) => {
+        // typing and the wheel (mouse reports) alike
+        touchedAt = Date.now();
+        s.type(data);
+      });
       const focusIn = () => (focused = true);
       const focusOut = () => (focused = false);
       x.textarea?.addEventListener("focus", focusIn);
@@ -309,6 +342,7 @@
         el.removeEventListener("mousemove", keepSelection, { capture: true });
         stopDrag();
         parsed.dispose();
+        scrolled.dispose();
         selectionGone.dispose();
         withdrawSelection("terminal");
         clearTimeout(copiedTimer);
@@ -341,22 +375,51 @@
   // its scrollback lives in herdr (`scrollmap`, moved with mouse-wheel events); an own shell has it in xterm.
   type MiniLine = [number, string | null];
   type Mini = { total: number; top: number; rows: number; lines: MiniLine[] };
+  type Position = { total: number; top: number; rows: number };
   let mini = $state.raw<Mini | null>(null);
+  /** the screen changed (output, xterm scrolled) since the overview was last measured */
+  let dirty = true;
+  let measuredAt = 0;
+  /** the newest herdr measurement: an older answer arriving later must not undo it */
+  let mapSeq = 0;
+  let mapping = false;
+  /** the server's Hollr has no `scrollmap` (older than the overview): stop asking */
+  let noMap = false;
+  /** the first output of the current terminal is on screen (before it, xterm's buffer says nothing about herdr) */
+  let ready = new Promise<void>(() => {});
+  /** when output was last parsed (performance.now) */
+  let lastWrite = 0;
+  /** when the user last typed or scrolled in the terminal (Date.now) */
+  let touchedAt = 0;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const inHerdr = () => !!term && term.buffer.active.type === "alternate";
   const PALETTE = ["#1d1f21", "#cc6666", "#b5bd68", "#f0c674", "#81a2be", "#b294bb", "#8abeb7", "#c5c8c6",
     "#666666", "#d54e53", "#b9ca4a", "#e7c547", "#7aa6da", "#c397d8", "#70c0b1", "#eaeaea"];
-  async function measureMini(): Promise<Mini | null> {
-    if (!term) return null;
+
+  async function measureMini() {
+    const x = term;
+    if (!x) return;
+    dirty = false;
+    measuredAt = Date.now();
     if (inHerdr()) {
+      const seq = ++mapSeq;
+      mapping = true;
       try {
         const r = await gate<{ total: number; offset: number; rows: number; lines: MiniLine[] }>(srv, `scrollmap ${paneId}`);
-        mini = { total: r.total, top: Math.max(0, r.total - r.rows - r.offset), rows: r.rows, lines: r.lines };
-      } catch {
-        mini = null;
+        if (seq === mapSeq && term === x)
+          mini = { total: r.total, top: Math.max(0, r.total - r.rows - r.offset), rows: r.rows, lines: r.lines };
+      } catch (e) {
+        // a failed poll keeps the last map (the next one is due in 10 s at the latest); an old server never answers
+        if (seq === mapSeq && term === x && e instanceof Error && e.message === "not_allowed") {
+          noMap = true;
+          mini = null;
+        }
+      } finally {
+        if (seq === mapSeq) mapping = false;
       }
-      return mini;
+      return;
     }
-    const b = term.buffer.active;
+    const b = x.buffer.active;
     const lines: MiniLine[] = [];
     const cell = b.getNullCell();
     for (let y = 0; y < b.length; y++) {
@@ -371,48 +434,103 @@
       }
       lines.push([text.length, color]);
     }
-    mini = { total: b.length, top: b.viewportY, rows: term.rows, lines };
-    return mini;
+    mini = { total: b.length, top: b.viewportY, rows: x.rows, lines };
   }
   $effect(() => {
     if (!overview) return;
-    void measureMini();
-    const id = setInterval(() => !document.hidden && void measureMini(), 1200);
+    // untracked: measuring writes `mini` (and for an own shell reads it right away), which made this effect depend
+    // on what it writes – an endless loop (effect_update_depth_exceeded) as soon as a terminal opened
+    untrack(() => void measureMini());
+    // only when something changed (herdr redraws on new lines and on scrolling), not every 1.2 s for hours: a working
+    // agent redraws all the time (spinner), so without the user's hand on it every 4 s is enough; every 10 s
+    // regardless (herdr adds lines without a redraw while scrolled up). An own shell is measured here, without a
+    // server call: right away.
+    const id = setInterval(() => {
+      if (document.hidden || noMap || mapping || phase.kind !== "open") return;
+      const age = Date.now() - measuredAt;
+      if ((dirty && (!inHerdr() || Date.now() - touchedAt < 5000 || age > 4000)) || age > 10_000) void measureMini();
+    }, 1200);
     return () => clearInterval(id);
   });
 
-  /** the first line on screen, counted from the top of the whole scrollback */
-  export const topLine = () => mini?.top ?? 0;
+  /** where the screen is in the whole scrollback: herdr's scroll position (`scrollinfo`, no line data) or xterm's */
+  async function position(): Promise<Position | null> {
+    const x = term;
+    if (!x) return null;
+    if (!inHerdr()) {
+      const b = x.buffer.active;
+      return { total: b.length, top: b.viewportY, rows: x.rows };
+    }
+    try {
+      const r = await gate<{ max: number; offset: number; rows: number }>(srv, `scrollinfo ${paneId}`);
+      return term === x ? { total: r.max + r.rows, top: Math.max(0, r.max - r.offset), rows: r.rows } : null;
+    } catch {
+      return null;
+    }
+  }
 
-  let target = 0;
+  /** The first line on screen, counted from the top of the whole scrollback – measured now: the overview's last
+   *  measurement may be old, or missing when the overview is off (a jump note made then landed on line 0). */
+  export async function topLine(): Promise<number> {
+    return (await position())?.top ?? mini?.top ?? 0;
+  }
+
+  /** After wheel events: until herdr has redrawn (its output went quiet) – at most 1.5 s. */
+  async function settled(since: number) {
+    while (performance.now() < since + 1500) {
+      await sleep(60);
+      if (lastWrite > since && performance.now() - lastWrite >= 120) return;
+    }
+  }
+
+  let wanted = 0;
   let scrolling = false;
+  /** herdr's lines per wheel step: not known here, learnt from what each round moved */
+  let perStep = 3;
   /** Scrolls so that `line` (from the top of the scrollback) is the first one on screen. */
   export async function scrollToTop(line: number) {
-    if (!term) return;
-    if (!inHerdr()) {
-      term.scrollToLine(Math.max(0, Math.round(line)));
-      void measureMini();
-      return;
-    }
     // a drag asks many times a second: one loop chases the newest target
-    target = line;
+    wanted = line;
     if (scrolling) return;
     scrolling = true;
     try {
-      // herdr's lines per wheel step aren't known: each round measures again
-      for (let round = 0; round < 6; round++) {
-        const cur = await measureMini();
-        if (!cur || !session || !term) return;
-        const want = Math.max(0, Math.min(cur.total - cur.rows, Math.round(target)));
+      // just switched to the terminal (a jump note from the chat): only its first frame tells herdr from a shell
+      await Promise.race([ready, sleep(15_000)]);
+      const x = term;
+      const s = session;
+      if (!x || !s) return;
+      if (!inHerdr()) {
+        x.scrollToLine(Math.max(0, Math.round(wanted)));
+        return;
+      }
+      // without mouse reporting the wheel sequences would land as text in the program's input
+      if (x.modes.mouseTrackingMode === "none") return;
+      let cur = await position();
+      for (let round = 0; cur && round < 12 && term === x; round++) {
+        const want = Math.max(0, Math.min(cur.total - cur.rows, Math.round(wanted)));
         const delta = cur.top - want;
-        if (Math.abs(delta) < 2) return;
-        const steps = Math.min(400, Math.ceil(Math.abs(delta) / 3));
-        const wheel = `\x1b[<${delta > 0 ? 64 : 65};${Math.ceil(term.cols / 2)};${Math.ceil(term.rows / 2)}M`;
-        session.type(wheel.repeat(steps));
-        await new Promise((r) => setTimeout(r, 160));
+        if (Math.abs(delta) < 2) break;
+        const steps = Math.min(400, Math.max(1, Math.round(Math.abs(delta) / perStep)));
+        const since = performance.now();
+        s.type(`\x1b[<${delta > 0 ? 64 : 65};${Math.ceil(x.cols / 2)};${Math.ceil(x.rows / 2)}M`.repeat(steps));
+        await settled(since);
+        const next = await position();
+        if (!next || term !== x) break;
+        const moved = Math.abs(next.top - cur.top);
+        // nothing moved: the wheel doesn't reach herdr's scrollback – stop instead of flooding the program with it
+        if (!moved) break;
+        perStep = Math.min(50, Math.max(0.5, moved / steps));
+        // the box follows while dragging; a map measured before this round is out of date
+        if (mini) {
+          mapSeq++;
+          mapping = false;
+          mini = { ...mini, top: next.top, rows: next.rows };
+        }
+        cur = next;
       }
     } finally {
       scrolling = false;
+      if (overview) void measureMini();
     }
   }
 </script>

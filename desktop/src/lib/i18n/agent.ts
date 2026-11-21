@@ -161,7 +161,6 @@ export default {
   // terminal (xterm): session / own shell, reconnect, links
   "Verbinde neu …": "Reconnecting …",
   "Neu verbinden": "Reconnect",
-  "Shell beendet.": "Shell ended.",
   "Die Session gibt es nicht mehr.": "The session no longer exists.",
   "Die Sitzung wurde geschlossen.": "The session was closed.",
   "Verbindung beendet.": "Connection ended.",

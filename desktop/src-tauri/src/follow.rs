@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use russh::ChannelMsg;
 use serde::Serialize;
@@ -14,8 +14,11 @@ use tokio::sync::{oneshot, Mutex};
 
 use crate::hollr::Hollr;
 
-/// The server pings every 20 s: this long without a line = the connection is dead.
+/// The server pings every 20 s: this long without a line = the connection is dead. Measured on the wall clock,
+/// checked every CHECK: tokio's timers stand still while the Mac sleeps, so after waking a stream that died with
+/// the network took another 50 s *awake* to notice – the chat showed the state from before the sleep meanwhile.
 const WATCHDOG: Duration = Duration::from_secs(50);
+const CHECK: Duration = Duration::from_secs(5);
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Default)]
@@ -85,15 +88,26 @@ async fn run(app: AppHandle, id: u64, server: String, pane: String, mut stopped:
     };
     let mut buf = Vec::<u8>::new();
     let mut by_user = false;
+    let mut last = SystemTime::now();
+    let mut check = tokio::time::interval(CHECK);
+    check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         let msg = tokio::select! {
-            m = tokio::time::timeout(WATCHDOG, channel.wait()) => m,
+            m = channel.wait() => m,
+            _ = check.tick() => {
+                // a clock set back counts as no time passed
+                if last.elapsed().unwrap_or_default() > WATCHDOG {
+                    break;
+                }
+                continue;
+            }
             _ = &mut stopped => {
                 by_user = true;
                 break;
             }
         };
-        let Ok(Some(msg)) = msg else { break }; // watchdog or channel gone
+        let Some(msg) = msg else { break }; // channel gone
+        last = SystemTime::now();
         match msg {
             ChannelMsg::Data { data } => {
                 buf.extend_from_slice(&data);

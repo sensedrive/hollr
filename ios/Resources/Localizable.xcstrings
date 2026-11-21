@@ -1547,6 +1547,16 @@
         }
       }
     },
+    "Chat und Terminal frieren nach Netzwechsel oder Hintergrund nicht mehr ein; „Nicht gesendet“ bleibt stehen, bis du es erledigt hast": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat and terminal no longer freeze after a network change or the background; “Not sent” stays until you've dealt with it"
+          }
+        }
+      }
+    },
     "Chats mit einem abgeschnittenen Emoji im Verlauf laden wieder – vorher blieb der Chat leer, nur das Terminal ging": {
       "localizations": {
         "en": {
@@ -1809,6 +1819,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copy the link from `hollr pair --link` and paste it below."
+          }
+        }
+      }
+    },
+    "Der Chat hat Farben wie am Mac: fett und Überschriften lila, Code grün, Tabellenköpfe gelb – in jedem Farbschema gut lesbar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chat has colours like on the Mac: bold and headings purple, code green, table heads yellow – readable in every colour scheme"
           }
         }
       }
@@ -2093,6 +2113,46 @@
         }
       }
     },
+    "Der Chat ließ sich nicht lesen. Hollr auf dem Server und hier aktualisieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chat could not be read. Update Hollr on the server and here."
+          }
+        }
+      }
+    },
+    "Ein Eintrag ließ sich nicht anzeigen – Hollr aktualisieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An entry could not be shown – update Hollr."
+          }
+        }
+      }
+    },
+    "Senden fehlgeschlagen: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending failed: %@"
+          }
+        }
+      }
+    },
+    "Terminal getrennt – es ist jetzt anderswo geöffnet oder wurde beendet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal disconnected – it is now open elsewhere or has ended."
+          }
+        }
+      }
+    },
     "Die Sitzung wurde geschlossen.": {
       "localizations": {
         "en": {
@@ -2309,6 +2369,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Own shell"
+          }
+        }
+      }
+    },
+    "Ein einzelner unlesbarer Eintrag lässt nicht mehr den ganzen Chat leer – und „Arbeitet …“ verschwindet, wenn der Agent wirklich fertig ist": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A single unreadable entry no longer leaves the whole chat empty – and “Working …” goes away once the agent is really done"
           }
         }
       }

@@ -4,6 +4,8 @@
  * questions, the current todo list and running background jobs.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { LogTail } from "./sessionlog";
+import { cut } from "./wire";
 
 export type ToolStatus = "running" | "ok" | "error";
 
@@ -209,7 +211,7 @@ export function redact(text: string): string {
 /** Trims, redacts and shortens a text to `max` chars (with "…"). */
 export function clip(text: string, max: number): string {
   const t = redact(text.trim());
-  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+  return t.length <= max ? t : `${cut(t, max - 1)}…`;
 }
 
 function textOf(content: unknown): string {
@@ -293,7 +295,7 @@ export function capDiff(hunks: DiffHunk[], alreadyLeftOut = 0): { diff?: DiffHun
     more += h.lines.length - take;
     left -= take;
     if (!take) continue;
-    const lines = h.lines.slice(0, take).map((l) => ({ ...l, text: redact(l.text).slice(0, DIFF_TEXT_MAX) }));
+    const lines = h.lines.slice(0, take).map((l) => ({ ...l, text: cut(redact(l.text), DIFF_TEXT_MAX) }));
     diff.push(h.file ? { file: h.file, lines } : { lines });
   }
   if (!diff.length) return {};
@@ -380,7 +382,7 @@ export function ompGrepMatches(display: string, singleFile?: string): MatchFile[
       out.push(cur);
     }
     if (!cur || cur.lines.length >= RICH_CAPS.matchLines) continue;
-    cur.lines.push({ n: Number(m[2]), text: redact(m[3] ?? "").trimEnd().slice(0, RICH_CAPS.matchText) });
+    cur.lines.push({ n: Number(m[2]), text: cut(redact(m[3] ?? "").trimEnd(), RICH_CAPS.matchText) });
   }
   return out.filter((f) => f.lines.length);
 }
@@ -388,14 +390,18 @@ export function ompGrepMatches(display: string, singleFile?: string): MatchFile[
 /** The todo state of a todo tool result, shortened like Timeline.todo. */
 function todoPhases(phases: unknown): TodoPhase[] | undefined {
   if (!Array.isArray(phases)) return undefined;
-  return (phases as TodoPhase[]).map((p) => ({
-    name: p.name,
-    tasks: (p.tasks ?? []).map((t) => ({
-      content: clip(t.content, 200),
-      status: t.status,
-      blocker: t.blocker,
-    })),
-  }));
+  return (phases as Array<Partial<TodoPhase> | null>)
+    .filter((p): p is Partial<TodoPhase> => !!p && typeof p === "object")
+    .map((p) => ({
+      name: String(p.name ?? ""),
+      tasks: (Array.isArray(p.tasks) ? p.tasks : [])
+        .filter((t) => !!t && typeof t === "object")
+        .map((t) => ({
+          content: clip(String(t.content ?? ""), 200),
+          status: t.status,
+          blocker: t.blocker,
+        })),
+    }));
 }
 
 /** A subagent's report inside a wait result or async delivery:
@@ -470,27 +476,83 @@ export interface TimelineOptions {
 
 /** Builds the timeline from the raw JSONL text. `maxItems` limits the returned history. */
 export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptions = {}): Timeline {
+  const builder = timelineBuilder(opts);
+  builder.feed(jsonl);
+  return builder.result(maxItems);
+}
+
+/** A timeline built as the log grows: `feed` takes whole lines, `result` is the timeline so far and changes
+ *  nothing – a follower parses only what was appended, not the whole log on every write (a 24 MB log took
+ *  ~140 ms per read). The items `result` returns are live: later feeds change them in place. */
+export interface TimelineBuilder {
+  feed(jsonl: string): void;
+  result(maxItems?: number): Timeline;
+}
+
+/** Longest log line parsed – a longer one (a tool result with a giant trace) is only skimmed, see skimLine. */
+const MAX_LINE = 3_000_000;
+
+/** What a log line too long to parse still says: the tool result in it ends its call – skipped whole, the call
+ *  stayed "running" for good (a spinner in a finished turn). */
+function skimLine(line: string): Entry | undefined {
+  const head = line.slice(0, 4096);
+  const toolCallId = /"toolCallId":"([^"]+)"/.exec(head)?.[1];
+  if (!toolCallId || !head.includes('"type":"message"') || !head.includes('"role":"toolResult"')) return undefined;
+  return {
+    type: "message",
+    id: /"id":"([^"]+)"/.exec(head)?.[1],
+    timestamp: /"timestamp":"([^"]+)"/.exec(head)?.[1],
+    message: {
+      role: "toolResult",
+      toolCallId,
+      toolName: /"toolName":"([^"]+)"/.exec(head)?.[1],
+      isError: line.slice(-512).includes('"isError":true'),
+      content: [{ type: "text", text: "Ausgabe zu groß für den Chat" }],
+    },
+  };
+}
+
+export function timelineBuilder(opts: TimelineOptions = {}): TimelineBuilder {
   const items: TimelineItem[] = [];
+  /** tool calls by their id in the log – a later call with the same id (ollama numbers them per turn) wins */
   const calls = new Map<string, ToolCall>();
+  /** calls without a result yet */
+  const open = new Set<ToolCall>();
+  /** ask items still waiting for their answer, by their call's id in the log */
+  const asks = new Map<string, Extract<TimelineItem, { k: "ask" }>>();
   const starts = new Map<string, number>();
   const jobs = new Map<string, Job>();
   /** write calls' content until their result says whether the write happened */
   const writes = new Map<string, string>();
   /** task calls: their subagents (id → type, answer) and which call each subagent belongs to */
-  const subAgents = new Map<string, Map<string, { agent?: string; answer?: string }>>();
-  const subCall = new Map<string, string>();
+  const subAgents = new Map<ToolCall, Map<string, { agent?: string; answer?: string }>>();
+  const subCall = new Map<string, ToolCall>();
+  /** Ids handed out. The apps key the chat by id – a duplicate broke the view (Svelte's keyed each throws,
+   *  a delta overwrote the other item): an id the log repeats ("ollama:1:bash" every turn) gets a suffix. */
+  const usedIds = new Set<string>();
+  const usedCallIds = new Set<string>();
+  const freeId = (used: Set<string>, id: string) => {
+    let free = id;
+    for (let n = 2; used.has(free); n++) free = `${id}~${n}`;
+    return free;
+  };
+  const unique = (used: Set<string>, id: string) => {
+    const free = freeId(used, id);
+    used.add(free);
+    return free;
+  };
   const noteTaskResults = (text: string) => {
     if (!text.includes("<task-result")) return;
     for (const r of taskResults(text)) {
-      const agents = subAgents.get(subCall.get(r.id) ?? "");
-      const a = agents?.get(r.id);
+      const call = subCall.get(r.id);
+      const a = call && subAgents.get(call)?.get(r.id);
       if (!a) continue;
       a.answer = r.answer || a.answer;
       a.agent = r.agent ?? a.agent;
     }
   };
-  /** Fills the rich tool data of a successful call from omp's result details. */
-  const richResult = (call: ToolCall, d: Record<string, unknown>, content: unknown) => {
+  /** Fills the rich tool data of a successful call from omp's result details; `key` = its id in the log. */
+  const richResult = (call: ToolCall, key: string, d: Record<string, unknown>, content: unknown) => {
     switch (call.name) {
       case "edit": {
         // a multi-file edit: the combined `diff` runs the files together, the per-file diffs keep them apart
@@ -511,7 +573,7 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
       case "write": {
         const path = str(d.resolvedPath);
         if (path && isFilePath(path)) call.file = path;
-        const text = writes.get(call.id);
+        const text = writes.get(key);
         if (text !== undefined && call.file) Object.assign(call, writeDiff(text));
         return;
       }
@@ -567,9 +629,9 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
           const id = str(p.id);
           if (!id) continue;
           agents.set(id, { agent: str(p.agent) });
-          subCall.set(id, call.id);
+          subCall.set(id, call);
         }
-        if (agents.size) subAgents.set(call.id, agents);
+        if (agents.size) subAgents.set(call, agents);
         return;
       }
     }
@@ -578,7 +640,9 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
   let title: string | undefined;
   let model: string | undefined;
   let turnStart: number | undefined;
-  let lastAssistantStop: string | undefined;
+  /** the agent owes its next message: a prompt came, or its last message asked for tools – omp writes a message
+   *  only once it is complete, so the first answer to a prompt (thinking …) used to count as not working */
+  let replyDue = false;
   let openWait = false;
   let currentGroup: Extract<TimelineItem, { k: "tools" }> | undefined;
   let lastFinal:
@@ -587,64 +651,95 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
   let seq = 0;
   const nid = (base?: string) => base ?? `i${seq++}`;
 
+  const endItem = (final: NonNullable<typeof lastFinal>, start: number, id: string): TimelineItem => ({
+    k: "end",
+    id,
+    ms: Math.max(0, final.at - start),
+    status: final.status,
+    error: final.error,
+    at: final.at,
+  });
   const closeTurn = () => {
-    if (turnStart !== undefined && lastFinal) {
-      items.push({
-        k: "end",
-        id: `end-${lastFinal.id}`,
-        ms: Math.max(0, lastFinal.at - turnStart),
-        status: lastFinal.status,
-        error: lastFinal.error,
-        at: lastFinal.at,
-      });
-    }
+    if (turnStart !== undefined && lastFinal)
+      items.push(endItem(lastFinal, turnStart, unique(usedIds, `end-${lastFinal.id}`)));
     lastFinal = undefined;
+  };
+  /** The turn is over (a new prompt, omp exited): what still waits for a result never gets one – its spinner
+   *  (and the open question) would stay for good. */
+  const settle = () => {
+    for (const call of open) {
+      call.status = "error";
+      call.result = "abgebrochen";
+    }
+    open.clear();
+    for (const ask of asks.values()) {
+      ask.pending = false;
+      ask.answer = "abgebrochen";
+    }
+    asks.clear();
   };
   const startTurn = (at: number) => {
     closeTurn();
+    settle();
     turnStart = at;
+    replyDue = true;
     currentGroup = undefined;
   };
   const pushItem = (item: TimelineItem) => {
     if (item.k !== "tools") currentGroup = undefined;
+    item.id = unique(usedIds, item.id);
     items.push(item);
   };
 
-  for (const line of jsonl.split("\n")) {
-    if (!line || line.length > 3_000_000) continue;
-    let e: Entry;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const at = e.timestamp ? Date.parse(e.timestamp) : Date.now();
+  const feedLine = (line: string) => {
+    if (!line) return;
+    let e: Entry | undefined;
+    if (line.length > MAX_LINE) e = skimLine(line);
+    else
+      try {
+        e = JSON.parse(line);
+      } catch {
+        return;
+      }
+    if (!e || typeof e !== "object") return;
     /** the entry's own time for `at` – never "now", so an unchanged item stays unchanged for follow */
     const ts = e.timestamp ? Date.parse(e.timestamp) || undefined : undefined;
+    const at = ts ?? Date.now();
     switch (e.type) {
       case "title":
+      case "title_change":
+        // the first line's title, then each rename (omp's auto title comes after the first answer)
         title = e.title || title;
-        continue;
+        return;
       case "model_change":
         model = e.model ?? model;
-        continue;
+        return;
       case "compaction":
         pushItem({ k: "info", id: nid(e.id), text: "Kontext wurde zusammengefasst", at: ts });
-        continue;
+        return;
       case "custom": {
-        const data = (typeof e.data === "object" ? e.data : {}) as Record<string, unknown>;
+        const data = (e.data && typeof e.data === "object" ? e.data : {}) as Record<string, unknown>;
         if (e.customType === "tool_execution_start") {
           const id = str(data.toolCallId);
           if (id) starts.set(id, Date.parse(str(data.startedAt) ?? "") || at);
           if (str(data.toolName) === "wait") openWait = true;
         }
-        if (e.customType === "session_exit") jobs.clear();
-        continue;
+        if (e.customType === "session_exit") {
+          // omp quit or was killed (a signal, the pane closed): whatever ran ended with it – the turn it was
+          // in (no final answer) ends aborted, not "Arbeitet …" for good
+          jobs.clear();
+          settle();
+          if (turnStart !== undefined && !lastFinal) lastFinal = { id: e.id ?? nid(), at, status: "aborted" };
+          replyDue = false;
+          openWait = false;
+          currentGroup = undefined;
+        }
+        return;
       }
       case "custom_message": {
         // a background subagent's report – also when omp does not show the delivery
         if (e.customType === "async-result") noteTaskResults(textOf(e.content));
-        if (!e.display) continue;
+        if (!e.display) return;
         const text = textOf(e.content);
         if (e.customType === "live-delegation") {
           startTurn(at);
@@ -654,11 +749,12 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
           const prompt = str(e.details?.prompt) ?? text;
           pushItem({ k: "user", id: nid(e.id), text: clip(prompt, 400), source: "skill", at });
         } else if (e.customType === "async-result") {
-          const finished =
-            (e.details?.jobs as Array<{ jobId?: string; label?: string; status?: string }>) ?? [];
-          for (const j of finished) if (j.jobId) jobs.delete(j.jobId);
+          const finished = (
+            Array.isArray(e.details?.jobs) ? e.details.jobs : []
+          ) as Array<{ jobId?: string; label?: string; status?: string }>;
+          for (const j of finished) if (j?.jobId) jobs.delete(j.jobId);
           const names = finished
-            .map((j) => j.label ?? j.jobId)
+            .map((j) => j?.label ?? j?.jobId)
             .filter(Boolean)
             .join(", ");
           pushItem({
@@ -676,19 +772,19 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
             at: ts,
           });
         }
-        continue;
+        return;
       }
       case "message":
         break;
       default:
-        continue;
+        return;
     }
 
     const m = e.message;
-    if (!m) continue;
+    if (!m) return;
     if (m.role === "user") {
       const text = textOf(m.content).trim();
-      if (!text || text.startsWith("<")) continue;
+      if (!text || text.startsWith("<")) return;
       if (!m.steering) startTurn(m.timestamp ?? at);
       pushItem({
         k: "user",
@@ -697,12 +793,13 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
         source: m.steering ? "agent" : "typed",
         at: m.timestamp ?? at,
       });
-      continue;
+      return;
     }
     if (m.role === "assistant") {
       openWait = false;
       const blocks = Array.isArray(m.content) ? m.content : [];
       for (const b of blocks) {
+        if (!b || typeof b !== "object") continue;
         if (b.type === "thinking" && b.thinking?.trim()) {
           pushItem({ k: "thinking", id: nid(), text: clip(b.thinking, 1500), at: ts });
         } else if (b.type === "text" && b.text?.trim()) {
@@ -722,19 +819,21 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
               status: "running",
             };
             calls.set(b.id, call);
-            pushItem({
+            const ask: Extract<TimelineItem, { k: "ask" }> = {
               k: "ask",
               id: b.id,
               ...first,
               ...(questions.length > 1 ? { questions } : {}),
               pending: true,
               at: ts,
-            });
+            };
+            pushItem(ask);
+            asks.set(b.id, ask);
             continue;
           }
           if (b.name === "wait") openWait = true;
           const call: ToolCall = {
-            id: b.id,
+            id: unique(usedCallIds, b.id),
             name: b.name,
             label: clip(b.intent ?? str(args.i) ?? b.name, 120),
             detail: (() => {
@@ -748,19 +847,20 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
             status: "running",
           };
           calls.set(b.id, call);
+          open.add(call);
           if (b.name === "read" || b.name === "write" || b.name === "edit") {
             const file = b.name === "edit" ? toolDetail("edit", args) : str(args.path);
             if (file && isFilePath(file)) call.file = file;
           }
           if (b.name === "write" && typeof args.content === "string") writes.set(b.id, args.content);
           if (!currentGroup) {
-            currentGroup = { k: "tools", id: `g-${b.id}`, calls: [], at: ts };
+            currentGroup = { k: "tools", id: unique(usedIds, `g-${b.id}`), calls: [], at: ts };
             items.push(currentGroup);
           }
           currentGroup.calls.push(call);
         }
       }
-      lastAssistantStop = m.stopReason;
+      replyDue = m.stopReason === "toolUse";
       // the agent kept working after an earlier stop (steering, async results) – that stop was not the end
       if (m.stopReason === "toolUse") lastFinal = undefined;
       if (
@@ -777,13 +877,14 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
         };
         currentGroup = undefined;
       }
-      continue;
+      return;
     }
     if (m.role === "toolResult" && m.toolCallId) {
       const call = calls.get(m.toolCallId);
       const details = m.details ?? {};
       const end = m.timestamp ?? at;
       if (call) {
+        open.delete(call);
         call.status = m.isError ? "error" : "ok";
         const started = starts.get(m.toolCallId);
         const wall = typeof details.wallTimeMs === "number" ? details.wallTimeMs : undefined;
@@ -797,7 +898,7 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
           const lines = text.split("\n");
           const async = (details.async as { state?: string } | undefined)?.state === "running";
           if (text && !async) {
-            call.out = lines.slice(-RICH_CAPS.outLines).map((l) => redact(l).slice(0, RICH_CAPS.outLineChars));
+            call.out = lines.slice(-RICH_CAPS.outLines).map((l) => cut(redact(l), RICH_CAPS.outLineChars));
             call.outTotal = lines.length;
           }
           if (typeof details.exitCode === "number" && details.exitCode !== 0)
@@ -810,9 +911,8 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
           call.bg = bg.jobId;
         }
         if (call.name === "ask") {
-          const item = items.find((i) => i.k === "ask" && i.id === call.id) as
-            | Extract<TimelineItem, { k: "ask" }>
-            | undefined;
+          const item = asks.get(m.toolCallId);
+          asks.delete(m.toolCallId);
           if (item) {
             item.pending = false;
             const sel = (details.selectedOptions as string[] | undefined) ?? [];
@@ -834,14 +934,15 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
                 );
           }
         }
-        if (!m.isError) richResult(call, details, m.content);
+        if (!m.isError) richResult(call, m.toolCallId, details, m.content);
         writes.delete(m.toolCallId);
       }
       if (m.toolName === "wait") {
-        const waited = (details.jobs as Array<Record<string, unknown>> | undefined) ?? [];
-        for (const j of waited) if (typeof j.resultText === "string") noteTaskResults(j.resultText);
-        if (call && Array.isArray(waited)) {
+        const waited = (Array.isArray(details.jobs) ? details.jobs : []) as Array<Record<string, unknown> | null>;
+        for (const j of waited) if (typeof j?.resultText === "string") noteTaskResults(j.resultText);
+        if (call) {
           const list = waited.flatMap((j) => {
+            if (!j) return [];
             const id = str(j.id) ?? str(j.jobId);
             if (!id) return [];
             const ms = typeof j.durationMs === "number" ? j.durationMs : undefined;
@@ -867,45 +968,65 @@ export function buildTimeline(jsonl: string, maxItems = 150, opts: TimelineOptio
           startedAt: starts.get(m.toolCallId) ?? end,
         });
       }
-      for (const j of (details.jobs as Array<{ id?: string; jobId?: string; status?: string }>) ??
-        []) {
-        const id = j.id ?? j.jobId;
-        if (id && j.status && TERMINAL_JOB.has(j.status)) jobs.delete(id);
+      const listed = (Array.isArray(details.jobs) ? details.jobs : []) as Array<{
+        id?: string;
+        jobId?: string;
+        status?: string;
+      } | null>;
+      for (const j of listed) {
+        const id = j?.id ?? j?.jobId;
+        if (id && j?.status && TERMINAL_JOB.has(j.status)) jobs.delete(id);
       }
     }
-  }
-  closeTurn();
+  };
 
-  // jobs that never reported an end (crash, old sessions) – hide after a few hours
-  const now = Date.now();
-  for (const [id, job] of jobs) if (now - job.startedAt > 4 * 3600_000) jobs.delete(id);
-
-  const lastItem = items.at(-1);
-  const running =
-    lastAssistantStop === "toolUse" ||
-    [...calls.values()].some((c) => c.status === "running" && c.name !== "ask");
-  const sliced = items.slice(-maxItems);
-  // subagent answers arrive after the task call (wait, async delivery) – assemble them at the end
-  for (const [callId, agents] of subAgents) {
-    const call = calls.get(callId);
-    if (!call) continue;
-    let count: number | undefined;
-    for (const id of agents.keys()) {
-      const n = opts.subCalls?.(id);
-      if (n !== undefined) count = (count ?? 0) + n;
-    }
-    call.sub = subOf(agents, count);
-  }
   return {
-    title,
-    items: sliced,
-    todo: todo?.some((p) => p.tasks.length) ? todo : undefined,
-    jobs: [...jobs.values()],
-    running: running && lastItem?.k !== "end",
-    waiting: openWait && jobs.size > 0,
-    turnStartedAt: turnStart,
-    model,
-    agent: "omp",
+    feed(jsonl: string) {
+      for (const line of jsonl.split("\n")) {
+        try {
+          feedLine(line);
+        } catch {
+          // one entry of an unexpected shape must not cost the whole chat – the next lines still count
+        }
+      }
+    },
+    result(maxItems = 150) {
+      // the open turn's end so far – not pushed: the agent may still go on (steering, a job's report)
+      const end =
+        turnStart !== undefined && lastFinal
+          ? endItem(lastFinal, turnStart, freeId(usedIds, `end-${lastFinal.id}`))
+          : undefined;
+      const keep = Math.max(0, maxItems - (end ? 1 : 0));
+      const sliced = keep ? items.slice(-keep) : [];
+      if (end) sliced.push(end);
+
+      // jobs that never reported an end (crash, old sessions) – hide after a few hours
+      const now = Date.now();
+      for (const [id, job] of jobs) if (now - job.startedAt > 4 * 3600_000) jobs.delete(id);
+
+      const lastItem = end ?? items.at(-1);
+      const running = replyDue || [...open].some((c) => c.name !== "ask");
+      // subagent answers arrive after the task call (wait, async delivery) – assemble them at the end
+      for (const [call, agents] of subAgents) {
+        let count: number | undefined;
+        for (const id of agents.keys()) {
+          const n = opts.subCalls?.(id);
+          if (n !== undefined) count = (count ?? 0) + n;
+        }
+        call.sub = subOf(agents, count);
+      }
+      return {
+        title,
+        items: sliced,
+        todo: todo?.some((p) => p.tasks.length) ? todo : undefined,
+        jobs: [...jobs.values()],
+        running: running && lastItem?.k !== "end",
+        waiting: openWait && jobs.size > 0,
+        turnStartedAt: turnStart,
+        model,
+        agent: "omp",
+      };
+    },
   };
 }
 
@@ -934,11 +1055,42 @@ export function subagentCalls(session: string, agentId: string): number | undefi
   return calls;
 }
 
+const emptyTimeline = (): Timeline => ({ items: [], jobs: [], running: false, waiting: false, agent: "omp" });
+
 export async function readTimeline(file: string, maxItems = 150): Promise<Timeline> {
-  if (!existsSync(file)) return { items: [], jobs: [], running: false, waiting: false, agent: "omp" };
+  if (!existsSync(file)) return emptyTimeline();
   return buildTimeline(await Bun.file(file).text(), maxItems, {
     subCalls: (id) => subagentCalls(file, id),
   });
+}
+
+/** A session log followed as it grows (`gate follow`): only the lines appended since the last read are parsed,
+ *  a rewritten file is built anew. */
+export class TimelineFile {
+  #tail: LogTail;
+  #builder: TimelineBuilder | undefined;
+
+  constructor(readonly file: string) {
+    this.#tail = new LogTail(file);
+  }
+
+  async read(maxItems = 150): Promise<Timeline> {
+    const got = await this.#tail.read();
+    if (!got) return emptyTimeline();
+    if (got.reset || !this.#builder) this.#builder = timelineBuilder({ subCalls: (id) => subagentCalls(this.file, id) });
+    if (got.text) this.#builder.feed(got.text);
+    return this.#builder.result(maxItems);
+  }
+}
+
+/**
+ * The log's timeline as of herdr's status: an idle omp works on nothing. A turn whose end never reached the
+ * log (omp killed before it could note its exit, a crash between a tool result and the next answer) left
+ * `running` set – the chat said "Arbeitet …" for an agent that sat idle.
+ */
+export function ompLive(tl: Timeline, status: string): Timeline {
+  const idle = status === "idle" || status === "done";
+  return idle && (tl.running || tl.waiting) ? { ...tl, running: false, waiting: false } : tl;
 }
 
 /** Labels, descriptions and the recommended one – as the question index or a flag on the option. */

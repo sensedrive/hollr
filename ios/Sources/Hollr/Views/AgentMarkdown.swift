@@ -54,34 +54,50 @@ struct AgentMarkdown: View {
     }
 }
 
+/// Colours like the desktop chat (Markdown.svelte) and omp's terminal: bold purple, italics tinted towards purple,
+/// headings purple, inline code green, table heads yellow, links in the accent – all from the current palette,
+/// hues made readable where a light palette's own is too pale (`Theme.ink`).
 extension MarkdownUI.Theme {
     static func hollr(size: CGFloat) -> MarkdownUI.Theme { MarkdownUI.Theme()
         .text {
             ForegroundColor(Hollr.Theme.fg)
             FontSize(size)
         }
-        // inline code: mono on a 7 % text wash (sess__md code)
+        // inline code: mono, green on a 9 % text wash (desktop `:not(pre) > code`)
         .code {
             FontFamilyVariant(.monospaced)
             FontSize(.em(0.88))
-            BackgroundColor(Hollr.Theme.wash(0.07))
+            ForegroundColor(Hollr.Theme.ink(\.green))
+            BackgroundColor(Hollr.Theme.wash(0.09))
         }
-        .strong { FontWeight(.semibold) }
+        .strong {
+            FontWeight(.semibold)
+            ForegroundColor(Hollr.Theme.ink(\.purple))
+        }
+        .emphasis {
+            FontStyle(.italic)
+            ForegroundColor(Hollr.Theme.emphasis)
+        }
         .link { ForegroundColor(Hollr.Theme.accent) }
         .heading1 { configuration in
             configuration.label
                 .markdownMargin(top: 12, bottom: 6)
-                .markdownTextStyle { FontWeight(.bold); FontSize(.em(1.25)) }
+                .markdownTextStyle { FontWeight(.bold); FontSize(.em(1.25)); ForegroundColor(Hollr.Theme.ink(\.purple)) }
         }
         .heading2 { configuration in
             configuration.label
                 .markdownMargin(top: 10, bottom: 4)
-                .markdownTextStyle { FontWeight(.bold); FontSize(.em(1.12)) }
+                .markdownTextStyle { FontWeight(.bold); FontSize(.em(1.12)); ForegroundColor(Hollr.Theme.ink(\.purple)) }
         }
         .heading3 { configuration in
             configuration.label
                 .markdownMargin(top: 8, bottom: 4)
-                .markdownTextStyle { FontWeight(.semibold); FontSize(.em(1.0)) }
+                .markdownTextStyle { FontWeight(.semibold); FontSize(.em(1.0)); ForegroundColor(Hollr.Theme.ink(\.purple)) }
+        }
+        .heading4 { configuration in
+            configuration.label
+                .markdownMargin(top: 8, bottom: 4)
+                .markdownTextStyle { FontWeight(.semibold); FontSize(.em(1.0)); ForegroundColor(Hollr.Theme.ink(\.purple)) }
         }
         .paragraph { configuration in
             configuration.label
@@ -121,7 +137,10 @@ extension MarkdownUI.Theme {
         .tableCell { configuration in
             configuration.label
                 .markdownTextStyle {
-                    if configuration.row == 0 { FontWeight(.semibold) }
+                    if configuration.row == 0 {
+                        FontWeight(.semibold)
+                        ForegroundColor(Hollr.Theme.ink(\.yellow))
+                    }
                     FontSize(.em(0.88))
                 }
                 .fixedSize(horizontal: false, vertical: true)
