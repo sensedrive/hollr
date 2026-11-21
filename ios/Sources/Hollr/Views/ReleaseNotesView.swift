@@ -10,6 +10,12 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 54, date: "21.11.2026", items: [
+            ("arrow.triangle.2.circlepath", String(localized: "Nach einem Netzwechsel (Tailscale wieder da, WLAN ↔ Mobilfunk) verbindet sich Hollr sofort neu – vorher hing es bis zu einer Minute")),
+            ("exclamationmark.bubble", String(localized: "Eine Nachricht ohne Verbindung zeigt „Nicht gesendet“ – mit „Erneut senden“ und „Verwerfen“, statt still im Chat zu stehen")),
+            ("plus.rectangle", String(localized: "Neue Sitzung öffnet ein Terminal – omp, Claude Code & Co. startest du dort selbst")),
+            ("puzzlepiece", String(localized: "Neu: Plugins – Erweiterungen deines Servers mit eigener Oberfläche, zum Beispiel das Sandcastle-Board")),
+        ]),
         ReleaseNote(build: 48, date: "30.10.2026", items: [
             ("link", String(localized: "Im Terminal: ein Tipp auf eine Adresse öffnet sie – im Hollr-Browser oder in Safari (auch localhost:PORT)")),
             ("character.cursor.ibeam", String(localized: "Im Terminal lange drücken: Text auswählen und kopieren – das Wort unter dem Finger ist schon markiert, Links darin öffnen ebenfalls")),

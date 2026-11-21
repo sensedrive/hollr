@@ -2333,6 +2333,16 @@
         }
       }
     },
+    "Eine Nachricht ohne Verbindung zeigt „Nicht gesendet“ – mit „Erneut senden“ und „Verwerfen“, statt still im Chat zu stehen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A message without a connection shows “Not sent” – with “Send again” and “Discard”, instead of sitting quietly in the chat"
+          }
+        }
+      }
+    },
     "Eingebauter Browser; Links fragen: Hollr-Browser oder Safari": {
       "localizations": {
         "en": {
@@ -4279,6 +4289,16 @@
         }
       }
     },
+    "Nach einem Netzwechsel (Tailscale wieder da, WLAN ↔ Mobilfunk) verbindet sich Hollr sofort neu – vorher hing es bis zu einer Minute": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a network change (Tailscale back, Wi-Fi ↔ mobile) Hollr reconnects right away – before, it could hang for up to a minute"
+          }
+        }
+      }
+    },
     "Neu laden": {
       "localizations": {
         "en": {
@@ -4439,6 +4459,16 @@
         }
       }
     },
+    "Neu: Plugins – Erweiterungen deines Servers mit eigener Oberfläche, zum Beispiel das Sandcastle-Board": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New: plugins – extensions on your server with their own interface, for example the Sandcastle board"
+          }
+        }
+      }
+    },
     "Neu: jede Session nativ als Terminal – omp, Claude, Codex und Shells zeigen ihre echte Oberfläche, in iPhone-Breite (Knopf oben rechts: Chat ↔ Terminal)": {
       "localizations": {
         "en": {
@@ -4455,6 +4485,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "New session"
+          }
+        }
+      }
+    },
+    "Neue Sitzung öffnet ein Terminal – omp, Claude Code & Co. startest du dort selbst": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New session opens a terminal – start omp, Claude Code & co. there yourself"
           }
         }
       }
