@@ -23,6 +23,7 @@ import { listDirs } from "./dirs";
 import { runDoctor } from "./doctor";
 import { jobDetail } from "./jobs";
 import { listSkills } from "./skills";
+import { wireJson } from "./wire";
 import { miniLines } from "./minimap";
 import { runEvents } from "./events";
 import { paneContext, readPath } from "./file";
@@ -114,7 +115,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.46.0";
+export const VERSION = "0.46.1";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -122,7 +123,7 @@ let pendingOutput: Promise<unknown> = Promise.resolve();
 
 /** Queues a JSON line; flushed completely before the process exits (pipes would truncate otherwise). */
 function json(data: unknown) {
-  const text = `${JSON.stringify(data)}\n`;
+  const text = `${wireJson(data)}\n`;
   pendingOutput = pendingOutput.then(() => Bun.write(Bun.stdout, text));
 }
 

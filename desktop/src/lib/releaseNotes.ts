@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 48,
+    version: "0.46.1",
+    date: "21.11.2026",
+    items: [
+      { icon: "✓", text: "Sitzungen, deren Verlauf ein abgeschnittenes Emoji enthält, laden im Chat wieder – auf dem iPhone blieb der Chat dann leer." },
+    ],
+  },
+  {
     build: 47,
     version: "0.46.0",
     date: "21.11.2026",

@@ -11,6 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { GitWatch } from "./gitwatch";
 import { spaceRoots } from "./spaces";
+import { wireJson } from "./wire";
 
 const SUBSCRIPTIONS = [
   "workspace.created",
@@ -67,7 +68,7 @@ export function herdrSocket(): string {
 export async function runEvents(): Promise<number> {
   const out = (line: object) => {
     try {
-      process.stdout.write(`${JSON.stringify(line)}\n`);
+      process.stdout.write(`${wireJson(line)}\n`);
     } catch {
       process.exit(0);
     }

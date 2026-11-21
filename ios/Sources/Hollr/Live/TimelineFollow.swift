@@ -23,13 +23,23 @@ enum FollowEvent {
         let etag: String?
     }
 
-    static func decode(_ line: Data) -> FollowEvent {
-        guard let env = try? JSONDecoder().decode(Envelope.self, from: line) else { return .other }
+    static func decode(_ raw: Data) -> FollowEvent {
+        // older servers could send a lone surrogate (text cut inside an emoji): repaired, not dropped
+        let line = (try? JSONSerialization.jsonObject(with: raw)) == nil ? JSONRepair.wellFormed(raw) : raw
+        guard let env = try? JSONDecoder().decode(Envelope.self, from: line) else {
+            HollrLog.error("follow: undecodable line \(String(decoding: raw.prefix(120), as: UTF8.self))")
+            return .other
+        }
         if env.error == "not_allowed" { return .unsupported }
         if env.t == "error" { return .gone }
         switch env.t {
         case "full":
-            return (try? JSONDecoder().decode(Timeline.self, from: line)).map(FollowEvent.full) ?? .other
+            do {
+                return .full(try JSONDecoder().decode(Timeline.self, from: line))
+            } catch {
+                HollrLog.error("follow: timeline decode \(error)")
+                return .other
+            }
         case "delta":
             // put "items": [] into the head so it decodes as a Timeline
             guard var obj = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],

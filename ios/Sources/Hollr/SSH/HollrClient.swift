@@ -176,7 +176,7 @@ enum HollrClient {
         let data = try await run(command, on: server)
         if data.count < 200, String(decoding: data, as: UTF8.self).contains("\"same\":true") { return nil }
         do {
-            return try JSONDecoder().decode(Timeline.self, from: data)
+            return try JSONRepair.decode(Timeline.self, from: data)
         } catch {
             HollrLog.error("timeline decode: \(error) \(String(decoding: data.prefix(200), as: UTF8.self))")
             throw HollrError.badResponse

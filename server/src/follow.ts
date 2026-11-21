@@ -12,6 +12,7 @@ import { type ClaudeUsage, claudeFooter, claudeLive, readClaudeLog } from "./cla
 import { execHerdr, type Herdr } from "./herdr";
 import { parseStartScreen } from "./startscreen";
 import { readTimeline, type Timeline, type TimelineItem } from "./timeline";
+import { wireJson } from "./wire";
 
 type Snapshot = Record<string, unknown> & { items: TimelineItem[] };
 
@@ -34,7 +35,7 @@ export async function runFollow(herdr: Herdr, pane: string, limit: number, statu
 ) => unknown): Promise<number> {
   const out = (line: object) => {
     try {
-      process.stdout.write(`${JSON.stringify(line)}\n`);
+      process.stdout.write(`${wireJson(line)}\n`);
     } catch {
       process.exit(0);
     }

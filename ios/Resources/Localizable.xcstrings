@@ -1547,6 +1547,16 @@
         }
       }
     },
+    "Chats mit einem abgeschnittenen Emoji im Verlauf laden wieder – vorher blieb der Chat leer, nur das Terminal ging": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chats with a cut-off emoji in their history load again – before, the chat stayed empty and only the terminal worked"
+          }
+        }
+      }
+    },
     "Claude Code": {
       "localizations": {
         "en": {

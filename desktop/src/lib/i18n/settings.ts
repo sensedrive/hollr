@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sitzungen, deren Verlauf ein abgeschnittenes Emoji enthält, laden im Chat wieder – auf dem iPhone blieb der Chat dann leer.":
+    "Sessions whose history contains a cut-off emoji load in the chat again – on the iPhone the chat stayed empty.",
   "Neu: Plugins. Ein Server-Plugin bringt seine eigene Oberfläche mit, Hollr zeigt sie in der Seitenleiste unter „Plugins“. Auf dem Server einschalten mit: hollr plugin link <ordner>":
     "New: plugins. A server plugin brings its own interface; Hollr shows it in the sidebar under “Plugins”. Turn one on on the server with: hollr plugin link <folder>",
   "Erstes Plugin „Sandcastle“: Issue-Board eines lul-workr-Projekts mit Warteschlange zum Ziehen und einer Ansicht für Sandcastle-Läufe.":

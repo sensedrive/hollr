@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 55, date: "21.11.2026", items: [
+            ("checkmark.bubble", String(localized: "Chats mit einem abgeschnittenen Emoji im Verlauf laden wieder – vorher blieb der Chat leer, nur das Terminal ging")),
+        ]),
         ReleaseNote(build: 54, date: "21.11.2026", items: [
             ("arrow.triangle.2.circlepath", String(localized: "Nach einem Netzwechsel (Tailscale wieder da, WLAN ↔ Mobilfunk) verbindet sich Hollr sofort neu – vorher hing es bis zu einer Minute")),
             ("exclamationmark.bubble", String(localized: "Eine Nachricht ohne Verbindung zeigt „Nicht gesendet“ – mit „Erneut senden“ und „Verwerfen“, statt still im Chat zu stehen")),

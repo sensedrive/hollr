@@ -57,4 +57,14 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(s.apply("frag OMP"), "frag omp")
         XCTAssertEqual(s.apply("Typescripten bleibt"), "Typescripten bleibt") // no partial-word hits
     }
+
+    /// A text cut inside an emoji (older servers) must not make the whole chat undecodable.
+    func testLoneSurrogateIsRepaired() throws {
+        let raw = Data(#"{"a":"\\ud83d is text","b":"\ud83d\udd16","c":"x\ud83d"}"#.utf8)
+        XCTAssertNil(try? JSONSerialization.jsonObject(with: raw))
+        let fixed = String(decoding: JSONRepair.wellFormed(raw), as: UTF8.self)
+        XCTAssertEqual(fixed, #"{"a":"\\ud83d is text","b":"\ud83d\udd16","c":"x\ufffd"}"#)
+        let obj = try JSONSerialization.jsonObject(with: Data(fixed.utf8)) as? [String: String]
+        XCTAssertEqual(obj?["b"], "🔖")
+    }
 }
