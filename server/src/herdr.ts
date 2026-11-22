@@ -28,6 +28,8 @@ export interface TreePane {
   live: boolean;
   /** a fork (`hollr gate fork`): the pane it was forked from and when */
   fork?: ForkMark;
+  /** server time (ms) the pane entered its current status – set by the `tree` gate command (shared.ts) */
+  since?: number;
 }
 
 export interface TreeTab {

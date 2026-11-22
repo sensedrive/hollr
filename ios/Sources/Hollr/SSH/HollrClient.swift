@@ -223,6 +223,20 @@ enum HollrClient {
         return ids
     }
 
+    private struct SharedAnswer: Decodable { let shared: SharedState }
+
+    /// What the apps share about this server (SharedState). A server before `shared` answers
+    /// `HollrError.server("not_allowed")`.
+    static func shared(_ server: Server) async throws -> SharedState {
+        try await fs(server, ["op": "get"], as: SharedAnswer.self, command: "shared").shared
+    }
+
+    /// Applies `changes` on the server; returns the doc after them.
+    static func patchShared(_ server: Server, _ changes: [SharedChange]) async throws -> SharedState {
+        let body: [String: Any] = ["op": "patch", "changes": changes.map(\.json)]
+        return try await fs(server, body, as: SharedAnswer.self, command: "shared").shared
+    }
+
     static func usage(_ server: Server, refresh: Bool = false) async throws -> (limits: [UsageLimit], capacity: [UsageCapacity]) {
         let data = try await run(refresh ? "usage refresh" : "usage", on: server)
         struct R: Decodable { let limits: [UsageLimit]; let capacity: [UsageCapacity]? }

@@ -10,6 +10,10 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 59, date: "22.11.2026", items: [
+            ("arrow.triangle.2.circlepath", String(localized: "„Braucht dich“, gesehene Ergebnisse, „Als ungelesen markieren“, „Meine Sitzungen“ und die Reihenfolge der Spaces sind jetzt auf iPhone und Mac gleich")),
+            ("stethoscope", String(localized: "Hollr schreibt ein kurzes Protokoll und schickt es an deinen Rechner – damit lassen sich Fehler wie ein weißer Bildschirm finden")),
+        ]),
         ReleaseNote(build: 58, date: "22.11.2026", items: [
             ("eye.slash", String(localized: "Spaces verstecken: nach links wischen oder lange drücken – unter „Versteckt“ aufklappen, zurückholen oder beenden")),
             ("arrow.left.arrow.right", String(localized: "Was versteckt ist, merkt sich der Server – iPhone und Mac zeigen immer dieselben Spaces")),

@@ -16,7 +16,6 @@
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
   import { allPanes, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
-  import { resultSeen } from "../inbox.svelte";
   import {
     live, liveAbout, liveActive, startLive as startLiveOn, stopLiveOn,
   } from "../live.svelte";

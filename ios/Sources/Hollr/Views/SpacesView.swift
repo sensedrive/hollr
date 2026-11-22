@@ -5,11 +5,13 @@ struct SpaceRoute: Hashable {
     let space: Space
 }
 
-/// The most urgent state among a space's agent panes (waits for you → new result → working → ready);
-/// herdr's own space state when no agent runs there.
-private func urgentStatus(of space: Space, in refs: [AgentRef]) -> String {
-    refs.filter { $0.pane.pane.hasPrefix(space.id + ":") && $0.pane.agent != nil }
-        .min { $0.statusRank < $1.statusRank }?.pane.status ?? space.status
+/// The most urgent state among a space's agent panes as their dots show it (waits for you → new result → working →
+/// ready; a seen result is ready, one marked unread new); herdr's own space state when no agent runs there.
+@MainActor private func urgentStatus(of space: Space, in refs: [AgentRef], herdr: HerdrStore) -> String {
+    let rank: [String: Int] = ["blocked": 0, "done": 1, "working": 2, "idle": 3]
+    let statuses: [String] = refs.filter { $0.pane.pane.hasPrefix(space.id + ":") && $0.pane.agent != nil }
+        .map { herdr.shownStatus($0) }
+    return statuses.min { (rank[$0] ?? 4) < (rank[$1] ?? 4) } ?? space.status
 }
 
 /// herdr's spaces per server (SpacesSidebar): repos with their worktrees nested below, standalone workspaces;
@@ -32,7 +34,8 @@ struct SpacesView: View {
                 SpacesSection(server: server, dot: serverColor(server), hiddenOpen: $hiddenOpen,
                               onOpen: { opened = SpaceRoute(server: server, space: $0) },
                               onClose: { closingServer = server; closing = $0 },
-                              onHide: { setHidden(server, $0, $1) })
+                              onHide: { setHidden(server, $0, $1) },
+                              onUnread: { markUnread(server, $0) })
             }
         }
         .themedList()
@@ -74,6 +77,18 @@ struct SpacesView: View {
         }
     }
 
+    /// „Als ungelesen markieren“ for every session of the space – shown as new on every device until opened
+    private func markUnread(_ server: Server, _ space: Space) {
+        let refs = herdr.agents(on: server).filter { $0.workspaceId == space.id && $0.pane.agent != nil }
+        Task {
+            do {
+                try await herdr.markUnread(refs)
+            } catch {
+                hideError = error.localizedDescription
+            }
+        }
+    }
+
     /// server status dot: green once its spaces loaded, red on an error, grey while connecting
     private func serverColor(_ server: Server) -> Color {
         if herdr.errors[server.id] != nil { return Theme.red }
@@ -103,6 +118,7 @@ private struct SpacesSection: View {
     let onClose: (Space) -> Void
     /// (space, hidden)
     let onHide: (Space, Bool) -> Void
+    let onUnread: (Space) -> Void
     @Environment(HerdrStore.self) private var herdr
 
     private var spaces: [Space] { herdr.spaces[server.id] ?? [] }
@@ -134,10 +150,12 @@ private struct SpacesSection: View {
 
     private var main: some View {
         let refs = refs
-        let shown: [Space] = HiddenSpaces.shown(spaces) { urgentStatus(of: $0, in: refs) }
-        return ForEach(SpacesView.group(shown), id: \.key) { group in
+        let shown: [Space] = HiddenSpaces.shown(spaces) { urgentStatus(of: $0, in: refs, herdr: herdr) }
+        // in the order dragged on any device (the desktop sidebar)
+        let groups = SharedOrder.groups(SpacesView.group(shown), in: herdr.shared[server.id])
+        return ForEach(groups, id: \.key) { group in
             ForEach(group.spaces) { space in
-                visibleRow(space, status: urgentStatus(of: space, in: refs), nested: space.id != group.key)
+                visibleRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr), nested: space.id != group.key)
             }
         }
         .listRowBackground(Theme.card)
@@ -155,6 +173,9 @@ private struct SpacesSection: View {
             }
         }
         .contextMenu {
+            if refs.contains(where: { $0.workspaceId == space.id && $0.pane.agent != nil }) {
+                Button { onUnread(space) } label: { Label("Als ungelesen markieren", systemImage: "circle.fill") }
+            }
             if !space.isHidden {
                 Button { onHide(space, true) } label: { Label("Verstecken", icon: .eyeSlash) }
             } else {
@@ -171,7 +192,7 @@ private struct SpacesSection: View {
                 .listRowBackground(Theme.card)
             if hiddenOpen {
                 let refs = refs
-                ForEach(hidden) { space in hiddenRow(space, status: urgentStatus(of: space, in: refs)) }
+                ForEach(hidden) { space in hiddenRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr)) }
                     .listRowBackground(Theme.card)
             }
         }
@@ -279,10 +300,15 @@ struct SpaceDetailView: View {
     /// the space as herdr reports it now (its git state changes while the page is open)
     private var current: Space { herdr.spaces[server.id]?.first { $0.id == space.id } ?? space }
     private var allRefs: [AgentRef] { herdr.agents(on: server) }
-    private var refs: [AgentRef] { allRefs.filter { $0.pane.pane.hasPrefix(space.id + ":") } }
+    /// its sessions, the tabs in the order dragged on any device
+    private var refs: [AgentRef] {
+        let own: [AgentRef] = allRefs.filter { $0.pane.pane.hasPrefix(space.id + ":") }
+        return SharedOrder.ordered(own, saved: herdr.tabOrder(server, ws: space.id)) { $0.tabId }
+    }
     private var worktrees: [Space] {
         guard !current.isWorktree, let repo = current.repo else { return [] }
-        return (herdr.spaces[server.id] ?? []).filter { $0.isWorktree && $0.repo == repo }
+        let all: [Space] = (herdr.spaces[server.id] ?? []).filter { $0.isWorktree && $0.repo == repo }
+        return SharedOrder.worktrees(all, saved: herdr.shared[server.id]?.worktreeOrder[current.id])
     }
 
     /// uncommitted files, each once (unstaged first – that's what an agent just changed)
@@ -305,7 +331,7 @@ struct SpaceDetailView: View {
                     Rows {
                         ForEach(worktrees) { worktree in
                             NavigationLink(value: SpaceRoute(server: server, space: worktree)) {
-                                WorktreeRow(space: worktree, status: urgentStatus(of: worktree, in: allRefs))
+                                WorktreeRow(space: worktree, status: urgentStatus(of: worktree, in: allRefs, herdr: herdr))
                             }
                             .buttonStyle(.plain)
                         }
@@ -400,7 +426,8 @@ struct SpaceDetailView: View {
             VStack(spacing: 0) {
                 ForEach(refs) { ref in
                     NavigationLink(value: ref.id) {
-                        SpaceSessionRow(ref: ref, branch: current.git?.branch, live: sessions.sessions[ref.id]?.isLive == true)
+                        SpaceSessionRow(ref: ref, status: herdr.shownStatus(ref), branch: current.git?.branch,
+                                        live: sessions.sessions[ref.id]?.isLive == true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -474,6 +501,8 @@ struct SpaceDetailView: View {
 /// A session of the space (molecule WorkRow): agent badge, status dot + name, branch, coloured state + detail.
 private struct SpaceSessionRow: View {
     let ref: AgentRef
+    /// as the dots show it (HerdrStore.shownStatus)
+    let status: String
     let branch: String?
     let live: Bool
 
@@ -484,7 +513,7 @@ private struct SpaceSessionRow: View {
             AgentBadge(pane: ref.pane)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Gap.s) {
-                    StatusDot(status: ref.pane.status, agent: !shell, size: 7, pulse: ref.pane.status == "working")
+                    StatusDot(status: status, agent: !shell, size: 7, pulse: status == "working")
                     Text(ref.title).font(Typo.md.weight(.semibold)).lineLimit(1)
                     if live {
                         IconView(.activity, size: 12).foregroundStyle(Theme.live).symbolEffect(.variableColor.iterative)
@@ -500,9 +529,9 @@ private struct SpaceSessionRow: View {
                     if shell {
                         Text("Terminal").foregroundStyle(Theme.muted)
                     } else if detail.isEmpty || detail == ref.title {
-                        Text(Theme.statusLabel(ref.pane.status)).foregroundStyle(Theme.statusColor(ref.pane.status))
+                        Text(Theme.statusLabel(status)).foregroundStyle(Theme.statusColor(status))
                     } else {
-                        Text(Theme.statusLabel(ref.pane.status)).foregroundStyle(Theme.statusColor(ref.pane.status))
+                        Text(Theme.statusLabel(status)).foregroundStyle(Theme.statusColor(status))
                             + Text(verbatim: " · \(detail)").foregroundStyle(Theme.muted)
                     }
                 }

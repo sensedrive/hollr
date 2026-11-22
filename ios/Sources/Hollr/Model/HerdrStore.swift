@@ -121,9 +121,14 @@ final class HerdrStore {
                 guard generations[id] == treeGeneration[id] else { continue } // a newer request is under way
                 switch result {
                 case .success(let tree):
-                    trees[id] = tree
+                    trees[id] = stamped(tree, server: id)
                     errors[id] = nil
                     retryAfter[id] = nil
+                    // connected: the shared doc comes along (the feed's `ready` loads it too; an older server
+                    // without a feed gets it here, at most once per refresh until it arrives)
+                    if shared[id] == nil, let server = servers.first(where: { $0.id == id }) {
+                        Task { await loadShared(server) }
+                    }
                 case .failure(let error):
                     errors[id] = error.localizedDescription
                     retryAfter[id] = .now.addingTimeInterval(30)
@@ -137,6 +142,7 @@ final class HerdrStore {
         }
         let ids = Set(servers.map(\.id))
         trees = trees.filter { ids.contains($0.key) }
+        shared = shared.filter { ids.contains($0.key) }
         loaded = true
     }
 
@@ -146,7 +152,7 @@ final class HerdrStore {
         do {
             let tree = try await HollrClient.tree(server)
             guard gen == treeGeneration[server.id] else { return }
-            trees[server.id] = tree
+            trees[server.id] = stamped(tree, server: server.id)
             errors[server.id] = nil
             retryAfter[server.id] = nil
         } catch {
@@ -155,10 +161,177 @@ final class HerdrStore {
         }
     }
 
+    /// Servers before `since` (it came with `shared`): when this app first saw each pane in its status, so seen and
+    /// dismissed results still work there (in memory). Per server, only panes of the newest tree are kept.
+    @ObservationIgnored private var localSince: [UUID: [String: (status: String, since: Double)]] = [:]
+
+    private func stamped(_ tree: [Workspace], server: UUID) -> [Workspace] {
+        let missing = tree.contains { ws in ws.tabs.contains { tab in tab.panes.contains { $0.since == nil } } }
+        guard missing else { return tree }
+        let now = Date().timeIntervalSince1970 * 1000
+        let known = localSince[server] ?? [:]
+        var next: [String: (status: String, since: Double)] = [:]
+        func stamp(_ pane: Pane) -> Pane {
+            var pane = pane
+            if let was = known[pane.pane], was.status == pane.status { pane.since = was.since } else { pane.since = now }
+            next[pane.pane] = (status: pane.status, since: pane.since ?? now)
+            return pane
+        }
+        let result: [Workspace] = tree.map { ws in
+            let tabs: [Tab] = ws.tabs.map { tab in
+                Tab(id: tab.id, label: tab.label, number: tab.number, focused: tab.focused, panes: tab.panes.map(stamp))
+            }
+            return Workspace(id: ws.id, label: ws.label, number: ws.number, focused: ws.focused, status: ws.status, tabs: tabs)
+        }
+        localSince[server] = next
+        return result
+    }
+
+    // MARK: shared with the other apps (`hollr gate shared`)
+
+    /// Per server: what the desktop app and this app share (SharedState); nil until loaded. A server before
+    /// `shared` gets a doc in memory only, for this run.
+    private(set) var shared: [UUID: SharedState] = [:]
+    /// servers that answered `not_allowed`: changes stay in memory, nothing is asked again
+    private var sharedInMemory: Set<UUID> = []
+    /// per server: bumped by every load and change – an answer that started before a newer one is stale
+    private var sharedSeq: [UUID: Int] = [:]
+    /// paired servers (for dropping the local "Meine Sitzungen" of servers no longer paired)
+    private var paired: Set<UUID> = []
+
+    private func nextSharedSeq(_ id: UUID) -> Int {
+        let n = (sharedSeq[id] ?? 0) + 1
+        sharedSeq[id] = n
+        return n
+    }
+
+    /// Loads the doc: on (re)connecting and when the feed says another device changed it.
+    func loadShared(_ server: Server) async {
+        guard !sharedInMemory.contains(server.id) else { return }
+        let seq = nextSharedSeq(server.id)
+        do {
+            let doc = try await HollrClient.shared(server)
+            guard sharedSeq[server.id] == seq else { return }
+            shared[server.id] = doc
+            await migrateMySessions(server, doc)
+        } catch HollrError.server("not_allowed") {
+            sharedInMemory.insert(server.id)
+            // what this phone listed itself still shows there
+            if shared[server.id] == nil { shared[server.id] = SharedState(mySessions: MySessions.legacy(for: server.id)) }
+        } catch {
+            HollrLog.error("shared \(server.label): \(error.localizedDescription)")
+        }
+    }
+
+    /// Once per server: "Meine Sitzungen" this phone kept itself go to the server (unless it has a list already),
+    /// then the local list of that server is deleted.
+    private func migrateMySessions(_ server: Server, _ doc: SharedState) async {
+        let local = MySessions.legacy(for: server.id)
+        guard !local.isEmpty else { return }
+        if doc.mySessions.isEmpty {
+            do {
+                try await patchShared(server, [.mySessions(Array(local.prefix(MySessions.max)))])
+            } catch {
+                return // tried again on the next load
+            }
+        }
+        MySessions.forgetLegacy(of: server.id, paired: paired)
+    }
+
+    /// Changes the doc right away; the server's answer confirms it. On an error it goes back and the error is
+    /// thrown. Nothing is sent when nothing changes – views may call this on every appearance.
+    func patchShared(_ server: Server, _ changes: [SharedChange]) async throws {
+        let before = shared[server.id] ?? SharedState()
+        let next = before.applying(changes)
+        guard next != before else { return }
+        shared[server.id] = next
+        let seq = nextSharedSeq(server.id)
+        guard !sharedInMemory.contains(server.id) else { return }
+        do {
+            let answer = try await HollrClient.patchShared(server, changes)
+            if sharedSeq[server.id] == seq { shared[server.id] = answer }
+        } catch HollrError.server("not_allowed") {
+            sharedInMemory.insert(server.id) // an older server: the change stays in memory
+        } catch {
+            // a newer change went out meanwhile: the server's doc says what holds
+            if sharedSeq[server.id] == seq { shared[server.id] = before } else { await loadShared(server) }
+            throw error
+        }
+    }
+
+    /// the doc, loaded first when it isn't yet (a whole-list change needs the current list)
+    private func currentShared(_ server: Server) async -> SharedState? {
+        if shared[server.id] == nil { await loadShared(server) }
+        return shared[server.id]
+    }
+
+    /// The status a session's dot and the lists show (seen results quiet, ones marked unread as new).
+    func shownStatus(_ ref: AgentRef) -> String {
+        shared[ref.server.id]?.shownStatus(ref.pane) ?? ref.pane.status
+    }
+
+    func isUnread(_ ref: AgentRef) -> Bool { shared[ref.server.id]?.isUnread(ref.pane.pane) == true }
+
+    /// in "Meine Sitzungen"
+    func isMine(_ ref: AgentRef) -> Bool { shared[ref.server.id]?.mySessions.contains(ref.pane.pane) == true }
+
+    /// The session is on screen: its result counts as seen, an unread mark is used up, and it moves to the front of
+    /// "Meine Sitzungen" – one change. Nothing done by hand: a failure is only logged.
+    func opened(_ ref: AgentRef) async {
+        guard let doc = await currentShared(ref.server) else { return }
+        let pane = ref.pane.pane
+        var changes: [SharedChange] = [.unread(pane, false), .mySessions(MySessions.touching(doc.mySessions, pane))]
+        if let since = ref.pane.since, ref.pane.status == "done" || ref.pane.status == "blocked" {
+            changes.append(.seen(pane, since))
+        }
+        do { try await patchShared(ref.server, changes) } catch { HollrLog.error("shared opened: \(error.localizedDescription)") }
+    }
+
+    /// An open session turned done (or waits): what it shows now is seen – unless it was marked unread meanwhile.
+    func seeing(_ ref: AgentRef) async {
+        guard let since = ref.pane.since, ref.pane.status == "done" || ref.pane.status == "blocked", !isUnread(ref) else { return }
+        do { try await patchShared(ref.server, [.seen(ref.pane.pane, since)]) } catch { HollrLog.error("shared seen: \(error.localizedDescription)") }
+    }
+
+    /// A new session: first in "Meine Sitzungen" right away (before its chat is on screen).
+    func started(_ server: Server, pane: String) async {
+        guard let doc = await currentShared(server) else { return }
+        do { try await patchShared(server, [.mySessions(MySessions.touching(doc.mySessions, pane))]) } catch {
+            HollrLog.error("shared started: \(error.localizedDescription)")
+        }
+    }
+
+    /// „Als ungelesen markieren“: shows as a new result (dot, card) on every device until opened.
+    func markUnread(_ refs: [AgentRef]) async throws {
+        let byServer = Dictionary(grouping: refs) { $0.server.id }
+        for (_, list) in byServer {
+            guard let server = list.first?.server else { continue }
+            try await patchShared(server, list.map { .unread($0.pane.pane, true) })
+        }
+    }
+
+    /// The card's „Gesehen“: hidden until the pane's next status; an unread mark goes with it.
+    func dismiss(_ entry: InboxEntry) async throws {
+        let pane = entry.ref.pane.pane
+        var changes: [SharedChange] = [.unread(pane, false)]
+        if let since = entry.ref.pane.since { changes.append(.dismissed(pane, since)) }
+        try await patchShared(entry.ref.server, changes)
+    }
+
+    /// „Aus der Übersicht nehmen“
+    func removeMine(_ ref: AgentRef) async throws {
+        guard let doc = await currentShared(ref.server) else { return }
+        try await patchShared(ref.server, [.mySessions(doc.mySessions.filter { $0 != ref.pane.pane })])
+    }
+
+    /// the space's tab ids in their dragged order
+    func tabOrder(_ server: Server, ws: String) -> [String]? { shared[server.id]?.tabOrder[ws] }
+
     // MARK: live change feed (`hollr gate events`)
 
     /// Keeps one feed per server while the app is active; changes in herdr show up right away.
     func startFeeds(_ servers: [Server]) {
+        paired = Set(servers.map(\.id))
         for server in servers where feeds[server.id] == nil {
             feeds[server.id] = Task { [weak self] in await self?.runFeed(server) }
         }
@@ -212,10 +385,13 @@ final class HerdrStore {
                             case "ready":
                                 live.insert(server.id)
                                 backoff = 2
+                                // (re)connected: another device may have changed what both share meanwhile
+                                await loadShared(server)
                             case "changed":
                                 changeCount += 1
                                 await refresh(server: server)
                                 if obj["spaces"] as? Bool == true { await refreshSpaces([server]) } else { refreshSpacesSoon(server) }
+                                if obj["shared"] as? Bool == true { await loadShared(server) }
                             default:
                                 break
                             }
@@ -238,7 +414,7 @@ final class HerdrStore {
             ws.tabs.flatMap { tab in
                 tab.panes.map {
                     AgentRef(server: server, workspace: ws.label, workspaceNumber: ws.number,
-                             tab: tab.label, tabNumber: tab.number, pane: $0)
+                             tab: tab.label, tabNumber: tab.number, pane: $0, tabId: tab.id)
                 }
             }
         }

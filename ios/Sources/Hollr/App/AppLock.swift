@@ -90,7 +90,9 @@ private struct AppLockModifier: ViewModifier {
         guard !authenticating else { return }
         authenticating = true
         defer { authenticating = false }
-        if await AppLock.authenticate() {
+        let ok = await AppLock.authenticate()
+        Diagnostics.shared.note("app lock: \(ok ? "unlocked" : "still locked")")
+        if ok {
             withAnimation { locked = false }
         }
     }

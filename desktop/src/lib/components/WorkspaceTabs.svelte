@@ -5,14 +5,15 @@
   // (agents after asking), ＋ starts a new session in the same space. 〰 marks the tab a live call runs on, ↳ a chat
   // with context (a fork of another session, `fork` on the server) – it sits right behind its session's tab. In a
   // session the bar also carries its tools (`actions`).
-  // Tabs can be dragged into another order – kept in Hollr per workspace (herdr has no "tab move").
+  // Tabs can be dragged into another order – kept in the server's shared doc per workspace, so the phone shows the
+  // same (herdr has no "tab move").
   import { tick, type Snippet } from "svelte";
   import Icon from "./git/Icon.svelte";
   import { isSideChatLabel } from "$lib/sidechats.svelte";
   import * as api from "$lib/api";
   import { t } from "$lib/i18n";
   import type { Workspace } from "$lib/api";
-  import { dialogs, go, mySessions, refresh } from "$lib/store.svelte";
+  import { app, dialogs, go, mySessions, refresh } from "$lib/store.svelte";
   import { dotStatus, markUnread } from "$lib/inbox.svelte";
   import ConfirmDialog from "$lib/views/dashboard/ConfirmDialog.svelte";
   import ContextMenu from "$lib/views/dashboard/ContextMenu.svelte";
@@ -22,7 +23,8 @@
   import { forksAfterParents, moveBefore, ordered } from "$lib/tabOrder";
   import { chatLabel } from "$lib/contextChatText";
   import { canFork, contextChat, startContextChat } from "$lib/contextChat.svelte";
-  import { tabOrders } from "$lib/tabOrders.svelte";
+  import { shared, showError } from "$lib/shared.svelte";
+  import { staleEntries } from "$lib/sharedState";
 
   /** `active`: the open session's pane – none in the space view, then the space tab is the active one */
   /** `actions`: the open session's tools, right-aligned in the same bar (AgentView) */
@@ -30,19 +32,27 @@
   type Tab = (typeof ws.tabs)[number];
   type Pane = Tab["panes"][number];
 
-  const orderKey = $derived(`${server}|${ws.id}`);
   // a chat with context sits right behind its session's tab; sidechats ("Nachfragen") are forks too – they live
   // in the session's panel, not here
   const tabs = $derived.by(() => {
     const own = ws.tabs.filter((tb) => !isSideChatLabel(tb.label));
     const tabOf = new Map(own.flatMap((tb) => tb.panes.map((p) => [p.pane, tb.id] as const)));
-    return forksAfterParents(ordered(own, tabOrders.all[orderKey], (tb) => tb.id), (tb) => tb.id, (tb) => {
+    return forksAfterParents(ordered(own, shared.of(server).tabOrder[ws.id], (tb) => tb.id), (tb) => tb.id, (tb) => {
       const of = tb.panes[0]?.fork?.of;
       return of ? tabOf.get(of) : undefined;
     });
   });
-  const moveTab = (id: string, before: string | null) =>
-    tabOrders.set(orderKey, moveBefore(tabs.map((tb) => tb.id), id, before));
+  /** saves the new order – and drops the orders of workspaces that are gone */
+  function moveTab(id: string, before: string | null) {
+    const ids = moveBefore(tabs.map((tb) => tb.id), id, before);
+    const alive = new Set((app.trees[server] ?? []).map((w) => w.id));
+    shared
+      .update(server, (doc) => [
+        { path: ["tabOrder", ws.id], value: ids },
+        ...(alive.size ? staleEntries("tabOrder", doc.tabOrder, alive.add(ws.id)) : []),
+      ])
+      .catch(showError);
+  }
 
   // the open session's tab stays in sight: with its tools in the same bar the strip is narrow, and the tab is the
   // only place that names the session (no header)
@@ -122,7 +132,7 @@
         { label: t("Öffnen"), icon: "↗", action: () => openTab(pane) },
         { label: t("Umbenennen …"), icon: "✎", action: () => startRename(tab) },
         { label: t("Neues Terminal hier"), icon: "＋", action: () => (dialogs.newSession = { server, ws: ws.id }) },
-        { label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(tab.panes.map((p) => `${server}|${p.pane}`)) },
+        { label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(server, tab.panes.map((p) => p.pane)) },
         ...(canFork(pane) && !contextChat.busy
           ? [{ label: t("Neuer Chat mit Kontext"), icon: "chat-plus", action: () => void startContextChat(server, pane.pane) }]
           : []),
@@ -173,7 +183,7 @@
               onclick={() => openTab(pane)}
               onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); askClose(tab, pane); } }}
               ondblclick={() => startRename(tab)} oncontextmenu={(e) => tabMenu(e, tab, pane)}>
-              <span class="dot {dotStatus(`${server}|${pane.pane}`, pane.status)}"></span>
+              <span class="dot {dotStatus(server, pane)}"></span>
               {#if pane.fork}<span class="derived"><Icon name="corner" size={12} /></span>{/if}
               <span class="name ellipsis">{nameOf(tab, pane)}</span>
               <LiveMark {server} pane={pane.pane} />

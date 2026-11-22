@@ -1,5 +1,7 @@
 // "Braucht dich": agents that wait for the user (or just finished) as compact inbox entries.
-// Pure part – the timeline → entry rules, ordering and throttling. State and fetching live in inbox.svelte.ts.
+// Pure part – the timeline → entry rules, what counts as seen, ordering and throttling. State and fetching live in
+// inbox.svelte.ts; seen / dismissed / unread come from the server's shared doc (shared.svelte.ts), so the phone
+// and this app show the same cards.
 import type { HistoryEvent } from "./agent";
 import type { Timeline } from "./api";
 
@@ -20,18 +22,44 @@ export interface InboxDetail {
   at?: number;
 }
 
-/** A pane as the tree knows it (status working|blocked|idle|done). */
+/** A pane as the tree knows it (status working|blocked|idle|done) with its marks from the shared doc. */
 export interface InboxPane {
   id: string;
   status: string;
+  /** server time the pane entered its status (tree `since`; this app's own time on servers without it) */
+  since: number;
+  /** the `since` whose result was looked at */
+  seen?: number;
+  /** the `since` whose card was removed by hand */
+  dismissed?: number;
+  /** marked unread by hand */
+  unread?: boolean;
 }
 
 export interface InboxEntry extends InboxDetail {
   id: string;
-  /** dismiss/answer key: pane + turn */
+  /** card key: pane + the status's `since` (the same on every device) */
   key: string;
-  /** since when it is in this state (ms): the log's time when known, else when this app first saw it */
+  /** the status's `since` – what dismissing writes */
+  entered: number;
+  /** since when it is in this state (ms): the log's time when known, else the status's `since` */
   since: number;
+}
+
+export const cardKey = (id: string, since: number) => `${id}@${since}`;
+
+/** The status a pane's card and dot show: one marked unread shows as a fresh result until opened. */
+export const cardStatus = (p: Pick<InboxPane, "status" | "unread">) =>
+  p.unread && p.status === "idle" ? "done" : p.status;
+
+/** a result looked at on some device (the same status, not a newer one) and not marked unread since */
+export const resultSeen = (p: Pick<InboxPane, "since" | "seen" | "unread">) => !p.unread && p.seen === p.since;
+
+/** The dot a session shows: a seen result is quiet, one marked unread is blue like a fresh result. */
+export function dotFor(p: Pick<InboxPane, "status" | "since" | "seen" | "unread">): string {
+  if (p.status === "working" || p.status === "blocked") return p.status;
+  if (p.unread) return "done";
+  return p.status === "done" && resultSeen(p) ? "idle" : p.status;
 }
 
 /** how often one pane's timeline is fetched at most */
@@ -89,38 +117,33 @@ const RANK: Record<InboxKind, number> = { ask: 0, waiting: 0, error: 1, done: 2 
 
 /**
  * The inbox: waiting agents first (longest waiting on top), then errors, then finished ones (newest on top).
- * Without a fetched detail the entry is built from the status alone.
+ * Without a fetched detail the entry is built from the status alone. A card stays away once dismissed, a result
+ * once seen – each for that status only (`since`); a pane marked unread shows its card in spite of both.
  */
 export function buildEntries(
   panes: InboxPane[],
   s: {
     details: Record<string, InboxDetail | undefined>;
-    since: Record<string, number | undefined>;
-    dismissed: Record<string, boolean | undefined>;
+    /** card key → when it was answered from the dashboard (this app only, short-lived) */
     answered: Record<string, number | undefined>;
-    /** pane → last time the user had that session open: a "done" / error from before is seen */
-    seen?: Record<string, number | undefined>;
   },
   now: number,
 ): InboxEntry[] {
   const out: InboxEntry[] = [];
   for (const p of panes) {
-    if (!wantsYou(p.status)) continue;
+    const status = cardStatus(p);
+    if (!wantsYou(status)) continue;
+    if (!p.unread && p.dismissed === p.since) continue;
     const fetched = s.details[p.id];
     // a detail from the other state (e.g. still "done" while the tree already says "blocked") is stale
-    const fits = fetched && (p.status === "blocked") === (fetched.kind === "ask" || fetched.kind === "waiting");
-    /** when this app saw it – the "seen" check compares local times only (the server's clock may be off) */
-    const noticed = s.since[p.id] ?? now;
-    const since = (fits ? fetched.at : undefined) ?? noticed;
-    const detail: InboxDetail = fits ? fetched : { kind: p.status === "blocked" ? "waiting" : "done", turn: `@${noticed}` };
-    const key = `${p.id}#${detail.turn}`;
-    if (s.dismissed[key]) continue;
+    const fits = fetched && (status === "blocked") === (fetched.kind === "ask" || fetched.kind === "waiting");
+    const detail: InboxDetail = fits ? fetched : { kind: status === "blocked" ? "waiting" : "done", turn: `@${p.since}` };
     // a question still waits for an answer however long it was looked at; a result is seen once opened
-    const seenAt = s.seen?.[p.id];
-    if ((detail.kind === "done" || detail.kind === "error") && seenAt !== undefined && seenAt >= noticed) continue;
+    if ((detail.kind === "done" || detail.kind === "error") && resultSeen(p)) continue;
+    const key = cardKey(p.id, p.since);
     const answered = s.answered[key];
     if (answered && now - answered < ANSWERED_MS) continue;
-    out.push({ ...detail, id: p.id, key, since });
+    out.push({ ...detail, id: p.id, key, entered: p.since, since: (fits ? fetched.at : undefined) ?? p.since });
   }
   return out.sort((a, b) => RANK[a.kind] - RANK[b.kind] || (a.kind === "done" ? b.since - a.since : a.since - b.since));
 }

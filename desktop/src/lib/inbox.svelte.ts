@@ -1,59 +1,28 @@
-// "Braucht dich" state: which agents wait for the user, what they ask, and what was already answered or
-// dismissed (memory only). The count works from the tree statuses alone; the dashboard additionally fetches
-// the timelines of those panes (ETag, at most every 5 s each) for question, options and last answer.
+// "Braucht dich" state: which agents wait for the user, what they ask, and what was already seen, dismissed or
+// marked unread – that part lives in each server's shared doc (shared.svelte.ts), so the phone shows the same.
+// Cards answered from the dashboard hide for a moment (this app only). The count works from the tree statuses
+// alone; the dashboard additionally fetches the timelines of those panes (ETag, at most every 5 s each) for
+// question, options and last answer.
 import * as api from "./api";
+import type { Pane } from "./api";
 import { history } from "./agent";
-import { buildEntries, fromHistory, fromTimeline, isDue, wantsYou, type InboxDetail, type InboxEntry } from "./inbox";
+import {
+  buildEntries, cardStatus, dotFor, fromHistory, fromTimeline, isDue, resultSeen as seenResult, wantsYou,
+  type InboxDetail, type InboxEntry, type InboxPane,
+} from "./inbox";
 import { allPanes, refresh, type PaneRef } from "./store.svelte";
 import { isHidden } from "./hiddenSpaces.svelte";
+import { shared, showError, type SharedChange, type SharedState } from "./shared.svelte";
 
 export type { InboxEntry } from "./inbox";
 
-const SEEN_KEY = "hollr.inbox.seen";
-const SINCE_KEY = "hollr.inbox.since";
-const STATUS_KEY = "hollr.inbox.status";
-const UNREAD_KEY = "hollr.inbox.unread";
-
-function loadNums(key: string): Record<string, number> {
-  try {
-    const raw = JSON.parse(localStorage.getItem(key) ?? "{}");
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-    const out: Record<string, number> = {};
-    for (const [k, v] of Object.entries(raw)) if (typeof v === "number") out[k] = v;
-    return out;
-  } catch {
-    return {};
-  }
-}
-function loadStrings(key: string): Record<string, string> {
-  try {
-    const raw = JSON.parse(localStorage.getItem(key) ?? "{}");
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(raw)) if (typeof v === "string") out[k] = v;
-    return out;
-  } catch {
-    return {};
-  }
-}
-const persist = (key: string, value: object) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* private mode: seen state lasts this session only */
-  }
-};
-
 export const inbox = $state({
   details: {} as Record<string, InboxDetail | undefined>,
-  /** "serverId|pane" → when it was first seen waiting/finished */
-  since: loadNums(SINCE_KEY) as Record<string, number | undefined>,
-  dismissed: {} as Record<string, boolean | undefined>,
-  /** "serverId|pane" → last time that session was open in front of the user (see markSeen) */
-  seen: loadNums(SEEN_KEY) as Record<string, number | undefined>,
+  /** "serverId|pane" → when this app saw it start waiting/finish – stands in for the tree's `since` on servers
+   *  before 0.48 */
+  noticed: {} as Record<string, number | undefined>,
+  /** card key → when it was answered from here (hidden for ANSWERED_MS) */
   answered: {} as Record<string, number | undefined>,
-  /** "serverId|pane" → marked unread by hand (blue dot until opened again) */
-  unread: loadNums(UNREAD_KEY) as Record<string, number | undefined>,
   /** a failed answer, per entry key */
   errors: {} as Record<string, string | undefined>,
   /** bumped every few seconds so answered entries come back on time */
@@ -63,60 +32,68 @@ export const inbox = $state({
 /** not reactive: fetch bookkeeping per pane */
 const etags: Record<string, string | undefined> = {};
 const lastFetch: Record<string, number | undefined> = {};
-const lastStatus: Record<string, string | undefined> = loadStrings(STATUS_KEY);
+/** "status@since" per pane – a new status (or the same one again, later) means a new turn */
+const lastState: Record<string, string | undefined> = {};
 const inflight = new Set<string>();
 
 const agentPanes = () => allPanes().filter((r) => r.pane.agent);
 
-/** The inbox with its pane refs (reactive: reads app.trees and the inbox state). Spaces taken off the list
- *  stay out unless the agent waits for you. */
+/** when the pane entered its status: the server's stamp, the same on every device */
+const sinceOf = (server: string, pane: Pane) => pane.since ?? inbox.noticed[`${server}|${pane.pane}`] ?? inbox.now;
+
+/** the pane with its marks from the server's shared doc */
+function marked(server: string, pane: Pane): InboxPane {
+  const doc = shared.of(server);
+  return {
+    id: `${server}|${pane.pane}`,
+    status: pane.status,
+    since: sinceOf(server, pane),
+    seen: doc.seen[pane.pane],
+    dismissed: doc.dismissed[pane.pane],
+    unread: doc.unread[pane.pane] === true,
+  };
+}
+
+/** The inbox with its pane refs (reactive: reads app.trees, the shared docs and the inbox state). Spaces taken
+ *  off the list stay out unless the agent waits for you. */
 export function inboxEntries(): (InboxEntry & { ref: PaneRef })[] {
   const refs = new Map(agentPanes().filter((r) => !isHidden(r)).map((r) => [r.id, r]));
-  return buildEntries([...refs.values()].map((r) => ({ id: r.id, status: r.pane.status })), inbox, inbox.now).map((e) => ({
+  return buildEntries([...refs.values()].map((r) => marked(r.server.id, r.pane)), inbox, inbox.now).map((e) => ({
     ...e,
     ref: refs.get(e.id)!,
   }));
 }
 
-/** After a tree refresh: note when panes started waiting, forget the details of the rest. Call untracked. */
+/** After a tree refresh: note new turns, forget the details of the rest. Call untracked. */
 export function trackInbox(now = Date.now()) {
-  const seen = new Set<string>();
-  let dirty = false;
+  const alive = new Set<string>();
   for (const r of agentPanes()) {
-    seen.add(r.id);
-    const status = r.pane.status;
-    if (lastStatus[r.id] !== status) {
-      lastStatus[r.id] = status;
-      if (wantsYou(status)) inbox.since[r.id] = now;
-      else forget(r.id);
-      dirty = true;
-      // a status change means a new turn may be there – fetch on the next round
-      lastFetch[r.id] = undefined;
-    }
+    alive.add(r.id);
+    const state = `${r.pane.status}@${r.pane.since ?? ""}`;
+    if (lastState[r.id] === state) continue;
+    lastState[r.id] = state;
+    if (wantsYou(r.pane.status)) inbox.noticed[r.id] = now;
+    else forget(r.id);
+    // a new turn may be there – fetch on the next round
+    lastFetch[r.id] = undefined;
   }
-  for (const id of Object.keys(lastStatus)) if (!seen.has(id)) forget(id), delete lastStatus[id], (dirty = true);
+  for (const id of Object.keys(lastState)) if (!alive.has(id)) forget(id), delete lastState[id];
   inbox.now = now;
-  if (dirty) {
-    persist(SINCE_KEY, inbox.since);
-    persist(SEEN_KEY, inbox.seen);
-    persist(STATUS_KEY, lastStatus);
-  }
 }
 
 function forget(id: string) {
   delete inbox.details[id];
-  delete inbox.since[id];
-  delete inbox.seen[id];
+  delete inbox.noticed[id];
   delete etags[id];
   delete lastFetch[id];
 }
 
-/** Fetches the detail of every waiting/finished pane that is due. Failures just leave the entry plain. */
+/** Fetches the detail of every pane with a card that is due. Failures just leave the entry plain. */
 export async function fetchInbox(now = Date.now()) {
   inbox.now = now;
   await Promise.all(
     agentPanes()
-      .filter((r) => wantsYou(r.pane.status) && isDue(lastFetch[r.id], now) && !inflight.has(r.id))
+      .filter((r) => wantsYou(cardStatus(marked(r.server.id, r.pane))) && isDue(lastFetch[r.id], now) && !inflight.has(r.id))
       .map((r) => load(r, now)),
   );
 }
@@ -124,9 +101,10 @@ export async function fetchInbox(now = Date.now()) {
 async function load(r: PaneRef, now: number) {
   inflight.add(r.id);
   lastFetch[r.id] = now;
-  const status = r.pane.status;
+  const status = cardStatus(marked(r.server.id, r.pane));
+  const state = lastState[r.id];
   // the pane moved on while we waited for the answer → drop it
-  const current = () => lastStatus[r.id] === status;
+  const current = () => lastState[r.id] === state;
   try {
     if (r.pane.agent === "omp") {
       const tl = await api.timeline(r.server.id, r.pane.pane, inbox.details[r.id] ? etags[r.id] : undefined);
@@ -145,27 +123,48 @@ async function load(r: PaneRef, now: number) {
   }
 }
 
-/** Hide until the next event of that pane. */
-export const dismiss = (e: InboxEntry) => (inbox.dismissed[e.key] = true);
-
-/** The user has this session open right now: its result (done / error) up to now counts as seen. */
-export function markSeen(id: string, now = Date.now()) {
-  // marked unread by hand: stays so while it is still open – opening it again clears it (openedAgain)
-  if (inbox.unread[id] !== undefined) return;
-  const prev = inbox.seen[id];
-  if (prev !== undefined && prev >= (inbox.since[id] ?? 0)) return;
-  inbox.seen[id] = now;
-  persist(SEEN_KEY, inbox.seen);
+/** "Als gesehen markieren": the card goes on every device until the pane's next status. */
+export function dismiss(e: InboxEntry & { ref: PaneRef }) {
+  const pane = e.ref.pane.pane;
+  shared
+    .update(e.ref.server.id, () => [
+      { path: ["dismissed", pane], value: e.entered },
+      { path: ["unread", pane], value: null },
+    ])
+    .catch(showError);
 }
 
-/** A finished session whose window was open after it finished. A newer result (status flipped again) counts fresh. */
-export function resultSeen(id: string): boolean {
-  if (inbox.unread[id] !== undefined) return false;
-  const seen = inbox.seen[id];
-  if (seen === undefined) return false;
-  const since = inbox.since[id];
-  return since === undefined || seen >= since;
+/**
+ * The user has these sessions in front of them: a result (done) or question (blocked) up to now counts as seen on
+ * every device. `opened`: just navigated there – that uses up a hand-made unread mark; later calls while it stays
+ * open (a result coming in meanwhile) leave such a mark alone.
+ */
+export function markSeen(server: string, panes: Pane[], opened = false) {
+  if (!panes.length) return;
+  const make = (doc: SharedState) =>
+    panes.flatMap((p): SharedChange[] => {
+      const unread = doc.unread[p.pane] === true;
+      if (unread && !opened) return [];
+      const since = p.since ?? inbox.noticed[`${server}|${p.pane}`];
+      return [
+        ...(unread ? [{ path: ["unread", p.pane], value: null } satisfies SharedChange] : []),
+        ...(wantsYou(p.status) && since !== undefined ? [{ path: ["seen", p.pane], value: since } satisfies SharedChange] : []),
+      ];
+    });
+  // unchanged values send nothing; a failure is tried again on the next tree refresh
+  shared.update(server, make).catch(() => {});
 }
+
+/** A finished session whose result was looked at (here or on the phone). A newer result counts fresh. */
+export const resultSeen = (server: string, pane: Pane) => seenResult(marked(server, pane));
+
+/** "Als ungelesen markieren": the blue dot (and a card) comes back on every device until the session is opened. */
+export function markUnread(server: string, panes: string[]) {
+  shared.update(server, () => panes.map((p): SharedChange => ({ path: ["unread", p], value: true }))).catch(showError);
+}
+
+/** The dot a session shows: a seen result is quiet, one marked unread is blue like a fresh result. */
+export const dotStatus = (server: string, pane: Pane) => dotFor(marked(server, pane));
 
 /** Optimistically hide, then refresh that pane soon (it comes back if the agent still waits). */
 async function act(e: InboxEntry & { ref: PaneRef }, send: () => Promise<unknown>): Promise<boolean> {
@@ -197,25 +196,3 @@ export const answerPicks = (e: InboxEntry & { ref: PaneRef }, ask: string, picks
 /** Sends a message like the composer does. */
 export const reply = (e: InboxEntry & { ref: PaneRef }, text: string) =>
   act(e, () => api.prompt(e.ref.server.id, e.ref.pane.pane, text));
-
-/** "Als ungelesen markieren": the blue dot comes back until the session is opened again. */
-export function markUnread(ids: string[], now = Date.now()) {
-  for (const id of ids) inbox.unread[id] = now;
-  persist(UNREAD_KEY, inbox.unread);
-}
-
-/** The user navigated to these sessions: a hand-made unread mark is used up. */
-export function openedAgain(ids: string[]) {
-  let dirty = false;
-  for (const id of ids) if (inbox.unread[id] !== undefined) delete inbox.unread[id], (dirty = true);
-  if (dirty) persist(UNREAD_KEY, inbox.unread);
-}
-
-export const isUnread = (id: string) => inbox.unread[id] !== undefined;
-
-/** The dot a session shows: a seen result is quiet, one marked unread is blue like a fresh result. */
-export function dotStatus(id: string, status: string): string {
-  if (status === "working" || status === "blocked") return status;
-  if (isUnread(id)) return "done";
-  return status === "done" && resultSeen(id) ? "idle" : status;
-}

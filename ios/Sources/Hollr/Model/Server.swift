@@ -48,6 +48,9 @@ struct Pane: Codable, Identifiable, Hashable {
     let focused: Bool
     /// omp panes support /live
     let live: Bool
+    /// server time (ms) the pane entered its current status – seen / dismissed results are keyed with it, the same
+    /// on every device (SharedState). Older servers don't send it: then HerdrStore stamps it locally.
+    var since: Double? = nil
 
     var id: String { pane }
     var folder: String { cwd.split(separator: "/").last.map(String.init) ?? cwd }
@@ -70,6 +73,8 @@ struct AgentRef: Hashable, Identifiable {
     let tab: String
     let tabNumber: Int
     let pane: Pane
+    /// herdr tab id (the dragged tab order is kept by it)
+    var tabId: String = ""
 
     var id: String { "\(server.id.uuidString)|\(pane.pane)" }
 

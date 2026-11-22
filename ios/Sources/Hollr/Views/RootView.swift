@@ -25,7 +25,6 @@ struct RootView: View {
     @State private var sheetDetent: PresentationDetent = .fraction(0.82)
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var wide: Bool { sizeClass == .regular }
-    @Environment(MySessions.self) private var mySessions
 
     enum RootTab { case home, spaces, agents, plugins, settings }
 
@@ -170,7 +169,7 @@ struct RootView: View {
             NewChatView { server, pane in
                 // new sessions open as sheet over the dashboard, like tapping a card
                 let id = "\(server.id.uuidString)|\(pane)"
-                mySessions.touch(id)
+                Task { await herdr.started(server, pane: pane) }
                 tab = .home
                 Task {
                     try? await Task.sleep(for: .milliseconds(450))
@@ -185,6 +184,8 @@ struct RootView: View {
         .task(id: scenePhase) {
             // keep herdr state fresh while the app is in the foreground: the live feed pushes
             // changes; polling stays as a slow safety net (fast only while a feed is down)
+            // the root view runs (a white screen without this line: SwiftUI never got to it)
+            Diagnostics.shared.note("root phase \(scenePhase)")
             NetworkWatch.shared.setActive(scenePhase != .background)
             guard scenePhase == .active else {
                 herdr.stopFeeds()
@@ -194,6 +195,11 @@ struct RootView: View {
             }
             NetworkWatch.shared.start()
             herdr.startFeeds(store.servers)
+            // the breadcrumbs since the last upload go to a server once the connections are up
+            Task {
+                try? await Task.sleep(for: .seconds(5))
+                await Diagnostics.shared.upload(servers: store.servers)
+            }
             while scenePhase == .active, !Task.isCancelled {
                 let network = NetworkWatch.shared.generation
                 // after a network change a failed server is asked again right away, not after its 30 s pause

@@ -6,6 +6,8 @@ struct InboxSection: View {
     @Environment(Inbox.self) private var inbox
     @Environment(HerdrStore.self) private var herdr
     let open: (String) -> Void
+    /// „Gesehen“ didn't reach the server – the card is back (shown here: the card itself went away meanwhile)
+    @State private var dismissError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Gap.m) {
@@ -16,12 +18,24 @@ struct InboxSection: View {
                 quiet
             } else {
                 ForEach(inbox.entries) { entry in
-                    InboxCard(entry: entry, branch: herdr.branch(of: entry.ref), open: { open(entry.id) })
+                    InboxCard(entry: entry, branch: herdr.branch(of: entry.ref), open: { open(entry.id) },
+                              seen: { dismiss(entry) })
                         .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
                 }
             }
         }
         .animation(.easeInOut(duration: 0.25), value: inbox.entries.map(\.id))
+        .alert("Fehler", isPresented: Binding(get: { dismissError != nil }, set: { if !$0 { dismissError = nil } })) {
+            Button("OK") { dismissError = nil }
+        } message: { Text(dismissError ?? "") }
+    }
+
+    /// off the list right away, on every device once the server has it
+    private func dismiss(_ entry: InboxEntry) {
+        withAnimation { inbox.dismiss(entry) }
+        Task {
+            do { try await herdr.dismiss(entry) } catch { dismissError = error.localizedDescription }
+        }
     }
 
     /// nothing waits (dash__quiet): a calm card instead of an empty gap
@@ -50,7 +64,10 @@ private struct InboxCard: View {
     /// the space's git branch, when known
     let branch: String?
     let open: () -> Void
+    /// „Gesehen“
+    let seen: () -> Void
     @Environment(Inbox.self) private var inbox
+    @Environment(HerdrStore.self) private var herdr
     @Environment(SessionStore.self) private var sessions
     @Environment(DraftStore.self) private var drafts
     @State private var replying = false
@@ -66,10 +83,10 @@ private struct InboxCard: View {
         }
     }
 
-    /// results and errors can be marked as seen (hidden until something new happens)
+    /// results and errors can be marked as seen (hidden on every device until something new happens)
     private var onSeen: (() -> Void)? {
         guard entry.kind == .done || entry.kind == .error else { return nil }
-        return { withAnimation { inbox.dismiss(entry) } }
+        return seen
     }
 
     /// questions and errors want an answer: the reply field is there right away
@@ -124,7 +141,11 @@ private struct InboxCard: View {
                 }
                 .buttonStyle(.hollr(.secondary, small: true))
             }
-            Button { showTerminal = true } label: { Label("Terminal", icon: .terminal) }
+            Button {
+                showTerminal = true
+                // the session is on screen now (its terminal): seen like opening the chat
+                Task { await herdr.opened(entry.ref) }
+            } label: { Label("Terminal", icon: .terminal) }
                 .buttonStyle(.hollr(.ghost, small: true))
             Spacer(minLength: 0)
         }

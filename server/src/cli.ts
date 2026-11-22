@@ -29,6 +29,7 @@ import { runEvents } from "./events";
 import { paneContext, readPath } from "./file";
 import { type ForkRequest, forkPane } from "./fork";
 import { pruneHidden, setHidden } from "./hiddenspaces";
+import { loadShared, patchShared, type SharedChange, stampPanes } from "./shared";
 import {
   execHerdr,
   Herdr,
@@ -75,7 +76,7 @@ import { runFollow } from "./follow";
 import { runAttach, runShell } from "./shell";
 import { parseStartScreen } from "./startscreen";
 import { runTerm } from "./term";
-import { saveUpload, UPLOAD_LIMIT } from "./uploads";
+import { saveDiag, saveUpload, UPLOAD_LIMIT } from "./uploads";
 import {
   pushConfig,
   pushDevices,
@@ -116,7 +117,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.47.0";
+export const VERSION = "0.48.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -283,6 +284,8 @@ async function gate(): Promise<number> {
       "job",
       "skills",
       "plugins",
+      "shared",
+      "diag",
     ].includes(cmd)
   )
     log("gate", original);
@@ -319,9 +322,29 @@ async function gate(): Promise<number> {
     case "agents":
       json({ agents: await herdr.agents() });
       return 0;
-    case "tree":
-      json({ workspaces: await herdr.tree() });
+    case "tree": {
+      const workspaces = await herdr.tree();
+      // `since` per pane: both apps key seen / dismissed results with it (shared.ts)
+      stampPanes(workspaces);
+      json({ workspaces });
       return 0;
+    }
+    case "shared": {
+      // what both apps share about this server: {"op":"get"} or {"op":"patch","changes":[{path,value}]}
+      const req = JSON.parse((await readStdinLine()) || "{}") as {
+        op?: string;
+        changes?: SharedChange[];
+      };
+      try {
+        if (req.op === "patch") {
+          if (!Array.isArray(req.changes)) throw new Error("changes fehlt");
+          json({ shared: patchShared(req.changes) });
+        } else json({ shared: loadShared() });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     case "kinds":
       json({ kinds: installedKinds() });
       return 0;
@@ -617,6 +640,21 @@ async function gate(): Promise<number> {
     case "term":
       // live terminal: screen out, typing in (runs until the app closes the channel)
       return runTerm(pane);
+    case "diag": {
+      // the phone's breadcrumbs (lifecycle, errors, MetricKit hangs) – read them here when something went wrong
+      const req = JSON.parse((await readStdinLine(2 * 1024 * 1024)) || "{}") as {
+        device?: string;
+        app?: string;
+        text?: string;
+      };
+      try {
+        saveDiag(req.device ?? "", req.app ?? "", req.text ?? "");
+        json({ ok: true });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     case "upload": {
       // a photo / file from the phone for the agent: stored outside the repo, the path goes into the prompt
       const req = JSON.parse((await readStdinLine(UPLOAD_LIMIT * 1.4)) || "{}") as {
@@ -795,7 +833,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | shared",
       });
       return 2;
   }

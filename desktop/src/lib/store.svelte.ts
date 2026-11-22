@@ -7,6 +7,8 @@ import { type Space, spaces as loadSpaces } from "./git";
 import * as d from "./drafts";
 import { chatLabel } from "./contextChatText";
 import { LAST_TAB_KEY, lastTabKey, parseLastTabs, restoreTab } from "./lastTab";
+import { shared, showError } from "./shared.svelte";
+import { toFront } from "./sharedState";
 
 export const app = $state({
   servers: [] as Server[],
@@ -44,7 +46,7 @@ export function go(route: Route) {
   if (JSON.stringify(route) === JSON.stringify(nav.route)) return;
   nav.history = [...nav.history.slice(-30), nav.route];
   nav.route = route;
-  if (route.view === "agent") mySessions.touch(`${route.server}|${route.pane}`);
+  if (route.view === "agent") mySessions.touch(`${route.server}|${route.pane}`, true);
   rememberTab(route);
 }
 
@@ -159,39 +161,25 @@ if (typeof window !== "undefined") {
 
 // ------------------------------------------------------------ my sessions
 
-const MY = "hollr.mySessions";
-
-function loadMy(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(MY) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-/** Sessions opened or started in Hollr ("serverId|pane", most recent first) – the dashboard shows these. */
+/** Sessions opened or started in Hollr – the dashboard shows these. Kept on each server (shared doc, newest first),
+ *  so the phone lists the same; the server forgets closed ones. Ids here are "serverId|pane". */
 class MySessions {
-  ids = $state<string[]>(loadMy());
-  touch(id: string) {
-    if (this.ids[0] === id) return;
-    this.ids = [id, ...this.ids.filter((x) => x !== id)];
-    this.save();
+  get ids(): string[] {
+    return app.servers.flatMap((s) => shared.of(s.id).mySessions.map((pane) => `${s.id}|${pane}`));
+  }
+  /** to the front; `quiet`: just navigating there – a failure isn't worth a dialog */
+  touch(id: string, quiet = false) {
+    this.change(id, (list, pane) => toFront(list, pane), quiet);
   }
   remove(id: string) {
-    this.ids = this.ids.filter((x) => x !== id);
-    this.save();
+    this.change(id, (list, pane) => list.filter((x) => x !== pane));
   }
-  /** keeps only the ids `keep` accepts */
-  prune(keep: (id: string) => boolean) {
-    const kept = this.ids.filter(keep);
-    if (kept.length === this.ids.length) return;
-    this.ids = kept;
-    this.save();
-  }
-  save() {
-    try {
-      localStorage.setItem(MY, JSON.stringify(this.ids));
-    } catch {}
+  private change(id: string, edit: (list: string[], pane: string) => string[], quiet = false) {
+    const i = id.indexOf("|");
+    const pane = id.slice(i + 1);
+    shared
+      .update(id.slice(0, i), (doc) => [{ path: ["mySessions"], value: edit(doc.mySessions, pane) }])
+      .catch(quiet ? () => {} : showError);
   }
 }
 
@@ -237,19 +225,24 @@ export const serverById = (id: string) => app.servers.find((s) => s.id === id);
 export async function loadServers() {
   app.servers = await api.servers();
   if (!app.servers.length) dialogs.pair = true;
-  api.feedsSync(app.servers.map((s) => s.id)).catch(() => {});
+  const ids = app.servers.map((s) => s.id);
+  api.feedsSync(ids).catch(() => {});
+  shared.sync(ids);
   await refresh();
 }
 
 /** Pushed changes from the servers' live feeds (`hollr gate events`). */
 export async function listenFeeds(): Promise<() => void> {
-  const offChanged = await api.onChanged(async ({ server, spaces }) => {
+  const offChanged = await api.onChanged(async ({ server, spaces, shared: doc }) => {
     app.changes++;
+    if (doc) void shared.load(server);
     if (!spaces) refreshSpacesSoon(server);
     // side by side: a pull's ↓N shouldn't wait for the session tree
     await Promise.all([refresh(server), spaces && refreshSpaces(server)]);
   });
   const offLive = await api.onFeed(({ server, live }) => {
+    // (re)connected: what changed meanwhile came without a feed
+    if (live && !app.live[server]) void shared.load(server);
     app.live[server] = live;
   });
   return () => {
@@ -258,13 +251,15 @@ export async function listenFeeds(): Promise<() => void> {
   };
 }
 
-/** Polling: fast while a server has no live feed, otherwise only every 30 s as a safety net. */
+/** Polling: fast while a server has no live feed, otherwise only every 30 s as a safety net. Without a feed the
+ *  shared doc has no other way in: loaded with every 30-s round. */
 let lastFull = 0;
 export function poll() {
   const full = Date.now() - lastFull > 30_000;
   if (full) lastFull = Date.now();
   const due = app.servers.filter((s) => full || !app.live[s.id]).map((s) => s.id);
   if (due.length) refresh(...due);
+  if (full) for (const s of app.servers) if (!app.live[s.id]) void shared.load(s.id);
 }
 
 /** per server: newest tree request – an older answer arriving later must not overwrite it */
@@ -287,10 +282,6 @@ export async function refresh(...only: string[]) {
       }
     }),
   );
-  // forget my sessions whose pane is gone on a server that just answered
-  const alive = new Set(allPanes().map((r) => r.id));
-  const answered = new Set(app.servers.filter((s) => !app.errors[s.id]).map((s) => s.id));
-  mySessions.prune((id) => !answered.has(id.split("|")[0] ?? "") || alive.has(id));
 }
 
 /** when each server's spaces (with their git state) were last loaded */

@@ -18,13 +18,20 @@ struct InboxEntry: Identifiable, Equatable {
 
     var id: String { ref.id }
 
+    /// `pane@since`: one card per status of a pane, the same on every device (dismissed / seen in SharedState)
+    var key: String { Self.key(ref) }
+
+    static func key(_ ref: AgentRef) -> String { "\(ref.pane.pane)@\(ref.pane.since.map { String(Int64($0)) } ?? "")" }
+
     static func == (a: InboxEntry, b: InboxEntry) -> Bool {
-        a.id == b.id && a.kind == b.kind && a.text == b.text && a.options == b.options && a.turn == b.turn
+        a.key == b.key && a.ref.server.id == b.ref.server.id && a.kind == b.kind && a.text == b.text
+            && a.options == b.options && a.turn == b.turn
     }
 
-    /// Timeline → entry (pure, tested). nil = nothing for you here.
-    static func make(ref: AgentRef, timeline: Timeline?) -> InboxEntry? {
-        let status = ref.pane.status
+    /// Timeline → entry (pure, tested). nil = nothing for you here. `status`: what the inbox treats the pane as
+    /// (SharedState.inboxStatus – a session marked unread counts as done).
+    static func make(ref: AgentRef, timeline: Timeline?, status: String? = nil) -> InboxEntry? {
+        let status = status ?? ref.pane.status
         guard status == "blocked" || status == "done" else { return nil }
         let items = timeline?.visibleItems ?? []
         if status == "blocked" {
@@ -70,46 +77,64 @@ struct InboxEntry: Identifiable, Equatable {
 @Observable
 final class Inbox {
     private(set) var entries: [InboxEntry] = []
-    /// turns you dismissed ("ref.id|turn")
-    private var dismissed = Set<String>()
-    /// answered here: hidden until the agent's state changes
-    private var answered: [String: String] = [:]
+    /// answered here (entry keys): hidden until the pane's next status – only this device, only briefly
+    private var answered = Set<String>()
     @ObservationIgnored private var cache: [String: (status: String, at: Date, timeline: Timeline?)] = [:]
     @ObservationIgnored private var running = false
+    /// asked again while running: one more round with the newest input afterwards
+    @ObservationIgnored private var pending: (refs: [AgentRef], shared: [UUID: SharedState])?
 
-    func update(_ refs: [AgentRef]) async {
-        guard !running else { return }
+    /// `shared`: per server what was seen, dismissed or marked unread (HerdrStore.shared)
+    func update(_ refs: [AgentRef], shared: [UUID: SharedState]) async {
+        guard !running else {
+            pending = (refs, shared)
+            return
+        }
         running = true
         defer { running = false }
+        var input: (refs: [AgentRef], shared: [UUID: SharedState])? = (refs, shared)
+        while let next = input {
+            pending = nil
+            await build(next.refs, shared: next.shared)
+            input = pending
+        }
+    }
+
+    private func build(_ refs: [AgentRef], shared: [UUID: SharedState]) async {
         var next: [InboxEntry] = []
-        for ref in refs where ref.pane.status == "blocked" || ref.pane.status == "done" {
-            if let was = answered[ref.id], was == ref.pane.status { continue }
-            answered[ref.id] = nil
+        var keys = Set<String>()
+        for ref in refs {
+            let doc = shared[ref.server.id] ?? SharedState()
+            guard let status = doc.inboxStatus(ref.pane) else { continue }
+            let key = InboxEntry.key(ref)
+            keys.insert(key)
+            if answered.contains(key) { continue }
             var timeline = cache[ref.id]?.timeline
-            let stale = cache[ref.id].map { $0.status != ref.pane.status || Date().timeIntervalSince($0.at) > 15 } ?? true
+            let stale = cache[ref.id].map { $0.status != status || Date().timeIntervalSince($0.at) > 15 } ?? true
             if stale, ref.pane.agent == "omp" {
                 timeline = (try? await HollrClient.timeline(ref.server, pane: ref.pane.pane, limit: 30)) ?? timeline
-                cache[ref.id] = (ref.pane.status, .now, timeline)
+                cache[ref.id] = (status, .now, timeline)
             }
-            guard let entry = InboxEntry.make(ref: ref, timeline: timeline),
-                  !dismissed.contains("\(ref.id)|\(entry.turn)") else { continue }
+            guard let entry = InboxEntry.make(ref: ref, timeline: timeline, status: status),
+                  !doc.hidesCard(entry.kind, of: ref.pane) else { continue }
             next.append(entry)
         }
         let order: [InboxEntry.Kind: Int] = [.ask: 0, .waiting: 1, .error: 2, .done: 3]
         next.sort { (order[$0.kind] ?? 9, $0.ref.title) < (order[$1.kind] ?? 9, $1.ref.title) }
         if next != entries { entries = next }
+        answered.formIntersection(keys)
         let ids = Set(refs.map(\.id))
         cache = cache.filter { ids.contains($0.key) }
     }
 
+    /// „Gesehen“: off the list right away (HerdrStore.dismiss keeps it so on every device).
     func dismiss(_ entry: InboxEntry) {
-        dismissed.insert("\(entry.id)|\(entry.turn)")
         entries.removeAll { $0.id == entry.id }
     }
 
     /// Answered from the home screen: hide it right away, it comes back when the agent needs you again.
     func markAnswered(_ entry: InboxEntry) {
-        answered[entry.id] = entry.ref.pane.status
+        answered.insert(entry.key)
         cache[entry.id] = nil
         entries.removeAll { $0.id == entry.id }
     }

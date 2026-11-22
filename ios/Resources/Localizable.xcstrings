@@ -771,6 +771,16 @@
         }
       }
     },
+    "Als ungelesen markieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark as unread"
+          }
+        }
+      }
+    },
     "Am Rechner `hollr pair` ausführen – der Code steht unter dem QR-Code, gilt 10 Minuten und nur einmal. Von unterwegs: am Rechner „Tailscale / Fernzugriff“ wählen und Tailscale auf dem iPhone verbinden.": {
       "localizations": {
         "en": {
@@ -1553,6 +1563,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chat menu › Terminal: “Session” shows the computer’s terminal, “Own shell” a separate one in the same folder – sized to the iPhone. iPhone in landscape: terminal or changes next to the chat."
+          }
+        }
+      }
+    },
+    "„Braucht dich“, gesehene Ergebnisse, „Als ungelesen markieren“, „Meine Sitzungen“ und die Reihenfolge der Spaces sind jetzt auf iPhone und Mac gleich": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Needs you”, seen results, “Mark as unread”, “My sessions” and the order of spaces are now the same on iPhone and Mac"
+          }
+        }
+      }
+    },
+    "Hollr schreibt ein kurzes Protokoll und schickt es an deinen Rechner – damit lassen sich Fehler wie ein weißer Bildschirm finden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr keeps a short log and sends it to your computer – so errors like a white screen can be found"
           }
         }
       }

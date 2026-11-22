@@ -7,7 +7,7 @@
   import { onMount } from "svelte";
   import * as api from "$lib/api";
   import { byUrgency, isLong, mainCaps, pooled, projectOf, portsIn, type FocusKind } from "$lib/dashboard";
-  import { hiddenLong, hideLong } from "./dashboard/hiddenLong.svelte";
+  import { hideLong, longHidden } from "./dashboard/hiddenLong.svelte";
   import { t } from "$lib/i18n";
   import {
     allPanes, app, dialogs, findPane, go, mySessions, nav, refresh, refreshSpaces, type AgentOpen, type PaneRef,
@@ -64,7 +64,7 @@
     for (const r of allPanes()) {
       if (isHidden(r)) continue;
       const ctx = sessionCtx.byId[r.id];
-      if (r.pane.agent && r.pane.status === "working" && !listed.has(r.id) && isLong(ctx, now) && hiddenLong[r.id] !== ctx!.turnStartedAt)
+      if (r.pane.agent && r.pane.status === "working" && !listed.has(r.id) && isLong(ctx, now) && !longHidden(r, ctx!.turnStartedAt!))
         items.push({ kind: "long", since: ctx!.turnStartedAt!, ref: r });
     }
     return items.sort(byUrgency);
@@ -230,8 +230,8 @@
       g: () => open(r, "git"),
       b: () => open(r, "browser", row.ports[0] ? `http://localhost:${row.ports[0].port}` : undefined),
       r: () => open(r),
-      e: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" && hideLong(selFocus.ref.id, selFocus.since)),
-      x: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" ? hideLong(selFocus.ref.id, selFocus.since) : (ending = r)),
+      e: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" && hideLong(selFocus.ref, selFocus.since)),
+      x: () => (selFocus?.entry ? dismiss(selFocus.entry) : selFocus?.kind === "long" ? hideLong(selFocus.ref, selFocus.since) : (ending = r)),
     };
     const action = actions[k];
     if (action) {
@@ -296,7 +296,7 @@
             <FocusCard bind:this={cards[f.ref.id]} kind={f.kind} since={f.since} ref={f.ref} entry={f.entry} ctx={row.ctx}
               project={row.project} selected={sel === `f:${f.ref.id}`}
               onSelect={() => select(`f:${f.ref.id}`, false)} onOpen={(how, url) => open(f.ref, how, url)}
-              onHide={() => hideLong(f.ref.id, f.since)} />
+              onHide={() => hideLong(f.ref, f.since)} />
           {/each}
         </div>
       {:else}

@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 51,
+    version: "0.48.0",
+    date: "22.11.2026",
+    items: [
+      { icon: "⇄", text: "„Braucht dich“, gesehene Ergebnisse, „Als ungelesen markieren“, „Meine Sitzungen“ und die Reihenfolge von Spaces, Worktrees und Tabs merkt sich jetzt der Server – Mac und iPhone zeigen dasselbe." },
+    ],
+  },
+  {
     build: 50,
     version: "0.47.0",
     date: "22.11.2026",

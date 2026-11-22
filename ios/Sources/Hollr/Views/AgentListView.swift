@@ -19,6 +19,13 @@ struct AgentListView: View {
     }
 
     var body: some View {
+        list
+            .alert("Fehler", isPresented: Binding(get: { unreadError != nil }, set: { if !$0 { unreadError = nil } })) {
+                Button("OK") { unreadError = nil }
+            } message: { Text(unreadError ?? "") }
+    }
+
+    @ViewBuilder private var list: some View {
         // a selection (Mac sidebar) only where there is one – a constant selection swallowed the taps
         // on the iPhone's navigation links
         if let selection {
@@ -56,9 +63,11 @@ struct AgentListView: View {
     // own functions with explicit types: one big nested expression made the Release compiler give
     // up on the CI machines ("unable to type-check this expression in reasonable time")
     private func refs(on server: Server, in ws: Workspace) -> [AgentRef] {
-        herdr.agents(on: server).filter { ref in
+        let refs: [AgentRef] = herdr.agents(on: server).filter { ref in
             ref.workspace == ws.label && (showShells || ref.pane.agent != nil)
         }
+        // the tabs in the order dragged on any device
+        return SharedOrder.ordered(refs, saved: herdr.tabOrder(server, ws: ws.id)) { $0.tabId }
     }
 
     @ViewBuilder private func workspaceSection(_ server: Server, _ ws: Workspace) -> some View {
@@ -75,6 +84,8 @@ struct AgentListView: View {
     }
 
     @State private var closing: AgentRef?
+    /// „Als ungelesen markieren“ didn't reach the server – undone, shown
+    @State private var unreadError: String?
 
     @ViewBuilder private func rowLink(_ ref: AgentRef, showServer: Bool, showWorkspace: Bool) -> some View {
         let label = AgentRow(ref: ref, showServer: showServer, showWorkspace: showWorkspace, branch: herdr.branch(of: ref),
@@ -91,6 +102,9 @@ struct AgentListView: View {
         .contextMenu {
             if let openBeside {
                 Button { openBeside(ref.id) } label: { Label("Rechts daneben öffnen", systemImage: "rectangle.split.2x1") }
+            }
+            if ref.pane.agent != nil && !herdr.isUnread(ref) {
+                Button { markUnread(ref) } label: { Label("Als ungelesen markieren", systemImage: "circle.fill") }
             }
         }
         .swipeActions {
@@ -110,6 +124,12 @@ struct AgentListView: View {
             Text("„\(ref.title)“ wird in herdr geschlossen und \(ref.pane.agentName) beendet.")
         }
     }
+
+    private func markUnread(_ ref: AgentRef) {
+        Task {
+            do { try await herdr.markUnread([ref]) } catch { unreadError = error.localizedDescription }
+        }
+    }
 }
 
 /// One session as a row (molecule WorkRow): agent badge, status dot and name, branch or folder on the right,
@@ -122,10 +142,14 @@ struct AgentRow: View {
     /// the space's git branch, when known (else the folder)
     var branch: String? = nil
     var live = false
+    @Environment(HerdrStore.self) private var herdr
 
     private var isShell: Bool { ref.pane.agent == nil }
 
-    private var state: String { isShell ? String(localized: "Terminal") : Theme.statusLabel(ref.pane.status) }
+    /// a seen result shows as ready, one marked unread as new (on every device)
+    private var status: String { herdr.shownStatus(ref) }
+
+    private var state: String { isShell ? String(localized: "Terminal") : Theme.statusLabel(status) }
 
     /// server, workspace (like herdr's sidebar group) and what the agent works on (omp session title)
     private var detail: String {
@@ -141,7 +165,7 @@ struct AgentRow: View {
             AgentBadge(pane: ref.pane)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Gap.s) {
-                    StatusDot(status: ref.pane.status, agent: !isShell, size: 7, pulse: ref.pane.status == "working")
+                    StatusDot(status: status, agent: !isShell, size: 7, pulse: status == "working")
                     // the tab name you gave it in herdr
                     Text(ref.title).font(Typo.md.weight(.semibold)).lineLimit(1).layoutPriority(1)
                     if live {
@@ -154,7 +178,7 @@ struct AgentRow: View {
                         .font(Typo.monoXS).foregroundStyle(Theme.dim)
                         .lineLimit(1).truncationMode(.middle)
                 }
-                (Text(verbatim: state).foregroundStyle(isShell ? Theme.muted : Theme.statusColor(ref.pane.status))
+                (Text(verbatim: state).foregroundStyle(isShell ? Theme.muted : Theme.statusColor(status))
                     + Text(verbatim: detail.isEmpty ? "" : " · \(detail)").foregroundStyle(Theme.muted))
                     .font(Typo.sm)
                     .lineLimit(1)

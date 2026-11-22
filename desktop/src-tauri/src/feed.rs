@@ -48,7 +48,7 @@ impl Feeds {
 }
 
 /// Follows one server's feed for good (reconnecting with backoff): `hollr-feed` {server, live} when the
-/// channel comes up or goes down, `hollr-changed` {server, spaces} per change. (The dev bridge reuses it.)
+/// channel comes up or goes down, `hollr-changed` {server, spaces, shared} per change. (The dev bridge reuses it.)
 pub async fn follow(hollr: &Hollr, server: &str, emit: impl Fn(&str, Value)) {
     let mut backoff = 2u64;
     loop {
@@ -76,7 +76,9 @@ pub async fn follow(hollr: &Hollr, server: &str, emit: impl Fn(&str, Value)) {
                         }
                         Some("changed") => {
                             let spaces = v["spaces"].as_bool().unwrap_or(false);
-                            emit("hollr-changed", json!({ "server": server, "spaces": spaces }));
+                            // the shared doc (`hollr gate shared`) changed: the app loads it again
+                            let shared = v["shared"].as_bool().unwrap_or(false);
+                            emit("hollr-changed", json!({ "server": server, "spaces": spaces, "shared": shared }));
                         }
                         None if v.get("error").is_some() => unsupported = true, // older server
                         _ => {}

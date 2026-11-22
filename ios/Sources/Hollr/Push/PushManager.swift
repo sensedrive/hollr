@@ -242,6 +242,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// Also runs for background launches (notification answers, Live Activity tokens): the delegate and
     /// the categories must be in place before any UI exists.
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Diagnostics.shared.start()
+        // background launches (notification answers, Live Activity tokens, iOS prewarming) make a scene that
+        // may come to the front much later – the white-screen hunt needs to know which start it was
+        let state = ["active", "inactive", "background"][min(application.applicationState.rawValue, 2)]
+        let options = launchOptions?.keys.map(\.rawValue).sorted().joined(separator: ",") ?? "-"
+        let prewarm = ProcessInfo.processInfo.environment["ActivePrewarm"] == "1"
+        Diagnostics.shared.note("launch \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?") state=\(state) options=\(options) prewarm=\(prewarm)")
         MainActor.assumeIsolated {
             UNUserNotificationCenter.current().delegate = PushManager.shared
             PushManager.registerCategories()

@@ -1,27 +1,25 @@
-// The tab orders dragged into place, per computer: "servers" for the server tabs, "serverId|workspaceId" for a
-// workspace's tabs (herdr tab ids). Only the most recently changed are kept.
+// The server tabs' order dragged into place – per computer (the server ids are this app's own). It lives in the
+// "servers" entry of `hollr.tabOrder`; the other entries there are a workspace's tab orders from earlier versions,
+// waiting to move to their server's shared doc (shared.svelte.ts), so they are left alone here.
 const KEY = "hollr.tabOrder";
-const MAX = 300;
 
 function load(): Record<string, string[]> {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   } catch {
     return {};
   }
 }
 
-class TabOrders {
-  all = $state(load());
-  set(key: string, ids: string[]) {
-    const { [key]: _, ...rest } = this.all;
-    const keys = Object.keys(rest);
-    for (const k of keys.slice(0, Math.max(0, keys.length + 1 - MAX))) delete rest[k];
-    this.all = { ...rest, [key]: ids };
+class ServerOrder {
+  ids = $state<string[] | undefined>(load().servers);
+  set(ids: string[]) {
+    this.ids = ids;
     try {
-      localStorage.setItem(KEY, JSON.stringify(this.all));
+      localStorage.setItem(KEY, JSON.stringify({ ...load(), servers: ids }));
     } catch {}
   }
 }
 
-export const tabOrders = new TabOrders();
+export const serverOrder = new ServerOrder();

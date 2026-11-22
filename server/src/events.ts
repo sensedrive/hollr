@@ -1,7 +1,8 @@
 /**
  * `hollr gate events` – a live change feed for the apps, so they don't have to poll.
  * Subscribes to herdr's socket API and writes one JSON line per burst of changes:
- *   {"t":"ready"} once, {"t":"changed","spaces":true|false} (coalesced, ≤ 4/s), {"t":"ping"} every 20 s.
+ *   {"t":"ready"} once, {"t":"changed","spaces":true|false,"shared"?:true} (coalesced, ≤ 4/s), {"t":"ping"} every 20 s.
+ * `shared`: what both apps share (shared.ts) changed on another device – load it again.
  * Pane output alone (revision bumps) is not a change – only structure, cwd, title and agent status.
  * Git state herdr doesn't see (a pull, fetch, commit or checkout in any shell) comes from a watch on the
  * spaces' repos (gitwatch.ts) as {"t":"changed","spaces":true}, and so does hiding a space on another device.
@@ -12,6 +13,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { GitWatch } from "./gitwatch";
 import { HIDDEN_FILE, stateDir } from "./hiddenspaces";
+import { SHARED_FILE } from "./shared";
 import { spaceRoots } from "./spaces";
 import { wireJson } from "./wire";
 
@@ -84,12 +86,15 @@ export async function runEvents(): Promise<number> {
   const git = new GitWatch(() => {
     pending = "spaces";
   });
-  // a space hidden or shown on another device (hiddenspaces.ts writes a temp file, then renames it)
-  let hiddenWatch: FSWatcher | undefined;
+  // another device hid a space (hiddenspaces.ts) or changed what both apps share (shared.ts): both write a temp
+  // file, then rename it
+  let sharedChanged = false;
+  let stateWatch: FSWatcher | undefined;
   try {
     mkdirSync(stateDir(), { recursive: true });
-    hiddenWatch = watch(stateDir(), (_event, name) => {
+    stateWatch = watch(stateDir(), (_event, name) => {
       if (name?.startsWith(HIDDEN_FILE)) pending = "spaces";
+      else if (name?.startsWith(SHARED_FILE) && !name.endsWith(".lock")) sharedChanged = true;
     });
   } catch {}
   /** which folders to watch follows the spaces: soon after a workspace/worktree change, at most every 10 s
@@ -159,9 +164,10 @@ export async function runEvents(): Promise<number> {
   );
   watchSoon(0);
   const flush = setInterval(() => {
-    if (pending === "none") return;
-    out({ t: "changed", spaces: pending === "spaces" });
+    if (pending === "none" && !sharedChanged) return;
+    out({ t: "changed", spaces: pending === "spaces", ...(sharedChanged ? { shared: true } : {}) });
     pending = "none";
+    sharedChanged = false;
   }, 250);
   const ping = setInterval(() => out({ t: "ping" }), 20_000);
   // the SSH channel closing closes stdin: stop then
@@ -174,7 +180,7 @@ export async function runEvents(): Promise<number> {
   clearInterval(ping);
   clearTimeout(rootsTimer);
   git.close();
-  hiddenWatch?.close();
+  stateWatch?.close();
   sock.end();
   return code;
 }

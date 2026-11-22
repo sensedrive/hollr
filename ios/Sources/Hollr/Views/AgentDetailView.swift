@@ -33,7 +33,6 @@ struct AgentDetailView: View {
 private struct AgentConversation: View {
     @Bindable var session: AgentSession
     @Binding var path: [String]
-    @Environment(MySessions.self) private var mySessions
     @Environment(SessionStore.self) private var sessions
     @Environment(HerdrStore.self) private var herdr
     @Environment(ServerStore.self) private var store
@@ -219,8 +218,11 @@ private struct AgentConversation: View {
         #endif
         .onAppear {
             PushManager.shared.visibleAgentId = ref.id
-            mySessions.touch(ref.id)
+            // on screen: its result is seen, an unread mark used up, first in "Meine Sitzungen" (every device)
+            Task { await herdr.opened(ref) }
         }
+        // it turns done (or waits) while you look at it: seen as well
+        .onChange(of: ref.pane.since) { _, _ in Task { await herdr.seeing(ref) } }
         .onDisappear { if PushManager.shared.visibleAgentId == ref.id { PushManager.shared.visibleAgentId = nil } }
         // the server's live feed saw a change (status, new pane …): refresh this chat now
         .onChange(of: herdr.changeCount) { _, _ in session.nudge() }

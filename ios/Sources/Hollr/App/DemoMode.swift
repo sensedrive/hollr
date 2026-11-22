@@ -37,6 +37,7 @@ enum DemoMode {
         case "fs": json = fs(body["op"] as? String ?? "")
         case "space": json = spaceOp(body, on: server)
         case "plugins": json = ["plugins": []]
+        case "shared": json = sharedOp(body, on: server)
         default: json = [:]
         }
         return (try? JSONSerialization.data(withJSONObject: json)) ?? Data("{}".utf8)
@@ -70,6 +71,21 @@ enum DemoMode {
             return ids
         }
         return ["hidden": ids.sorted()]
+    }
+
+    /// what both apps share, per demo server (in memory, like the servers)
+    private static var shared: [UUID: SharedState] = [:]
+
+    private static func sharedOp(_ body: [String: Any], on server: Server) -> [String: Any] {
+        let changes: [SharedChange] = body["op"] as? String == "patch"
+            ? (body["changes"] as? [[String: Any]] ?? []).compactMap(SharedChange.init(json:)) : []
+        let doc: SharedState = lock.withLock {
+            let next = (shared[server.id] ?? SharedState()).applying(changes)
+            shared[server.id] = next
+            return next
+        }
+        let data = (try? JSONEncoder().encode(doc)) ?? Data("{}".utf8)
+        return ["shared": (try? JSONSerialization.jsonObject(with: data)) ?? [:]]
     }
 
     // MARK: herdr tree
@@ -259,6 +275,22 @@ enum DemoMode {
         default:
             return [:]
         }
+    }
+}
+
+extension SharedChange {
+    /// a change as the app sends it (`json`) – read back by the demo server
+    init?(json: [String: Any]) {
+        guard let path = json["path"] as? [String], !path.isEmpty else { return nil }
+        // the body comes straight from `SharedChange.json` (Swift values, never serialized)
+        let value: Value
+        switch json["value"] {
+        case let ids as [String]: value = .ids(ids)
+        case let number as Double: value = .number(number)
+        case is Bool: value = .flag
+        default: value = .remove
+        }
+        self.init(path: path, value: value)
     }
 }
 #endif

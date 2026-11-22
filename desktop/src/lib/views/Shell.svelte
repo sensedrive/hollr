@@ -35,7 +35,7 @@
   import CommandPalette from "$lib/components/CommandPalette.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   import { pendingTips, tour } from "$lib/tips.svelte";
-  import { inbox, inboxEntries, markSeen, openedAgain, trackInbox } from "$lib/inbox.svelte";
+  import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
 
   const zoomBy = (d: number) => (settings.zoom = Math.round(Math.min(1.6, Math.max(0.7, settings.zoom + d)) * 100) / 100);
 
@@ -87,29 +87,24 @@
   });
   const needsYou = $derived(inboxEntries().length);
 
-  // the session in front of the user: its result counts as seen ("Braucht dich" drops it). Re-run on every
-  // tree refresh and inbox tick, so a result that comes in while it's open is seen too.
-  // navigating to a session uses up its hand-made "unread" mark (not the polls while it stays open)
+  // the session in front of the user: its result counts as seen on every device ("Braucht dich" drops it here and
+  // on the phone). Re-run on every tree refresh and inbox tick, so a result that comes in while it's open is seen
+  // too. Navigating to a session also uses up its hand-made "unread" mark (not the re-runs while it stays open).
   let lastOpened = "";
   $effect(() => {
     const r = nav.route;
-    const key = r.view === "agent" ? `a|${r.server}|${r.pane}` : r.view === "space" ? `s|${r.server}|${r.ws}` : "";
-    if (key === lastOpened) return;
-    lastOpened = key;
-    untrack(() => {
-      if (r.view === "agent") openedAgain([`${r.server}|${r.pane}`]);
-      else if (r.view === "space") openedAgain(allPanes(r.server).filter((p) => p.workspace.id === r.ws).map((p) => p.id));
-    });
-  });
-  $effect(() => {
-    const r = nav.route;
     void inbox.now;
-    if (r.view !== "agent" && r.view !== "space") return;
+    if (r.view !== "agent" && r.view !== "space") return void (lastOpened = "");
     void app.trees[r.server];
     if (document.visibilityState !== "visible") return;
     untrack(() => {
-      if (r.view === "agent") markSeen(`${r.server}|${r.pane}`);
-      else for (const p of allPanes(r.server)) if (p.workspace.id === r.ws) markSeen(p.id);
+      const panes = allPanes(r.server)
+        .filter((p) => (r.view === "agent" ? p.pane.pane === r.pane : p.workspace.id === r.ws))
+        .map((p) => p.pane);
+      if (!panes.length) return; // not loaded yet: the next tree refresh comes back here
+      const key = r.view === "agent" ? `a|${r.server}|${r.pane}` : `s|${r.server}|${r.ws}`;
+      markSeen(r.server, panes, key !== lastOpened);
+      lastOpened = key;
     });
   });
 

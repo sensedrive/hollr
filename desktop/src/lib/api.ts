@@ -25,6 +25,9 @@ export interface Pane {
   live: boolean;
   /** a chat with context (server 0.36.1+ `fork`): the pane whose history it continues, and when (epoch ms) */
   fork?: { of: string; at: number };
+  /** server time (ms) the pane entered its current status (newer servers): seen / dismissed results key with it,
+   *  the same on every device */
+  since?: number;
 }
 export interface Tab {
   id: string;
@@ -288,7 +291,8 @@ export const tunnelClose = (localPort: number) => invoke<void>("tunnel_close", {
 
 // ---- live change feed (one `hollr gate events` channel per server, see src-tauri/src/feed.rs)
 export const feedsSync = (servers: string[]) => invoke<void>("feeds_sync", { servers });
-export const onChanged = (fn: (e: { server: string; spaces: boolean }) => void) =>
-  listen<{ server: string; spaces: boolean }>("hollr-changed", (e) => fn(e.payload));
+/** `shared`: the doc both apps share (shared.svelte.ts) changed – on another device, or by this app's own patch */
+export const onChanged = (fn: (e: { server: string; spaces: boolean; shared: boolean }) => void) =>
+  listen<{ server: string; spaces: boolean; shared: boolean }>("hollr-changed", (e) => fn(e.payload));
 export const onFeed = (fn: (e: { server: string; live: boolean }) => void) =>
   listen<{ server: string; live: boolean }>("hollr-feed", (e) => fn(e.payload));

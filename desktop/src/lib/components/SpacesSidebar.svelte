@@ -1,8 +1,8 @@
 <script lang="ts">
   import { alertAsk } from "$lib/ask.svelte";
   // Sidebar like herdr's "spaces" list, for every paired server: repos with their branch, worktrees nested
-  // below (├─ / └─, foldable), plain workspaces standalone; spaces and worktrees reorder by dragging (kept per
-  // computer). One status dot per space from its sessions.
+  // below (├─ / └─, foldable), plain workspaces standalone; spaces and worktrees reorder by dragging (kept on the
+  // server, so the phone shows the same order). One status dot per space from its sessions.
   // A click jumps straight into the session that needs you most; ✕ closes the space in herdr (tabs and agents end).
   // „Verstecken“ (− , drag onto „Versteckt“) takes it off the list on every device – the server keeps it; „Versteckt“
   // at the bottom shows them without bringing them back. 〰 shows where a live call runs. A space whose
@@ -21,11 +21,10 @@
   import { sortable } from "$lib/sortable";
   import { dotStatus, markUnread, resultSeen } from "$lib/inbox.svelte";
   import { currentServer } from "$lib/currentServer.svelte";
+  import { shared, showError } from "$lib/shared.svelte";
+  import { staleEntries } from "$lib/sharedState";
 
   const FOLDED = "hollr.sidebar.folded";
-  const WTORDER = "hollr.sidebar.wtorder";
-  /** dragged order of the spaces (repo groups and standalone spaces) per server */
-  const ORDER = "hollr.sidebar.order";
   const loadSet = (key: string) => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(key) ?? "[]"));
@@ -34,36 +33,24 @@
     }
   };
   let folded = $state(loadSet(FOLDED));
-  let wtOrder = $state<Record<string, string[]>>({});
-  try {
-    const raw = JSON.parse(localStorage.getItem(WTORDER) ?? "{}");
-    wtOrder = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  } catch {
-    wtOrder = {};
-  }
-  /** dragged order within one repo group; unknown ids stay at the end, then by label */
-  function sortTrees(key: string, trees: FullSpace[]) {
-    const rank = new Map((wtOrder[key] ?? []).map((id, i) => [id, i]));
+  /** dragged order within one repo group (server's shared doc); unknown ids stay at the end, then by label */
+  function sortTrees(server: string, repo: string, trees: FullSpace[]) {
+    const rank = new Map((shared.of(server).worktreeOrder[repo] ?? []).map((id, i) => [id, i]));
     return [...trees].sort((a, b) => (rank.get(a.id) ?? 9999) - (rank.get(b.id) ?? 9999) || a.label.localeCompare(b.label));
   }
-  function saveOrder(key: string, ids: string[]) {
-    wtOrder = { ...wtOrder, [key]: ids };
-    try {
-      localStorage.setItem(WTORDER, JSON.stringify(wtOrder));
-    } catch {
-      /* private mode: order lasts this session only */
-    }
+  /** saves a repo group's order – and drops the orders of repos that are gone */
+  function saveOrder(server: string, repo: string, ids: string[]) {
+    const alive = new Set((app.spaces[server] ?? []).map((s) => s.id));
+    shared
+      .update(server, (doc) => [
+        { path: ["worktreeOrder", repo], value: ids },
+        ...(alive.size ? staleEntries("worktreeOrder", doc.worktreeOrder, alive.add(repo)) : []),
+      ])
+      .catch(showError);
   }
-  let order = $state<Record<string, string[]>>({});
-  try {
-    const raw = JSON.parse(localStorage.getItem(ORDER) ?? "{}");
-    order = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  } catch {
-    order = {};
-  }
-  /** groups in the dragged order; ones never dragged keep the server's order behind them */
+  /** groups in the dragged order (server's shared doc); ones never dragged keep the server's order behind them */
   function sortGroups<G extends { spaces: FullSpace[] }>(server: string, groups: G[]): G[] {
-    const rank = new Map((order[server] ?? []).map((id, i) => [id, i]));
+    const rank = new Map(shared.of(server).spaceOrder.map((id, i) => [id, i]));
     return groups
       .map((g, i) => ({ g, i }))
       .sort((a, b) => (rank.get(a.g.spaces[0]!.id) ?? 1e6 + a.i) - (rank.get(b.g.spaces[0]!.id) ?? 1e6 + b.i))
@@ -79,10 +66,7 @@
     const to = before == null ? ids.length : ids.indexOf(before);
     if (to < 0) return;
     ids.splice(to, 0, id);
-    order = { ...order, [server]: ids };
-    try {
-      localStorage.setItem(ORDER, JSON.stringify(order));
-    } catch {}
+    shared.update(server, () => [{ path: ["spaceOrder"], value: ids }]).catch(showError);
   }
 
   const persist = (key: string, set: Set<string>) => {
@@ -113,9 +97,9 @@
   function statusOf(server: string, sp: FullSpace): string {
     const panes = panesOf(server, sp.id);
     for (const s of ["blocked", "working", "done", "idle"])
-      if (panes.some((r) => dotStatus(r.id, r.pane.status) === s)) return s;
+      if (panes.some((r) => dotStatus(server, r.pane) === s)) return s;
     const reported = sp.status ?? "unknown";
-    if (reported === "done" && panes.length && panes.every((r) => r.pane.status !== "done" || resultSeen(r.id))) return "idle";
+    if (reported === "done" && panes.length && panes.every((r) => r.pane.status !== "done" || resultSeen(server, r.pane))) return "idle";
     return reported;
   }
 
@@ -135,8 +119,7 @@
       for (const g of sec.groups) {
         const repo = g.spaces[0];
         if (!repo) continue;
-        const key = `${sec.server.id}|${repo.id}`;
-        const trees = sortTrees(key, g.spaces.slice(1));
+        const trees = sortTrees(sec.server.id, repo.id, g.spaces.slice(1));
         if (!trees.some((t) => t.id === id)) continue;
         const ids = trees.map((t) => t.id);
         const from = ids.indexOf(id);
@@ -144,7 +127,7 @@
         const to = before == null ? ids.length : ids.indexOf(before);
         if (to < 0) return;
         ids.splice(to, 0, id);
-        saveOrder(key, ids);
+        saveOrder(sec.server.id, repo.id, ids);
         return;
       }
     }
@@ -203,7 +186,7 @@
         // view
         { sep: true, label: t("Umbenennen …"), icon: "✎", action: () => { ren = { x: e.clientX, y: e.clientY, server, ws: sp.id }; name = sp.label; renErr = ""; } },
         ...(trees.length && !sp.isWorktree ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: folded.has(fkey) ? "▸" : "▾", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
-        ...(panesOf(server, sp.id).length ? [{ label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(panesOf(server, sp.id).map((r) => r.id)) }] : []),
+        ...(panesOf(server, sp.id).length ? [{ label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(server, panesOf(server, sp.id).map((r) => r.pane.pane)) }] : []),
         { label: t("Space verstecken"), hint: t("läuft weiter, unten unter „Versteckt“"), icon: "◌", action: () => void hideSpace(server, sp.id) },
         // end (red)
         ...(sp.missing ? [] : [{
@@ -370,7 +353,7 @@
     {#each sec.groups as g (g.key)}
       {@const repo = g.spaces[0]!}
       {@const fkey = `${sec.server.id}|${repo.id}`}
-      {@const trees = sortTrees(fkey, g.spaces.slice(1))}
+      {@const trees = sortTrees(sec.server.id, repo.id, g.spaces.slice(1))}
       {@const open_ = !folded.has(fkey)}
       <div class="grp" data-sort-group={repo.id} use:sortable={{ axis: "y", onMove: reorder, dropOn: "[data-drop=hidden]", onDropOn: (id) => void hideSpace(sec.server.id, id) }}>
       {#each open_ ? [repo, ...trees] : [repo] as sp, i (sp.id)}

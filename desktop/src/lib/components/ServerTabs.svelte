@@ -16,11 +16,10 @@
   import { currentServer } from "$lib/currentServer.svelte";
   import { sortable } from "$lib/sortable";
   import { moveBefore, ordered } from "$lib/tabOrder";
-  import { tabOrders } from "$lib/tabOrders.svelte";
+  import { serverOrder } from "$lib/tabOrders.svelte";
 
-  const servers = $derived(ordered(app.servers, tabOrders.all.servers, (s) => s.id));
-  const moveServer = (id: string, before: string | null) =>
-    tabOrders.set("servers", moveBefore(servers.map((s) => s.id), id, before));
+  const servers = $derived(ordered(app.servers, serverOrder.ids, (s) => s.id));
+  const moveServer = (id: string, before: string | null) => serverOrder.set(moveBefore(servers.map((s) => s.id), id, before));
 
   // the session in front of the user is the one to come back to on its server
   $effect(() => {

@@ -55,11 +55,11 @@ describe("recentSaid", () => {
   });
 });
 
-test("inbox: a finished turn dates from its end in the log, seen is judged on this app's clock", () => {
+test("inbox: a finished turn dates from its end in the log, seen is judged by the status's since", () => {
   const detail = fromTimeline("done", { items: [{ k: "user", id: "u", text: "a", at: 5 }, { k: "end", id: "e", ms: 1, status: "done", at: 9 }] });
-  const s = { details: { p: detail }, since: { p: 20 }, dismissed: {}, answered: {}, seen: {} as Record<string, number> };
-  expect(buildEntries([{ id: "p", status: "done" }], s, 30)[0]?.since).toBe(9);
-  // looked at before this app noticed it finished: still new, even though the log says it ended earlier
-  s.seen.p = 15;
-  expect(buildEntries([{ id: "p", status: "done" }], s, 30).length).toBe(1);
+  const s = { details: { p: detail }, answered: {} };
+  expect(buildEntries([{ id: "p", status: "done", since: 20 }], s, 30)[0]?.since).toBe(9);
+  // seen for an earlier status: still new, whatever the log's times say
+  expect(buildEntries([{ id: "p", status: "done", since: 20, seen: 15 }], s, 30).length).toBe(1);
+  expect(buildEntries([{ id: "p", status: "done", since: 20, seen: 20 }], s, 30).length).toBe(0);
 });

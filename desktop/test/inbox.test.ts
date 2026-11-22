@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { ANSWERED_MS, buildEntries, fromHistory, fromTimeline, isDue, plain, type InboxDetail } from "../src/lib/inbox";
+import {
+  ANSWERED_MS, buildEntries, cardKey, cardStatus, dotFor, fromHistory, fromTimeline, isDue, plain, resultSeen, type InboxDetail,
+} from "../src/lib/inbox";
 import type { TimelineItem } from "../src/lib/api";
 
 const NOW = 1_800_000_000_000;
@@ -78,58 +80,102 @@ describe("plain", () => {
 });
 
 describe("buildEntries", () => {
-  const empty = { details: {}, since: {}, dismissed: {}, answered: {} };
+  const empty = { details: {}, answered: {} };
   const ask: InboxDetail = { kind: "ask", turn: "a1", question: "?", options: ["ja", "nein"] };
 
   test("only blocked and done panes, waiting first (oldest), then errors, then done (newest)", () => {
     const e = buildEntries(
       [
-        { id: "s|1", status: "working" },
-        { id: "s|2", status: "done" },
-        { id: "s|3", status: "blocked" },
-        { id: "s|4", status: "done" },
-        { id: "s|5", status: "blocked" },
-        { id: "s|6", status: "idle" },
-        { id: "s|7", status: "done" },
+        { id: "s|1", status: "working", since: NOW },
+        { id: "s|2", status: "done", since: NOW - 5000 },
+        { id: "s|3", status: "blocked", since: NOW - 1000 },
+        { id: "s|4", status: "done", since: NOW - 1000 },
+        { id: "s|5", status: "blocked", since: NOW - 9000 },
+        { id: "s|6", status: "idle", since: NOW },
+        { id: "s|7", status: "done", since: NOW },
       ],
-      {
-        ...empty,
-        details: { "s|7": { kind: "error", turn: "e" }, "s|5": ask },
-        since: { "s|2": NOW - 5000, "s|3": NOW - 1000, "s|4": NOW - 1000, "s|5": NOW - 9000, "s|7": NOW },
-      },
+      { ...empty, details: { "s|7": { kind: "error", turn: "e" }, "s|5": ask } },
       NOW,
     );
     expect(e.map((x) => x.id)).toEqual(["s|5", "s|3", "s|7", "s|4", "s|2"]);
-    expect(e[0]?.key).toBe("s|5#a1");
+    expect(e[0]?.key).toBe(`s|5@${NOW - 9000}`);
+    expect(e[0]?.entered).toBe(NOW - 9000);
     expect(e[1]?.kind).toBe("waiting");
   });
 
+  test("the card's time is the log's when known, the key stays the status's since", () => {
+    const [e] = buildEntries([{ id: "p", status: "blocked", since: NOW }], { ...empty, details: { p: { ...ask, at: NOW - 3000 } } }, NOW);
+    expect(e?.since).toBe(NOW - 3000);
+    expect(e?.key).toBe(cardKey("p", NOW));
+  });
+
   test("a detail from the other state is ignored", () => {
-    const e = buildEntries([{ id: "p", status: "done" }], { ...empty, details: { p: ask }, since: { p: NOW } }, NOW);
+    const e = buildEntries([{ id: "p", status: "done", since: NOW }], { ...empty, details: { p: ask } }, NOW);
     expect(e[0]?.kind).toBe("done");
   });
 
-  test("dismissed stays hidden for that turn only", () => {
-    const panes = [{ id: "p", status: "blocked" }];
-    const s = { ...empty, details: { p: ask }, dismissed: { "p#a1": true } };
-    expect(buildEntries(panes, s, NOW)).toEqual([]);
-    expect(buildEntries(panes, { ...s, details: { p: { ...ask, turn: "a2" } } }, NOW).length).toBe(1);
+  test("dismissed stays hidden for that status only", () => {
+    const s = { ...empty, details: { p: ask } };
+    expect(buildEntries([{ id: "p", status: "blocked", since: NOW, dismissed: NOW }], s, NOW)).toEqual([]);
+    // a newer status (the agent asked again later) shows again
+    expect(buildEntries([{ id: "p", status: "blocked", since: NOW + 1, dismissed: NOW }], s, NOW).length).toBe(1);
   });
 
   test("answered hides for a while, then comes back if still waiting", () => {
-    const panes = [{ id: "p", status: "blocked" }];
-    const s = { ...empty, details: { p: ask }, answered: { "p#a1": NOW } };
+    const panes = [{ id: "p", status: "blocked", since: NOW }];
+    const s = { ...empty, details: { p: ask }, answered: { [cardKey("p", NOW)]: NOW } };
     expect(buildEntries(panes, s, NOW + 1000)).toEqual([]);
     expect(buildEntries(panes, s, NOW + ANSWERED_MS).length).toBe(1);
   });
 
-  test("opening a session sees its result up to then, never an open question", () => {
-    const s = { ...empty, since: { done: NOW - 5000, err: NOW - 5000, q: NOW - 5000 }, details: { err: { kind: "error" as const, turn: "e" }, q: ask } };
-    const panes = [{ id: "done", status: "done" }, { id: "err", status: "done" }, { id: "q", status: "blocked" }];
-    const seen = { done: NOW, err: NOW, q: NOW };
-    expect(buildEntries(panes, { ...s, seen }, NOW).map((e) => e.id)).toEqual(["q"]);
-    // the next result after that look shows again
-    expect(buildEntries(panes, { ...s, seen, since: { ...s.since, done: NOW + 1000 } }, NOW + 1000).map((e) => e.id)).toEqual(["q", "done"]);
+  test("a result seen for its status stays away, never an open question", () => {
+    const s = { ...empty, details: { err: { kind: "error" as const, turn: "e" }, q: ask } };
+    const at = NOW - 5000;
+    const panes = [
+      { id: "done", status: "done", since: at, seen: at },
+      { id: "err", status: "done", since: at, seen: at },
+      { id: "q", status: "blocked", since: at, seen: at },
+    ];
+    expect(buildEntries(panes, s, NOW).map((e) => e.id)).toEqual(["q"]);
+    // the next result (a newer since) shows again
+    expect(buildEntries([{ ...panes[0]!, since: NOW }], s, NOW).map((e) => e.id)).toEqual(["done"]);
+  });
+
+  test("marked unread: shows as a fresh result in spite of seen, dismissed or an idle status", () => {
+    const e = buildEntries(
+      [
+        { id: "a", status: "done", since: NOW, seen: NOW, unread: true },
+        { id: "b", status: "done", since: NOW, dismissed: NOW, unread: true },
+        { id: "c", status: "idle", since: NOW, unread: true },
+        { id: "d", status: "working", since: NOW, unread: true },
+      ],
+      empty,
+      NOW,
+    );
+    expect(e.map((x) => [x.id, x.kind])).toEqual([["a", "done"], ["b", "done"], ["c", "done"]]);
+  });
+});
+
+describe("seen and dots", () => {
+  test("resultSeen: the same status only, and not while marked unread", () => {
+    expect(resultSeen({ since: NOW, seen: NOW })).toBe(true);
+    expect(resultSeen({ since: NOW + 1, seen: NOW })).toBe(false);
+    expect(resultSeen({ since: NOW })).toBe(false);
+    expect(resultSeen({ since: NOW, seen: NOW, unread: true })).toBe(false);
+  });
+
+  test("dotFor: a seen result is quiet, unread is blue, working and waiting always show", () => {
+    expect(dotFor({ status: "done", since: NOW })).toBe("done");
+    expect(dotFor({ status: "done", since: NOW, seen: NOW })).toBe("idle");
+    expect(dotFor({ status: "idle", since: NOW, unread: true })).toBe("done");
+    expect(dotFor({ status: "blocked", since: NOW, seen: NOW, unread: true })).toBe("blocked");
+    expect(dotFor({ status: "working", since: NOW, unread: true })).toBe("working");
+  });
+
+  test("cardStatus: only an idle pane marked unread changes", () => {
+    expect(cardStatus({ status: "idle", unread: true })).toBe("done");
+    expect(cardStatus({ status: "idle" })).toBe("idle");
+    expect(cardStatus({ status: "working", unread: true })).toBe("working");
   });
 });
 

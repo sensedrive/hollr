@@ -6,7 +6,6 @@ struct DashboardView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
     @Environment(SessionStore.self) private var sessions
-    @Environment(MySessions.self) private var mySessions
     @Environment(Inbox.self) private var inbox
     @Environment(\.openInBrowser) private var openInBrowser
     let onNew: () -> Void
@@ -16,6 +15,8 @@ struct DashboardView: View {
     @State private var showLimits = false
     /// herdr refused to end a session – shown, the session stays
     @State private var closeError: String?
+    /// „Als ungelesen markieren“ / „Aus der Übersicht nehmen“ didn't reach the server – undone, shown
+    @State private var actionError: String?
 
     var body: some View {
         ScrollView {
@@ -34,14 +35,9 @@ struct DashboardView: View {
         .navigationTitle("Übersicht")
         .navigationBarTitleDisplayMode(.large)
         .themedPage()
-        // what waits for you – on every herdr change (the live feed makes this immediate)
-        .task(id: InboxInput(trees: herdr.trees, hidden: herdr.hiddenIds)) { await updateInbox() }
-        .onChange(of: herdr.trees) { _, trees in
-            // forget sessions that were closed elsewhere
-            let loaded = Set(trees.keys).filter { herdr.errors[$0] == nil }
-            let alive = Set(herdr.allAgents(store.servers, includeShells: true).map(\.id))
-            mySessions.prune(alive: alive, loadedServers: loaded)
-        }
+        // what waits for you – on every herdr change (the live feed makes this immediate) and on every change of
+        // what was seen, dismissed or marked unread (on any device)
+        .task(id: InboxInput(trees: herdr.trees, hidden: herdr.hiddenIds, shared: herdr.shared)) { await updateInbox() }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { openInBrowser() } label: { Image(.globe) }
@@ -61,6 +57,9 @@ struct DashboardView: View {
         .alert("Sitzung ließ sich nicht beenden", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
             Button("OK") { closeError = nil }
         } message: { Text(closeError ?? "") }
+        .alert("Fehler", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") { actionError = nil }
+        } message: { Text(actionError ?? "") }
         .task {
             await herdr.refreshUsage(store.servers)
             // branches for the cards and rows
@@ -81,15 +80,15 @@ struct DashboardView: View {
 
     // MARK: Läuft gerade
 
-    /// Alle / Arbeitet (working or waiting) / Neu (new result)
+    /// Alle / Arbeitet (working or waiting) / Neu (new result) – by the status the rows show (HerdrStore.shownStatus)
     enum WorkFilter: Hashable {
         case all, busy, new
 
-        func includes(_ ref: AgentRef) -> Bool {
+        func includes(_ status: String) -> Bool {
             switch self {
             case .all: return true
-            case .busy: return ref.pane.status == "working" || ref.pane.status == "blocked"
-            case .new: return ref.pane.status == "done"
+            case .busy: return status == "working" || status == "blocked"
+            case .new: return status == "done"
             }
         }
     }
@@ -104,24 +103,26 @@ struct DashboardView: View {
 
     private var liveIds: Set<String> { Set(sessions.sessions.filter { $0.value.isLive }.map(\.key)) }
 
-    /// What's going on: the sessions you opened in Hollr plus every agent that works, waits or just finished –
-    /// not from hidden spaces (unless the agent waits for you).
+    /// What's going on: the sessions you opened in Hollr ("Meine Sitzungen", on any device) plus every agent that
+    /// works, waits or has a new result – not from hidden spaces (unless the agent waits for you).
     private var workRefs: [AgentRef] {
-        let mine = Set(mySessions.ids)
-        return herdr.allAgents(store.servers, includeShells: true).filter { ref in
+        herdr.allAgents(store.servers, includeShells: true).filter { ref in
             guard !herdr.hides(ref) else { return false }
-            return mine.contains(ref.id) || (ref.pane.agent != nil && ["working", "blocked", "done"].contains(ref.pane.status))
+            let status = herdr.shownStatus(ref)
+            let busy = status == "working" || status == "blocked" || status == "done"
+            return herdr.isMine(ref) || (ref.pane.agent != nil && busy)
         }
     }
 
-    /// what the inbox is built from: the agents and which spaces are hidden
+    /// what the inbox is built from: the agents, which spaces are hidden, what was seen / dismissed / marked unread
     private struct InboxInput: Equatable {
         let trees: [UUID: [Workspace]]
         let hidden: [UUID: Set<String>]
+        let shared: [UUID: SharedState]
     }
 
     private func updateInbox() async {
-        await inbox.update(herdr.allAgents(store.servers, includeShells: false).filter { !herdr.hides($0) })
+        await inbox.update(herdr.allAgents(store.servers, includeShells: false).filter { !herdr.hides($0) }, shared: herdr.shared)
     }
 
     /// grouped per workspace and server, in the agents' order (needs-you first)
@@ -151,7 +152,7 @@ struct DashboardView: View {
             SectionHeader(title: String(localized: "Läuft gerade"), trailing: refs.isEmpty ? nil : "\(refs.count)")
             if !refs.isEmpty {
                 Segmented(label: String(localized: "Filter"), options: filterOptions, selection: $workFilter, boxed: true)
-                let shown = projects(refs.filter(workFilter.includes))
+                let shown = projects(refs.filter { workFilter.includes(herdr.shownStatus($0)) })
                 if shown.isEmpty {
                     Text("Nichts mit diesem Filter.")
                         .font(Typo.sm).foregroundStyle(Theme.muted)
@@ -180,7 +181,7 @@ struct DashboardView: View {
     private func projectHead(_ project: WorkProject) -> some View {
         let states: [PaneState] = [.working, .blocked, .result]
         let counts: [(state: PaneState, count: Int)] = states.map { state in
-            (state: state, count: project.refs.filter { PaneState(status: $0.pane.status, agent: $0.pane.agent != nil) == state }.count)
+            (state: state, count: project.refs.filter { PaneState(status: herdr.shownStatus($0), agent: $0.pane.agent != nil) == state }.count)
         }
         return HStack(spacing: Gap.s) {
             ProjectBar(color: Theme.identity(project.name), height: 15)
@@ -207,14 +208,26 @@ struct DashboardView: View {
         .buttonStyle(WorkRowButtonStyle())
         .zoomSource(ref.id)
         .contextMenu {
-            if mySessions.ids.contains(ref.id) {
-                Button { mySessions.remove(ref.id) } label: {
+            if ref.pane.agent != nil && !herdr.isUnread(ref) {
+                Button { act { try await herdr.markUnread([ref]) } } label: {
+                    Label("Als ungelesen markieren", systemImage: "circle.fill")
+                }
+            }
+            if herdr.isMine(ref) {
+                Button { act { try await herdr.removeMine(ref) } } label: {
                     Label("Aus der Übersicht nehmen", systemImage: "eye.slash")
                 }
             }
             Button(role: .destructive) { closeSession(ref) } label: {
                 Label("Sitzung beenden", systemImage: "xmark.circle")
             }
+        }
+    }
+
+    /// a change to what both apps share: undone on an error, which shows
+    private func act(_ change: @escaping () async throws -> Void) {
+        Task {
+            do { try await change() } catch { actionError = error.localizedDescription }
         }
     }
 
@@ -252,8 +265,8 @@ struct DashboardView: View {
     private func closeSession(_ ref: AgentRef) {
         Task {
             do {
+                // the server drops it from "Meine Sitzungen" once the pane is gone
                 try await HollrClient.close(ref.server, pane: ref.pane.pane)
-                mySessions.remove(ref.id)
             } catch {
                 HollrLog.error("close: \(error)")
                 closeError = error.localizedDescription

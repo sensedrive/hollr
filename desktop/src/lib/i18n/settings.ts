@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "„Braucht dich“, gesehene Ergebnisse, „Als ungelesen markieren“, „Meine Sitzungen“ und die Reihenfolge von Spaces, Worktrees und Tabs merkt sich jetzt der Server – Mac und iPhone zeigen dasselbe.":
+    "“Needs you”, seen results, “Mark as unread”, “My sessions” and the order of spaces, worktrees and tabs are now kept on the server – Mac and iPhone show the same.",
   "Versteckte Spaces: unten in der Seitenleiste unter „Versteckt“ aufklappen, ohne sie zurückzuholen. Per Ziehen oder Klick zurückholen oder beenden; ein Space, den du auf „Versteckt“ ziehst, verschwindet aus der Liste.":
     "Hidden spaces: expand them at the bottom of the sidebar under “Hidden” without bringing them back. Bring them back or end them by dragging or a click; a space you drag onto “Hidden” leaves the list.",
   "Was versteckt ist, merkt sich jetzt der Server – Mac und iPhone zeigen immer dieselben Spaces.":
