@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 52,
+    version: "0.48.1",
+    date: "22.11.2026",
+    items: [
+      { icon: "☾", text: "Hollr in der Menüleiste: „Zugeklappt wach bleiben“ hält das MacBook auch auf Akku mit geschlossenem Deckel wach – vom iPhone erreichbar. Einmal Admin-Passwort; unter 20 % Akku und beim Beenden von Hollr darf es wieder schlafen." },
+    ],
+  },
+  {
     build: 51,
     version: "0.48.0",
     date: "22.11.2026",

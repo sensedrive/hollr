@@ -10,6 +10,7 @@ pub mod term;
 pub mod dictation;
 pub mod speech;
 mod notice;
+mod awake;
 
 use hollr::{Hollr, Server};
 use tauri::Manager;
@@ -199,9 +200,18 @@ pub fn run() {
             app.manage(tunnel::Tunnels::default());
             app.manage(term::Terms::default());
             notice::init(app.handle());
+            // the menu bar item: stay awake with the lid closed (pmset needs macOS)
+            #[cfg(target_os = "macos")]
+            awake::setup(app.handle())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![diag::diag_log, feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .invoke_handler(tauri::generate_handler![diag::diag_log, feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, awake::awake_texts, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // quitting gives sleep back: nothing watches the battery once Hollr is gone
+            if let tauri::RunEvent::Exit = event {
+                awake::on_exit(app);
+            }
+        });
 }

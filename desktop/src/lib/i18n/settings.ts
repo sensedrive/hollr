@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Hollr in der Menüleiste: „Zugeklappt wach bleiben“ hält das MacBook auch auf Akku mit geschlossenem Deckel wach – vom iPhone erreichbar. Einmal Admin-Passwort; unter 20 % Akku und beim Beenden von Hollr darf es wieder schlafen.":
+    "Hollr in the menu bar: “Stay awake when closed” keeps the MacBook awake with the lid closed, also on battery – reachable from the iPhone. Admin password once; below 20 % battery and when Hollr quits it may sleep again.",
   "„Braucht dich“, gesehene Ergebnisse, „Als ungelesen markieren“, „Meine Sitzungen“ und die Reihenfolge von Spaces, Worktrees und Tabs merkt sich jetzt der Server – Mac und iPhone zeigen dasselbe.":
     "“Needs you”, seen results, “Mark as unread”, “My sessions” and the order of spaces, worktrees and tabs are now kept on the server – Mac and iPhone show the same.",
   "Versteckte Spaces: unten in der Seitenleiste unter „Versteckt“ aufklappen, ohne sie zurückzuholen. Per Ziehen oder Klick zurückholen oder beenden; ein Space, den du auf „Versteckt“ ziehst, verschwindet aus der Liste.":

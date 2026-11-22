@@ -3,6 +3,7 @@
   // Hollr desktop shell (the main window): sidebar (navigation + my sessions) and the current view on the right.
   import { onMount, untrack } from "svelte";
   import { t } from "$lib/i18n";
+  import { invoke } from "@tauri-apps/api/core";
   import { settings } from "$lib/settings.svelte";
   import {
     allPanes, app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName,
@@ -78,6 +79,23 @@
       clearInterval(timer);
       unlisten();
     };
+  });
+
+  // the menu bar item (src-tauri/src/awake.rs) speaks the app's language; re-sent when it changes
+  $effect(() => {
+    void invoke("awake_texts", {
+      texts: {
+        toggle: t("Zugeklappt wach bleiben"),
+        statusOff: t("Schläft zugeklappt (wie gewohnt)"),
+        statusOn: t("Bleibt zugeklappt wach – vom iPhone erreichbar"),
+        // {pct} is filled in by the menu itself
+        statusLow: t("Akku unter {pct} % – darf jetzt schlafen"),
+        statusFailed: t("Ließ sich nicht umstellen"),
+        open: t("Hollr öffnen"),
+        quit: t("Hollr beenden"),
+        prompt: t("Hollr möchte einstellen dürfen, ob der Mac zugeklappt schläft."),
+      },
+    }).catch(() => {});
   });
 
   // "Braucht dich": note when agents start waiting (on every tree refresh); the count goes on the Übersicht item
