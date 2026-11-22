@@ -7,6 +7,12 @@ struct ServersView: View {
     @Environment(MachinesSync.self) private var machines
     let onPair: () -> Void
 
+    /// machines another app is paired with, not this one
+    private var missing: [Machine] {
+        let paired = Set(store.servers.map(\.hostFingerprint))
+        return machines.missing.filter { !paired.contains($0.fp) }
+    }
+
     var body: some View {
         List {
             Group {
@@ -15,7 +21,8 @@ struct ServersView: View {
                         NavigationLink { ServerDetailView(server: server) } label: { ServerRow(server: server) }
                     }
                     // paired in another of your Hollr apps: paired here as soon as one of your machines reaches it
-                    ForEach(machines.missing, id: \.fp) { machine in
+                    // (never next to its own paired row – the moment it gets paired here it leaves this list)
+                    ForEach(missing, id: \.fp) { machine in
                         MissingServerRow(machine: machine, pending: machines.pending.contains(machine.fp),
                                          failure: machines.failures[machine.fp])
                     }
@@ -44,6 +51,7 @@ struct ServersView: View {
         .labelStyle(.settings)
         .themedList()
         .navigationTitle("Server & Geräte")
+        .onAppear { Diagnostics.shared.note("settings: servers (\(store.servers.count) paired, \(missing.count) missing)") }
     }
 }
 
@@ -247,6 +255,7 @@ struct ServerDetailView: View {
         .labelStyle(.settings)
         .themedList()
         .navigationTitle(server.label)
+        .onAppear { Diagnostics.shared.note("settings: server \(server.label)") }
         .refreshable { await load() }
         .task { await load() }
         .confirmationDialog(String(localized: "Server aus Hollr entfernen?"), isPresented: $confirmRemove, titleVisibility: .visible) {

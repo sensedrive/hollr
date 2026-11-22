@@ -69,15 +69,21 @@ struct PluginsView: View {
         case let .loaded(plugins) where plugins.isEmpty:
             FootNote(String(localized: "Keine Plugins. Auf dem Server: hollr plugin link <ordner>"))
         case let .loaded(plugins):
-            ForEach(plugins) { plugin in
-                if plugin.error == nil {
-                    NavigationLink(value: PluginRoute(server: server, plugin: plugin)) { PluginRow(plugin: plugin) }
+            // ids unique in the whole List: the same plugin can be linked on several servers
+            ForEach(plugins.map { PluginItem(id: "\(server.id.uuidString)|\($0.id)", plugin: $0) }) { item in
+                if item.plugin.error == nil {
+                    NavigationLink(value: PluginRoute(server: server, plugin: item.plugin)) { PluginRow(plugin: item.plugin) }
                         .listRowBackground(Theme.card)
                 } else {
-                    PluginRow(plugin: plugin).listRowBackground(Theme.card)
+                    PluginRow(plugin: item.plugin).listRowBackground(Theme.card)
                 }
             }
         }
+    }
+
+    private struct PluginItem: Identifiable {
+        let id: String
+        let plugin: PluginInfo
     }
 
     private func dot(_ load: Load?) -> Color {

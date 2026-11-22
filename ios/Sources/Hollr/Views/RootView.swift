@@ -154,7 +154,12 @@ struct RootView: View {
                     PushManager.shared.updateServers(servers)
                     herdr.startFeeds(servers)
                 }
-                .onChange(of: sheetAgent) { _, _ in sheetDetent = .fraction(0.82) }
+                .onChange(of: sheetAgent) { _, id in
+                    sheetDetent = .fraction(0.82)
+                    Diagnostics.shared.note(id.map { "chat sheet open \(AgentRef.pane(ofId: $0))" } ?? "chat sheet closed")
+                }
+                // where the user was when something went wrong (diag breadcrumbs, cheap)
+                .onChange(of: tab) { _, tab in Diagnostics.shared.note("tab \(tab)") }
                 .sheet(item: Binding(get: { sheetAgent.map(SheetID.init) }, set: { sheetAgent = $0?.id })) { item in
                     AgentSheet(agentId: item.id)
                         .presentationDetents([.fraction(0.82), .large], selection: $sheetDetent)

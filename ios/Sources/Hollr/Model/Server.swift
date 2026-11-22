@@ -112,6 +112,11 @@ struct AgentRef: Hashable, Identifiable {
 
     var id: String { "\(server.id.uuidString)|\(pane.pane)" }
 
+    /// the herdr pane of an id like `id` ("serverUUID|w1:p2" → "w1:p2"), e.g. for breadcrumbs
+    static func pane(ofId id: String) -> String {
+        id.split(separator: "|", maxSplits: 1).last.map(String.init) ?? id
+    }
+
     /// herdr tab names like "1" carry no meaning – then the workspace name is the better title.
     var place: String {
         let t = tab.trimmingCharacters(in: .whitespaces)
@@ -183,17 +188,28 @@ final class ServerStore {
         }
     }
 
-    /// Paired (by hand, or by the sync – which brings the machine's own `updatedAt`).
+    /// Paired (by hand, or by the sync – which brings the machine's own `updatedAt`). Paired again: the record takes
+    /// the old one's place, so the lists keep their order.
     func add(_ server: Server) {
         var server = server
         if server.updatedAt == nil { server.updatedAt = Self.nowMs }
-        // paired again: the old entry's pooled connection (and its tunnels) must not live on
-        for old in servers where old.hostFingerprint == server.hostFingerprint && old.user == server.user {
+        let same = { (old: Server) in old.hostFingerprint == server.hostFingerprint && old.user == server.user }
+        // the old entry's pooled connection (and its tunnels) must not live on
+        for old in servers where same(old) {
             Task { await SSHPool.shared.invalidate(old) }
         }
-        servers.removeAll { $0.hostFingerprint == server.hostFingerprint && $0.user == server.user }
-        servers.append(server)
-        tombstones.removeAll { $0.fp == server.hostFingerprint }
+        var next = servers
+        if let at = next.firstIndex(where: same) {
+            next[at] = server
+            next.removeAll { $0.id != server.id && same($0) }
+        } else {
+            next.append(server)
+        }
+        servers = next // one change for the lists, not a remove and an insert
+        if tombstones.contains(where: { $0.fp == server.hostFingerprint }) {
+            tombstones.removeAll { $0.fp == server.hostFingerprint }
+        }
+        Diagnostics.shared.note("servers: added \(server.label) – \(servers.count) paired")
         save()
         onChange?()
     }
@@ -201,12 +217,13 @@ final class ServerStore {
     /// Removed here – and, through the tombstone, in the user's other apps. `at`: when (the sync passes the time of
     /// a removal it learned from another app).
     func remove(_ server: Server, at: Double? = nil) {
-        servers.removeAll { $0.id == server.id }
+        guard servers.contains(where: { $0.id == server.id }) else { return }
+        servers = servers.filter { $0.id != server.id }
         var gone = Machine(server: server)
         gone.removed = true
         gone.updatedAt = at ?? Self.nowMs
-        tombstones.removeAll { $0.fp == server.hostFingerprint }
-        tombstones.append(gone)
+        tombstones = tombstones.filter { $0.fp != server.hostFingerprint } + [gone]
+        Diagnostics.shared.note("servers: removed \(server.label) – \(servers.count) paired")
         save()
         onChange?()
         Task { await SSHPool.shared.invalidate(server) }

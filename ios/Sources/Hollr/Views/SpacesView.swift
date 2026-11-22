@@ -132,31 +132,49 @@ struct SpacesView: View {
         return groups
     }
 
-    /// One server's list: the main rows (not hidden or waiting for you, in the dragged order, worktrees nested) and
-    /// the „Versteckt“ rows. Each space at most once in all of it – a SwiftUI List whose rows repeat an id in one
-    /// section crashes on the next change (UICollectionView "invalid number of items").
-    static func layout(_ spaces: [Space], status: (Space) -> String, order: SharedState?) -> (main: [SpaceListRow], hidden: [Space]) {
+    /// One server's section as rows: loading placeholders, the main rows (not hidden or waiting for you, in the
+    /// dragged order, worktrees nested), „Versteckt“ and – unfolded – the hidden ones. One flat list with ids unique in
+    /// the whole List (`scope` = the server): a SwiftUI List whose diff sees an id twice, or rows that come and go
+    /// through `if`s next to moving ones, crashes UICollectionView ("invalid number of items", bad moves/deletes).
+    static func rows(_ spaces: [Space]?, status: (Space) -> String, order: SharedState?, hiddenOpen: Bool,
+                     scope: String) -> [SpaceListRow] {
+        var out: [SpaceListRow] = []
+        if spaces == nil {
+            for i in 0..<5 { out.append(SpaceListRow(id: "\(scope)|skeleton|\(i)", kind: .skeleton(i))) }
+        }
         var seen = Set<String>()
-        let unique: [Space] = spaces.filter { seen.insert($0.id).inserted }
-        let shown: [Space] = HiddenSpaces.shown(unique, status: status)
-        let groups = SharedOrder.groups(group(shown), in: order)
-        var main: [SpaceListRow] = []
+        let unique: [Space] = (spaces ?? []).filter { seen.insert($0.id).inserted }
+        let groups = SharedOrder.groups(group(HiddenSpaces.shown(unique, status: status)), in: order)
         var listed = Set<String>()
         for group in groups {
             for space in group.spaces where listed.insert(space.id).inserted {
-                main.append(SpaceListRow(space: space, nested: space.id != group.key))
+                out.append(SpaceListRow(id: "\(scope)|\(space.id)", kind: .space(space, nested: space.id != group.key)))
             }
         }
+        if unique.isEmpty { out.append(SpaceListRow(id: "\(scope)|loading", kind: .loading)) }
         let hidden: [Space] = HiddenSpaces.hidden(unique).filter { !listed.contains($0.id) }
-        return (main, hidden)
+        if !hidden.isEmpty {
+            out.append(SpaceListRow(id: "\(scope)|hidden", kind: .hiddenToggle(hidden.count)))
+            if hiddenOpen {
+                for space in hidden { out.append(SpaceListRow(id: "\(scope)|hidden|\(space.id)", kind: .hidden(space))) }
+            }
+        }
+        return out
     }
 }
 
-/// A row of the spaces list: the space and whether it hangs below its repo (a worktree).
-struct SpaceListRow: Identifiable {
-    let space: Space
-    let nested: Bool
-    var id: String { space.id }
+/// A row of a server's spaces section (SpacesView.rows). Every kind is exactly one row.
+struct SpaceListRow: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case skeleton(Int)
+        case space(Space, nested: Bool)
+        case loading
+        /// how many are hidden
+        case hiddenToggle(Int)
+        case hidden(Space)
+    }
+    let id: String
+    let kind: Kind
 }
 
 /// One server's spaces: the main list (not hidden, or hidden but waiting for you), then „Versteckt“ with the hidden
@@ -177,37 +195,34 @@ private struct SpacesSection: View {
 
     var body: some View {
         let refs = refs
-        let layout = SpacesView.layout(spaces, status: { urgentStatus(of: $0, in: refs, herdr: herdr) },
-                                       order: herdr.shared[server.id])
+        let rows = SpacesView.rows(herdr.spaces[server.id], status: { urgentStatus(of: $0, in: refs, herdr: herdr) },
+                                   order: herdr.shared[server.id], hiddenOpen: hiddenOpen, scope: server.id.uuidString)
         Section {
-            if herdr.spaces[server.id] == nil { skeleton }
-            main(layout.main, refs: refs)
-            if spaces.isEmpty { Text("Lade …").foregroundStyle(Theme.muted).listRowBackground(Theme.card) }
-            hiddenPart(layout.hidden, refs: refs)
+            ForEach(rows) { row in self.row(row, refs: refs) }
+                .listRowBackground(Theme.card)
         } header: {
             SectionHeader(title: server.label, dot: dot)
         }
     }
 
-    private var skeleton: some View {
-        ForEach(0..<5, id: \.self) { i in
-            HStack(spacing: 10) {
-                SkeletonBar(width: CGFloat([170, 220, 140, 200, 160][i]), height: 14)
-                Spacer()
-                SkeletonBar(width: 36, height: 10)
-            }
-            .padding(.vertical, Gap.xs)
-            .shimmer()
+    @ViewBuilder private func row(_ row: SpaceListRow, refs: [AgentRef]) -> some View {
+        switch row.kind {
+        case let .skeleton(i): skeleton(i)
+        case .loading: Text("Lade …").foregroundStyle(Theme.muted)
+        case let .hiddenToggle(count): HiddenToggle(count: count, open: $hiddenOpen)
+        case let .space(space, nested): visibleRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr), nested: nested)
+        case let .hidden(space): hiddenRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr))
         }
-        .listRowBackground(Theme.card)
     }
 
-    /// in the order dragged on any device (the desktop sidebar); one flat ForEach with unique ids
-    private func main(_ rows: [SpaceListRow], refs: [AgentRef]) -> some View {
-        ForEach(rows) { row in
-            visibleRow(row.space, status: urgentStatus(of: row.space, in: refs, herdr: herdr), nested: row.nested)
+    private func skeleton(_ i: Int) -> some View {
+        HStack(spacing: 10) {
+            SkeletonBar(width: CGFloat([170, 220, 140, 200, 160][i % 5]), height: 14)
+            Spacer()
+            SkeletonBar(width: 36, height: 10)
         }
-        .listRowBackground(Theme.card)
+        .padding(.vertical, Gap.xs)
+        .shimmer()
     }
 
     private func visibleRow(_ space: Space, status: String, nested: Bool) -> some View {
@@ -231,18 +246,6 @@ private struct SpacesSection: View {
                 Button { onHide(space, false) } label: { Label("Zurückholen", icon: .arrowUp) }
             }
             Button(role: .destructive) { onClose(space) } label: { Label("Schließen", icon: .x) }
-        }
-    }
-
-    /// the hidden spaces not already in the main list (one that waits for you shows there)
-    @ViewBuilder private func hiddenPart(_ hidden: [Space], refs: [AgentRef]) -> some View {
-        if !hidden.isEmpty {
-            HiddenToggle(count: hidden.count, open: $hiddenOpen)
-                .listRowBackground(Theme.card)
-            if hiddenOpen {
-                ForEach(hidden) { space in hiddenRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr)) }
-                    .listRowBackground(Theme.card)
-            }
         }
     }
 
@@ -278,11 +281,16 @@ private struct SpacesArrangeSection: View {
         return SharedOrder.groups(SpacesView.group(shown), in: herdr.shared[server.id])
     }
 
+    /// ids unique in the whole List: the same space id ("w1") exists on every server
+    private func items(_ spaces: [Space]) -> [ArrangeItem] {
+        spaces.map { ArrangeItem(id: "\(server.id.uuidString)|\($0.id)", space: $0) }
+    }
+
     var body: some View {
         let groups = groups
         Section {
-            ForEach(groups, id: \.key) { group in
-                SpaceRow(space: group.spaces[0], status: "idle", nested: false)
+            ForEach(items(groups.map { $0.spaces[0] })) { item in
+                SpaceRow(space: item.space, status: "idle", nested: false)
             }
             .onMove { from, to in
                 var ids = groups.map(\.key)
@@ -293,27 +301,41 @@ private struct SpacesArrangeSection: View {
         } header: {
             SectionHeader(title: server.label, dot: dot)
         }
-        ForEach(groups.filter { $0.spaces.count > 2 }, id: \.key) { group in
-            worktrees(group)
+        ForEach(items(repos(groups))) { repo in
+            worktrees(repo.space, trees: trees(of: repo.space.id, in: groups))
         }
     }
 
-    private func worktrees(_ group: (key: String, spaces: [Space])) -> some View {
-        let trees: [Space] = Array(group.spaces.dropFirst())
-        return Section {
-            ForEach(trees) { space in
-                SpaceRow(space: space, status: "idle", nested: false)
+    /// repos with two or more worktrees (one alone has nothing to arrange)
+    private func repos(_ groups: [(key: String, spaces: [Space])]) -> [Space] {
+        groups.filter { $0.spaces.count > 2 }.map { $0.spaces[0] }
+    }
+
+    private func trees(of repo: String, in groups: [(key: String, spaces: [Space])]) -> [Space] {
+        guard let group = groups.first(where: { $0.key == repo }) else { return [] }
+        return Array(group.spaces.dropFirst())
+    }
+
+    private func worktrees(_ repo: Space, trees: [Space]) -> some View {
+        Section {
+            ForEach(items(trees)) { item in
+                SpaceRow(space: item.space, status: "idle", nested: false)
             }
             .onMove { from, to in
                 var ids = trees.map(\.id)
                 ids.move(fromOffsets: from, toOffset: to)
-                onReorder(.worktreeOrder(group.key, ids))
+                onReorder(.worktreeOrder(repo.id, ids))
             }
             .listRowBackground(Theme.card)
         } header: {
-            SectionHeader(title: String(localized: "\(group.spaces[0].label) · Worktrees"))
+            SectionHeader(title: String(localized: "\(repo.label) · Worktrees"))
         }
     }
+}
+
+private struct ArrangeItem: Identifiable {
+    let id: String
+    let space: Space
 }
 
 /// „Versteckt“ at the end of a server's spaces: quiet, with the count; folds the hidden spaces in and out.
@@ -464,6 +486,8 @@ struct SpaceDetailView: View {
             await loadChanges()
         }
         .task(id: current.git) { await loadChanges() }
+        .onAppear { Diagnostics.shared.note("space open \(space.id) on \(server.label)") }
+        .onDisappear { Diagnostics.shared.note("space closed \(space.id)") }
         .onAppear {
             // debug: open the git panel on a tab right away
             guard !openedDebugTab else { return }

@@ -235,27 +235,32 @@ final class MachinesSync {
         let current = reachable.filter { server in !behind.contains { $0.id == server.id } }
         let docs = await call(behind, merge) + call(current, ["op": "get"])
         for (server, doc) in docs { known[server.id] = doc }
+        Diagnostics.shared.note("machines: merge \(behind.count) get \(current.count) answered \(docs.count) of \(reachable.count)")
         guard !docs.isEmpty else { return }
 
         adoptPrefs(Machines.union(prefs: docs.compactMap(\.doc.prefs)))
         let union = Machines.union([local] + docs.map(\.doc.machines))
-        for gone in Machines.toRemove(union, servers: store.servers) {
-            HollrLog.info("machines: \(gone.server.label) was removed on another device")
-            store.remove(gone.server, at: gone.at)
+        let gone = Machines.toRemove(union, servers: store.servers)
+        for entry in gone {
+            HollrLog.info("machines: \(entry.server.label) was removed on another device")
+            store.remove(entry.server, at: entry.at)
         }
         let live = docs.filter { doc in store.servers.contains { $0.id == doc.server.id } }
-        await pairMissing(Machines.missing(union, servers: store.servers, tombstones: store.tombstones), docs: live)
+        let lacking = Machines.missing(union, servers: store.servers, tombstones: store.tombstones)
+        Diagnostics.shared.note("machines: union \(union.count) remove \(gone.count) missing \(lacking.count)")
+        await pairMissing(lacking, docs: live)
         await answerRequests(live)
     }
 
     // MARK: missing machines
 
     private func pairMissing(_ lacking: [Machine], docs: [(server: Server, doc: MachinesDoc)]) async {
-        missing = lacking
+        show(missing: lacking)
         let fps = Set(lacking.map(\.fp))
-        failures = failures.filter { fps.contains($0.key) }
+        let stillFailing = failures.filter { fps.contains($0.key) }
+        if stillFailing != failures { failures = stillFailing }
         guard !lacking.isEmpty else {
-            pending = []
+            show(pending: [])
             return
         }
         let install = Self.installId
@@ -264,10 +269,11 @@ final class MachinesSync {
         let open = docs.flatMap(\.doc.requests).filter { $0.install == install }.map(\.fp)
         var next = fps.intersection(Set(open).union(pairing))
         let taken: [Invite] = await call(servers, ["op": "take", "install": install]).flatMap { $0.doc.taken ?? [] }
+        Diagnostics.shared.note("machines: \(lacking.count) missing, \(taken.count) invites")
         for machine in lacking {
             if let invite = taken.first(where: { $0.fp == machine.fp }) {
                 next.insert(machine.fp)
-                pending = next
+                show(pending: next)
                 await pairSilently(machine, link: invite.url)
                 next.remove(machine.fp) // paired, or failed: then the row says why
                 continue
@@ -275,11 +281,22 @@ final class MachinesSync {
             guard Machines.requestDue(lastRequest[machine.fp], now: .now) else { continue }
             lastRequest[machine.fp] = .now
             let body: [String: Any] = ["op": "request", "fp": machine.fp, "install": install, "name": DeviceKey.defaultDeviceName]
-            if !(await call(servers, body)).isEmpty { next.insert(machine.fp) }
+            let asked = await call(servers, body).count
+            Diagnostics.shared.note("machines: requested \(machine.label) on \(asked) servers")
+            if asked > 0 { next.insert(machine.fp) }
         }
         let paired = Set(store?.servers.map(\.hostFingerprint) ?? [])
-        missing = lacking.filter { !paired.contains($0.fp) }
-        pending = next.subtracting(paired)
+        show(missing: lacking.filter { !paired.contains($0.fp) })
+        show(pending: next.subtracting(paired))
+    }
+
+    // only real changes: every assignment makes the server list diff again
+    private func show(missing next: [Machine]) {
+        if missing != next { missing = next }
+    }
+
+    private func show(pending next: Set<String>) {
+        if pending != next { pending = next }
     }
 
     /// Pairs like a scanned link – without any UI. The record keeps the machine's label and time.

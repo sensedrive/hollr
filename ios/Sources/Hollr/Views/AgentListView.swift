@@ -35,22 +35,20 @@ struct AgentListView: View {
         }
     }
 
+    // Every ForEach element is exactly one row or one section, and ids are unique in the whole List: rows that
+    // come and go through `if`s next to moving ones made UICollectionView crash on a refresh.
     @ViewBuilder private var rows: some View {
         Group {
-            ForEach(store.servers) { server in
-                if let error = herdr.errors[server.id] {
-                    Label("\(server.label): \(error)", icon: .alert)
-                        .font(Typo.note).foregroundStyle(Theme.warn)
-                }
+            ForEach(store.servers.filter { herdr.errors[$0.id] != nil }) { server in
+                Label("\(server.label): \(herdr.errors[server.id] ?? "")", icon: .alert)
+                    .font(Typo.note).foregroundStyle(Theme.warn)
             }
             switch grouping {
             case .status:
                 let agents = herdr.allAgents(store.servers, includeShells: showShells)
                 ForEach(agents) { ref in row(ref, showServer: store.servers.count > 1, showWorkspace: true) }
             case .workspace:
-                ForEach(store.servers) { server in
-                    ForEach(herdr.trees[server.id] ?? []) { ws in workspaceSection(server, ws) }
-                }
+                ForEach(workspaceGroups()) { group in workspaceSection(group) }
             }
             if herdr.loaded && herdr.allAgents(store.servers, includeShells: showShells).isEmpty {
                 EmptyState(icon: .terminal, title: String(localized: "Keine Agents"),
@@ -60,8 +58,29 @@ struct AgentListView: View {
         .listRowBackground(Theme.card)
     }
 
+    /// One workspace with sessions (a section), keyed by server and workspace – "w1" exists on every server.
+    private struct WorkspaceGroup: Identifiable {
+        let id: String
+        let title: String
+        let label: String
+        let refs: [AgentRef]
+    }
+
     // own functions with explicit types: one big nested expression made the Release compiler give
     // up on the CI machines ("unable to type-check this expression in reasonable time")
+    private func workspaceGroups() -> [WorkspaceGroup] {
+        var out: [WorkspaceGroup] = []
+        for server in store.servers {
+            for ws in herdr.trees[server.id] ?? [] {
+                let refs: [AgentRef] = refs(on: server, in: ws)
+                guard !refs.isEmpty else { continue }
+                let title: String = store.servers.count > 1 ? "\(server.label) · \(ws.label)" : ws.label
+                out.append(WorkspaceGroup(id: "\(server.id.uuidString)|\(ws.id)", title: title, label: ws.label, refs: refs))
+            }
+        }
+        return out
+    }
+
     private func refs(on server: Server, in ws: Workspace) -> [AgentRef] {
         // by id: two workspaces with the same name must not list each other's sessions
         let refs: [AgentRef] = herdr.agents(on: server).filter { ref in
@@ -71,16 +90,12 @@ struct AgentListView: View {
         return SharedOrder.ordered(refs, saved: herdr.tabOrder(server, ws: ws.id)) { $0.tabId }
     }
 
-    @ViewBuilder private func workspaceSection(_ server: Server, _ ws: Workspace) -> some View {
-        let refs: [AgentRef] = refs(on: server, in: ws)
-        if !refs.isEmpty {
-            let title: String = store.servers.count > 1 ? "\(server.label) · \(ws.label)" : ws.label
-            Section {
-                ForEach(refs) { ref in row(ref, showServer: false, showWorkspace: false) }
-            } header: {
-                SectionHeader(title: title, trailing: "\(refs.count)", dot: Theme.identity(ws.label))
-                    .textCase(nil)
-            }
+    private func workspaceSection(_ group: WorkspaceGroup) -> some View {
+        Section {
+            ForEach(group.refs) { ref in row(ref, showServer: false, showWorkspace: false) }
+        } header: {
+            SectionHeader(title: group.title, trailing: "\(group.refs.count)", dot: Theme.identity(group.label))
+                .textCase(nil)
         }
     }
 

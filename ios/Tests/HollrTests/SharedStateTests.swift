@@ -160,13 +160,23 @@ final class SharedOrderTests: XCTestCase {
         var doc = SharedState()
         doc.spaceOrder = ["w4", "w1", "w4", "w9", "w1"]
         doc.worktreeOrder["w1"] = ["w3", "w3", "w2"]
-        let layout = SpacesView.layout(all, status: { $0.id == "w9" ? "blocked" : "idle" }, order: doc)
-        let ids = layout.main.map(\.id) + layout.hidden.map(\.id)
+        let rows = SpacesView.rows(all, status: { $0.id == "w9" ? "blocked" : "idle" }, order: doc, hiddenOpen: true, scope: "S")
+        let ids = rows.map(\.id)
         XCTAssertEqual(ids.count, Set(ids).count)
-        XCTAssertEqual(layout.main.map(\.id), ["w4", "w1", "w3", "w2", "w9"])
-        XCTAssertEqual(layout.main.filter(\.nested).map(\.id), ["w3", "w2"])
-        // waiting for you: in the main list only, not again under „Versteckt“
-        XCTAssertEqual(layout.hidden.map(\.id), ["w8"])
+        // the same space id on another server is another row
+        XCTAssertEqual(ids, ["S|w4", "S|w1", "S|w3", "S|w2", "S|w9", "S|hidden", "S|hidden|w8"])
+        XCTAssertEqual(rows[2].kind, .space(all[2], nested: true))
+        XCTAssertEqual(rows[5].kind, .hiddenToggle(1))
+        // folded: the toggle, not the hidden rows
+        let folded = SpacesView.rows(all, status: { _ in "idle" }, order: nil, hiddenOpen: false, scope: "S").map(\.id)
+        XCTAssertEqual(folded.last, "S|hidden")
+        XCTAssertFalse(folded.contains("S|hidden|w9"))
+    }
+
+    func testRowsWhileLoading() {
+        let loading = SpacesView.rows(nil, status: { _ in "idle" }, order: nil, hiddenOpen: false, scope: "S").map(\.id)
+        XCTAssertEqual(loading, ["S|skeleton|0", "S|skeleton|1", "S|skeleton|2", "S|skeleton|3", "S|skeleton|4", "S|loading"])
+        XCTAssertEqual(SpacesView.rows([], status: { _ in "idle" }, order: nil, hiddenOpen: false, scope: "S").map(\.id), ["S|loading"])
     }
 
     func testOrderedNeverRepeatsAnItem() {

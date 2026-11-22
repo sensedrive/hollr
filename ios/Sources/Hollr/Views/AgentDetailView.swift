@@ -218,12 +218,16 @@ private struct AgentConversation: View {
         #endif
         .onAppear {
             PushManager.shared.visibleAgentId = ref.id
+            Diagnostics.shared.note("chat open \(ref.pane.pane) (\(ref.pane.agent ?? "shell"))")
             // on screen: its result is seen, an unread mark used up, first in "Meine Sitzungen" (every device)
             Task { await herdr.opened(ref) }
         }
         // it turns done (or waits) while you look at it: seen as well
         .onChange(of: ref.pane.since) { _, _ in Task { await herdr.seeing(ref) } }
-        .onDisappear { if PushManager.shared.visibleAgentId == ref.id { PushManager.shared.visibleAgentId = nil } }
+        .onDisappear {
+            Diagnostics.shared.note("chat closed \(ref.pane.pane)")
+            if PushManager.shared.visibleAgentId == ref.id { PushManager.shared.visibleAgentId = nil }
+        }
         // the server's live feed saw a change (status, new pane …): refresh this chat now
         .onChange(of: herdr.changeCount) { _, _ in session.nudge() }
         .onChange(of: session.isLive) { _, live in

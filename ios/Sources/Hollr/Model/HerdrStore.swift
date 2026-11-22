@@ -30,7 +30,7 @@ final class HerdrStore {
             let seq = (spacesSeq[server.id] ?? 0) + 1
             spacesSeq[server.id] = seq
             if let list = try? await HollrClient.spaces(server), spacesSeq[server.id] == seq {
-                spaces[server.id] = list
+                if spaces[server.id] != list { spaces[server.id] = list }
                 spacesAt[server.id] = Date()
             }
         }
@@ -121,8 +121,8 @@ final class HerdrStore {
                 guard generations[id] == treeGeneration[id] else { continue } // a newer request is under way
                 switch result {
                 case .success(let tree):
-                    trees[id] = stamped(tree, server: id)
-                    errors[id] = nil
+                    setTree(id, tree)
+                    setError(id, nil)
                     retryAfter[id] = nil
                     // connected: the shared doc comes along (the feed's `ready` loads it too; an older server
                     // without a feed gets it here, at most once per refresh until it arrives)
@@ -130,20 +130,31 @@ final class HerdrStore {
                         Task { await loadShared(server) }
                     }
                 case .failure(let error):
-                    errors[id] = error.localizedDescription
+                    setError(id, error.localizedDescription)
                     retryAfter[id] = .now.addingTimeInterval(30)
                     // only a broken connection is worth reconnecting – not an error answer from herdr
                     if HollrError.isTransport(error), let server = servers.first(where: { $0.id == id }) {
                         await SSHPool.shared.invalidate(server)
                     }
                 }
-                loaded = true // show what we have, don't wait for the slowest machine
+                if !loaded { loaded = true } // show what we have, don't wait for the slowest machine
             }
         }
         let ids = Set(servers.map(\.id))
-        trees = trees.filter { ids.contains($0.key) }
-        shared = shared.filter { ids.contains($0.key) }
-        loaded = true
+        if trees.keys.contains(where: { !ids.contains($0) }) { trees = trees.filter { ids.contains($0.key) } }
+        if shared.keys.contains(where: { !ids.contains($0) }) { shared = shared.filter { ids.contains($0.key) } }
+        if !loaded { loaded = true }
+    }
+
+    // Every assignment to an observed property makes the lists diff again – even with the same value. Unchanged
+    // trees and errors are left alone, so a refresh that finds nothing new doesn't touch the lists.
+    private func setTree(_ id: UUID, _ raw: [Workspace]) {
+        let tree = stamped(raw, server: id)
+        if trees[id] != tree { trees[id] = tree }
+    }
+
+    private func setError(_ id: UUID, _ message: String?) {
+        if errors[id] != message { errors[id] = message }
     }
 
     /// One server's tree, without touching the others.
@@ -152,12 +163,12 @@ final class HerdrStore {
         do {
             let tree = try await HollrClient.tree(server)
             guard gen == treeGeneration[server.id] else { return }
-            trees[server.id] = stamped(tree, server: server.id)
-            errors[server.id] = nil
+            setTree(server.id, tree)
+            setError(server.id, nil)
             retryAfter[server.id] = nil
         } catch {
             guard gen == treeGeneration[server.id] else { return }
-            errors[server.id] = error.localizedDescription
+            setError(server.id, error.localizedDescription)
         }
     }
 
@@ -215,7 +226,7 @@ final class HerdrStore {
         do {
             let doc = try await HollrClient.shared(server)
             guard sharedSeq[server.id] == seq else { return }
-            shared[server.id] = doc
+            if shared[server.id] != doc { shared[server.id] = doc }
             await migrateMySessions(server, doc)
         } catch HollrError.server("not_allowed") {
             sharedInMemory.insert(server.id)
@@ -252,7 +263,7 @@ final class HerdrStore {
         guard !sharedInMemory.contains(server.id) else { return }
         do {
             let answer = try await HollrClient.patchShared(server, changes)
-            if sharedSeq[server.id] == seq { shared[server.id] = answer }
+            if sharedSeq[server.id] == seq, shared[server.id] != answer { shared[server.id] = answer }
         } catch HollrError.server("not_allowed") {
             sharedInMemory.insert(server.id) // an older server: the change stays in memory
         } catch {

@@ -112,4 +112,22 @@ final class MachinesTests: XCTestCase {
         XCTAssertTrue(store.tombstones.isEmpty)
         XCTAssertGreaterThan(store.servers.first?.updatedAt ?? 0, 1)
     }
+
+    @MainActor func testPairingAgainKeepsThePlaceAndRemovingTwiceIsANoOp() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = ServerStore(directory: dir)
+        for fp in ["a", "b", "c"] { store.add(server(fp, 5)) }
+        let again = server("b", 9)
+        store.add(again)
+        XCTAssertEqual(store.servers.map(\.hostFingerprint), ["a", "b", "c"])
+        XCTAssertEqual(store.servers[1].id, again.id)
+        var changes = 0
+        store.onChange = { changes += 1 }
+        store.remove(again)
+        store.remove(again)
+        XCTAssertEqual(changes, 1)
+        XCTAssertEqual(store.tombstones.map(\.fp), ["b"])
+    }
 }
