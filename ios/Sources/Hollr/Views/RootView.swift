@@ -185,6 +185,7 @@ struct RootView: View {
         .task(id: scenePhase) {
             // keep herdr state fresh while the app is in the foreground: the live feed pushes
             // changes; polling stays as a slow safety net (fast only while a feed is down)
+            NetworkWatch.shared.setActive(scenePhase != .background)
             guard scenePhase == .active else {
                 herdr.stopFeeds()
                 // back from the background the connections are often half-open: start fresh

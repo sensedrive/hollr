@@ -154,3 +154,24 @@ final class PaletteContrastTests: XCTestCase {
         }
     }
 }
+
+final class RaceTests: XCTestCase {
+    /// The chat stream's watchdog must win even when the stream never ends (a half-open connection).
+    func testFirstOutcomeWinsWithoutWaitingForTheRest() async {
+        let race = Race()
+        let hung = Task { try? await Task.sleep(for: .seconds(3600)) }
+        Task { race.finish(FollowStalled()) }
+        let outcome = await race.wait()
+        XCTAssertTrue(outcome is FollowStalled)
+        race.finish(nil)
+        hung.cancel()
+    }
+
+    func testFinishedBeforeWaitReturnsAtOnce() async {
+        let race = Race()
+        race.finish(nil)
+        race.finish(FollowStalled())
+        let outcome = await race.wait()
+        XCTAssertNil(outcome)
+    }
+}

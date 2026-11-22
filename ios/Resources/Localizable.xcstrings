@@ -1547,6 +1547,16 @@
         }
       }
     },
+    "Zurück aus dem Hintergrund lädt der Chat sofort – vorher blieb er bis zu einer Minute auf dem Platzhalter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back from the background the chat loads at once – before, it sat on its placeholder for up to a minute"
+          }
+        }
+      }
+    },
     "Chat und Terminal frieren nach Netzwechsel oder Hintergrund nicht mehr ein; „Nicht gesendet“ bleibt stehen, bis du es erledigt hast": {
       "localizations": {
         "en": {

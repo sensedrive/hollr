@@ -240,6 +240,9 @@ extension Result where Failure == Error {
 final class Clock: @unchecked Sendable {
     private let lock = NSLock()
     private var last = Date()
-    func touch() { lock.withLock { last = Date() } }
+    private var touched = false
+    func touch() { lock.withLock { last = Date(); touched = true } }
     var age: TimeInterval { lock.withLock { Date().timeIntervalSince(last) } }
+    /// touched at least once since it was made
+    var any: Bool { lock.withLock { touched } }
 }

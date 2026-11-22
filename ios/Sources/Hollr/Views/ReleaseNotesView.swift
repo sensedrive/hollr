@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 57, date: "22.11.2026", items: [
+            ("bolt.horizontal", String(localized: "Zurück aus dem Hintergrund lädt der Chat sofort – vorher blieb er bis zu einer Minute auf dem Platzhalter")),
+        ]),
         ReleaseNote(build: 56, date: "21.11.2026", items: [
             ("paintpalette", String(localized: "Der Chat hat Farben wie am Mac: fett und Überschriften lila, Code grün, Tabellenköpfe gelb – in jedem Farbschema gut lesbar")),
             ("checkmark.bubble", String(localized: "Ein einzelner unlesbarer Eintrag lässt nicht mehr den ganzen Chat leer – und „Arbeitet …“ verschwindet, wenn der Agent wirklich fertig ist")),

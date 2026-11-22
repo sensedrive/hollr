@@ -86,65 +86,40 @@ final class AgentSession {
         let pane = ref.pane.pane
         let server = ref.server
         let heard = Clock()
-        var supported = true
+        let unsupported = Flag()
         // the connection this stream ran on: only that one is dropped when it fails
         var used: SSHClient?
         do {
             let client = try await SSHPool.shared.client(for: server)
             used = client
-            heard.touch()
-            // the server pings every 20 s: silence = a dead connection. Closing the stream's own connection ends
-            // it – the pool may hold a newer one by now, and a half-open channel waits forever for its close.
-            let watchdog = Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(10))
-                    guard heard.age > 50 else { continue }
-                    // just back from the background: the buffered pings arrive in a moment – look again first
-                    try? await Task.sleep(for: .seconds(3))
-                    if heard.age > 50, !Task.isCancelled {
-                        HollrLog.error("follow \(pane): nothing for \(Int(heard.age))s – reconnecting")
-                        try? await client.close()
-                        return
-                    }
+            let race = Race()
+            let stream = Task {
+                do {
+                    try await self.stream(client, pane: pane, heard: heard, unsupported: unsupported)
+                    race.finish(nil)
+                } catch {
+                    race.finish(error)
                 }
             }
-            defer { watchdog.cancel() }
-            try await client.withExec("follow \(pane) 150") { inbound, _ in
-                var buffer = Data()
-                for try await output in inbound {
-                    guard case .stdout(let bytes) = output else { continue }
-                    heard.touch()
-                    buffer.append(contentsOf: bytes.readableBytesView)
-                    while let nl = buffer.firstIndex(of: 0x0a) {
-                        let line = Data(buffer[buffer.startIndex..<nl])
-                        buffer.removeSubrange(buffer.startIndex...nl)
-                        // decoding a full timeline (~100 KB) stays off the main thread
-                        let event = await Task.detached(priority: .userInitiated) { FollowEvent.decode(line) }.value
-                        switch event {
-                        case .unsupported:
-                            supported = false
-                            return
-                        case .gone:
-                            self.loadError = String(localized: "Die Session gibt es nicht mehr.")
-                            self.historyLoaded = true
-                            return
-                        case let .full(timeline):
-                            self.apply(timeline)
-                        case let .delta(head, order, items):
-                            // an id we don't have (gap): reconnect for a full one
-                            guard let merged = FollowEvent.merge(self.timeline, head: head, order: order, items: items) else { return }
-                            self.apply(merged)
-                        case .broken:
-                            // skipping it would keep what it changed stale until that item changes again
-                            if self.timeline == nil {
-                                self.loadError = String(localized: "Der Chat ließ sich nicht lesen. Hollr auf dem Server und hier aktualisieren.")
-                            }
-                            return
-                        case .other:
-                            break
-                        }
-                    }
-                }
+            let watchdog = Task { await Self.watch(heard, pane: pane, race: race) }
+            // the race, not the stream: on a half-open connection ending the stream waits for a channel close that
+            // never comes – the chat would sit on its skeleton until the view goes away
+            let outcome = await withTaskCancellationHandler {
+                await race.wait()
+            } onCancel: {
+                race.finish(CancellationError())
+            }
+            watchdog.cancel()
+            switch outcome {
+            case is FollowStalled:
+                stream.cancel()
+                // closing the connection ends the hung stream too; the next try connects fresh
+                await SSHPool.shared.invalidate(server, ifStill: client)
+            case let error?:
+                stream.cancel()
+                throw error
+            case nil:
+                break
             }
         } catch is CancellationError {
         } catch {
@@ -157,7 +132,79 @@ final class AgentSession {
                 if let used { await SSHPool.shared.invalidate(server, ifStill: used) } else { await SSHPool.shared.invalidate(server) }
             }
         }
-        return supported
+        return !unsupported.value
+    }
+
+    /// Reads `follow` until it ends; sets `unsupported` for a server without it.
+    private func stream(_ client: SSHClient, pane: String, heard: Clock, unsupported: Flag) async throws {
+        try await client.withExec("follow \(pane) 150") { inbound, _ in
+            var buffer = Data()
+            for try await output in inbound {
+                guard case .stdout(let bytes) = output else { continue }
+                heard.touch()
+                buffer.append(contentsOf: bytes.readableBytesView)
+                while let nl = buffer.firstIndex(of: 0x0a) {
+                    let line = Data(buffer[buffer.startIndex..<nl])
+                    buffer.removeSubrange(buffer.startIndex...nl)
+                    // decoding a full timeline (~100 KB) stays off the main thread
+                    let event = await Task.detached(priority: .userInitiated) { FollowEvent.decode(line) }.value
+                    switch event {
+                    case .unsupported:
+                        unsupported.value = true
+                        return
+                    case .gone:
+                        self.loadError = String(localized: "Die Session gibt es nicht mehr.")
+                        self.historyLoaded = true
+                        return
+                    case let .full(timeline):
+                        self.apply(timeline)
+                    case let .delta(head, order, items):
+                        // an id we don't have (gap): reconnect for a full one
+                        guard let merged = FollowEvent.merge(self.timeline, head: head, order: order, items: items) else { return }
+                        self.apply(merged)
+                    case .broken:
+                        // skipping it would keep what it changed stale until that item changes again
+                        if self.timeline == nil {
+                            self.loadError = String(localized: "Der Chat ließ sich nicht lesen. Hollr auf dem Server und hier aktualisieren.")
+                        }
+                        return
+                    case .other:
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ends the race with `FollowStalled` once the stream is dead. The server answers at once with the whole
+    /// chat and pings every 20 s; buffered pings arrive the moment the app is back or the network settled.
+    private static func watch(_ heard: Clock, pane: String, race: Race) async {
+        let opened = Date()
+        var generation = NetworkWatch.shared.generation
+        var recheck: Date?
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(2))
+            // suspended: nothing can arrive, and coming back bumps the generation
+            guard NetworkWatch.shared.active else { continue }
+            if NetworkWatch.shared.generation != generation {
+                generation = NetworkWatch.shared.generation
+                recheck = Date().addingTimeInterval(3)
+            }
+            let dead: Bool
+            if !heard.any {
+                dead = Date().timeIntervalSince(opened) > 10
+            } else if let at = recheck, Date() >= at {
+                recheck = nil
+                dead = heard.age > 25
+            } else {
+                dead = heard.age > 55
+            }
+            if dead {
+                HollrLog.error("follow \(pane): nothing for \(Int(heard.any ? heard.age : Date().timeIntervalSince(opened)))s – reconnecting")
+                race.finish(FollowStalled())
+                return
+            }
+        }
     }
 
     /// A fresh timeline from the stream or a poll.
@@ -692,5 +739,49 @@ final class SessionStore {
 
     func endOtherLiveCalls(except id: String) {
         for (key, session) in sessions where key != id && session.isLive { session.stop() }
+    }
+}
+
+/// The chat stream went silent (dead connection): reconnect.
+struct FollowStalled: Error {}
+
+/// A flag set from another task.
+final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = false
+    var value: Bool {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
+}
+
+/// The first of several outcomes (stream ended, watchdog, cancellation) – `wait()` returns it, later ones are
+/// ignored. `nil` = the stream ended normally.
+final class Race: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    private var outcome: Error?
+    private var waiter: CheckedContinuation<Error?, Never>?
+
+    func finish(_ error: Error?) {
+        let waiting: CheckedContinuation<Error?, Never>? = lock.withLock {
+            guard !done else { return nil }
+            done = true
+            outcome = error
+            defer { waiter = nil }
+            return waiter
+        }
+        waiting?.resume(returning: error)
+    }
+
+    func wait() async -> Error? {
+        await withCheckedContinuation { (cont: CheckedContinuation<Error?, Never>) in
+            let ready: Bool = lock.withLock {
+                if done { return true }
+                waiter = cont
+                return false
+            }
+            if ready { cont.resume(returning: lock.withLock { outcome }) }
+        }
     }
 }

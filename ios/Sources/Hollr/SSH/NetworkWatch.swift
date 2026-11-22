@@ -10,8 +10,12 @@ import Network
 final class NetworkWatch {
     static let shared = NetworkWatch()
 
-    /// bumped on every real change of the path
+    /// bumped on every real change of the path – and when the app comes back from the background, whose
+    /// connections were closed or went half-open meanwhile
     private(set) var generation = 0
+    /// false while the app is in the background: streams wait instead of connecting into a suspended app
+    /// (such a connection is dead on return, and the stream on it sat out its whole watchdog)
+    private(set) var active = true
     @ObservationIgnored private var monitor: NWPathMonitor?
     @ObservationIgnored private var last: String?
 
@@ -38,6 +42,20 @@ final class NetworkWatch {
         HollrLog.info("network changed: \(last) → \(signature)")
         generation += 1
         Task { await SSHPool.shared.closeAll() }
+    }
+
+    /// The app went to the background (false) or came back (true).
+    func setActive(_ on: Bool) {
+        guard on != active else { return }
+        active = on
+        if on { generation += 1 }
+    }
+
+    /// Returns once the app is in the foreground.
+    func untilActive() async {
+        while !active, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
     }
 
     /// Waits `seconds` – or less when the network changes meanwhile (a reconnect is worth trying then).

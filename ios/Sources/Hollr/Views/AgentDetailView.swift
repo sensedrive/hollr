@@ -186,6 +186,8 @@ private struct AgentConversation: View {
             guard session.usesTimeline else { return }
             var failures = 0
             while !Task.isCancelled {
+                // not from the background: a connection made there is dead when the app comes back
+                await NetworkWatch.shared.untilActive()
                 let started = Date()
                 guard await session.follow() else {
                     // server without `follow`: poll like before
