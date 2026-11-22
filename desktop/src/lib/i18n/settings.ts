@@ -185,6 +185,12 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Dieselben Rechner auf allen Geräten: wird ein Rechner auf dem iPhone oder einem anderen Mac gekoppelt, koppelt sich Hollr hier selbst damit; Entfernen gilt für alle Geräte.":
+    "The same machines on every device: when a machine is paired on the iPhone or another Mac, Hollr pairs with it here by itself; removing applies to all devices.",
+  "Prompt-Bausteine und das Diktat-Vokabular sind auf allen Geräten gleich.":
+    "Prompt snippets and the dictation vocabulary are the same on every device.",
+  "Behoben: Spaces ziehen nahm versteckte Spaces aus der gemerkten Reihenfolge.":
+    "Fixed: dragging spaces took hidden spaces out of the remembered order.",
   "Hollr in der Menüleiste: „Zugeklappt wach bleiben“ hält das MacBook auch auf Akku mit geschlossenem Deckel wach – vom iPhone erreichbar. Einmal Admin-Passwort; unter 20 % Akku und beim Beenden von Hollr darf es wieder schlafen.":
     "Hollr in the menu bar: “Stay awake when closed” keeps the MacBook awake with the lid closed, also on battery – reachable from the iPhone. Admin password once; below 20 % battery and when Hollr quits it may sleep again.",
   "„Braucht dich“, gesehene Ergebnisse, „Als ungelesen markieren“, „Meine Sitzungen“ und die Reihenfolge von Spaces, Worktrees und Tabs merkt sich jetzt der Server – Mac und iPhone zeigen dasselbe.":

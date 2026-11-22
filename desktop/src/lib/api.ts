@@ -13,6 +13,19 @@ export interface Server {
   deviceId: string;
   /** lan / tailscale / auto */
   network?: string;
+  /** ms: when paired here (1 for records from before) – the machine list keeps the newest per machine */
+  updatedAt: number;
+}
+
+/** A server removed here lately (Rust tombstone) – its removal spreads to the user's other devices. */
+export interface Tombstone {
+  fp: string;
+  label: string;
+  addresses: string[];
+  port: number;
+  user: string;
+  updatedAt: number;
+  removed: true;
 }
 
 export interface Pane {
@@ -192,7 +205,14 @@ export const servers = () => invoke<Server[]>("servers");
 export const pair = (link: string, deviceName: string) => invoke<Server>("pair", { link, deviceName });
 /** Pairing by one-time code; code errors reject with `otp:<kind>` (`otp:unreachable:<ip>`). */
 export const pairCode = (code: string, deviceName: string) => invoke<Server>("pair_code", { code, deviceName });
-export const removeServer = (id: string) => invoke<void>("remove_server", { id });
+/** `removedAt`: removed on another device at that time (machines sync); without it the removal is now */
+export const removeServer = (id: string, removedAt?: number) => invoke<void>("remove_server", { id, removedAt: removedAt ?? null });
+export const tombstones = () => invoke<Tombstone[] | null>("tombstones");
+/** this app installation's id (null in the dev bridge, which has no such command) */
+export const installId = () => invoke<string | null>("install_id");
+/** quiet pairing with an invite another of the user's devices got for this app (machines sync) */
+export const pairInvite = (link: string, deviceName: string, label: string, updatedAt: number) =>
+  invoke<Server>("pair_invite", { link, deviceName, label, updatedAt });
 
 export async function gate<T>(server: string, command: string, body?: unknown, long = false): Promise<T> {
   const out = await invoke<string>(long ? "gate_long" : "gate", {
@@ -291,8 +311,9 @@ export const tunnelClose = (localPort: number) => invoke<void>("tunnel_close", {
 
 // ---- live change feed (one `hollr gate events` channel per server, see src-tauri/src/feed.rs)
 export const feedsSync = (servers: string[]) => invoke<void>("feeds_sync", { servers });
-/** `shared`: the doc both apps share (shared.svelte.ts) changed – on another device, or by this app's own patch */
-export const onChanged = (fn: (e: { server: string; spaces: boolean; shared: boolean }) => void) =>
-  listen<{ server: string; spaces: boolean; shared: boolean }>("hollr-changed", (e) => fn(e.payload));
+/** `shared`: the doc both apps share (shared.svelte.ts) changed – on another device, or by this app's own patch;
+ *  `machines`: the user's machine list, a pairing request or invite changed (machines.svelte.ts) */
+export const onChanged = (fn: (e: { server: string; spaces: boolean; shared: boolean; machines: boolean }) => void) =>
+  listen<{ server: string; spaces: boolean; shared: boolean; machines: boolean }>("hollr-changed", (e) => fn(e.payload));
 export const onFeed = (fn: (e: { server: string; live: boolean }) => void) =>
   listen<{ server: string; live: boolean }>("hollr-feed", (e) => fn(e.payload));

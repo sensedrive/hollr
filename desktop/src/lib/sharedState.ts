@@ -135,8 +135,9 @@ function mine(map: Record<string, string[]>, server: string): Record<string, str
   return out;
 }
 
-/** This server's legacy values as changes – only for keys the shared doc has nothing in yet (another device
- *  may have filled them already; those win). */
+/** This server's legacy values as changes – for the entries the shared doc has nothing in yet (another device may
+ *  have filled them already; those win). Maps go entry by entry: one tab order dragged on the phone must not keep
+ *  every other workspace's order here from moving over. */
 export function migrationChanges(doc: SharedState, server: string, local: Legacy): SharedChange[] {
   const out: SharedChange[] = [];
   if (!doc.mySessions.length) {
@@ -145,24 +146,29 @@ export function migrationChanges(doc: SharedState, server: string, local: Legacy
   }
   const order = local.spaceOrder[server];
   if (!doc.spaceOrder.length && isIds(order) && order.length) out.push({ path: ["spaceOrder"], value: order });
-  for (const key of ["worktreeOrder", "tabOrder"] as const) {
-    if (Object.keys(doc[key]).length) continue;
-    for (const [k, v] of Object.entries(mine(local[key], server))) out.push({ path: [key, k], value: v });
-  }
+  for (const key of ["worktreeOrder", "tabOrder"] as const)
+    for (const [k, v] of Object.entries(mine(local[key], server)))
+      if (!doc[key][k]?.length) out.push({ path: [key, k], value: v });
   return out;
 }
 
-/** The legacy values without this server's and without those of servers no longer paired. */
-export function dropServer(local: Legacy, server: string, paired: readonly string[]): Legacy {
-  const keep = (key: string) => {
-    const s = serverOf(key);
-    return s === undefined || (s !== server && paired.includes(s));
-  };
-  const filter = (map: Record<string, string[]>) => Object.fromEntries(Object.entries(map).filter(([k]) => keep(k)));
+/**
+ * The legacy values without what the server now holds for `server` (`doc`: its doc after the migration;
+ * `written`: the migration's changes the server took – "Meine Sitzungen" may be pruned there right away, since it
+ * forgets closed sessions). Anything else stays: a value another device's won over, and every value of another
+ * server id – also one no longer paired (a re-paired machine gets a new id here; its old values are kept rather
+ * than lost unseen).
+ */
+export function settled(local: Legacy, server: string, doc: SharedState, written: SharedChange[] = []): Legacy {
+  const own = (key: string) => serverOf(key) === server;
+  const wrote = (key: SharedKey) => written.some((c) => c.path[0] === key);
+  const held = (key: "worktreeOrder" | "tabOrder") =>
+    Object.fromEntries(Object.entries(local[key]).filter(([k, v]) => !own(k) || !sameValue(doc[key][k.slice(server.length + 1)], v)));
+  const sessionsHeld = wrote("mySessions") || local.mySessions.filter(own).every((id) => doc.mySessions.includes(id.slice(server.length + 1)));
   return {
-    mySessions: local.mySessions.filter(keep),
-    spaceOrder: Object.fromEntries(Object.entries(local.spaceOrder).filter(([s]) => s !== server && paired.includes(s))),
-    worktreeOrder: filter(local.worktreeOrder),
-    tabOrder: filter(local.tabOrder),
+    mySessions: sessionsHeld ? local.mySessions.filter((id) => !own(id)) : local.mySessions,
+    spaceOrder: Object.fromEntries(Object.entries(local.spaceOrder).filter(([s, v]) => s !== server || !sameValue(doc.spaceOrder, v))),
+    worktreeOrder: held("worktreeOrder"),
+    tabOrder: held("tabOrder"),
   };
 }

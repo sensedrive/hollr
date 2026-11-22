@@ -20,7 +20,7 @@
   import type { MenuItem } from "$lib/views/dashboard/util";
   import LiveMark from "./LiveMark.svelte";
   import { sortable } from "$lib/sortable";
-  import { forksAfterParents, moveBefore, ordered } from "$lib/tabOrder";
+  import { forksAfterParents, orderAfterMove, ordered } from "$lib/tabOrder";
   import { chatLabel } from "$lib/contextChatText";
   import { canFork, contextChat, startContextChat } from "$lib/contextChat.svelte";
   import { shared, showError } from "$lib/shared.svelte";
@@ -42,13 +42,14 @@
       return of ? tabOf.get(of) : undefined;
     });
   });
-  /** saves the new order – and drops the orders of workspaces that are gone */
+  /** saves the new order – of every tab of the workspace, also the ones this bar doesn't show (sidechats; the
+   *  phone lists them) – and drops the orders of workspaces that are gone */
   function moveTab(id: string, before: string | null) {
-    const ids = moveBefore(tabs.map((tb) => tb.id), id, before);
+    const all = ws.tabs.map((tb) => tb.id);
     const alive = new Set((app.trees[server] ?? []).map((w) => w.id));
     shared
       .update(server, (doc) => [
-        { path: ["tabOrder", ws.id], value: ids },
+        { path: ["tabOrder", ws.id], value: orderAfterMove(all, doc.tabOrder[ws.id], id, before) },
         ...(alive.size ? staleEntries("tabOrder", doc.tabOrder, alive.add(ws.id)) : []),
       ])
       .catch(showError);

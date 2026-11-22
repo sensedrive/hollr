@@ -38,6 +38,7 @@ enum DemoMode {
         case "space": json = spaceOp(body, on: server)
         case "plugins": json = ["plugins": []]
         case "shared": json = sharedOp(body, on: server)
+        case "machines": json = ["machines": [], "requests": []]
         default: json = [:]
         }
         return (try? JSONSerialization.data(withJSONObject: json)) ?? Data("{}".utf8)

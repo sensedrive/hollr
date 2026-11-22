@@ -11,6 +11,7 @@ struct HollrApp: App {
     @State private var dictator = Dictator()
     @State private var inbox = Inbox()
     @State private var snippets = PromptSnippets()
+    @State private var machines = MachinesSync()
     @State private var pairing: PairingRequest?
 
     var body: some Scene {
@@ -27,6 +28,9 @@ struct HollrApp: App {
                 .environment(dictator)
                 .environment(inbox)
                 .environment(snippets)
+                .environment(machines)
+                // the same machines, snippets and vocabulary as the user's other Hollr apps
+                .task { machines.start(store: store, herdr: herdr, snippets: snippets, dictation: dictation) }
                 .appTextScale()
                 .appLock()
                 // dictation models take hundreds of MB: give them back when iOS asks or we go away

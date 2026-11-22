@@ -165,7 +165,10 @@ final class HerdrStore {
     /// dismissed results still work there (in memory). Per server, only panes of the newest tree are kept.
     @ObservationIgnored private var localSince: [UUID: [String: (status: String, since: Double)]] = [:]
 
-    private func stamped(_ tree: [Workspace], server: UUID) -> [Workspace] {
+    /// The tree as the lists use it: each workspace, tab and pane once (a List repeating an id crashes), and – on
+    /// servers before `since` – every pane stamped.
+    private func stamped(_ raw: [Workspace], server: UUID) -> [Workspace] {
+        let tree = raw.uniqued
         let missing = tree.contains { ws in ws.tabs.contains { tab in tab.panes.contains { $0.since == nil } } }
         guard missing else { return tree }
         let now = Date().timeIntervalSince1970 * 1000
@@ -329,6 +332,9 @@ final class HerdrStore {
 
     // MARK: live change feed (`hollr gate events`)
 
+    /// a feed connected, or a server's machines doc changed (another app paired or removed one): MachinesSync
+    @ObservationIgnored var onMachinesChanged: (() -> Void)?
+
     /// Keeps one feed per server while the app is active; changes in herdr show up right away.
     func startFeeds(_ servers: [Server]) {
         paired = Set(servers.map(\.id))
@@ -387,11 +393,13 @@ final class HerdrStore {
                                 backoff = 2
                                 // (re)connected: another device may have changed what both share meanwhile
                                 await loadShared(server)
+                                onMachinesChanged?()
                             case "changed":
                                 changeCount += 1
                                 await refresh(server: server)
                                 if obj["spaces"] as? Bool == true { await refreshSpaces([server]) } else { refreshSpacesSoon(server) }
                                 if obj["shared"] as? Bool == true { await loadShared(server) }
+                                if obj["machines"] as? Bool == true { onMachinesChanged?() }
                             default:
                                 break
                             }

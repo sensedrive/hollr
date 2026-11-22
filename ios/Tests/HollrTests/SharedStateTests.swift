@@ -139,4 +139,52 @@ final class SharedOrderTests: XCTestCase {
         // nothing saved: server order, worktrees by name
         XCTAssertEqual(SharedOrder.groups(SpacesView.group(all), in: nil)[0].spaces.map(\.id), ["w1", "w3", "w2"])
     }
+
+    // a SwiftUI List crashes when one section repeats a row id: the list functions never return one twice
+
+    func testTwoMainCheckoutsOfOneRepoDontShareWorktrees() {
+        let all = [space("w1", "repo"), space("w2", "repo-2"), space("w3", "wt", worktree: true), space("w1", "dup")]
+        let groups = SpacesView.group(all)
+        let ids = groups.flatMap { $0.spaces.map(\.id) }
+        XCTAssertEqual(ids, ["w1", "w3", "w2"])
+        XCTAssertEqual(Set(groups.map(\.key)).count, groups.count)
+    }
+
+    func testLayoutListsEverySpaceOnceEvenWithDuplicatedOrders() {
+        var hidden = space("w9", "hidden-but-waiting")
+        hidden.hidden = true
+        var quiet = space("w8", "hidden")
+        quiet.hidden = true
+        let all = [space("w1", "repo"), space("w2", "wt-b", worktree: true), space("w3", "wt-a", worktree: true),
+                   space("w4", "other"), hidden, quiet, space("w2", "wt-b again", worktree: true)]
+        var doc = SharedState()
+        doc.spaceOrder = ["w4", "w1", "w4", "w9", "w1"]
+        doc.worktreeOrder["w1"] = ["w3", "w3", "w2"]
+        let layout = SpacesView.layout(all, status: { $0.id == "w9" ? "blocked" : "idle" }, order: doc)
+        let ids = layout.main.map(\.id) + layout.hidden.map(\.id)
+        XCTAssertEqual(ids.count, Set(ids).count)
+        XCTAssertEqual(layout.main.map(\.id), ["w4", "w1", "w3", "w2", "w9"])
+        XCTAssertEqual(layout.main.filter(\.nested).map(\.id), ["w3", "w2"])
+        // waiting for you: in the main list only, not again under „Versteckt“
+        XCTAssertEqual(layout.hidden.map(\.id), ["w8"])
+    }
+
+    func testOrderedNeverRepeatsAnItem() {
+        let out = SharedOrder.ordered(["a", "b", "c"], saved: ["c", "c", "a", "c"]) { $0 }
+        XCTAssertEqual(out, ["c", "a", "b"])
+    }
+
+    func testTreeKeepsEachWorkspaceTabAndPaneOnce() {
+        func pane(_ id: String) -> Pane { Pane(pane: id, agent: "omp", status: "idle", title: "", cwd: "/", focused: false, live: false) }
+        let tab1 = Tab(id: "w1:t1", label: "1", number: 1, focused: false, panes: [pane("w1:p1"), pane("w1:p1")])
+        let tab2 = Tab(id: "w1:t1", label: "1", number: 1, focused: false, panes: [pane("w1:p2")])
+        let ws = Workspace(id: "w1", label: "a", number: 1, focused: false, status: "idle", tabs: [tab1, tab2])
+        let tree = [ws, ws].uniqued
+        XCTAssertEqual(tree.map(\.id), ["w1"])
+        XCTAssertEqual(tree[0].tabs.map(\.id), ["w1:t1"])
+        XCTAssertEqual(tree[0].tabs[0].panes.map(\.pane), ["w1:p1"])
+        let fine = [Workspace(id: "w2", label: "b", number: 2, focused: false, status: "idle",
+                              tabs: [Tab(id: "w2:t1", label: "1", number: 1, focused: false, panes: [pane("w2:p1")])])]
+        XCTAssertEqual(fine.uniqued, fine)
+    }
 }

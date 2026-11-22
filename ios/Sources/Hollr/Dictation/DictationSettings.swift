@@ -94,8 +94,21 @@ final class DictationSettings {
     var whisperModel: String { didSet { defaults.set(whisperModel, forKey: "dictation.whisperModel") } }
     var language: String { didSet { defaults.set(language, forKey: "dictation.language") } }
     var autoSend: Bool { didSet { defaults.set(autoSend, forKey: "dictation.autoSend") } }
-    /// Raw vocabulary text, one term per line (aliases after "=").
-    var vocabularyText: String { didSet { defaults.set(vocabularyText, forKey: "dictation.vocabularyText") } }
+    /// Raw vocabulary text, one term per line (aliases after "="). Shared with the user's other apps (MachinesSync).
+    var vocabularyText: String {
+        didSet {
+            defaults.set(vocabularyText, forKey: "dictation.vocabularyText")
+            if !adoptingVocabulary {
+                stampVocabulary(ServerStore.nowMs)
+                onVocabularyEdit?()
+            }
+        }
+    }
+    /// ms of the last edit here (or of the version taken from another app); 1 = never edited, any other app's wins
+    private(set) var vocabularyUpdatedAt: Double
+    @ObservationIgnored private var adoptingVocabulary = false
+    /// edited here: the user's other apps should get it soon (MachinesSync)
+    @ObservationIgnored var onVocabularyEdit: (() -> Void)?
     /// Feed the vocabulary into the engines (Apple context, Whisper prompt, Parakeet CTC boosting).
     var useVocabulary: Bool { didSet { defaults.set(useVocabulary, forKey: "dictation.useVocabulary") } }
     /// Parakeet: CTC keyword spotting + rescoring (extra ≈ 100 MB model).
@@ -133,6 +146,8 @@ final class DictationSettings {
             ?? (Self.languages.contains { $0.code == preferred } ? preferred : "de")
         autoSend = defaults.bool(forKey: "dictation.autoSend")
         vocabularyText = defaults.string(forKey: "dictation.vocabularyText") ?? Self.defaultVocabulary
+        vocabularyUpdatedAt = defaults.object(forKey: "dictation.vocabularyUpdatedAt") != nil
+            ? defaults.double(forKey: "dictation.vocabularyUpdatedAt") : 1
         useVocabulary = Self.flag("dictation.useVocabulary", default: true)
         parakeetBoost = Self.flag("dictation.parakeetBoost", default: false)
         whisperFallbacks = defaults.object(forKey: "dictation.whisperFallbacks") != nil ? defaults.integer(forKey: "dictation.whisperFallbacks") : 3
@@ -148,6 +163,19 @@ final class DictationSettings {
             .flatMap { try? JSONDecoder().decode([Replacement].self, from: $0) } ?? []
         downloaded = (defaults.dictionary(forKey: "dictation.downloaded") as? [String: String] ?? [:])
             .filter { FileManager.default.fileExists(atPath: $0.value) }
+    }
+
+    /// A newer vocabulary from another of the user's apps: taken as is, keeping its time.
+    func adoptVocabulary(_ text: String, updatedAt: Double) {
+        adoptingVocabulary = true
+        vocabularyText = text
+        adoptingVocabulary = false
+        stampVocabulary(updatedAt)
+    }
+
+    private func stampVocabulary(_ at: Double) {
+        vocabularyUpdatedAt = at
+        defaults.set(at, forKey: "dictation.vocabularyUpdatedAt")
     }
 
     private static func flag(_ key: String, default value: Bool) -> Bool {

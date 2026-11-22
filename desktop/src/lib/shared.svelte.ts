@@ -7,7 +7,7 @@ import { gate } from "./api";
 import { alertAsk } from "./ask.svelte";
 import { t } from "./i18n";
 import {
-  applyChanges, dropServer, effective, emptyShared, migrationChanges, normalize, type Legacy, type SharedChange,
+  applyChanges, effective, emptyShared, migrationChanges, normalize, settled, type Legacy, type SharedChange,
   type SharedState,
 } from "./sharedState";
 
@@ -83,7 +83,6 @@ class Shared {
   private old = new Set<string>();
   private loading: Record<string, Promise<void> | undefined> = {};
   private again = new Set<string>();
-  private paired: string[] = [];
 
   /** the server's doc (empty until loaded) */
   of = (server: string): SharedState => this.docs[server] ?? EMPTY;
@@ -95,7 +94,6 @@ class Shared {
 
   /** The paired servers changed (or the app started): load every one of them. */
   sync(servers: string[]) {
-    this.paired = servers;
     for (const s of servers) void this.load(s);
   }
 
@@ -136,7 +134,8 @@ class Shared {
     }
   }
 
-  /** What this app kept on its own goes to the server once; then it is removed here. */
+  /** What this app kept on its own goes to the server once; then what the server holds is removed here (and only
+   *  that – a value the server doesn't hold stays, nothing is lost unseen). */
   private async migrate(server: string) {
     const local = readLegacy();
     const changes = migrationChanges(this.of(server), server, local);
@@ -146,8 +145,10 @@ class Shared {
       } catch {
         return; // kept – the next load tries again
       }
-    // read again: the tab bar may have written its own entry meanwhile
-    writeLegacy(dropServer(readLegacy(), server, this.paired));
+    // the patch went to memory only (the server turned out too old): nothing is on the server yet
+    if (this.old.has(server)) return;
+    // read again: the server tabs may have written their own entry meanwhile
+    writeLegacy(settled(readLegacy(), server, this.of(server), changes));
   }
 
   /**

@@ -172,8 +172,10 @@ function withLock<T>(fn: () => T): T {
 
 export function patchShared(changes: SharedChange[]): SharedState {
   return withLock(() => {
-    const next = applyChanges(loadShared(), changes);
-    writeJson(SHARED_FILE, next);
+    const state = loadShared();
+    const next = applyChanges(state, changes);
+    // every write wakes every app's feed: a patch that changes nothing must not start another round
+    if (JSON.stringify(next) !== JSON.stringify(state)) writeJson(SHARED_FILE, next);
     return next;
   });
 }

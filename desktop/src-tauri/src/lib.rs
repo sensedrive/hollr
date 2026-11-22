@@ -12,7 +12,7 @@ pub mod speech;
 mod notice;
 mod awake;
 
-use hollr::{Hollr, Server};
+use hollr::{Hollr, Server, Tombstone};
 use tauri::Manager;
 
 type R<T> = Result<T, String>;
@@ -40,10 +40,28 @@ async fn pair_code(state: tauri::State<'_, Hollr>, code: String, device_name: St
     })
 }
 
+/// `removed_at` (ms): set when another device removed it (machines sync) – the removal keeps that time.
 #[tauri::command]
-async fn remove_server(state: tauri::State<'_, Hollr>, tunnels: tauri::State<'_, tunnel::Tunnels>, id: String) -> R<()> {
+async fn remove_server(state: tauri::State<'_, Hollr>, tunnels: tauri::State<'_, tunnel::Tunnels>, id: String, removed_at: Option<u64>) -> R<()> {
     tunnels.close_server(&id).await;
-    state.remove_server(&id).await.map_err(err)
+    state.remove_server(&id, removed_at).await.map_err(err)
+}
+
+/// Servers removed here lately – the machines sync spreads their removal.
+#[tauri::command]
+fn tombstones(state: tauri::State<'_, Hollr>) -> Vec<Tombstone> {
+    state.tombstones()
+}
+
+#[tauri::command]
+fn install_id(state: tauri::State<'_, Hollr>) -> R<String> {
+    state.install_id().map_err(err)
+}
+
+/// Quiet pairing with an invite from another of the user's devices (machines sync).
+#[tauri::command]
+async fn pair_invite(state: tauri::State<'_, Hollr>, link: String, device_name: String, label: String, updated_at: u64) -> R<Server> {
+    state.pair_invite(&link, &device_name, &label, updated_at).await.map_err(err)
 }
 
 /// One `hollr gate` call: command line plus optional JSON on stdin; returns stdout.
@@ -205,7 +223,7 @@ pub fn run() {
             awake::setup(app.handle())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![diag::diag_log, feeds_sync, follow_start, follow_stop, servers, pair, pair_code, remove_server, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, awake::awake_texts, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
+        .invoke_handler(tauri::generate_handler![diag::diag_log, feeds_sync, follow_start, follow_stop, servers, pair, pair_code, pair_invite, remove_server, tombstones, install_id, gate, gate_long, live_start, live_stop, live_mute, live_speaker, live_headphones, tunnel_open, tunnel_close, applock_available, applock_authenticate, term_start, term_write, term_resize, term_stop, notice::notice_show, awake::awake_texts, dictation::dictation_models, dictation::dictation_download, dictation::dictation_download_cancel, dictation::dictation_delete, dictation::dictation_prewarm, dictation::dictation_start, dictation::dictation_stop, dictation::dictation_cancel, speech::speech_status, speech::speech_download, speech::speech_download_cancel, speech::speech_delete, speech::speech_voices, speech::speech_speak, speech::speech_stop, speech::speech_prewarm])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

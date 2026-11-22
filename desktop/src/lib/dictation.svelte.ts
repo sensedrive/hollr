@@ -18,8 +18,11 @@ export interface DictationSettings {
   autoSend: boolean;
   /** "… senden" at the end sends the message */
   voiceSend: boolean;
-  /** one term per line, misheard variants after "=" */
+  /** one term per line, misheard variants after "=" – the user's, so the machines sync carries it to the other
+   *  devices (newest edit wins) */
   vocabularyText: string;
+  /** ms of the last edit of `vocabularyText` here (or of the version taken from another device); 1 = never */
+  vocabularyUpdatedAt: number;
   /** vocabulary into Whisper's prompt and spelling fixes afterwards */
   useVocabulary: boolean;
   /** Whisper retries with higher temperature when the result looks wrong (0 = off) */
@@ -38,6 +41,7 @@ const defaults: DictationSettings = {
   autoSend: false,
   voiceSend: true,
   vocabularyText: DEFAULT_VOCABULARY,
+  vocabularyUpdatedAt: 1,
   useVocabulary: true,
   whisperFallbacks: 3,
   removeFillers: true,
@@ -55,6 +59,8 @@ function load(): DictationSettings {
 
 export const dictation = $state<DictationSettings>(load());
 
+let lastVocabulary = dictation.vocabularyText;
+
 $effect.root(() => {
   $effect(() => {
     const snapshot = JSON.stringify(dictation);
@@ -62,7 +68,21 @@ $effect.root(() => {
       localStorage.setItem(KEY, snapshot);
     } catch {}
   });
+  // an edit of the vocabulary here gets the time it was made
+  $effect(() => {
+    const text = dictation.vocabularyText;
+    if (text === lastVocabulary) return;
+    lastVocabulary = text;
+    dictation.vocabularyUpdatedAt = Date.now();
+  });
 });
+
+/** A newer vocabulary from another device (machines sync): keeps its time, so it doesn't count as an edit here. */
+export function takeVocabulary(text: string, updatedAt: number) {
+  lastVocabulary = text;
+  dictation.vocabularyText = text;
+  dictation.vocabularyUpdatedAt = updatedAt;
+}
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 

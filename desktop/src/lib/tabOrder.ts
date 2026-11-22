@@ -18,6 +18,14 @@ export function moveBefore(ids: readonly string[], id: string, before: string | 
   return [...rest.slice(0, at), id, ...rest.slice(at)];
 }
 
+/**
+ * The order to save after a drag: every id that exists (`all` – also ones not shown right now, e.g. hidden spaces
+ * or folded worktrees) in the saved order, the rest behind in their own order, with `id` moved in front of
+ * `before`. Only ids that no longer exist drop out – a list that shows less never shrinks the saved order.
+ */
+export const orderAfterMove = (all: readonly string[], saved: readonly string[] | undefined, id: string, before: string | null) =>
+  moveBefore(ordered(all, saved, (x) => x), id, before);
+
 /** Chats with context right behind the tab of the session they continue (`parent`: that tab's id), whatever
  *  order the tabs have otherwise – so a fork tab hangs off its own session, not off whichever came before it. */
 export function forksAfterParents<T>(items: readonly T[], id: (item: T) => string, parent: (item: T) => string | undefined): T[] {

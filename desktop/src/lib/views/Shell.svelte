@@ -37,6 +37,7 @@
   import Icon from "$lib/components/git/Icon.svelte";
   import { pendingTips, tour } from "$lib/tips.svelte";
   import { inbox, inboxEntries, markSeen, trackInbox } from "$lib/inbox.svelte";
+  import { startMachines } from "$lib/machines.svelte";
 
   const zoomBy = (d: number) => (settings.zoom = Math.round(Math.min(1.6, Math.max(0.7, settings.zoom + d)) * 100) / 100);
 
@@ -75,9 +76,13 @@
     let unlisten = () => {};
     listenFeeds().then((off) => (unlisten = off)).catch(() => {});
     const timer = setInterval(poll, 5000);
+    // the same machines and own settings as the user's other devices (a newly paired server's feed coming up
+    // syncs too)
+    const stopMachines = startMachines();
     return () => {
       clearInterval(timer);
       unlisten();
+      stopMachines();
     };
   });
 

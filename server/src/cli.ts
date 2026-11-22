@@ -30,6 +30,7 @@ import { paneContext, readPath } from "./file";
 import { type ForkRequest, forkPane } from "./fork";
 import { pruneHidden, setHidden } from "./hiddenspaces";
 import { loadShared, patchShared, type SharedChange, stampPanes } from "./shared";
+import { type MachinesRequest, machines } from "./machines";
 import {
   execHerdr,
   Herdr,
@@ -117,7 +118,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.48.1";
+export const VERSION = "0.49.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -286,6 +287,7 @@ async function gate(): Promise<number> {
       "plugins",
       "shared",
       "diag",
+      "machines",
     ].includes(cmd)
   )
     log("gate", original);
@@ -640,6 +642,35 @@ async function gate(): Promise<number> {
     case "term":
       // live terminal: screen out, typing in (runs until the app closes the channel)
       return runTerm(pane);
+    case "machines": {
+      // the user's machines, shared by every app (machines.ts)
+      const req = JSON.parse((await readStdinLine(256 * 1024)) || "{}") as MachinesRequest;
+      try {
+        json(machines(req));
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "pairlink": {
+      // a paired app asks for a one-time pairing link for another of the user's apps (machines.ts invites):
+      // the same bootstrap key as `hollr pair`, 10 minutes, one use – no terminal question, the asking app is trusted
+      try {
+        const { seed, publicLine } = newBootstrapKey();
+        const { id, exp } = addBootstrap(publicLine);
+        const payload = buildPayload({
+          seed,
+          exp,
+          addresses: addressesFor("auto", tailscaleInfo()),
+          network: "auto",
+        });
+        log("gate", `pairlink ${id}: invite for another app of this user`);
+        json({ url: payloadUrl(payload) });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
     case "diag": {
       // the phone's breadcrumbs (lifecycle, errors, MetricKit hangs) – read them here when something went wrong
       const req = JSON.parse((await readStdinLine(2 * 1024 * 1024)) || "{}") as {
@@ -833,7 +864,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | shared",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | shared | machines | pairlink",
       });
       return 2;
   }

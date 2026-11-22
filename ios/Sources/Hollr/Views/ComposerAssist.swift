@@ -12,12 +12,39 @@ final class PromptSnippets {
         String(localized: "Mach weiter."),
     ]
 
+    /// Shared with the user's other apps (MachinesSync): order and text as the user has them.
     var items: [String] {
-        didSet { UserDefaults.standard.set(items, forKey: "prompts.snippets") }
+        didSet {
+            UserDefaults.standard.set(items, forKey: "prompts.snippets")
+            if !adopting {
+                stamp(ServerStore.nowMs)
+                onEdit?()
+            }
+        }
     }
+    /// ms of the last edit here (or of the version taken from another app); 1 = never edited, any other app's wins
+    private(set) var updatedAt: Double
+    @ObservationIgnored private var adopting = false
+    /// edited here: the user's other apps should get it soon (MachinesSync)
+    @ObservationIgnored var onEdit: (() -> Void)?
 
     init() {
         items = UserDefaults.standard.stringArray(forKey: "prompts.snippets") ?? Self.defaults
+        updatedAt = UserDefaults.standard.object(forKey: "prompts.snippets.updatedAt") != nil
+            ? UserDefaults.standard.double(forKey: "prompts.snippets.updatedAt") : 1
+    }
+
+    /// Newer snippets from another of the user's apps: taken as they are, keeping their time.
+    func adopt(_ value: [String], updatedAt: Double) {
+        adopting = true
+        items = value
+        adopting = false
+        stamp(updatedAt)
+    }
+
+    private func stamp(_ at: Double) {
+        updatedAt = at
+        UserDefaults.standard.set(at, forKey: "prompts.snippets.updatedAt")
     }
 
     /// Chip title: the first words.
@@ -61,7 +88,8 @@ struct SnippetChips: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(snippets.items, id: \.self) { prompt in
+                // by position: two snippets may read the same (they also come from the user's other devices)
+                ForEach(Array(snippets.items.enumerated()), id: \.offset) { _, prompt in
                     Button { pick(prompt) } label: {
                         Text(PromptSnippets.title(prompt)).chipStyle()
                     }

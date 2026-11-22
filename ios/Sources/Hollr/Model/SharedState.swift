@@ -104,6 +104,12 @@ struct SharedChange: Equatable {
     static func dismissed(_ pane: String, _ since: Double) -> SharedChange { SharedChange(path: ["dismissed", pane], value: .number(since)) }
     static func unread(_ pane: String, _ on: Bool) -> SharedChange { SharedChange(path: ["unread", pane], value: on ? .flag : .remove) }
     static func mySessions(_ panes: [String]) -> SharedChange { SharedChange(path: ["mySessions"], value: .ids(panes)) }
+    /// dragged order of the space groups (first space id of each), like the desktop sidebar
+    static func spaceOrder(_ ids: [String]) -> SharedChange { SharedChange(path: ["spaceOrder"], value: .ids(ids)) }
+    /// dragged order of a repo's worktrees
+    static func worktreeOrder(_ repo: String, _ ids: [String]) -> SharedChange {
+        SharedChange(path: ["worktreeOrder", repo], value: .ids(ids))
+    }
 }
 
 // MARK: seen / dismissed / unread (pure, tested)

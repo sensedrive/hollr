@@ -14,6 +14,9 @@ struct Server: Codable, Identifiable, Hashable {
     var pairedAt: Date = Date()
     /// lan / tailscale / auto – nil for servers paired before connection types existed
     var network: NetworkMode?
+    /// ms – when this record last changed (paired, renamed, new addresses): the newest version of a machine wins
+    /// across the user's apps (MachinesSync). Records from before have none; ServerStore sets 1 once.
+    var updatedAt: Double?
 
     static let placeholder = Server(label: "", user: "", addresses: [], port: 22, hostFingerprint: "", deviceId: "")
 
@@ -36,6 +39,37 @@ struct Tab: Codable, Identifiable, Hashable {
     let number: Int
     let focused: Bool
     let panes: [Pane]
+}
+
+extension Array where Element == Workspace {
+    /// Each workspace, tab and pane once (first wins). herdr shouldn't repeat one, but a List that gets the same id
+    /// twice crashes the app (UICollectionView "invalid number of items") – so the lists never see it.
+    var uniqued: [Workspace] {
+        var workspaces = Set<String>()
+        var tabs = Set<String>()
+        var panes = Set<String>()
+        var clean = true
+        for ws in self {
+            clean = clean && workspaces.insert(ws.id).inserted
+            for tab in ws.tabs {
+                clean = clean && tabs.insert(tab.id).inserted
+                for pane in tab.panes { clean = clean && panes.insert(pane.pane).inserted }
+            }
+        }
+        guard !clean else { return self }
+        workspaces = []
+        tabs = []
+        panes = []
+        return compactMap { ws -> Workspace? in
+            guard workspaces.insert(ws.id).inserted else { return nil }
+            let kept: [Tab] = ws.tabs.compactMap { tab -> Tab? in
+                guard tabs.insert(tab.id).inserted else { return nil }
+                let own: [Pane] = tab.panes.filter { panes.insert($0.pane).inserted }
+                return Tab(id: tab.id, label: tab.label, number: tab.number, focused: tab.focused, panes: own)
+            }
+            return Workspace(id: ws.id, label: ws.label, number: ws.number, focused: ws.focused, status: ws.status, tabs: kept)
+        }
+    }
 }
 
 struct Pane: Codable, Identifiable, Hashable {
@@ -105,13 +139,23 @@ struct AgentRef: Hashable, Identifiable {
 @Observable
 final class ServerStore {
     private(set) var servers: [Server] = []
+    /// servers removed here, kept 90 days so the removal reaches the user's other apps (MachinesSync)
+    private(set) var tombstones: [Machine] = []
+    /// any change by the user or the sync – the other apps should learn it soon (MachinesSync.poke)
+    @ObservationIgnored var onChange: (() -> Void)?
     private let url: URL
+    private let tombstonesURL: URL
     /// debug screenshot demo: made-up servers in memory only, never saved
     private var demo = false
+
+    private static let tombstoneDays = 90.0
+
+    static var nowMs: Double { Date().timeIntervalSince1970 * 1000 }
 
     init(directory: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         url = directory.appendingPathComponent("servers.json")
+        tombstonesURL = directory.appendingPathComponent("servers-removed.json")
         #if DEBUG
         if DemoMode.isOn {
             servers = DemoMode.servers
@@ -123,21 +167,48 @@ final class ServerStore {
            let saved = try? JSONDecoder().decode([Server].self, from: data) {
             servers = saved
         }
+        // paired before machines were shared: older than anything another app did (a removal there wins)
+        if servers.contains(where: { $0.updatedAt == nil }) {
+            servers = servers.map { server in
+                var server = server
+                if server.updatedAt == nil { server.updatedAt = 1 }
+                return server
+            }
+            save()
+        }
+        if let data = try? Data(contentsOf: tombstonesURL),
+           let saved = try? JSONDecoder().decode([Machine].self, from: data) {
+            let oldest = Self.nowMs - Self.tombstoneDays * 86_400_000
+            tombstones = saved.filter { $0.updatedAt > oldest }
+        }
     }
 
+    /// Paired (by hand, or by the sync – which brings the machine's own `updatedAt`).
     func add(_ server: Server) {
+        var server = server
+        if server.updatedAt == nil { server.updatedAt = Self.nowMs }
         // paired again: the old entry's pooled connection (and its tunnels) must not live on
         for old in servers where old.hostFingerprint == server.hostFingerprint && old.user == server.user {
             Task { await SSHPool.shared.invalidate(old) }
         }
         servers.removeAll { $0.hostFingerprint == server.hostFingerprint && $0.user == server.user }
         servers.append(server)
+        tombstones.removeAll { $0.fp == server.hostFingerprint }
         save()
+        onChange?()
     }
 
-    func remove(_ server: Server) {
+    /// Removed here – and, through the tombstone, in the user's other apps. `at`: when (the sync passes the time of
+    /// a removal it learned from another app).
+    func remove(_ server: Server, at: Double? = nil) {
         servers.removeAll { $0.id == server.id }
+        var gone = Machine(server: server)
+        gone.removed = true
+        gone.updatedAt = at ?? Self.nowMs
+        tombstones.removeAll { $0.fp == server.hostFingerprint }
+        tombstones.append(gone)
         save()
+        onChange?()
         Task { await SSHPool.shared.invalidate(server) }
     }
 
@@ -145,18 +216,27 @@ final class ServerStore {
     func setNetwork(_ server: Server, mode: NetworkMode, addresses: [String]) {
         guard let i = servers.firstIndex(where: { $0.id == server.id }), !addresses.isEmpty else { return }
         servers[i].network = mode
+        if servers[i].addresses != addresses { servers[i].updatedAt = Self.nowMs }
         servers[i].addresses = addresses
         save()
+        onChange?()
     }
 
     func rename(_ server: Server, to label: String) {
-        guard let i = servers.firstIndex(where: { $0.id == server.id }) else { return }
+        guard let i = servers.firstIndex(where: { $0.id == server.id }), servers[i].label != label else { return }
         servers[i].label = label
+        servers[i].updatedAt = Self.nowMs
         save()
+        onChange?()
     }
 
     private func save() {
-        guard !demo, let data = try? JSONEncoder().encode(servers) else { return }
-        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        guard !demo else { return }
+        if let data = try? JSONEncoder().encode(servers) {
+            try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
+        if let data = try? JSONEncoder().encode(tombstones) {
+            try? data.write(to: tombstonesURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
     }
 }

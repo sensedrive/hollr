@@ -27,20 +27,33 @@ struct SpacesView: View {
     @State private var hideError: String?
     /// „Versteckt“ unfolded – this device only, like the desktop app's sidebar
     @AppStorage("spaces.hiddenOpen") private var hiddenOpen = false
+    /// „Anordnen“: drag spaces and worktrees into the order every device shows
+    @State private var arranging = false
 
     var body: some View {
         List {
             ForEach(store.servers) { server in
-                SpacesSection(server: server, dot: serverColor(server), hiddenOpen: $hiddenOpen,
-                              onOpen: { opened = SpaceRoute(server: server, space: $0) },
-                              onClose: { closingServer = server; closing = $0 },
-                              onHide: { setHidden(server, $0, $1) },
-                              onUnread: { markUnread(server, $0) })
+                if arranging {
+                    SpacesArrangeSection(server: server, dot: serverColor(server), onReorder: { reorder(server, $0) })
+                } else {
+                    SpacesSection(server: server, dot: serverColor(server), hiddenOpen: $hiddenOpen,
+                                  onOpen: { opened = SpaceRoute(server: server, space: $0) },
+                                  onClose: { closingServer = server; closing = $0 },
+                                  onHide: { setHidden(server, $0, $1) },
+                                  onUnread: { markUnread(server, $0) })
+                }
             }
         }
+        // the drag handles only while arranging: swipe actions and links work as before otherwise
+        .environment(\.editMode, .constant(arranging ? .active : .inactive))
         .themedList()
         .navigationTitle("Spaces")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(arranging ? String(localized: "Fertig") : String(localized: "Anordnen")) {
+                    withAnimation { arranging.toggle() }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { newSpace = true } label: { Image(.plus) }
                     .buttonStyle(.icon())
@@ -89,23 +102,61 @@ struct SpacesView: View {
         }
     }
 
+    /// A dragged order: on the server, so every device shows it (like the desktop sidebar)
+    private func reorder(_ server: Server, _ change: SharedChange) {
+        Task {
+            do {
+                try await herdr.patchShared(server, [change])
+            } catch {
+                hideError = error.localizedDescription
+            }
+        }
+    }
+
     /// server status dot: green once its spaces loaded, red on an error, grey while connecting
     private func serverColor(_ server: Server) -> Color {
         if herdr.errors[server.id] != nil { return Theme.red }
         return herdr.spaces[server.id] == nil ? Theme.dim : Theme.live
     }
 
-    /// repo main checkout first, its worktrees nested below; other workspaces standalone
+    /// repo main checkout first, its worktrees nested below; other workspaces standalone. Every space lands in
+    /// exactly one group – two main checkouts of the same repo don't both get its worktrees.
     static func group(_ spaces: [Space]) -> [(key: String, spaces: [Space])] {
         var groups: [(key: String, spaces: [Space])] = []
-        for space in spaces where !space.isWorktree {
-            let worktrees = spaces.filter { $0.isWorktree && $0.repo != nil && $0.repo == space.repo }
+        var placed = Set<String>()
+        for space in spaces where !space.isWorktree && placed.insert(space.id).inserted {
+            let worktrees = spaces.filter { $0.isWorktree && $0.repo != nil && $0.repo == space.repo && placed.insert($0.id).inserted }
             groups.append((space.id, [space] + worktrees))
         }
-        let placed = Set(groups.flatMap { $0.spaces.map(\.id) })
-        for orphan in spaces where !placed.contains(orphan.id) { groups.append((orphan.id, [orphan])) }
+        for orphan in spaces where placed.insert(orphan.id).inserted { groups.append((orphan.id, [orphan])) }
         return groups
     }
+
+    /// One server's list: the main rows (not hidden or waiting for you, in the dragged order, worktrees nested) and
+    /// the „Versteckt“ rows. Each space at most once in all of it – a SwiftUI List whose rows repeat an id in one
+    /// section crashes on the next change (UICollectionView "invalid number of items").
+    static func layout(_ spaces: [Space], status: (Space) -> String, order: SharedState?) -> (main: [SpaceListRow], hidden: [Space]) {
+        var seen = Set<String>()
+        let unique: [Space] = spaces.filter { seen.insert($0.id).inserted }
+        let shown: [Space] = HiddenSpaces.shown(unique, status: status)
+        let groups = SharedOrder.groups(group(shown), in: order)
+        var main: [SpaceListRow] = []
+        var listed = Set<String>()
+        for group in groups {
+            for space in group.spaces where listed.insert(space.id).inserted {
+                main.append(SpaceListRow(space: space, nested: space.id != group.key))
+            }
+        }
+        let hidden: [Space] = HiddenSpaces.hidden(unique).filter { !listed.contains($0.id) }
+        return (main, hidden)
+    }
+}
+
+/// A row of the spaces list: the space and whether it hangs below its repo (a worktree).
+struct SpaceListRow: Identifiable {
+    let space: Space
+    let nested: Bool
+    var id: String { space.id }
 }
 
 /// One server's spaces: the main list (not hidden, or hidden but waiting for you), then „Versteckt“ with the hidden
@@ -125,11 +176,14 @@ private struct SpacesSection: View {
     private var refs: [AgentRef] { herdr.agents(on: server) }
 
     var body: some View {
+        let refs = refs
+        let layout = SpacesView.layout(spaces, status: { urgentStatus(of: $0, in: refs, herdr: herdr) },
+                                       order: herdr.shared[server.id])
         Section {
             if herdr.spaces[server.id] == nil { skeleton }
-            main
+            main(layout.main, refs: refs)
             if spaces.isEmpty { Text("Lade …").foregroundStyle(Theme.muted).listRowBackground(Theme.card) }
-            hiddenPart
+            hiddenPart(layout.hidden, refs: refs)
         } header: {
             SectionHeader(title: server.label, dot: dot)
         }
@@ -148,15 +202,10 @@ private struct SpacesSection: View {
         .listRowBackground(Theme.card)
     }
 
-    private var main: some View {
-        let refs = refs
-        let shown: [Space] = HiddenSpaces.shown(spaces) { urgentStatus(of: $0, in: refs, herdr: herdr) }
-        // in the order dragged on any device (the desktop sidebar)
-        let groups = SharedOrder.groups(SpacesView.group(shown), in: herdr.shared[server.id])
-        return ForEach(groups, id: \.key) { group in
-            ForEach(group.spaces) { space in
-                visibleRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr), nested: space.id != group.key)
-            }
+    /// in the order dragged on any device (the desktop sidebar); one flat ForEach with unique ids
+    private func main(_ rows: [SpaceListRow], refs: [AgentRef]) -> some View {
+        ForEach(rows) { row in
+            visibleRow(row.space, status: urgentStatus(of: row.space, in: refs, herdr: herdr), nested: row.nested)
         }
         .listRowBackground(Theme.card)
     }
@@ -185,13 +234,12 @@ private struct SpacesSection: View {
         }
     }
 
-    @ViewBuilder private var hiddenPart: some View {
-        let hidden = HiddenSpaces.hidden(spaces)
+    /// the hidden spaces not already in the main list (one that waits for you shows there)
+    @ViewBuilder private func hiddenPart(_ hidden: [Space], refs: [AgentRef]) -> some View {
         if !hidden.isEmpty {
             HiddenToggle(count: hidden.count, open: $hiddenOpen)
                 .listRowBackground(Theme.card)
             if hiddenOpen {
-                let refs = refs
                 ForEach(hidden) { space in hiddenRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr)) }
                     .listRowBackground(Theme.card)
             }
@@ -211,6 +259,59 @@ private struct SpacesSection: View {
             Button { onOpen(space) } label: { Label("Öffnen", icon: .chevronRight) }
             Button { onHide(space, false) } label: { Label("Zurückholen", icon: .arrowUp) }
             Button(role: .destructive) { onClose(space) } label: { Label("Space beenden", icon: .stop) }
+        }
+    }
+}
+
+/// „Anordnen“ for one server: its spaces (a repo with its worktrees counts as one) and, per repo, its worktrees –
+/// dragged into the order the server keeps for every device (`spaceOrder`, `worktreeOrder`).
+private struct SpacesArrangeSection: View {
+    let server: Server
+    let dot: Color
+    let onReorder: (SharedChange) -> Void
+    @Environment(HerdrStore.self) private var herdr
+
+    /// what the main list shows, in its order
+    private var groups: [(key: String, spaces: [Space])] {
+        let refs = herdr.agents(on: server)
+        let shown = HiddenSpaces.shown(herdr.spaces[server.id] ?? []) { urgentStatus(of: $0, in: refs, herdr: herdr) }
+        return SharedOrder.groups(SpacesView.group(shown), in: herdr.shared[server.id])
+    }
+
+    var body: some View {
+        let groups = groups
+        Section {
+            ForEach(groups, id: \.key) { group in
+                SpaceRow(space: group.spaces[0], status: "idle", nested: false)
+            }
+            .onMove { from, to in
+                var ids = groups.map(\.key)
+                ids.move(fromOffsets: from, toOffset: to)
+                onReorder(.spaceOrder(ids))
+            }
+            .listRowBackground(Theme.card)
+        } header: {
+            SectionHeader(title: server.label, dot: dot)
+        }
+        ForEach(groups.filter { $0.spaces.count > 2 }, id: \.key) { group in
+            worktrees(group)
+        }
+    }
+
+    private func worktrees(_ group: (key: String, spaces: [Space])) -> some View {
+        let trees: [Space] = Array(group.spaces.dropFirst())
+        return Section {
+            ForEach(trees) { space in
+                SpaceRow(space: space, status: "idle", nested: false)
+            }
+            .onMove { from, to in
+                var ids = trees.map(\.id)
+                ids.move(fromOffsets: from, toOffset: to)
+                onReorder(.worktreeOrder(group.key, ids))
+            }
+            .listRowBackground(Theme.card)
+        } header: {
+            SectionHeader(title: String(localized: "\(group.spaces[0].label) · Worktrees"))
         }
     }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  applyChanges, dropServer, effective, emptyShared, migrationChanges, normalize, sameValue, staleEntries, toFront,
+  applyChanges, effective, emptyShared, migrationChanges, normalize, sameValue, settled, staleEntries, toFront,
   type Legacy,
 } from "../src/lib/sharedState";
 
@@ -73,24 +73,39 @@ describe("migration", () => {
     tabOrder: { servers: ["s2", "s1"], "s1|w1": ["t2", "t1"], "gone|w": ["t"] },
   };
 
-  test("this server's values, without the server prefix, for empty keys only", () => {
+  test("this server's values, without the server prefix, for empty keys and missing map entries only", () => {
     expect(migrationChanges(emptyShared(), "s1", local)).toEqual([
       { path: ["mySessions"], value: ["p1", "p2"] },
       { path: ["spaceOrder"], value: ["w2", "w1"] },
       { path: ["worktreeOrder", "w1"], value: ["w3", "w4"] },
       { path: ["tabOrder", "w1"], value: ["t2", "t1"] },
     ]);
+    // another workspace's tab order already there doesn't keep this one from moving over; the same one wins
     const filled = { ...emptyShared(), mySessions: ["p7"], tabOrder: { w9: ["t"] } };
-    expect(migrationChanges(filled, "s1", local).map((c) => c.path[0])).toEqual(["spaceOrder", "worktreeOrder"]);
+    expect(migrationChanges(filled, "s1", local).map((c) => c.path.join("."))).toEqual(["spaceOrder", "worktreeOrder.w1", "tabOrder.w1"]);
+    expect(migrationChanges({ ...emptyShared(), tabOrder: { w1: ["t1"] } }, "s1", local).some((c) => c.path[0] === "tabOrder")).toBe(false);
     expect(migrationChanges(emptyShared(), "s3", local)).toEqual([]);
   });
 
-  test("dropServer keeps other paired servers and the server tabs' own order", () => {
-    expect(dropServer(local, "s1", ["s1", "s2"])).toEqual({
+  test("settled drops only what the server holds for this server", () => {
+    const written = migrationChanges(emptyShared(), "s1", local);
+    // the server pruned a closed session right away: written counts
+    const doc = { ...applyChanges(emptyShared(), written), mySessions: ["p1"] };
+    expect(settled(local, "s1", doc, written)).toEqual({
       mySessions: ["s2|p9"],
       spaceOrder: { s2: ["x"] },
       worktreeOrder: { "s2|x": ["y"] },
-      tabOrder: { servers: ["s2", "s1"] },
+      // a server id no longer paired keeps its values
+      tabOrder: { servers: ["s2", "s1"], "gone|w": ["t"] },
     });
+  });
+
+  test("settled keeps a value another device's won over", () => {
+    const doc = { ...emptyShared(), spaceOrder: ["w1", "w2"], mySessions: ["p1"], tabOrder: { w1: ["t2", "t1"] } };
+    const left = settled(local, "s1", doc);
+    expect(left.spaceOrder.s1).toEqual(["w2", "w1"]);
+    expect(left.mySessions).toEqual(local.mySessions);
+    expect(left.tabOrder["s1|w1"]).toBeUndefined();
+    expect(left.worktreeOrder["s1|w1"]).toEqual(["w3", "w4"]);
   });
 });

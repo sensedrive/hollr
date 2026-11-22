@@ -63,8 +63,9 @@ struct AgentListView: View {
     // own functions with explicit types: one big nested expression made the Release compiler give
     // up on the CI machines ("unable to type-check this expression in reasonable time")
     private func refs(on server: Server, in ws: Workspace) -> [AgentRef] {
+        // by id: two workspaces with the same name must not list each other's sessions
         let refs: [AgentRef] = herdr.agents(on: server).filter { ref in
-            ref.workspace == ws.label && (showShells || ref.pane.agent != nil)
+            ref.workspaceId == ws.id && (showShells || ref.pane.agent != nil)
         }
         // the tabs in the order dragged on any device
         return SharedOrder.ordered(refs, saved: herdr.tabOrder(server, ws: ws.id)) { $0.tabId }

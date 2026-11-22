@@ -103,6 +103,16 @@
         }
       }
     },
+    "%@ · Worktrees": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Worktrees"
+          }
+        }
+      }
+    },
     "%@ ist gekoppelt": {
       "localizations": {
         "en": {
@@ -931,6 +941,16 @@
         }
       }
     },
+    "Anordnen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrange"
+          }
+        }
+      }
+    },
     "Ansicht": {
       "localizations": {
         "en": {
@@ -1143,6 +1163,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nothing answers on port %2$lld on %1$@."
+          }
+        }
+      }
+    },
+    "Auf allen Geräten entfernen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove on all devices"
           }
         }
       }
@@ -1563,6 +1593,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chat menu › Terminal: “Session” shows the computer’s terminal, “Own shell” a separate one in the same folder – sized to the iPhone. iPhone in landscape: terminal or changes next to the chat."
+          }
+        }
+      }
+    },
+    "Dieselben Rechner auf allen Geräten: was auf dem Mac gekoppelt ist, koppelt sich hier von selbst – und Entfernen gilt überall": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The same machines on every device: what is paired on the Mac pairs here by itself – and removing applies everywhere"
+          }
+        }
+      }
+    },
+    "Spaces anordnen: „Anordnen“ oben in Spaces – die Reihenfolge ist auf Mac und iPhone gleich; Prompt-Bausteine und Diktat-Vokabular ebenso": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrange spaces: “Arrange” at the top of Spaces – the order is the same on Mac and iPhone; prompt snippets and dictation vocabulary too"
+          }
+        }
+      }
+    },
+    "Behoben: Absturz in der Spaces-Liste, wenn ein versteckter Space auf dich wartete": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixed: a crash in the spaces list when a hidden space was waiting for you"
           }
         }
       }
@@ -4779,6 +4839,16 @@
         }
       }
     },
+    "Nicht erreichbar – wird gekoppelt, sobald einer deiner Rechner ihn erreicht": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not reachable – will be paired as soon as one of your machines reaches it"
+          }
+        }
+      }
+    },
     "Nicht umbrechen": {
       "localizations": {
         "en": {
@@ -7367,6 +7437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Created together with the space."
+          }
+        }
+      }
+    },
+    "Wird gekoppelt …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing …"
           }
         }
       }

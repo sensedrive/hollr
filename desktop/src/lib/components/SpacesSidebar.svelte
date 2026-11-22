@@ -23,6 +23,7 @@
   import { currentServer } from "$lib/currentServer.svelte";
   import { shared, showError } from "$lib/shared.svelte";
   import { staleEntries } from "$lib/sharedState";
+  import { orderAfterMove } from "$lib/tabOrder";
 
   const FOLDED = "hollr.sidebar.folded";
   const loadSet = (key: string) => {
@@ -38,13 +39,20 @@
     const rank = new Map((shared.of(server).worktreeOrder[repo] ?? []).map((id, i) => [id, i]));
     return [...trees].sort((a, b) => (rank.get(a.id) ?? 9999) - (rank.get(b.id) ?? 9999) || a.label.localeCompare(b.label));
   }
-  /** saves a repo group's order – and drops the orders of repos that are gone */
-  function saveOrder(server: string, repo: string, ids: string[]) {
+  /** every space group the server lists – hidden spaces too: what is saved after a drag starts from these, so a
+   *  space taken off the list (or not shown for any other reason) keeps its place in the order */
+  const allGroups = (server: string) => groupSpaces((app.spaces[server] ?? []) as FullSpace[]);
+  /** saves a repo group's order after a drag – and drops the orders of repos that are gone */
+  function moveTree(server: string, id: string, before: string | null) {
+    const group = allGroups(server).find((g) => g.spaces.slice(1).some((s) => s.id === id));
+    if (!group) return;
+    const repo = group.spaces[0]!.id;
+    const trees = group.spaces.slice(1).sort((a, b) => a.label.localeCompare(b.label)).map((s) => s.id);
     const alive = new Set((app.spaces[server] ?? []).map((s) => s.id));
     shared
       .update(server, (doc) => [
-        { path: ["worktreeOrder", repo], value: ids },
-        ...(alive.size ? staleEntries("worktreeOrder", doc.worktreeOrder, alive.add(repo)) : []),
+        { path: ["worktreeOrder", repo], value: orderAfterMove(trees, doc.worktreeOrder[repo], id, before) },
+        ...staleEntries("worktreeOrder", doc.worktreeOrder, alive),
       ])
       .catch(showError);
   }
@@ -57,16 +65,9 @@
       .map(({ g }) => g);
   }
   function reorderGroups(server: string, id: string, before: string | null) {
-    const sec = sections.find((s) => s.server.id === server);
-    if (!sec) return;
-    const ids = sec.groups.map((g) => g.spaces[0]!.id);
-    const from = ids.indexOf(id);
-    if (from < 0) return;
-    ids.splice(from, 1);
-    const to = before == null ? ids.length : ids.indexOf(before);
-    if (to < 0) return;
-    ids.splice(to, 0, id);
-    shared.update(server, () => [{ path: ["spaceOrder"], value: ids }]).catch(showError);
+    const all = allGroups(server).map((g) => g.spaces[0]!.id);
+    if (!all.includes(id)) return;
+    shared.update(server, (doc) => [{ path: ["spaceOrder"], value: orderAfterMove(all, doc.spaceOrder, id, before) }]).catch(showError);
   }
 
   const persist = (key: string, set: Set<string>) => {
@@ -115,22 +116,7 @@
 
   /** drop a worktree in front of `before` (null: end of its own repo group) */
   function reorder(id: string, before: string | null) {
-    for (const sec of sections) {
-      for (const g of sec.groups) {
-        const repo = g.spaces[0];
-        if (!repo) continue;
-        const trees = sortTrees(sec.server.id, repo.id, g.spaces.slice(1));
-        if (!trees.some((t) => t.id === id)) continue;
-        const ids = trees.map((t) => t.id);
-        const from = ids.indexOf(id);
-        ids.splice(from, 1);
-        const to = before == null ? ids.length : ids.indexOf(before);
-        if (to < 0) return;
-        ids.splice(to, 0, id);
-        saveOrder(sec.server.id, repo.id, ids);
-        return;
-      }
-    }
+    for (const sec of sections) moveTree(sec.server.id, id, before);
   }
 
   const currentWs = $derived.by(() => {

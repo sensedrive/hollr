@@ -148,6 +148,25 @@ enum HollrClient {
         return server
     }
 
+    /// A `hollr://pair?c=…` link, paired like a scanned one (MachinesSync: an invite from another of the user's apps).
+    static func pair(link: String, deviceName: String) async throws -> Server {
+        try await pair(try PairingPayload.parse(link), deviceName: deviceName)
+    }
+
+    /// The user's machines and settings as this server keeps them (`gate machines`, MachinesSync). A server before
+    /// that answers `HollrError.server("not_allowed")`.
+    static func machines(_ server: Server, _ body: [String: Any]) async throws -> MachinesDoc {
+        try await fs(server, body, as: MachinesDoc.self, command: "machines", seconds: 15)
+    }
+
+    /// A fresh one-time pairing link for this server, for another app of the same user (`gate pairlink`).
+    static func pairLink(_ server: Server) async throws -> String {
+        struct R: Decodable { let url: String?; let error: String? }
+        let r = try JSONDecoder().decode(R.self, from: try await run("pairlink", on: server))
+        guard let url = r.url else { throw HollrError.server(r.error ?? "pairlink") }
+        return url
+    }
+
     // MARK: Commands
 
     /// Runs one read command on the pooled connection and returns its stdout.

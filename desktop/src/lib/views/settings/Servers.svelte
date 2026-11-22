@@ -1,9 +1,12 @@
 <script lang="ts">
   import Icon from "$lib/components/git/Icon.svelte";
-  // Settings → Server & Geräte (iOS ServersView + the per-server links of SettingsView).
+  // Settings → Server & Geräte (iOS ServersView + the per-server links of SettingsView). Lists the user's machines
+  // this app isn't paired with yet too (greyed, machines.svelte.ts pairs them by itself); removing one removes it
+  // on all of the user's devices.
   import * as api from "$lib/api";
   import type { Server } from "$lib/api";
   import { t } from "$lib/i18n";
+  import { machines, syncMachines } from "$lib/machines.svelte";
   import { allPanes, app, dialogs, go, loadServers } from "$lib/store.svelte";
   import { errText } from "$lib/serverapi";
   import SetupCommands from "./SetupCommands.svelte";
@@ -13,7 +16,7 @@
   let busy = $state(false);
 
   const agents = (id: string) => allPanes(id).filter((r) => r.pane.agent).length;
-  const address = (s: Server) => `${s.user}@${s.addresses[0] ?? "?"}${s.port !== 22 ? `:${s.port}` : ""}`;
+  const address = (s: Pick<Server, "user" | "addresses" | "port">) => `${s.user}@${s.addresses[0] ?? "?"}${s.port !== 22 ? `:${s.port}` : ""}`;
 
   async function remove(s: Server) {
     busy = true;
@@ -22,6 +25,8 @@
       confirm = null;
       error = "";
       await loadServers();
+      // the removal goes to the other devices right away
+      void syncMachines();
     } catch (e) {
       error = errText(e);
     }
@@ -65,12 +70,27 @@
             <div class="confirm">
               <div class="grow">
                 <b>{t("Server aus Hollr entfernen?")}</b>
+                <div class="small muted">{t("Er wird auch auf deinen anderen Geräten entfernt.")}</div>
                 <div class="small muted">{t("Auf dem Server bleibt der Schlüssel bis `hollr revoke {device}`.", { device: s.deviceId })}</div>
               </div>
               <button class="btn" onclick={() => (confirm = null)}>{t("Abbrechen")}</button>
-              <button class="btn danger" disabled={busy} onclick={() => remove(s)}>{t("Entfernen")}</button>
+              <button class="btn danger" disabled={busy} onclick={() => remove(s)}>{t("Auf allen Geräten entfernen")}</button>
             </div>
           {/if}
+        </div>
+      {/each}
+      {#each machines.missing as m (m.fp)}
+        <!-- one of the user's machines, paired on another device: this app pairs it by itself -->
+        <div class="srv missing">
+          <div class="icon"><Icon name="▤" size={15} /></div>
+          <div class="grow">
+            <div class="name">{m.label}</div>
+            <div class="small muted mono ellipsis" title={m.addresses.join(", ")}>{address(m)}</div>
+            <div class="small dim">
+              {machines.pending[m.fp] ? t("Wird gekoppelt …") : t("Nicht erreichbar – wird gekoppelt, sobald einer deiner Rechner ihn erreicht")}
+            </div>
+            {#if machines.errors[m.fp]}<div class="small warn">{machines.errors[m.fp]}</div>{/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -85,6 +105,7 @@
 
 <style>
   .srv { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; }
+  .srv.missing { opacity: 0.55; }
   .icon { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; color: var(--accent);
     background: color-mix(in srgb, var(--accent) 15%, transparent); flex: none; }
   .name { font-weight: 600; }

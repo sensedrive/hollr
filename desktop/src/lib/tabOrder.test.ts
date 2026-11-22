@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { forksAfterParents, moveBefore, ordered } from "./tabOrder";
+import { forksAfterParents, moveBefore, orderAfterMove, ordered } from "./tabOrder";
 
 const tabs = (...ids: string[]) => ids.map((id) => ({ id }));
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
@@ -38,5 +38,27 @@ describe("forksAfterParents", () => {
   });
   test("a parent cycle loses no tab", () => {
     expect(sort({ x: "y", y: "x" }, "a", "x", "y").sort()).toEqual(["a", "x", "y"]);
+  });
+});
+
+describe("orderAfterMove", () => {
+  // the server lists a..e; c and e are hidden, so the sidebar shows a, b, d
+  const all = ["a", "b", "c", "d", "e"];
+  const saved = ["d", "c", "a", "e", "b"];
+
+  test("a space not shown keeps its place – the saved order never shrinks by hidden ones", () => {
+    // drag b in front of d (the shown order is d, a, b)
+    expect(orderAfterMove(all, saved, "b", "d")).toEqual(["b", "d", "c", "a", "e"]);
+    // to the end of the shown list
+    expect(orderAfterMove(all, saved, "d", null)).toEqual(["c", "a", "e", "b", "d"]);
+  });
+
+  test("only ids that no longer exist drop out; new ones follow in their own order", () => {
+    expect(orderAfterMove(["a", "b", "x"], ["gone", "b", "a"], "x", "b")).toEqual(["x", "b", "a"]);
+  });
+
+  test("nothing saved yet: the existing order with the move", () => {
+    expect(orderAfterMove(all, undefined, "e", "a")).toEqual(["e", "a", "b", "c", "d"]);
+    expect(orderAfterMove(all, [], "a", null)).toEqual(["b", "c", "d", "e", "a"]);
   });
 });

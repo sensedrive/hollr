@@ -4,6 +4,7 @@ import SwiftUI
 struct ServersView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
+    @Environment(MachinesSync.self) private var machines
     let onPair: () -> Void
 
     var body: some View {
@@ -12,6 +13,11 @@ struct ServersView: View {
                 Section {
                     ForEach(store.servers) { server in
                         NavigationLink { ServerDetailView(server: server) } label: { ServerRow(server: server) }
+                    }
+                    // paired in another of your Hollr apps: paired here as soon as one of your machines reaches it
+                    ForEach(machines.missing, id: \.fp) { machine in
+                        MissingServerRow(machine: machine, pending: machines.pending.contains(machine.fp),
+                                         failure: machines.failures[machine.fp])
                     }
                     Button(action: onPair) {
                         HStack(spacing: Gap.m) {
@@ -96,6 +102,36 @@ private struct ServerRow: View {
                 .accessibilityLabel(state.label)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// A machine another of your apps is paired with, not yet this one (greyed): being paired, or waiting until one of
+/// your machines reaches it.
+private struct MissingServerRow: View {
+    let machine: Machine
+    let pending: Bool
+    let failure: String?
+
+    var body: some View {
+        HStack(spacing: Gap.m) {
+            ServerIcon()
+            VStack(alignment: .leading, spacing: 1) {
+                Text(machine.label).font(Typo.md.weight(.semibold)).lineLimit(1)
+                Text(verbatim: "\(machine.user)@\(machine.addresses.first ?? "?")")
+                    .font(Typo.monoXS).foregroundStyle(Theme.muted).lineLimit(1)
+                Text(pending ? String(localized: "Wird gekoppelt …")
+                     : String(localized: "Nicht erreichbar – wird gekoppelt, sobald einer deiner Rechner ihn erreicht"))
+                    .font(Typo.xs).foregroundStyle(Theme.dim).lineLimit(2)
+                if let failure, !pending {
+                    Text(failure).font(Typo.xs).foregroundStyle(Theme.dim).lineLimit(2)
+                }
+            }
+            Spacer(minLength: Gap.s)
+            if pending { Spinner(color: Theme.muted) }
+        }
+        .padding(.vertical, 2)
+        .opacity(0.55)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -214,7 +250,8 @@ struct ServerDetailView: View {
         .refreshable { await load() }
         .task { await load() }
         .confirmationDialog(String(localized: "Server aus Hollr entfernen?"), isPresented: $confirmRemove, titleVisibility: .visible) {
-            Button("Entfernen", role: .destructive) {
+            // the removal reaches your other Hollr apps too (MachinesSync)
+            Button("Auf allen Geräten entfernen", role: .destructive) {
                 store.remove(server)
                 dismiss()
             }
@@ -251,7 +288,8 @@ struct ServerDetailView: View {
                 if switching { Spacer(); Spinner(color: Theme.muted, size: 16) }
             }
             DisclosureGroup("Adressen") {
-                ForEach(current.addresses, id: \.self) { host in
+                // by position: an address list may repeat one (List rows with the same id crash)
+                ForEach(Array(current.addresses.enumerated()), id: \.offset) { _, host in
                     HStack {
                         Text(verbatim: host).font(Typo.monoSmall)
                         Spacer()

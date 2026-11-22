@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 53,
+    version: "0.49.0",
+    date: "22.11.2026",
+    items: [
+      { icon: "⇄", text: "Dieselben Rechner auf allen Geräten: wird ein Rechner auf dem iPhone oder einem anderen Mac gekoppelt, koppelt sich Hollr hier selbst damit; Entfernen gilt für alle Geräte." },
+      { icon: "✎", text: "Prompt-Bausteine und das Diktat-Vokabular sind auf allen Geräten gleich." },
+      { icon: "✓", text: "Behoben: Spaces ziehen nahm versteckte Spaces aus der gemerkten Reihenfolge." },
+    ],
+  },
+  {
     build: 52,
     version: "0.48.1",
     date: "22.11.2026",
