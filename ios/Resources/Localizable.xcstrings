@@ -1307,6 +1307,16 @@
         }
       }
     },
+    "Beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End"
+          }
+        }
+      }
+    },
     "Befehl ausführen …": {
       "localizations": {
         "en": {
@@ -1543,6 +1553,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chat menu › Terminal: “Session” shows the computer’s terminal, “Own shell” a separate one in the same folder – sized to the iPhone. iPhone in landscape: terminal or changes next to the chat."
+          }
+        }
+      }
+    },
+    "Spaces verstecken: nach links wischen oder lange drücken – unter „Versteckt“ aufklappen, zurückholen oder beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide spaces: swipe left or long-press – expand them under “Hidden”, bring them back or end them"
+          }
+        }
+      }
+    },
+    "Was versteckt ist, merkt sich der Server – iPhone und Mac zeigen immer dieselben Spaces": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server remembers what is hidden – iPhone and Mac always show the same spaces"
           }
         }
       }
@@ -3199,6 +3229,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hollr on this server is too old for plugins – update it in Tools."
+          }
+        }
+      }
+    },
+    "Hollr auf diesem Server ist zu alt zum Verstecken – in Werkzeuge aktualisieren.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr on this server is too old to hide spaces – update it in Tools."
           }
         }
       }
@@ -5985,6 +6025,16 @@
         }
       }
     },
+    "Space beenden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End space"
+          }
+        }
+      }
+    },
     "Space schließen mit allen Optionen: nur schließen, Worktree entfernen, Worktree und Branch löschen (auch auf origin), Ordner löschen – vorher siehst du offene Änderungen und nicht gepushte Commits": {
       "localizations": {
         "en": {
@@ -6951,6 +7001,36 @@
         }
       }
     },
+    "Versteckt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden"
+          }
+        }
+      }
+    },
+    "Versteckt: %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hidden: %lld"
+          }
+        }
+      }
+    },
+    "Verstecken": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        }
+      }
+    },
     "Verwerfen": {
       "localizations": {
         "en": {
@@ -7371,6 +7451,16 @@
         }
       }
     },
+    "Zeigen – sie bleiben versteckt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show – they stay hidden"
+          }
+        }
+      }
+    },
     "Zeilen umbrechen": {
       "localizations": {
         "en": {
@@ -7471,6 +7561,16 @@
         }
       }
     },
+    "Zuklappen – sie bleiben versteckt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse – they stay hidden"
+          }
+        }
+      }
+    },
     "Zuletzt": {
       "localizations": {
         "en": {
@@ -7497,6 +7597,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Type “%@” to confirm"
+          }
+        }
+      }
+    },
+    "Zurückholen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring back"
           }
         }
       }
@@ -7737,6 +7847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "running"
+          }
+        }
+      }
+    },
+    "läuft weiter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keeps running"
           }
         }
       }

@@ -28,6 +28,7 @@ import { miniLines } from "./minimap";
 import { runEvents } from "./events";
 import { paneContext, readPath } from "./file";
 import { type ForkRequest, forkPane } from "./fork";
+import { pruneHidden, setHidden } from "./hiddenspaces";
 import {
   execHerdr,
   Herdr,
@@ -115,7 +116,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.46.3";
+export const VERSION = "0.47.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -600,9 +601,13 @@ async function gate(): Promise<number> {
       }
       return 0;
     }
-    case "spaces":
-      json({ spaces: await listSpaces() });
+    case "spaces": {
+      const spaces = await listSpaces();
+      // hidden on this server, so the desktop app and the phone show the same list
+      const hidden = pruneHidden(spaces.map((s) => s.id));
+      json({ spaces: spaces.map((s) => (hidden.has(s.id) ? { ...s, hidden: true } : s)) });
       return 0;
+    }
     case "attach":
       // the pane's real terminal, sized to the phone (Heeler-style native view)
       return runAttach(pane, Number(rest[0]), Number(rest[1]));
@@ -648,11 +653,18 @@ async function gate(): Promise<number> {
     case "space": {
       const req = JSON.parse((await readStdinLine()) || "{}") as SpaceRequest;
       try {
-        json(
+        if (req.op === "hide" || req.op === "unhide") {
+          if (!req.ws) throw new Error("Space fehlt");
+          json({ hidden: setHidden([req.ws], req.op === "hide") });
+          return 0;
+        }
+        const result =
           req.op === "worktrees"
             ? { worktrees: await listCheckouts(req.ws ?? "") }
-            : await manageSpace(req),
-        );
+            : await manageSpace(req);
+        // a closed space is no longer hidden: herdr may hand its id to a new one
+        if (req.op === "close" && req.ws) setHidden([req.ws], false);
+        json(result);
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }

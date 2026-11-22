@@ -26,7 +26,7 @@ enum DemoMode {
         let json: Any
         switch words.first ?? "" {
         case "tree": json = ["workspaces": studio ? studioTree : devboxTree]
-        case "spaces": json = ["spaces": studio ? studioSpaces : devboxSpaces]
+        case "spaces": json = ["spaces": markHidden(studio ? studioSpaces : devboxSpaces, on: server)]
         case "timeline": json = timeline(words.count > 1 ? words[1] : "")
         case "usage": json = usage
         case "ports": json = ["ports": studio ? [] : [["port": 3000, "title": "hollr preview", "process": "bun", "cwd": "/home/martin/code/hollr"]]]
@@ -35,11 +35,41 @@ enum DemoMode {
         case "history": json = ["events": []]
         case "close": json = ["ok": true]
         case "fs": json = fs(body["op"] as? String ?? "")
-        case "space": json = (body["op"] as? String) == "info" ? ["agents": 2, "dirty": 3, "unpushed": 1, "isWorktree": false, "linkedWorktrees": 2] : [:]
+        case "space": json = spaceOp(body, on: server)
         case "plugins": json = ["plugins": []]
         default: json = [:]
         }
         return (try? JSONSerialization.data(withJSONObject: json)) ?? Data("{}".utf8)
+    }
+
+    /// spaces hidden with „Verstecken“ per demo server (in memory, like the servers); nil = not touched yet: the
+    /// devbox starts with its idle `finksmart-web` hidden, so the demo shows the „Versteckt“ row
+    private static var hidden: [UUID: Set<String>] = [:]
+    private static let lock = NSLock()
+
+    private static func hiddenIds(_ server: Server) -> Set<String> {
+        hidden[server.id] ?? (server.label == "mac-studio" ? [] : ["w4"])
+    }
+
+    private static func markHidden(_ spaces: [[String: Any]], on server: Server) -> [[String: Any]] {
+        let ids = lock.withLock { hiddenIds(server) }
+        return spaces.map { space in
+            guard let id = space["id"] as? String, ids.contains(id) else { return space }
+            return space.merging(["hidden": true]) { $1 }
+        }
+    }
+
+    private static func spaceOp(_ body: [String: Any], on server: Server) -> [String: Any] {
+        let op = body["op"] as? String
+        if op == "info" { return ["agents": 2, "dirty": 3, "unpushed": 1, "isWorktree": false, "linkedWorktrees": 2] }
+        guard op == "hide" || op == "unhide", let ws = body["ws"] as? String else { return [:] }
+        let ids: Set<String> = lock.withLock {
+            var ids = hiddenIds(server)
+            if op == "hide" { ids.insert(ws) } else { ids.remove(ws) }
+            hidden[server.id] = ids
+            return ids
+        }
+        return ["hidden": ids.sorted()]
     }
 
     // MARK: herdr tree

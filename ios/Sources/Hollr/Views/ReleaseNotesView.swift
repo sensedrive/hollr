@@ -10,6 +10,10 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 58, date: "22.11.2026", items: [
+            ("eye.slash", String(localized: "Spaces verstecken: nach links wischen oder lange drücken – unter „Versteckt“ aufklappen, zurückholen oder beenden")),
+            ("arrow.left.arrow.right", String(localized: "Was versteckt ist, merkt sich der Server – iPhone und Mac zeigen immer dieselben Spaces")),
+        ]),
         ReleaseNote(build: 57, date: "22.11.2026", items: [
             ("bolt.horizontal", String(localized: "Zurück aus dem Hintergrund lädt der Chat sofort – vorher blieb er bis zu einer Minute auf dem Platzhalter")),
         ]),

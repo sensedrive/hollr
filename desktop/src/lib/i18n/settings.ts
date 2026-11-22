@@ -185,6 +185,10 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Versteckte Spaces: unten in der Seitenleiste unter „Versteckt“ aufklappen, ohne sie zurückzuholen. Per Ziehen oder Klick zurückholen oder beenden; ein Space, den du auf „Versteckt“ ziehst, verschwindet aus der Liste.":
+    "Hidden spaces: expand them at the bottom of the sidebar under “Hidden” without bringing them back. Bring them back or end them by dragging or a click; a space you drag onto “Hidden” leaves the list.",
+  "Was versteckt ist, merkt sich jetzt der Server – Mac und iPhone zeigen immer dieselben Spaces.":
+    "The server now remembers what is hidden – Mac and iPhone always show the same spaces.",
   "Der Chat bleibt nicht mehr stehen, während das Terminal weiterläuft, und „Arbeitet …“ verschwindet, wenn der Agent wirklich fertig ist (auch nach einem Absturz).":
     "The chat no longer freezes while the terminal keeps going, and “Working …” goes away once the agent is really done (also after a crash).",
   "Terminal: die Übersichtsleiste hängt nicht mehr und kostet weniger Verbindung, Sprung zu Notizen trifft die richtige Stelle, Kopieren über den Rand klappt auch mit Emoji.":

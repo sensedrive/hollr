@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 50,
+    version: "0.47.0",
+    date: "22.11.2026",
+    items: [
+      { icon: "◌", text: "Versteckte Spaces: unten in der Seitenleiste unter „Versteckt“ aufklappen, ohne sie zurückzuholen. Per Ziehen oder Klick zurückholen oder beenden; ein Space, den du auf „Versteckt“ ziehst, verschwindet aus der Liste." },
+      { icon: "⇄", text: "Was versteckt ist, merkt sich jetzt der Server – Mac und iPhone zeigen immer dieselben Spaces." },
+    ],
+  },
+  {
     build: 49,
     version: "0.46.2",
     date: "21.11.2026",

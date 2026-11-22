@@ -204,6 +204,25 @@ enum HollrClient {
         return (r.ws, r.pane)
     }
 
+    /// „Verstecken“ / „Zurückholen“ (kept on the server); returns all hidden workspace ids after the change
+    static func setHidden(_ server: Server, ws: String, hidden: Bool) async throws -> [String] {
+        struct R: Decodable { let hidden: [String]? }
+        let tooOld = HollrError.server(String(localized: "Hollr auf diesem Server ist zu alt zum Verstecken – in Werkzeuge aktualisieren."))
+        let r: R
+        do {
+            r = try await fs(server, ["op": hidden ? "hide" : "unhide", "ws": ws], as: R.self, command: "space")
+        } catch {
+            // a server before 0.47 runs it as an unknown space op and fails with a cryptic error
+            struct Hello: Decodable { let hollr: String? }
+            let version = (try? await run("hello", on: server)).flatMap { try? JSONDecoder().decode(Hello.self, from: $0) }?.hollr
+            if let version, !HiddenSpaces.supported(version: version) { throw tooOld }
+            throw error
+        }
+        // an older server may also answer without the list
+        guard let ids = r.hidden else { throw tooOld }
+        return ids
+    }
+
     static func usage(_ server: Server, refresh: Bool = false) async throws -> (limits: [UsageLimit], capacity: [UsageCapacity]) {
         let data = try await run(refresh ? "usage refresh" : "usage", on: server)
         struct R: Decodable { let limits: [UsageLimit]; let capacity: [UsageCapacity]? }

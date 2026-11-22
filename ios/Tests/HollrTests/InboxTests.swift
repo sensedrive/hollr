@@ -162,3 +162,48 @@ final class FollowTests: XCTestCase {
         XCTAssertTrue({ if case .unsupported = FollowEvent.decode(Data(#"{"error":"not_allowed"}"#.utf8)) { return true }; return false }())
     }
 }
+
+final class HiddenSpacesTests: XCTestCase {
+    private func spaces() throws -> [Space] {
+        let json = #"""
+        [{"id":"w1","label":"hollr","number":1,"focused":true,"status":"idle","root":"/a","isWorktree":false,"paneCount":1},
+         {"id":"w2","label":"tendr","number":2,"focused":false,"status":"idle","root":"/b","isWorktree":false,"paneCount":1,"hidden":true},
+         {"id":"w3","label":"web","number":3,"focused":false,"status":"idle","root":"/c","isWorktree":false,"paneCount":1,"hidden":true}]
+        """#
+        return try JSONDecoder().decode([Space].self, from: Data(json.utf8))
+    }
+
+    private func ref(_ pane: String, _ status: String) -> AgentRef {
+        AgentRef(server: .placeholder, workspace: "x", workspaceNumber: 1, tab: "1", tabNumber: 1,
+                 pane: Pane(pane: pane, agent: "omp", status: status, title: "", cwd: "/tmp", focused: false, live: false))
+    }
+
+    func testMainListKeepsHiddenSpacesThatWaitForYou() throws {
+        let all = try spaces()
+        XCTAssertNil(all[0].hidden) // older servers don't send it
+        let shown = HiddenSpaces.shown(all) { $0.id == "w3" ? "blocked" : "working" }
+        XCTAssertEqual(shown.map(\.id), ["w1", "w3"])
+        XCTAssertEqual(HiddenSpaces.hidden(all).map(\.id), ["w2", "w3"])
+    }
+
+    func testSessionsOfHiddenSpacesStayOutUnlessBlocked() throws {
+        let all = try spaces()
+        XCTAssertTrue(HiddenSpaces.hides(ref("w2:p1", "working"), in: all))
+        XCTAssertFalse(HiddenSpaces.hides(ref("w2:p1", "blocked"), in: all))
+        XCTAssertFalse(HiddenSpaces.hides(ref("w1:p1", "done"), in: all))
+        XCTAssertFalse(HiddenSpaces.hides(ref("w2:p1", "done"), in: nil)) // spaces not loaded yet
+    }
+
+    func testMarkingSetsExactlyTheGivenIds() throws {
+        let marked = HiddenSpaces.marking(try spaces(), hidden: ["w1"])
+        XCTAssertEqual(HiddenSpaces.hidden(marked).map(\.id), ["w1"])
+    }
+
+    func testHidingNeedsHollr047() {
+        XCTAssertFalse(HiddenSpaces.supported(version: "0.46.3"))
+        XCTAssertTrue(HiddenSpaces.supported(version: "0.47.0"))
+        XCTAssertTrue(HiddenSpaces.supported(version: "0.47.0-dev"))
+        XCTAssertTrue(HiddenSpaces.supported(version: "1.0"))
+        XCTAssertFalse(HiddenSpaces.supported(version: "0.9.12"))
+    }
+}

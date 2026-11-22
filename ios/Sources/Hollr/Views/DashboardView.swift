@@ -35,7 +35,7 @@ struct DashboardView: View {
         .navigationBarTitleDisplayMode(.large)
         .themedPage()
         // what waits for you – on every herdr change (the live feed makes this immediate)
-        .task(id: herdr.trees) { await inbox.update(herdr.allAgents(store.servers, includeShells: false)) }
+        .task(id: InboxInput(trees: herdr.trees, hidden: herdr.hiddenIds)) { await updateInbox() }
         .onChange(of: herdr.trees) { _, trees in
             // forget sessions that were closed elsewhere
             let loaded = Set(trees.keys).filter { herdr.errors[$0] == nil }
@@ -104,12 +104,24 @@ struct DashboardView: View {
 
     private var liveIds: Set<String> { Set(sessions.sessions.filter { $0.value.isLive }.map(\.key)) }
 
-    /// What's going on: the sessions you opened in Hollr plus every agent that works, waits or just finished.
+    /// What's going on: the sessions you opened in Hollr plus every agent that works, waits or just finished –
+    /// not from hidden spaces (unless the agent waits for you).
     private var workRefs: [AgentRef] {
         let mine = Set(mySessions.ids)
         return herdr.allAgents(store.servers, includeShells: true).filter { ref in
-            mine.contains(ref.id) || (ref.pane.agent != nil && ["working", "blocked", "done"].contains(ref.pane.status))
+            guard !herdr.hides(ref) else { return false }
+            return mine.contains(ref.id) || (ref.pane.agent != nil && ["working", "blocked", "done"].contains(ref.pane.status))
         }
+    }
+
+    /// what the inbox is built from: the agents and which spaces are hidden
+    private struct InboxInput: Equatable {
+        let trees: [UUID: [Workspace]]
+        let hidden: [UUID: Set<String>]
+    }
+
+    private func updateInbox() async {
+        await inbox.update(herdr.allAgents(store.servers, includeShells: false).filter { !herdr.hides($0) })
     }
 
     /// grouped per workspace and server, in the agents' order (needs-you first)

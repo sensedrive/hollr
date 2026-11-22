@@ -28,8 +28,51 @@ struct Space: Codable, Identifiable, Hashable {
     let paneCount: Int
     /// its folder is gone (a worktree removed outside herdr) – it can only be closed; older servers don't send it
     var missing: Bool? = nil
+    /// taken off the apps' lists with „Verstecken“ (kept on the server, same on every device); older servers don't send it
+    var hidden: Bool? = nil
 
     var folder: String { root.split(separator: "/").last.map(String.init) ?? root }
+    var isHidden: Bool { hidden == true }
+}
+
+/// Spaces hidden with „Verstecken“: off the main list, the overview and the inbox – herdr keeps them running.
+/// A session that waits for you (blocked) still shows (parity with the desktop app's `isHidden`).
+enum HiddenSpaces {
+    /// the main list: not hidden, or hidden but waiting for you
+    static func shown(_ spaces: [Space], status: (Space) -> String) -> [Space] {
+        spaces.filter { !$0.isHidden || status($0) == "blocked" }
+    }
+
+    /// the „Versteckt“ list, in the server's order
+    static func hidden(_ spaces: [Space]) -> [Space] { spaces.filter(\.isHidden) }
+
+    /// the session's space is hidden and the session doesn't wait for you
+    static func hides(_ ref: AgentRef, in spaces: [Space]?) -> Bool {
+        guard ref.pane.status != "blocked", let spaces else { return false }
+        let ws = ref.workspaceId
+        return spaces.contains { $0.id == ws && $0.isHidden }
+    }
+
+    /// the list with exactly `ids` hidden
+    static func marking(_ spaces: [Space], hidden ids: Set<String>) -> [Space] {
+        spaces.map { space in
+            var space = space
+            space.hidden = ids.contains(space.id)
+            return space
+        }
+    }
+
+    /// hide / unhide came with hollr 0.47.0 (a "0.47.0-dev" build counts as 0.47.0)
+    static func supported(version: String) -> Bool {
+        let parts = version.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
+        let padded = parts + Array(repeating: 0, count: max(0, 3 - parts.count))
+        return padded.prefix(3).lexicographicallyPrecedes([0, 47, 0]) == false
+    }
+}
+
+extension AgentRef {
+    /// herdr workspace id of the pane ("w1" of "w1:p2")
+    var workspaceId: String { pane.pane.split(separator: ":").first.map(String.init) ?? "" }
 }
 
 struct CommitRow: Codable, Identifiable, Hashable {

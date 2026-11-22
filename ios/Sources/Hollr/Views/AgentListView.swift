@@ -168,7 +168,7 @@ struct AgentRow: View {
 extension HerdrStore {
     /// The git branch of the space a pane runs in, once the spaces are loaded.
     func branch(of ref: AgentRef) -> String? {
-        let ws = ref.pane.pane.split(separator: ":").first.map(String.init) ?? ""
+        let ws = ref.workspaceId
         return spaces[ref.server.id]?.first { $0.id == ws }?.git?.branch
     }
 }

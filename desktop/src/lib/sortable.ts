@@ -1,14 +1,19 @@
 // Drag & drop for a tab strip, with pointer events (WKWebView's HTML5 drag & drop is unreliable). Children
 // carry `data-sort-id` (or the attribute in `attr`; an inner sortable inside an outer one takes its presses first); several children with the same id (a split tab's panes) move together. A press only
 // becomes a drag after a few pixels, so clicks, double-clicks and middle clicks stay what they were. While
-// dragging, the dragged tab is faded, a marker shows where it lands and the strip scrolls at its edges.
+// dragging, the dragged tab is faded, a marker shows where it lands and the strip scrolls at its edges. With
+// `dropOn`, an item can also be dropped on another element (a second list): it gets `data-drop-over` meanwhile.
 export interface SortableOptions {
-  /** `id` dropped in front of `before` (null: at the end) */
-  onMove: (id: string, before: string | null) => void;
+  /** `id` dropped in front of `before` (null: at the end); none = the list keeps its order (drop elsewhere only) */
+  onMove?: (id: string, before: string | null) => void;
   /** tab strips run across; a worktree list runs down */
   axis?: "x" | "y";
   /** the data attribute that marks an item (default "sort-id"); nested sortables use different ones */
   attr?: string;
+  /** selector of elements outside the list an item can be dropped on … */
+  dropOn?: string;
+  /** … and what dropping it there does */
+  onDropOn?: (id: string, target: HTMLElement) => void;
 }
 
 /** a press an inner sortable took – the outer one (its ancestor, later in the bubble) leaves it alone */
@@ -35,6 +40,14 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
   /** dropping now changes the order */
   let lands = false;
   let frame = 0;
+  /** the `dropOn` element under the pointer */
+  let over: HTMLElement | null = null;
+  function setOver(el: HTMLElement | null) {
+    if (el === over) return;
+    over?.removeAttribute("data-drop-over");
+    el?.setAttribute("data-drop-over", "");
+    over = el;
+  }
 
   const items = (id: string) => [...node.querySelectorAll<HTMLElement>(`[data-${attr()}="${CSS.escape(id)}"]`)];
   /** every sort id in screen order with its extent along the drag axis */
@@ -53,6 +66,13 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
   }
 
   function place() {
+    const target = opts.dropOn ? document.elementFromPoint(lastX, lastY)?.closest<HTMLElement>(opts.dropOn) : null;
+    setOver(target && !node.contains(target) ? target : null);
+    if (over || !opts.onMove) {
+      lands = false;
+      marker.style.display = "none";
+      return;
+    }
     const list = slots();
     const y = vertical();
     const cursor = y ? lastY : lastX;
@@ -82,6 +102,11 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
 
   function tick() {
     const box = node.getBoundingClientRect();
+    if (over) {
+      place();
+      frame = requestAnimationFrame(tick);
+      return;
+    }
     if (vertical()) {
       if (lastY < box.top + EDGE) node.scrollTop -= 8;
       else if (lastY > box.bottom - EDGE) node.scrollTop += 8;
@@ -127,6 +152,7 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
     dragging = false;
     cancelAnimationFrame(frame);
     marker.remove();
+    setOver(null);
     for (const el of items(id)) el.style.opacity = "";
     document.body.style.userSelect = "";
     document.body.style.cursor = "";
@@ -144,14 +170,17 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
     place();
     const id = press.id;
     const drop = lands ? before : undefined;
+    const target = over;
     end();
-    if (drop !== undefined) opts.onMove(id, drop);
+    if (target) opts.onDropOn?.(id, target);
+    else if (drop !== undefined) opts.onMove?.(id, drop);
   }
   const onKey = (e: KeyboardEvent) => e.key === "Escape" && dragging && end();
 
   node.addEventListener("pointerdown", onDown);
-  node.addEventListener("pointermove", onMove);
-  node.addEventListener("pointerup", onUp);
+  // on the window: a quick first move can leave the list before the drag starts (pointer capture comes then)
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
   node.addEventListener("pointercancel", end);
   window.addEventListener("keydown", onKey);
   return {
@@ -162,8 +191,8 @@ export function sortable(node: HTMLElement, options: SortableOptions) {
       end();
       marker.remove();
       node.removeEventListener("pointerdown", onDown);
-      node.removeEventListener("pointermove", onMove);
-      node.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
       node.removeEventListener("pointercancel", end);
       window.removeEventListener("keydown", onKey);
     },

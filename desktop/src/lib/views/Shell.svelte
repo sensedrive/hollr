@@ -297,7 +297,7 @@
   .count { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center;
     font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--orange); }
   .ico { width: 16px; display: grid; place-items: center; }
-  .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .list { flex: 1; overflow-y: auto; padding: 4px 8px; display: flex; flex-direction: column; }
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
   .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }
   .view { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }

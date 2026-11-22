@@ -12,52 +12,27 @@ private func urgentStatus(of space: Space, in refs: [AgentRef]) -> String {
         .min { $0.statusRank < $1.statusRank }?.pane.status ?? space.status
 }
 
-/// herdr's spaces per server (SpacesSidebar): repos with their worktrees nested below, standalone workspaces.
+/// herdr's spaces per server (SpacesSidebar): repos with their worktrees nested below, standalone workspaces;
+/// spaces hidden with „Verstecken“ fold into „Versteckt“ at the end of their server.
 struct SpacesView: View {
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
     @State private var newSpace = UserDefaults.standard.string(forKey: "hollrSheet") == "newspace"
     @State private var closing: Space?
     @State private var closingServer: Server?
+    /// „Öffnen“ from a context menu
+    @State private var opened: SpaceRoute?
+    @State private var hideError: String?
+    /// „Versteckt“ unfolded – this device only, like the desktop app's sidebar
+    @AppStorage("spaces.hiddenOpen") private var hiddenOpen = false
 
     var body: some View {
         List {
             ForEach(store.servers) { server in
-                let spaces = herdr.spaces[server.id] ?? []
-                let refs = herdr.agents(on: server)
-                Section {
-                    if herdr.spaces[server.id] == nil {
-                        ForEach(0..<5, id: \.self) { i in
-                            HStack(spacing: 10) {
-                                SkeletonBar(width: CGFloat([170, 220, 140, 200, 160][i]), height: 14)
-                                Spacer()
-                                SkeletonBar(width: 36, height: 10)
-                            }
-                            .padding(.vertical, Gap.xs)
-                            .shimmer()
-                        }
-                        .listRowBackground(Theme.card)
-                    }
-                    ForEach(Self.group(spaces), id: \.key) { group in
-                        ForEach(group.spaces) { space in
-                            NavigationLink(value: SpaceRoute(server: server, space: space)) {
-                                SpaceRow(space: space, status: urgentStatus(of: space, in: refs), nested: space.id != group.key)
-                            }
-                            .swipeActions {
-                                Button(role: .destructive) {
-                                    closingServer = server
-                                    closing = space
-                                } label: {
-                                    Label("Schließen", icon: .x)
-                                }
-                            }
-                        }
-                    }
-                    .listRowBackground(Theme.card)
-                    if spaces.isEmpty { Text("Lade …").foregroundStyle(Theme.muted).listRowBackground(Theme.card) }
-                } header: {
-                    SectionHeader(title: server.label, dot: serverColor(server))
-                }
+                SpacesSection(server: server, dot: serverColor(server), hiddenOpen: $hiddenOpen,
+                              onOpen: { opened = SpaceRoute(server: server, space: $0) },
+                              onClose: { closingServer = server; closing = $0 },
+                              onHide: { setHidden(server, $0, $1) })
             }
         }
         .themedList()
@@ -72,6 +47,10 @@ struct SpacesView: View {
         .sheet(isPresented: $newSpace) { NewSpaceView() }
         .modifier(CloseSpaceModifier(server: closingServer ?? store.servers.first ?? Server.placeholder, space: $closing))
         .navigationDestination(for: SpaceRoute.self) { SpaceDetailView(server: $0.server, space: $0.space) }
+        .navigationDestination(item: $opened) { SpaceDetailView(server: $0.server, space: $0.space) }
+        .alert("Fehler", isPresented: Binding(get: { hideError != nil }, set: { if !$0 { hideError = nil } })) {
+            Button("OK") { hideError = nil }
+        } message: { Text(hideError ?? "") }
         .refreshable { await herdr.refreshSpaces(store.servers) }
         .task {
             while !Task.isCancelled {
@@ -80,6 +59,17 @@ struct SpacesView: View {
                 // spaces' repos); this is the safety net for a server without a live feed or a change it missed
                 let allLive = store.servers.allSatisfy { herdr.live.contains($0.id) }
                 try? await Task.sleep(for: .seconds(allLive ? 30 : 10))
+            }
+        }
+    }
+
+    /// „Verstecken“ / „Zurückholen“ – the list changes right away and goes back on an error, which shows
+    private func setHidden(_ server: Server, _ space: Space, _ hidden: Bool) {
+        Task {
+            do {
+                try await herdr.setHidden(server, ws: space.id, hidden: hidden)
+            } catch {
+                hideError = error.localizedDescription
             }
         }
     }
@@ -100,6 +90,131 @@ struct SpacesView: View {
         let placed = Set(groups.flatMap { $0.spaces.map(\.id) })
         for orphan in spaces where !placed.contains(orphan.id) { groups.append((orphan.id, [orphan])) }
         return groups
+    }
+}
+
+/// One server's spaces: the main list (not hidden, or hidden but waiting for you), then „Versteckt“ with the hidden
+/// ones below while unfolded. Unfolding doesn't bring them back; opening one keeps it hidden.
+private struct SpacesSection: View {
+    let server: Server
+    let dot: Color
+    @Binding var hiddenOpen: Bool
+    let onOpen: (Space) -> Void
+    let onClose: (Space) -> Void
+    /// (space, hidden)
+    let onHide: (Space, Bool) -> Void
+    @Environment(HerdrStore.self) private var herdr
+
+    private var spaces: [Space] { herdr.spaces[server.id] ?? [] }
+    private var refs: [AgentRef] { herdr.agents(on: server) }
+
+    var body: some View {
+        Section {
+            if herdr.spaces[server.id] == nil { skeleton }
+            main
+            if spaces.isEmpty { Text("Lade …").foregroundStyle(Theme.muted).listRowBackground(Theme.card) }
+            hiddenPart
+        } header: {
+            SectionHeader(title: server.label, dot: dot)
+        }
+    }
+
+    private var skeleton: some View {
+        ForEach(0..<5, id: \.self) { i in
+            HStack(spacing: 10) {
+                SkeletonBar(width: CGFloat([170, 220, 140, 200, 160][i]), height: 14)
+                Spacer()
+                SkeletonBar(width: 36, height: 10)
+            }
+            .padding(.vertical, Gap.xs)
+            .shimmer()
+        }
+        .listRowBackground(Theme.card)
+    }
+
+    private var main: some View {
+        let refs = refs
+        let shown: [Space] = HiddenSpaces.shown(spaces) { urgentStatus(of: $0, in: refs) }
+        return ForEach(SpacesView.group(shown), id: \.key) { group in
+            ForEach(group.spaces) { space in
+                visibleRow(space, status: urgentStatus(of: space, in: refs), nested: space.id != group.key)
+            }
+        }
+        .listRowBackground(Theme.card)
+    }
+
+    private func visibleRow(_ space: Space, status: String, nested: Bool) -> some View {
+        NavigationLink(value: SpaceRoute(server: server, space: space)) {
+            SpaceRow(space: space, status: status, nested: nested)
+        }
+        .swipeActions {
+            Button(role: .destructive) { onClose(space) } label: { Label("Schließen", icon: .x) }
+            if !space.isHidden {
+                Button { onHide(space, true) } label: { Label("Verstecken", icon: .eyeSlash) }
+                    .tint(Theme.dim)
+            }
+        }
+        .contextMenu {
+            if !space.isHidden {
+                Button { onHide(space, true) } label: { Label("Verstecken", icon: .eyeSlash) }
+            } else {
+                Button { onHide(space, false) } label: { Label("Zurückholen", icon: .arrowUp) }
+            }
+            Button(role: .destructive) { onClose(space) } label: { Label("Schließen", icon: .x) }
+        }
+    }
+
+    @ViewBuilder private var hiddenPart: some View {
+        let hidden = HiddenSpaces.hidden(spaces)
+        if !hidden.isEmpty {
+            HiddenToggle(count: hidden.count, open: $hiddenOpen)
+                .listRowBackground(Theme.card)
+            if hiddenOpen {
+                let refs = refs
+                ForEach(hidden) { space in hiddenRow(space, status: urgentStatus(of: space, in: refs)) }
+                    .listRowBackground(Theme.card)
+            }
+        }
+    }
+
+    private func hiddenRow(_ space: Space, status: String) -> some View {
+        NavigationLink(value: SpaceRoute(server: server, space: space)) {
+            SpaceRow(space: space, status: status, nested: false).opacity(0.6)
+        }
+        .swipeActions {
+            Button(role: .destructive) { onClose(space) } label: { Label("Beenden", icon: .stop) }
+            Button { onHide(space, false) } label: { Label("Zurückholen", icon: .arrowUp) }
+                .tint(Theme.accent)
+        }
+        .contextMenu {
+            Button { onOpen(space) } label: { Label("Öffnen", icon: .chevronRight) }
+            Button { onHide(space, false) } label: { Label("Zurückholen", icon: .arrowUp) }
+            Button(role: .destructive) { onClose(space) } label: { Label("Space beenden", icon: .stop) }
+        }
+    }
+}
+
+/// „Versteckt“ at the end of a server's spaces: quiet, with the count; folds the hidden spaces in and out.
+private struct HiddenToggle: View {
+    let count: Int
+    @Binding var open: Bool
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: Gap.s) {
+                IconView(open ? .chevronDown : .chevronRight, size: 12)
+                Text("Versteckt")
+                Text(verbatim: "\(count)").font(Typo.monoXS)
+                Spacer(minLength: Gap.s)
+                Text("läuft weiter").font(Typo.sm)
+            }
+            .font(Typo.note)
+            .foregroundStyle(Theme.dim)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "Versteckt: \(count)"))
+        .accessibilityHint(open ? String(localized: "Zuklappen – sie bleiben versteckt") : String(localized: "Zeigen – sie bleiben versteckt"))
     }
 }
 

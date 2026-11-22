@@ -2,7 +2,6 @@
 import { gate } from "$lib/api";
 import type { Space } from "$lib/git";
 import { t } from "$lib/i18n";
-import { hiddenSpaces } from "$lib/hiddenSpaces.svelte";
 import { confirmAsk } from "$lib/ask.svelte";
 
 /** the fields the server sends beyond `Space` in git.ts */
@@ -13,6 +12,8 @@ export type FullSpace = Space & {
   paneCount?: number;
   /** its folder is gone (a worktree removed outside herdr) – it can only be closed */
   missing?: boolean;
+  /** hidden from the lists – kept on the server, the phone shows the same (hiddenSpaces.svelte.ts) */
+  hidden?: boolean;
   git?: Space["git"] & { lastCommit?: { hash: string; subject: string; at: number } };
 };
 
@@ -99,7 +100,6 @@ export async function ejectSpace(server: string, ws: string, label: string): Pro
     if (!ok) return false;
   }
   await space(server, { op: "close", ws, ...(info.group?.length ? { group: true } : {}) });
-  hiddenSpaces.unhide(server, ws);
   return true;
 }
 

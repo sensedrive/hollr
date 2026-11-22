@@ -6,7 +6,7 @@ enum HIcon: String, CaseIterable {
     case plus, x, check, grid, search, sliders, branch, globe, info, maximize, more, terminal, paperclip, mic
     case arrowUp, refresh, pencil, file, chevronRight, chevronDown, chevronLeft, alert, message, reply, activity
     case server, cpu, folder, help, wifiOff, corner, list, sun, lock, copy, external, volume, pause, trash, stop
-    case sparkle, bell, key, image
+    case sparkle, bell, key, image, eyeSlash
 
     var symbol: String {
         switch self {
@@ -54,6 +54,7 @@ enum HIcon: String, CaseIterable {
         case .bell: return "bell"
         case .key: return "key"
         case .image: return "photo"
+        case .eyeSlash: return "eye.slash"
         }
     }
 }

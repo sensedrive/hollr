@@ -36,6 +36,35 @@ final class HerdrStore {
         }
     }
 
+    /// „Verstecken“ / „Zurückholen“: the list changes right away, the server's answer and a reload confirm it; on an
+    /// error the list goes back and the error is thrown for the view to show. Other devices learn it from the feed.
+    func setHidden(_ server: Server, ws: String, hidden: Bool) async throws {
+        let before = Set(HiddenSpaces.hidden(spaces[server.id] ?? []).map(\.id))
+        var next = before
+        if hidden { next.insert(ws) } else { next.remove(ws) }
+        markHidden(server.id, next)
+        // a reload that started before the change must not bring the old state back
+        spacesSeq[server.id, default: 0] += 1
+        do {
+            markHidden(server.id, Set(try await HollrClient.setHidden(server, ws: ws, hidden: hidden)))
+        } catch {
+            markHidden(server.id, before)
+            throw error
+        }
+        await refreshSpaces([server])
+    }
+
+    private func markHidden(_ id: UUID, _ ids: Set<String>) {
+        guard let list = spaces[id] else { return }
+        spaces[id] = HiddenSpaces.marking(list, hidden: ids)
+    }
+
+    /// the session's space is hidden and it doesn't wait for you: off the overview, the inbox and the switcher
+    func hides(_ ref: AgentRef) -> Bool { HiddenSpaces.hides(ref, in: spaces[ref.server.id]) }
+
+    /// hidden workspace ids per server (a view's trigger to filter again)
+    var hiddenIds: [UUID: Set<String>] { spaces.mapValues { Set(HiddenSpaces.hidden($0).map(\.id)) } }
+
     /// Session activity (status, title, folder) may come with a commit or checkout the server's git watch
     /// already reported (`spaces: true`) – or, on servers before that watch, didn't: reload the spaces, at
     /// most every 5 s.

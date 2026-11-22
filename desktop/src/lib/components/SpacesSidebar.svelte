@@ -4,9 +4,10 @@
   // below (├─ / └─, foldable), plain workspaces standalone; spaces and worktrees reorder by dragging (kept per
   // computer). One status dot per space from its sessions.
   // A click jumps straight into the session that needs you most; ✕ closes the space in herdr (tabs and agents end).
-  // „Verstecken“ takes it off the list only; restore with the link below. 〰 shows where a live call runs. A space whose
+  // „Verstecken“ (− , drag onto „Versteckt“) takes it off the list on every device – the server keeps it; „Versteckt“
+  // at the bottom shows them without bringing them back. 〰 shows where a live call runs. A space whose
   // folder is gone (a worktree removed outside herdr) says so and offers closing.
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import Icon from "./git/Icon.svelte";
   import { allPanes, app, dialogs, findPane, go, lastTabRoute, nav, pollSpaces, refresh, refreshSpaces } from "$lib/store.svelte";
@@ -122,8 +123,8 @@
   const sections = $derived(
     app.servers.filter((s) => s.id === currentServer()).map((s) => {
       const spaces = (app.spaces[s.id] ?? []) as FullSpace[];
-      // hidden ones (also off the dashboard) stay away until they need you
-      const visible = spaces.filter((sp) => !hiddenSpaces.has(s.id, sp.id) || statusOf(s.id, sp) === "blocked");
+      // hidden ones (also off the dashboard) live in the „Versteckt“ list below until they need you
+      const visible = spaces.filter((sp) => !sp.hidden || statusOf(s.id, sp) === "blocked");
       return { server: s, loaded: app.spaces[s.id] !== undefined, groups: sortGroups(s.id, groupSpaces(visible)) };
     }),
   );
@@ -203,7 +204,7 @@
         { sep: true, label: t("Umbenennen …"), icon: "✎", action: () => { ren = { x: e.clientX, y: e.clientY, server, ws: sp.id }; name = sp.label; renErr = ""; } },
         ...(trees.length && !sp.isWorktree ? [{ label: folded.has(fkey) ? t("Worktrees zeigen") : t("Worktrees einklappen"), icon: folded.has(fkey) ? "▸" : "▾", action: () => (folded = toggle(folded, FOLDED, fkey, !folded.has(fkey))) }] : []),
         ...(panesOf(server, sp.id).length ? [{ label: t("Als ungelesen markieren"), icon: "●", action: () => markUnread(panesOf(server, sp.id).map((r) => r.id)) }] : []),
-        { label: t("Space ausblenden"), hint: t("läuft weiter, unten wieder einblenden"), icon: "◌", action: () => hideSpace(server, sp.id) },
+        { label: t("Space verstecken"), hint: t("läuft weiter, unten unter „Versteckt“"), icon: "◌", action: () => void hideSpace(server, sp.id) },
         // end (red)
         ...(sp.missing ? [] : [{
           sep: true, danger: true, icon: "⏹",
@@ -290,10 +291,21 @@
     adding = false;
   }
 
-  /** hidden from the sidebar – herdr keeps running; restore with „alle zeigen“ */
-  function hideSpace(server: string, id: string) {
-    hiddenSpaces.hide(server, id);
+  /** off the main list (on every device: kept on the server) – herdr keeps running; back from „Versteckt“ */
+  async function hideSpace(server: string, id: string) {
     leaveIfShowing(server, id);
+    try {
+      await hiddenSpaces.hide(server, id);
+    } catch (e) {
+      void alertAsk(t("Fehler"), e instanceof Error ? e.message : String(e));
+    }
+  }
+  async function unhideSpace(server: string, id: string) {
+    try {
+      await hiddenSpaces.unhide(server, id);
+    } catch (e) {
+      void alertAsk(t("Fehler"), e instanceof Error ? e.message : String(e));
+    }
   }
 
   function leaveIfShowing(server: string, id: string) {
@@ -313,12 +325,36 @@
     }
   }
 
-  const hiddenCount = $derived(
-    ((app.spaces[currentServer()] ?? []) as FullSpace[]).filter((sp) => hiddenSpaces.has(currentServer(), sp.id)).length,
-  );
+  const hiddenList = $derived(hiddenSpaces.list(currentServer()));
+  /** „Versteckt“ open shows the hidden spaces – they stay hidden (this device only, like folding) */
+  const HIDDEN_OPEN = "hollr.sidebar.hiddenOpen";
+  let hiddenOpen = $state(localStorage.getItem(HIDDEN_OPEN) === "1");
+  function toggleHidden() {
+    hiddenOpen = !hiddenOpen;
+    try {
+      localStorage.setItem(HIDDEN_OPEN, hiddenOpen ? "1" : "0");
+    } catch {}
+  }
+  function hiddenMenu(e: MouseEvent, server: string, sp: FullSpace) {
+    e.preventDefault();
+    menu = {
+      x: e.clientX, y: e.clientY,
+      items: [
+        { label: t("Space öffnen"), icon: "❒", action: () => open(server, sp) },
+        { label: t("Zurückholen"), hint: t("wieder in der Liste oben"), icon: "↩", action: () => void unhideSpace(server, sp.id) },
+        { sep: true, danger: true, icon: "⏹", label: t("Space beenden"), hint: t("Tabs und Agenten enden, Dateien und Branch bleiben"), action: () => void ejectFromList(server, sp) },
+      ],
+    };
+  }
+
+  // what this app hid on its own before hiding moved to the server: handed over once per server
+  $effect(() => {
+    const loaded = app.servers.filter((s) => app.spaces[s.id] !== undefined).map((s) => s.id);
+    untrack(() => loaded.forEach((id) => void hiddenSpaces.migrate(id)));
+  });
 </script>
 
-<div class="tree">
+<div class="tree" data-drop="spaces">
   {#each sections as sec (sec.server.id)}
     {#if app.errors[sec.server.id]}
       <!-- the server's switcher above shows which one; here only what is wrong with it -->
@@ -330,13 +366,13 @@
     {#if !sec.loaded}
       {#each [110, 80, 130] as w}<div class="skeleton" style="height:12px; width:{w}px; margin:10px 0 10px 29px"></div>{/each}
     {/if}
-    <div class="spaces" class:stale={!!app.errors[sec.server.id]} use:sortable={{ axis: "y", attr: "sort-group", onMove: (id, before) => reorderGroups(sec.server.id, id, before) }}>
+    <div class="spaces" class:stale={!!app.errors[sec.server.id]} use:sortable={{ axis: "y", attr: "sort-group", onMove: (id, before) => reorderGroups(sec.server.id, id, before), dropOn: "[data-drop=hidden]", onDropOn: (id) => void hideSpace(sec.server.id, id) }}>
     {#each sec.groups as g (g.key)}
       {@const repo = g.spaces[0]!}
       {@const fkey = `${sec.server.id}|${repo.id}`}
       {@const trees = sortTrees(fkey, g.spaces.slice(1))}
       {@const open_ = !folded.has(fkey)}
-      <div class="grp" data-sort-group={repo.id} use:sortable={{ axis: "y", onMove: reorder }}>
+      <div class="grp" data-sort-group={repo.id} use:sortable={{ axis: "y", onMove: reorder, dropOn: "[data-drop=hidden]", onDropOn: (id) => void hideSpace(sec.server.id, id) }}>
       {#each open_ ? [repo, ...trees] : [repo] as sp, i (sp.id)}
         {@const st = statusOf(sec.server.id, sp)}
         {@const nested = i > 0}
@@ -358,23 +394,50 @@
               aria-expanded={open_} onclick={() => (folded = toggle(folded, FOLDED, fkey, open_))}>
               <Icon name={open_ ? "chevronD" : "chevronR"} size={13} />{#if !open_}<span>{trees.length}</span>{/if}</button>
           {/if}
-          <button class="hide" data-sort-ignore title={t("Ausblenden – läuft weiter")} aria-label={t("Ausblenden")}
-            onclick={() => hideSpace(sec.server.id, sp.id)}><Icon name="minus" size={12} /></button>
+          <button class="hide" data-sort-ignore title={t("Verstecken – läuft weiter")} aria-label={t("Verstecken")}
+            onclick={() => void hideSpace(sec.server.id, sp.id)}><Icon name="minus" size={12} /></button>
         </div>
       {/each}
       </div>
     {/each}
     </div>
   {/each}
-  {#if hiddenCount}
-    <button class="restore" onclick={() => hiddenSpaces.showAll(currentServer())}>
-      {t("{n} ausgeblendet – alle zeigen", { n: hiddenCount })}
-    </button>
-  {/if}
   <button class="addspace" disabled={!currentServer() || adding} onclick={() => void newMain()}>
     <Icon name="plus" size={14} /> {t("Neuer Space")}
   </button>
   {#if addErr}<div class="adderr">{addErr}</div>{/if}
+</div>
+
+<!-- pinned to the sidebar's bottom edge; a space dragged onto it is hidden, one dragged up from it comes back -->
+<div class="hidden-box" data-drop="hidden" class:empty={!hiddenList.length}>
+  <button class="hidden-head" onclick={toggleHidden} aria-expanded={hiddenOpen}
+    title={hiddenOpen ? t("Versteckte Spaces zuklappen – sie bleiben versteckt") : t("Versteckte Spaces zeigen – sie bleiben versteckt")}>
+    <Icon name={hiddenOpen ? "chevronD" : "chevronR"} size={12} />
+    <span>{t("Versteckt")}</span>
+    {#if hiddenList.length}<span class="hcount">{hiddenList.length}</span>{/if}
+  </button>
+  {#if hiddenOpen}
+    {#if hiddenList.length}
+      <div class="hidden-list" use:sortable={{ axis: "y", attr: "hidden-id", dropOn: "[data-drop=spaces]", onDropOn: (id) => void unhideSpace(currentServer(), id) }}>
+        {#each hiddenList as sp (sp.id)}
+          {@const st = statusOf(currentServer(), sp)}
+          <div class="srow hrow" class:sel={currentWs === `${currentServer()}|${sp.id}`} data-hidden-id={sp.id}>
+            <button class="item" onclick={() => open(currentServer(), sp)} oncontextmenu={(e) => hiddenMenu(e, currentServer(), sp)}
+              title={[sp.label, sp.git?.branch, statusLabel(st), sp.root].filter(Boolean).join(" · ")}>
+              <span class="dotbox">{#if st === "working" || st === "blocked" || st === "done"}<span class="dot {st}"></span>{/if}</span>
+              <span class="name ellipsis">{sp.label}</span>
+            </button>
+            <button class="hact back" data-sort-ignore title={t("Zurückholen – wieder in der Liste oben")} aria-label={t("Zurückholen")}
+              onclick={() => void unhideSpace(currentServer(), sp.id)}><Icon name="up" size={12} /></button>
+            <button class="hact end" data-sort-ignore title={t("Space beenden – Tabs und Agenten enden")} aria-label={t("Space beenden")}
+              onclick={() => void ejectFromList(currentServer(), sp)}><Icon name="x" size={12} /></button>
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="hidden-none">{t("Nichts versteckt. Einen Space hierher ziehen versteckt ihn.")}</div>
+    {/if}
+  {/if}
 </div>
 
 {#if menu}
@@ -461,8 +524,31 @@
   .hide:hover, .fold:hover { background: var(--border); color: var(--fg); }
   .hide:focus-visible, .fold:focus-visible { outline: 2px solid var(--accent); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .restore { all: unset; cursor: pointer; display: block; margin: 10px 10px 0; font-size: 12px; color: var(--dim); }
-  .restore:hover, .restore:focus-visible { color: var(--fg); }
+  /* data-drop-over: set by sortable while a space hangs over the other list */
+  .tree:global([data-drop-over]) { outline: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; border-radius: 8px; }
+  /* the sidebar's list scrolls; this stays at its bottom edge (Shell's .list is a column) */
+  .hidden-box { margin: auto -8px -4px; position: sticky; bottom: -4px; z-index: 2; padding: 4px 8px 6px; background: var(--side);
+    border-top: 1px solid var(--border); font-size: 13px; }
+  .hidden-box:global([data-drop-over]) { background: color-mix(in srgb, var(--accent) 12%, var(--side)); }
+  .hidden-head { all: unset; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px;
+    font-size: 12px; color: var(--dim); }
+  .hidden-box.empty .hidden-head { opacity: .7; }
+  .hidden-head:hover, .hidden-head:focus-visible { color: var(--fg); }
+  .hidden-head:focus-visible { outline: 2px solid var(--accent); }
+  .hcount { font: 11px var(--mono); padding: 0 5px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  .hidden-list { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; max-height: 40vh; overflow-y: auto; }
+  .hrow { cursor: grab; }
+  .hrow .item { padding-right: 52px; }
+  .hrow .name { color: var(--muted); }
+  .hact { all: unset; cursor: pointer; position: absolute; top: 50%; translate: 0 -50%; width: 22px; height: 22px; display: grid;
+    place-items: center; border-radius: 5px; color: var(--dim); opacity: 0; }
+  .hact.back { right: 26px; }
+  .hact.end { right: 4px; }
+  .hrow:hover .hact, .hrow:focus-within .hact { opacity: 1; }
+  .hact:hover { background: var(--border); color: var(--fg); }
+  .hact.end:hover { color: var(--red, var(--orange)); }
+  .hact:focus-visible { outline: 2px solid var(--accent); opacity: 1; }
+  .hidden-none { padding: 4px 10px 6px; font-size: 12px; color: var(--dim); }
   .addspace { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; margin: 8px 10px 0;
     padding: 6px 8px; border-radius: 8px; font-size: 13px; color: var(--muted); }
   .addspace:hover, .addspace:focus-visible { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg); }

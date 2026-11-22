@@ -146,7 +146,7 @@
         { label: t("Git & Dateien"), icon: "⑂", action: () => open(r, "git") },
         ...row.ports.map((p) => ({ label: t("Im Browser öffnen") + ` :${p.port}`, icon: "◍", action: () => open(r, "browser", `http://localhost:${p.port}`) })),
         ...(mineSet.has(r.id) ? [{ label: t("Aus der Übersicht nehmen"), icon: "◌", action: () => mySessions.remove(r.id) }] : []),
-        { sep: true, label: t("Space ausblenden"), icon: "◌", action: () => { hiddenSpaces.hide(r.server.id, r.workspace.id); const route = nav.route; if (route.view === "agent" && route.server === r.server.id && route.pane === r.pane.pane) go({ view: "dashboard" }); } },
+        { sep: true, label: t("Space verstecken"), icon: "◌", action: () => { const route = nav.route; if (route.view === "agent" && route.server === r.server.id && route.pane === r.pane.pane) go({ view: "dashboard" }); hiddenSpaces.hide(r.server.id, r.workspace.id).catch((e) => void alertAsk(t("Fehler"), e instanceof Error ? e.message : String(e))); } },
         { label: t("Space beenden"), hint: t("Tabs und Agenten enden, Dateien und Branch bleiben"), icon: "⏹", danger: true, action: () => void ejectWorkspace(r) },
         { label: t("Sitzung beenden"), icon: "✕", danger: true, action: () => (ending = r) },
       ],

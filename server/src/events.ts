@@ -4,12 +4,14 @@
  *   {"t":"ready"} once, {"t":"changed","spaces":true|false} (coalesced, ≤ 4/s), {"t":"ping"} every 20 s.
  * Pane output alone (revision bumps) is not a change – only structure, cwd, title and agent status.
  * Git state herdr doesn't see (a pull, fetch, commit or checkout in any shell) comes from a watch on the
- * spaces' repos (gitwatch.ts) as {"t":"changed","spaces":true}.
+ * spaces' repos (gitwatch.ts) as {"t":"changed","spaces":true}, and so does hiding a space on another device.
  * Ends when herdr goes away or the SSH channel closes; the apps reconnect.
  */
+import { type FSWatcher, mkdirSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { GitWatch } from "./gitwatch";
+import { HIDDEN_FILE, stateDir } from "./hiddenspaces";
 import { spaceRoots } from "./spaces";
 import { wireJson } from "./wire";
 
@@ -82,6 +84,14 @@ export async function runEvents(): Promise<number> {
   const git = new GitWatch(() => {
     pending = "spaces";
   });
+  // a space hidden or shown on another device (hiddenspaces.ts writes a temp file, then renames it)
+  let hiddenWatch: FSWatcher | undefined;
+  try {
+    mkdirSync(stateDir(), { recursive: true });
+    hiddenWatch = watch(stateDir(), (_event, name) => {
+      if (name?.startsWith(HIDDEN_FILE)) pending = "spaces";
+    });
+  } catch {}
   /** which folders to watch follows the spaces: soon after a workspace/worktree change, at most every 10 s
    *  after session activity (a pane's folder may have changed) */
   let rootsTimer: ReturnType<typeof setTimeout> | undefined;
@@ -164,6 +174,7 @@ export async function runEvents(): Promise<number> {
   clearInterval(ping);
   clearTimeout(rootsTimer);
   git.close();
+  hiddenWatch?.close();
   sock.end();
   return code;
 }

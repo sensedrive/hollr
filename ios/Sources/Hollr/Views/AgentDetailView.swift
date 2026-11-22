@@ -578,7 +578,8 @@ private struct AgentSwitcher: View {
     @Environment(SessionStore.self) private var sessions
 
     var body: some View {
-        let others = herdr.allAgents(store.servers)
+        // sessions of hidden spaces stay out (unless they wait for you); the open one always shows
+        let others = herdr.allAgents(store.servers).filter { $0.id == current.id || !herdr.hides($0) }
         if others.count > 1 {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {

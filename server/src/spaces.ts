@@ -46,6 +46,8 @@ export interface Space {
   repoKey?: string;
   /** its folder is gone (e.g. a worktree removed outside herdr) – the space can only be closed */
   missing?: boolean;
+  /** hidden from the apps' lists (hiddenspaces.ts) – set by the `spaces` gate command */
+  hidden?: boolean;
 }
 
 export interface GitSummary {
@@ -498,7 +500,17 @@ export async function usageLimits(
 // ---------------------------------------------------------------- create / close spaces
 
 export interface SpaceRequest {
-  op: "create" | "worktree" | "close" | "info" | "rename" | "worktrees" | "open";
+  /** hide / unhide: only the apps' lists (hiddenspaces.ts), herdr keeps the space running */
+  op:
+    | "create"
+    | "worktree"
+    | "close"
+    | "info"
+    | "rename"
+    | "worktrees"
+    | "open"
+    | "hide"
+    | "unhide";
   /** create: folder on the server (absolute or ~/…); open: checkout path from `worktrees` */
   cwd?: string;
   label?: string;
