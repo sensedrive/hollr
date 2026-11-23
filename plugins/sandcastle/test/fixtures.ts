@@ -1,6 +1,6 @@
 /** Test data shared by the cache and HTTP tests. */
 import type { RepoSnapshot } from "../src/github";
-import type { Issue, Project, Pull, ReleasePull } from "../src/types";
+import type { Issue, Project, Pull, Release } from "../src/types";
 
 export const NOW = Date.parse("2026-11-23T12:00:00Z");
 
@@ -43,7 +43,7 @@ export function pull(n: number, over: Partial<Pull> = {}): Pull {
   };
 }
 
-export function snapshot(issues: Issue[], pulls: Pull[] = [], releases: ReleasePull[] = []): RepoSnapshot {
+export function snapshot(issues: Issue[], pulls: Pull[] = [], releases: Release[] = []): RepoSnapshot {
   return {
     repoId: "R_1",
     viewer: "martin",

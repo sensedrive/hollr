@@ -8,8 +8,6 @@ export interface Project {
   root: string;
   gitCommonDir: string;
   defaultBranch: string;
-  /** branch release PRs merge into (`github.releaseBranch`); null/missing (older servers) = detect by head/title */
-  releaseBranch?: string | null;
   engine: string;
   /** workflow labels (GitHub owns them); ready/ciFailed/nogo are null when not configured */
   labels: {
@@ -98,25 +96,30 @@ export interface Pull {
 }
 
 /** A pull request in the API answers (JIRA ticket `prs`, Werkbank `pulls`). */
-export type PullOut = Pick<Pull, "n" | "title" | "url" | "state" | "checks" | "review" | "branch" | "base" | "mergedAt">;
+export type PullOut = Pick<Pull, "n" | "title" | "url" | "state" | "checks" | "review" | "branch" | "base" | "mergedAt"> & {
+  /** documentation only (src/pulls.ts isDocsPull): never counts as the ticket's code */
+  docs: boolean;
+};
 
-/** A merged PR that may be a release (src/pulls.ts toRelease): the JIRA keys of its whole title and body. */
-export interface ReleasePull {
-  n: number;
-  title: string;
-  url: string;
-  base: string;
-  branch: string;
-  mergedAt: string;
+/** A version tag and the JIRA keys of the code commits it shipped (src/releases.ts, cached by tag). */
+export interface Release {
+  /** vX.Y.Z as tagged */
+  tag: string;
+  /** the commit the tag points at */
+  oid: string;
+  /** the commit of the previous version tag (the range starts there); null for the first one */
+  base: string | null;
+  /** when the tag was set (tagger date, else commit date) */
+  at: string;
+  /** keys named by non-merge, non-docs commits in base..oid */
   keys: string[];
 }
 
-/** The release a ticket first shipped in (src/pulls.ts releasesByKey). */
+/** The release a ticket's code first shipped in, and the later ones that added to it (src/releases.ts releasesByKey). */
 export interface Released {
-  /** vX.Y.Z from title or head, null when neither names one */
-  version: string | null;
+  version: string;
   at: string;
-  pr: number;
+  later: { version: string; at: string }[];
 }
 
 export interface BoardData {

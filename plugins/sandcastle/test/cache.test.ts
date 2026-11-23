@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type BoardAnswer, BoardCache, type Fetchers, FULL_MS, STALE_MS } from "../src/cache";
 import type { RepoSnapshot } from "../src/github";
-import type { BoardData, Issue, Pull } from "../src/types";
+import type { BoardData, Issue, Pull, Release } from "../src/types";
 import { issue, NOW, project, pull, snapshot } from "./fixtures";
 
 let dir: string;
@@ -14,11 +14,14 @@ let full: RepoSnapshot;
 let changed: Issue[];
 let changedPulls: Pull[];
 let offline: boolean;
+/** the releases each full fetch was handed (tags), to see ranges carried over */
+let knownSeen: string[][];
 
 const fetchers: Fetchers = {
-  async fetchBoard(slug) {
+  async fetchBoard(slug, _now, known) {
     if (offline) throw new Error("gh: offline");
     calls.push(`full ${slug}`);
+    knownSeen.push(known.map((r) => r.tag));
     return structuredClone(full);
   },
   async fetchChanged(slug, since) {
@@ -46,6 +49,7 @@ beforeEach(() => {
   changed = [];
   changedPulls = [];
   offline = false;
+  knownSeen = [];
   full = snapshot([
     issue(1, { labels: ["Sandcastle"] }),
     issue(2, { labels: ["story"], title: "Story zwei" }),
@@ -197,6 +201,27 @@ describe("BoardCache", () => {
     expect(data(await b.board(project())).pulls).toEqual([]);
     await b.sync("o/r");
     expect(calls).toEqual(["full o/r"]);
+  });
+
+  test("a disk copy with release PRs (before version tags) starts without releases; full fetches carry the ranges on", async () => {
+    const v1: Release = { tag: "v1.0.0", oid: "c1", base: null, at: "2026-11-01T10:00:00.000Z", keys: ["R-1"] };
+    full = { ...full, releases: [v1] };
+    const a = make();
+    await a.board(project());
+    await a.saved();
+    const file = join(dir, "boards", "o__r.json");
+    const stored = JSON.parse(await Bun.file(file).text());
+    stored.snap.releases = [{ n: 3300, title: "🔖 chore(release): v2.0.0", url: "", base: "release", branch: "release-prep/v2.0.0", mergedAt: "2026-11-13T10:00:00Z", keys: ["R-1"] }];
+    await Bun.write(file, JSON.stringify(stored));
+    calls = [];
+    knownSeen = [];
+    const b = make();
+    await b.board(project());
+    await b.sync("o/r");
+    await b.board(project(), null, true);
+    // the old copy is dropped and fetched in full; the next full fetch gets the tag ranges just fetched
+    expect(calls).toEqual(["full o/r", "full o/r"]);
+    expect(knownSeen).toEqual([[], ["v1.0.0"]]);
   });
 
   test("a failed refresh keeps the data and says why", async () => {

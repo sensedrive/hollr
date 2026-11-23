@@ -6,8 +6,9 @@
  */
 import { blockedByOf, jiraKeyOf, parentOf } from "./body";
 import { firstLine, HttpError, run } from "./env";
-import { type PullNode, toPull, toRelease } from "./pulls";
-import type { Assignee, Issue, LabelInfo, Pull, ReleasePull } from "./types";
+import { type PullNode, toPull } from "./pulls";
+import { codeKeys, compareVersions, isVersionTag, type RangeCommit } from "./releases";
+import type { Assignee, Issue, LabelInfo, Pull, Release } from "./types";
 
 /** Days the "Erledigt" column covers before „Ältere laden“. */
 export const CLOSED_DAYS = 14;
@@ -21,8 +22,10 @@ export interface RepoSnapshot {
   issues: Issue[];
   /** open pull requests and those merged or closed in the last PULL_DAYS days */
   pulls: Pull[];
-  /** every merged PR titled like a release, however old (few) – src/pulls.ts isReleasePull picks the releases */
-  releases: ReleasePull[];
+  /** every version tag with the JIRA keys of its code commits, oldest version first (src/releases.ts) */
+  releases: Release[];
+  /** the last release fetch failed: `releases` are those of the fetch before (null: they are current) */
+  releasesError?: string | null;
   labels: (LabelInfo & { id: string })[];
   assignees: Assignee[];
   closedOlder: number;
@@ -175,10 +178,10 @@ async function closedOnDays(slug: string, fromMs: number, toMs: number): Promise
 /**
  * Full fetch of a board. Open issues come in two page chains at once, oldest-first and newest-first, that stop
  * where they meet; the oldest-first chain's first page also brings labels, users, viewer and the count of
- * closed issues before the window. Closed issues come per day in parallel (closedOnDays), pull requests beside
- * them (fetchPulls).
+ * closed issues before the window. Closed issues come per day in parallel (closedOnDays), pull requests and
+ * releases beside them (fetchPulls, fetchReleases). `known`: the releases of the last fetch – their ranges are kept.
  */
-export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSnapshot> {
+export async function fetchBoard(slug: string, now = Date.now(), known: Release[] = []): Promise<RepoSnapshot> {
   const { owner, name } = splitSlug(slug);
   const fromMs = now - CLOSED_DAYS * DAY;
   const open = new Map<number, Issue>();
@@ -210,10 +213,14 @@ export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSn
     }
   }
 
-  const [closed, pulls, releases] = await Promise.all([
+  const [closed, pulls, rel] = await Promise.all([
     closedOnDays(slug, fromMs, now),
     fetchPulls(owner, name, slug, now),
-    fetchReleases(slug),
+    // releases failing must not take the board down: keep the last ones and say why
+    fetchReleases(owner, name, slug, known).then(
+      (releases) => ({ releases, releasesError: null }),
+      (err: unknown) => ({ releases: known, releasesError: err instanceof Error ? err.message : String(err) }),
+    ),
     chain("ASC"),
     chain("DESC"),
   ]);
@@ -226,7 +233,7 @@ export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSn
     viewer: meta?.viewer?.login ?? "",
     issues: [...issues.values()],
     pulls,
-    releases,
+    ...rel,
     labels: repo?.labels?.nodes ?? [],
     assignees: repo?.assignableUsers?.nodes ?? [],
     closedOlder: meta?.older?.issueCount ?? 0,
@@ -302,10 +309,128 @@ async function searchPullNodes(q: string): Promise<PullNode[]> {
   return out;
 }
 
-/** All merged PRs with „release“ in the title, of any age (a repo has few); bodies whole for their changelogs. */
-async function fetchReleases(slug: string): Promise<ReleasePull[]> {
-  const nodes = await searchPullNodes(`repo:${slug} is:pr is:merged release in:title`);
-  return nodes.map(toRelease).filter((r): r is ReleasePull => !!r);
+const TAGS_QUERY = `query Tags($owner: String!, $name: String!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    refs(refPrefix: "refs/tags/", first: 100, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        name
+        target {
+          oid
+          ... on Commit { committedDate }
+          ... on Tag { tagger { date } target { oid ... on Commit { committedDate } } }
+        }
+      }
+    }
+  }
+}`;
+
+/** A tag ref as TAGS_QUERY selects it: lightweight (target is the commit) or annotated (target is a Tag). */
+interface TagNode {
+  name: string;
+  target: { oid: string; committedDate?: string; tagger?: { date: string } | null; target?: { oid: string; committedDate?: string } };
+}
+
+/** Version tags (src/releases.ts isVersionTag), oldest version first: the commit each points at and when it was set. */
+async function versionTags(owner: string, name: string, slug: string): Promise<{ tag: string; oid: string; at: string }[]> {
+  const out: { tag: string; oid: string; at: string }[] = [];
+  let after: string | null = null;
+  do {
+    const page: { repository: { refs: Page<TagNode> } | null } = await graphql(TAGS_QUERY, { owner, name, after });
+    if (!page.repository) throw new HttpError(404, `Repo ${slug} nicht gefunden.`);
+    for (const n of page.repository.refs.nodes) {
+      const commit = n.target.target ?? n.target;
+      const at = n.target.tagger?.date ?? commit.committedDate;
+      // a tag on something other than a commit carries no date: no release
+      if (isVersionTag(n.name) && at) out.push({ tag: n.name, oid: commit.oid, at: new Date(at).toISOString() });
+    }
+    after = page.repository.refs.pageInfo.hasNextPage ? page.repository.refs.pageInfo.endCursor : null;
+  } while (after);
+  return out.sort((a, b) => compareVersions(a.tag, b.tag));
+}
+
+const HISTORY_QUERY = `query History($owner: String!, $name: String!, $oid: GitObjectID!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    object(oid: $oid) {
+      ... on Commit {
+        history(first: 100, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          nodes { message parents { totalCount } }
+        }
+      }
+    }
+  }
+}`;
+
+/** The whole history up to `oid` – the first release's range. */
+async function historyCommits(owner: string, name: string, slug: string, oid: string): Promise<RangeCommit[]> {
+  const out: RangeCommit[] = [];
+  let after: string | null = null;
+  do {
+    const page: {
+      repository: { object: { history?: Page<{ message: string; parents: { totalCount: number } }> } | null } | null;
+    } = await graphql(HISTORY_QUERY, { owner, name, oid, after });
+    const history = page.repository?.object?.history;
+    if (!history) throw new HttpError(502, `GitHub: Commit ${oid} in ${slug} nicht gefunden.`);
+    for (const c of history.nodes) out.push({ subject: c.message.split("\n", 1)[0] ?? "", merge: c.parents.totalCount > 1 });
+    after = history.pageInfo.hasNextPage ? history.pageInfo.endCursor : null;
+  } while (after);
+  return out;
+}
+
+/** Commits in `head` but not in `base` – GitHub's compare, 100 a page; subjects only. */
+async function rangeCommits(slug: string, base: string, head: string): Promise<RangeCommit[]> {
+  const r = await run(
+    [
+      "gh",
+      "api",
+      "--paginate",
+      `repos/${slug}/compare/${base}...${head}?per_page=100`,
+      "--jq",
+      '.commits[] | [(.parents | length), (.commit.message | split("\\n")[0])] | @tsv',
+    ],
+    { timeoutMs: 120_000 },
+  );
+  if (!r.ok) throw new HttpError(502, `gh: ${firstLine(r.err || r.out)}`);
+  return r.out
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const tab = line.indexOf("\t");
+      return { subject: line.slice(tab + 1), merge: Number(line.slice(0, tab)) > 1 };
+    });
+}
+
+/** Ranges fetched at once: a first fetch of a repo with many tags stays within GitHub's limits. */
+const RANGE_PARALLEL = 4;
+
+/**
+ * Every version tag with the JIRA keys of its code commits. A range – the commits since the previous version tag,
+ * the whole history for the first – is fetched only when `known` has none for the same tag, commit and base: tags
+ * don't move, so once the history is in, only a new release costs requests. Any failure fails the whole list (the
+ * caller keeps the last one): a list with a range missing would move tickets to a later release.
+ */
+async function fetchReleases(owner: string, name: string, slug: string, known: Release[]): Promise<Release[]> {
+  const tags = await versionTags(owner, name, slug);
+  const cached = new Map(known.map((r) => [r.tag, r]));
+  const out: Release[] = [];
+  let next = 0;
+  async function worker() {
+    while (next < tags.length) {
+      const i = next++;
+      const t = tags[i];
+      if (!t) return;
+      const base = tags[i - 1]?.oid ?? null;
+      const hit = cached.get(t.tag);
+      if (hit && hit.oid === t.oid && hit.base === base) out[i] = { ...hit, at: t.at };
+      else {
+        const commits = base ? await rangeCommits(slug, base, t.oid) : await historyCommits(owner, name, slug, t.oid);
+        out[i] = { tag: t.tag, oid: t.oid, base, at: t.at, keys: codeKeys(commits) };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: RANGE_PARALLEL }, worker));
+  return out;
 }
 
 /**

@@ -195,9 +195,9 @@ function source(): (SuggestSource & { quick: string[]; typeCounts?: [string, num
       versions: [
         ...new Set(
           j.tickets
-            .flatMap((t) => (t.released?.version ? [{ v: t.released.version, at: t.released.at }] : []))
+            .flatMap((t) => (t.released ? [t.released, ...t.released.later] : []))
             .sort((a, b) => b.at.localeCompare(a.at))
-            .map((r) => r.v),
+            .map((r) => r.version),
         ),
       ],
       typeCounts: [...f.types].sort((a, b) => typeRank(a[0]) - typeRank(b[0]) || a[0].localeCompare(b[0], "de")),

@@ -179,9 +179,8 @@ export const jiraLabel = (label: string) => label.trim().replace(/\s+/g, "-");
 
 export type InMain = "yes" | "partly" | "no";
 
-/** A PR that builds the ticket: into the default branch, not a grill doc PR (`docs/<KEY>-…`). */
-export const isBuildPull = (p: Pick<PullOut, "base" | "branch">, defaultBranch: string) =>
-  p.base === defaultBranch && !p.branch.startsWith("docs/");
+/** A PR that builds the ticket: into the default branch, not documentation (src/pulls.ts isDocsPull). */
+export const isBuildPull = (p: Pick<PullOut, "base" | "docs">, defaultBranch: string) => p.base === defaultBranch && !p.docs;
 
 const openish = (p: Pick<PullOut, "state">) => p.state === "open" || p.state === "draft";
 
@@ -189,7 +188,7 @@ const openish = (p: Pick<PullOut, "state">) => p.state === "open" || p.state ===
  * Whether the ticket's work is in the default branch – the real state, whatever JIRA says. Children closed into a
  * feature branch don't count; only merged build PRs do. null: neither a GitHub family nor a build PR.
  */
-export function inMain(f: Family | undefined, prs: Pick<PullOut, "base" | "branch" | "state">[], defaultBranch: string): InMain | null {
+export function inMain(f: Family | undefined, prs: Pick<PullOut, "base" | "docs" | "state">[], defaultBranch: string): InMain | null {
   const build = prs.filter((p) => isBuildPull(p, defaultBranch));
   const family = !!f && (!!f.grill || !!f.story || f.children.length > 0);
   if (!build.length && !family) return null;
@@ -206,8 +205,8 @@ export interface TicketDrift {
 }
 
 /**
- * `released`: the release PR the ticket first shipped in (src/pulls.ts releasesByKey) – the strongest signal: live
- * > in main > partly > not in main.
+ * `released`: the version tag the ticket's code first shipped in (src/releases.ts releasesByKey) – the strongest
+ * signal: live > in main > partly > not in main.
  */
 export function ticketDrift(t: JiraTicket, f: Family | undefined, cfg: DriftConfig, prs: PullOut[] = [], released: Released | null = null): TicketDrift {
   const live = released ? "yes" : inMain(f, prs, cfg.defaultBranch ?? "main");

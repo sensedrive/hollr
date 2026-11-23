@@ -13,7 +13,7 @@ import { JiraCache } from "../src/jiracache";
 import { LiveRuns } from "../src/live";
 import { Prefs } from "../src/prefs";
 import { Projects } from "../src/projects";
-import type { Issue, Pull } from "../src/types";
+import type { Issue, Pull, Release, Released } from "../src/types";
 import { issue, NOW, project, pull, snapshot } from "./fixtures";
 import { type FakeJira, fakeJira } from "./jirafake";
 
@@ -22,6 +22,8 @@ let gateCalls: { command: string; stdin: unknown }[];
 let ctx: Ctx;
 let ghIssues: Issue[];
 let ghPulls: Pull[];
+let ghReleases: Release[];
+let ghReleasesError: string | null;
 let jira: FakeJira;
 let creds: JiraCredentials | null;
 /** GitHub label writes: issue id, removed label ids, and how many JIRA calls had happened before */
@@ -53,10 +55,15 @@ beforeEach(() => {
   gateCalls = [];
   ghIssues = [issue(1, { labels: ["Sandcastle"] }), issue(2, { labels: ["story"] })];
   ghPulls = [];
+  ghReleases = [];
+  ghReleasesError = null;
   jira = fakeJira([]);
   creds = { site: "x.atlassian.net", email: "m@x.de", token: TOKEN };
   const fetchers = {
-    fetchBoard: async () => snapshot(structuredClone(ghIssues), structuredClone(ghPulls)),
+    fetchBoard: async () => ({
+      ...snapshot(structuredClone(ghIssues), structuredClone(ghPulls), structuredClone(ghReleases)),
+      releasesError: ghReleasesError,
+    }),
     fetchChanged: async () => ({ issues: [], pulls: [] }),
   };
   const access = new JiraAccess(() => creds, jira.fetch);
@@ -220,6 +227,7 @@ describe("JIRA API", () => {
     derived: string | null;
     family: unknown;
     prs: { n: number; state: string; checks: string | null; [k: string]: unknown }[];
+    released: Released | null;
   };
   const tickets = (body: Record<string, unknown>) => body.tickets as Ticket[];
   const ticket = (body: Record<string, unknown>, key: string) => tickets(body).find((t) => t.key === key) as Ticket;
@@ -293,9 +301,9 @@ describe("JIRA API", () => {
     ];
     const r = await call("/api/jira/board?slug=o/r");
     const prs = (key: string) => ticket(r.body, key).prs;
-    expect(prs("R-1").map((p) => [p.n, p.state, p.checks])).toEqual([
-      [101, "draft", "pending"],
-      [100, "merged", null],
+    expect(prs("R-1").map((p) => [p.n, p.state, p.checks, p.docs])).toEqual([
+      [101, "draft", "pending", false],
+      [100, "merged", null, true],
     ]);
     expect(prs("R-2").map((p) => p.n)).toEqual([102]);
     expect(prs("R-3")).toEqual([]);
@@ -309,7 +317,23 @@ describe("JIRA API", () => {
       review: null,
       branch: "feature/R-1-bau",
       mergedAt: null,
+      docs: false,
     });
+  });
+
+  test("board: live from version tags – first release and later ones; a failed release fetch is reported", async () => {
+    const rel = (tag: string, at: string, keys: string[]): Release => ({ tag, oid: `c-${tag}`, base: null, at, keys });
+    ghReleases = [rel("v1.0.0", "2026-11-01T10:00:00.000Z", ["R-1"]), rel("v1.1.0", "2026-11-10T10:00:00.000Z", ["R-1", "R-2"])];
+    ghReleasesError = "gh: HTTP 502";
+    const r = await call("/api/jira/board?slug=o/r");
+    expect(ticket(r.body, "R-1").released).toEqual({
+      version: "v1.0.0",
+      at: "2026-11-01T10:00:00.000Z",
+      later: [{ version: "v1.1.0", at: "2026-11-10T10:00:00.000Z" }],
+    });
+    expect(ticket(r.body, "R-2").released?.version).toBe("v1.1.0");
+    expect(ticket(r.body, "R-3").released).toBeNull();
+    expect(r.body.refreshError).toBe("Releases (Stand vom letzten Abruf): gh: HTTP 502");
   });
 
   test("issue detail: description and comments as safe HTML, transitions", async () => {

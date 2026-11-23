@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { type DriftConfig, deriveState, families, type GhIssue, inMain, planApply, ticketDrift } from "../src/drift";
 import type { JiraTicket } from "../src/jira";
-import type { PullOut } from "../src/types";
-import { project } from "./fixtures";
+import { pullOut } from "../src/pulls";
+import type { Pull } from "../src/types";
+import { project, pull } from "./fixtures";
 
 const labels = project().labels;
 const cfg: DriftConfig = {
@@ -47,18 +48,9 @@ const ticket = (status: string, over: Partial<JiraTicket> = {}): JiraTicket => (
 
 const familyOf = (issues: GhIssue[], live?: Map<number, string>) => families(issues, labels, live).byKey.get("R-1");
 
-const pr = (n: number, over: Partial<PullOut> = {}): PullOut => ({
-  n,
-  title: `PR ${n}`,
-  url: `https://github.com/o/r/pull/${n}`,
-  state: "merged",
-  checks: null,
-  review: null,
-  branch: `feature/R-1-${n}`,
-  base: "main",
-  mergedAt: "2026-11-20T10:00:00Z",
-  ...over,
-});
+// through pullOut, so the docs flag comes from branch and title like on the board
+const pr = (n: number, over: Partial<Pull> = {}) =>
+  pullOut(pull(n, { state: "merged", branch: `feature/R-1-${n}`, mergedAt: "2026-11-20T10:00:00Z", ...over }));
 
 describe("families", () => {
   test("children inherit the key from their story; keyless roots are reported once", () => {
@@ -205,15 +197,18 @@ describe("inMain", () => {
     expect(inMain(familyOf([story, closed(3)]), [pr(50), pr(51, { state: "draft", mergedAt: null })], "main")).toBe("partly");
     expect(inMain(familyOf([story, closed(3), gh(4, { parent: 2 })]), [pr(50)], "main")).toBe("partly");
   });
-  test("only build PRs count: doc PRs and PRs into other branches don't", () => {
+  test("only build PRs count: doc PRs (docs/ branch or type docs) and PRs into other branches don't", () => {
     expect(inMain(undefined, [pr(3535, { branch: "docs/R-1-spec" })], "main")).toBeNull();
     expect(inMain(familyOf([story]), [pr(3535, { branch: "docs/R-1-spec" })], "main")).toBe("no");
+    // TENDR-636 shape: spec and ADRs merged into main ahead of the build, the build PR closed unmerged
+    const spec = pr(1056, { branch: "feature/R-1-lasttest-spec", title: "📝 docs: R-1 Spec und ADRs" });
+    expect(inMain(undefined, [spec, pr(1060, { state: "closed", mergedAt: null, base: "feature/R-1-lasttest-spec" })], "main")).toBeNull();
     expect(inMain(familyOf([story, closed(3)]), [pr(50, { base: "feature/R-1" })], "main")).toBe("no");
     expect(inMain(undefined, [pr(50, { base: "develop" })], "develop")).toBe("yes");
     expect(inMain(undefined, [], "main")).toBeNull();
   });
   test("released: counts as in main – no done-not-in-main; done-candidate for any status short of Done", () => {
-    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", pr: 3300 };
+    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", later: [] };
     const fam = familyOf([story, closed(3)]);
     expect(ticketDrift(ticket("Done"), fam, cfg, [], released)).toEqual({ derived: "testing", drift: [], inMain: "yes" });
     expect(ticketDrift(ticket("In Progress"), undefined, cfg, [], released)).toEqual({

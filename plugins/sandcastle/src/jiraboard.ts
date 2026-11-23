@@ -23,7 +23,8 @@ import type { updateIssue } from "./github";
 import type { JiraAccess, JiraClient, JiraStatus, JiraTicket } from "./jira";
 import type { JiraCache } from "./jiracache";
 import type { LiveRuns } from "./live";
-import { pullsByTicket, releasesByKey } from "./pulls";
+import { pullsByTicket } from "./pulls";
+import { releasesByKey } from "./releases";
 import type { Project, PullOut, Released } from "./types";
 
 export interface JiraCtx {
@@ -45,7 +46,7 @@ export interface TicketOut extends JiraTicket {
   prs: PullOut[];
   /** whether the work is merged into the default branch (src/drift.ts inMain); null: nothing on GitHub */
   inMain: InMain | null;
-  /** the release PR the ticket first shipped in (key in its title or changelog), null when none */
+  /** the version tag the ticket's code first shipped in, and later ones adding to it; null when none */
   released: Released | null;
 }
 
@@ -57,7 +58,7 @@ interface View {
   fam: Families;
   /** ticket key → its pull requests, main PR first */
   prs: Map<string, PullOut[]>;
-  /** ticket key → the release it first shipped in */
+  /** ticket key → the release its code first shipped in */
   released: Map<string, Released>;
   cfg: DriftConfig;
   fetchedAt: number;
@@ -79,7 +80,13 @@ async function view(ctx: JiraCtx, p: Project, refresh = false): Promise<View> {
     ctx.boards.current(p.slug, refresh),
   ]);
   const cfg: DriftConfig = { labels: p.labels, states: p.jira.states, statuses: j.snap.statuses, defaultBranch: p.defaultBranch };
-  const error = [j.error && `JIRA: ${j.error}`, gh.error && `GitHub: ${gh.error}`].filter(Boolean).join(" · ");
+  const error = [
+    j.error && `JIRA: ${j.error}`,
+    gh.error && `GitHub: ${gh.error}`,
+    gh.snap.releasesError && `Releases (Stand vom letzten Abruf): ${gh.snap.releasesError}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const fam = families(gh.snap.issues, p.labels, ctx.live.phases(p.slug));
   const known = new Set([...j.snap.tickets.map((t) => t.key), ...fam.byKey.keys()]);
   return {
@@ -89,7 +96,7 @@ async function view(ctx: JiraCtx, p: Project, refresh = false): Promise<View> {
     tickets: j.snap.tickets,
     fam,
     prs: pullsByTicket(gh.snap.pulls, known, fam.byKey),
-    released: releasesByKey(gh.snap.releases, p.defaultBranch, p.releaseBranch ?? null),
+    released: releasesByKey(gh.snap.releases),
     cfg,
     fetchedAt: j.fetchedAt,
     stale: j.stale || gh.stale,

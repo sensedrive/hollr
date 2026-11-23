@@ -127,7 +127,8 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) flushPrefs();
 });
 
-const PREFIX = "sc.v2.";
+// v3: tickets carry released.later and PRs a docs flag – older copies would break the first render
+const PREFIX = "sc.v3.";
 
 export function cacheGet<T>(key: string): T | null {
   try {

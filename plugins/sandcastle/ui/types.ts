@@ -198,6 +198,8 @@ export interface PullRequest {
   /** base branch */
   base: string;
   mergedAt: string | null;
+  /** documentation only (src/pulls.ts isDocsPull): never counts as the ticket's code */
+  docs: boolean;
 }
 
 export interface BoardData {
@@ -270,11 +272,11 @@ export interface DriftItem {
 /** Whether the work is merged into the default branch (src/drift.ts inMain; released counts as yes); null: nothing on GitHub. */
 export type InMain = "yes" | "partly" | "no";
 
-/** The release a ticket first shipped in (src/types.ts Released). */
+/** The version tag a ticket's code first shipped in, and the later ones that added to it (src/types.ts Released). */
 export interface Released {
-  version: string | null;
+  version: string;
   at: string;
-  pr: number;
+  later: { version: string; at: string }[];
 }
 
 export interface JiraTicket {

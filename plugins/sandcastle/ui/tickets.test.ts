@@ -123,24 +123,28 @@ describe("card facts", () => {
       branch: `feature/R-${n}`,
       base: "main",
       mergedAt: state === "merged" ? "2026-11-20T10:00:00Z" : null,
+      docs: false,
       ...extra,
     });
-    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", pr: 3300 };
+    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", later: [] };
     expect(statePill({ inMain: "yes", released })).toEqual({ text: "live v2.0.0", tone: "live", title: "live seit 13.11.2026" });
     expect(statePill({ inMain: "yes", released: null })).toEqual({ text: "in main", tone: "yes" });
     expect(statePill({ inMain: "partly", released: null })?.text).toBe("teilweise in main");
     expect(statePill({ inMain: null, released: null })).toBeNull();
     expect(inMainLine({ inMain: "yes", prs: [], released })).toBe("live seit v2.0.0 (13.11.2026)");
+    const more = { ...released, later: [{ version: "v2.1.0", at: "2026-11-20T10:00:00Z" }, { version: "v2.2.0", at: "2026-11-27T10:00:00Z" }] };
+    expect(inMainLine({ inMain: "yes", prs: [], released: more })).toBe("live seit v2.0.0 (13.11.2026), ergänzt in v2.1.0, v2.2.0");
+    expect(statePill({ inMain: "yes", released: more })?.text).toBe("live v2.0.0");
     expect(inMainLine({ inMain: null, prs: [], released: null })).toBeNull();
     expect(inMainLine({ inMain: "yes", prs: [p(50, "merged")], released: null })).toBe("in main seit 20.11.2026");
     expect(
-      inMainLine({ inMain: "no", prs: [p(3550, "draft", { checks: "failure" }), p(3535, "merged", { branch: "docs/R-1" })], released: null }),
+      inMainLine({ inMain: "no", prs: [p(3550, "draft", { checks: "failure" }), p(3535, "merged", { branch: "docs/R-1", docs: true })], released: null }),
     ).toBe("nicht in main – #3550 Entwurf, CI ✗");
     expect(inMainLine({ inMain: "no", prs: [], released: null })).toBe("nicht in main – kein gemergter PR");
     expect(inMainLine({ inMain: "partly", prs: [p(50, "merged"), p(51, "open")], released: null })).toBe("teilweise in main – #51 offen");
   });
   test("build line: text, segments and the main PR as a link", () => {
-    const pr = { n: 3550, title: "Kalender", url: "https://github.com/o/r/pull/3550", state: "merged" as const, checks: null, review: null, branch: "feature/R-1", base: "main", mergedAt: "2026-11-23T10:00:00Z" };
+    const pr = { n: 3550, title: "Kalender", url: "https://github.com/o/r/pull/3550", state: "merged" as const, checks: null, review: null, branch: "feature/R-1", base: "main", mergedAt: "2026-11-23T10:00:00Z", docs: false };
     const line = buildLine({
       story: 3540,
       children: [
@@ -210,14 +214,14 @@ describe("ticket filter", () => {
       category: "done",
       inMain: "no",
       drift: [{ kind: "done-not-in-main" }],
-      prs: [{ n: 1, title: "", url: "", state: "merged", checks: null, review: null, branch: "docs/HACCP-4", base: "main", mergedAt: "2026-11-20T10:00:00Z" }],
+      prs: [{ n: 1, title: "", url: "", state: "merged", checks: null, review: null, branch: "docs/HACCP-4", base: "main", mergedAt: "2026-11-20T10:00:00Z", docs: true }],
     }),
     ticket("HACCP-5", {
       inMain: "yes",
-      prs: [{ n: 2, title: "", url: "", state: "merged", checks: null, review: null, branch: "feature/HACCP-5", base: "main", mergedAt: "2026-11-20T10:00:00Z" }],
+      prs: [{ n: 2, title: "", url: "", state: "merged", checks: null, review: null, branch: "feature/HACCP-5", base: "main", mergedAt: "2026-11-20T10:00:00Z", docs: false }],
     }),
     ticket("HACCP-6", { inMain: "partly" }),
-    ticket("HACCP-7", { inMain: "yes", released: { version: "v2.0.0", at: "2026-11-13T10:00:00Z", pr: 3300 } }),
+    ticket("HACCP-7", { inMain: "yes", released: { version: "v2.0.0", at: "2026-11-13T10:00:00Z", later: [{ version: "v2.1.0", at: "2026-11-20T10:00:00Z" }] } }),
   ];
   const run = (q: string, partialLast = false) => {
     const tokens = tokenize(q);
@@ -247,6 +251,7 @@ describe("ticket filter", () => {
     const pick = (q: string) => tickets.filter(compileTerms(parse(q), (tok) => compileTickets(tok))).map((t) => t.key);
     expect(pick("live:")).toEqual(["HACCP-7"]);
     expect(pick("live:v2.0*")).toEqual(["HACCP-7"]);
+    expect(pick("live:v2.1*")).toEqual(["HACCP-7"]);
     expect(pick("live:v1*")).toEqual([]);
     expect(pick("-live: haccp-")).toEqual(["HACCP-1", "HACCP-2", "HACCP-3", "HACCP-4", "HACCP-5", "HACCP-6"]);
     expect(pick("main:")).toEqual(["HACCP-5", "HACCP-7"]);
