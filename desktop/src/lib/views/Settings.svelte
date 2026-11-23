@@ -8,6 +8,7 @@
   import Design from "./settings/Design.svelte";
   import Dictation from "./settings/Dictation.svelte";
   import General from "./settings/General.svelte";
+  import Integrations from "./settings/Integrations.svelte";
   import Notes from "./settings/Notes.svelte";
   import Servers from "./settings/Servers.svelte";
   import Speech from "./settings/Speech.svelte";
@@ -21,6 +22,7 @@
     { page: "dictation", label: "Diktat", icon: "mic" },
     { page: "speech", label: "Vorlesen", icon: "volume" },
     { page: "servers", label: "Server & Geräte", icon: "server" },
+    { page: "integrations", label: "Integrationen", icon: "key" },
     { page: "notes", label: "Neuigkeiten", icon: "sparkle" },
     { page: "about", label: "Über", icon: "info" },
   ];
@@ -42,6 +44,8 @@
       <Design />
     {:else if page === "servers"}
       <Servers />
+    {:else if page === "integrations"}
+      <Integrations />
     {:else if page === "dictation"}
       <Dictation />
     {:else if page === "speech"}

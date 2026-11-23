@@ -1,6 +1,176 @@
 {
   "sourceLanguage": "de",
   "strings": {
+    "API-Token": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API token"
+          }
+        }
+      }
+    },
+    "Auf allen Rechnern speichern": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save on all machines"
+          }
+        }
+      }
+    },
+    "Bitte eine gültige E-Mail angeben.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please enter a valid email."
+          }
+        }
+      }
+    },
+    "Das Token darf keine Leerzeichen enthalten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The token must not contain spaces."
+          }
+        }
+      }
+    },
+    "Das Token wird auf jedem gekoppelten Rechner gespeichert und nie wieder angezeigt.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The token is stored on every paired machine and never shown again."
+          }
+        }
+      }
+    },
+    "E-Mail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email"
+          }
+        }
+      }
+    },
+    "Hollr zu alt – in Werkzeuge aktualisieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hollr too old – update in Tools"
+          }
+        }
+      }
+    },
+    "Integrationen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Integrations"
+          }
+        }
+      }
+    },
+    "JIRA-Zugang entfernen?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove JIRA access?"
+          }
+        }
+      }
+    },
+    "Rechner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Machines"
+          }
+        }
+      }
+    },
+    "Site": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site"
+          }
+        }
+      }
+    },
+    "Site muss wie name.atlassian.net aussehen.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site must look like name.atlassian.net."
+          }
+        }
+      }
+    },
+    "Token anlegen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create token"
+          }
+        }
+      }
+    },
+    "angemeldet als %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "signed in as %@"
+          }
+        }
+      }
+    },
+    "nicht hinterlegt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not set"
+          }
+        }
+      }
+    },
+    "offline": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "offline"
+          }
+        }
+      }
+    },
+    "✓ gespeichert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ saved"
+          }
+        }
+      }
+    },
     "": {
       "localizations": {
         "en": {
@@ -1593,6 +1763,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chat menu › Terminal: “Session” shows the computer’s terminal, “Own shell” a separate one in the same folder – sized to the iPhone. iPhone in landscape: terminal or changes next to the chat."
+          }
+        }
+      }
+    },
+    "Einstellungen › Integrationen: JIRA-Zugang einmal eintragen, Hollr hinterlegt ihn auf allen Rechnern": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings › Integrations: enter JIRA access once, Hollr stores it on every machine"
           }
         }
       }

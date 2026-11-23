@@ -62,6 +62,9 @@ struct SettingsView: View {
                 NavigationLink { PushSettingsView() } label: {
                     Label("Mitteilungen", icon: .bell)
                 }
+                NavigationLink { IntegrationsView() } label: {
+                    Label("Integrationen", systemImage: "key")
+                }
             }
             Section {
                 NavigationLink { ServersView(onPair: onPair) } label: {

@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 59,
+    version: "0.52.0",
+    date: "23.11.2026",
+    items: [
+      { icon: "🔑", text: "Einstellungen › Integrationen: JIRA-Zugang einmal eintragen – Hollr prüft ihn und hinterlegt ihn auf allen gekoppelten Rechnern (nur dort, nie in der App)." },
+    ],
+  },
+  {
     build: 58,
     version: "0.51.0",
     date: "23.11.2026",

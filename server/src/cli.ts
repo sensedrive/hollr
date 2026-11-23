@@ -103,6 +103,7 @@ import {
   usageLimits,
 } from "./spaces";
 import { type SandcastleRequest, sandcastle } from "./sandcastle";
+import { type SecretsRequest, secrets } from "./secrets";
 import { type SummarizeRequest, summarize } from "./summarize";
 import { restartWatcher, sysinfo } from "./sysinfo";
 import { ompLive, readTimeline } from "./timeline";
@@ -120,7 +121,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.51.0";
+export const VERSION = "0.52.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -279,6 +280,8 @@ async function gate(): Promise<number> {
       "shared",
       "diag",
       "machines",
+      // stdin carries tokens: only the op and name are logged below
+      "secrets",
     ].includes(cmd)
   )
     log("gate", original);
@@ -561,6 +564,17 @@ async function gate(): Promise<number> {
           log("gate", `plugins open ${req.id}`);
           json(await openPlugin(req.id ?? "", hollrCli()));
         } else json({ plugins: listPlugins() });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "secrets": {
+      const req = JSON.parse((await readStdinLine()) || "{}") as SecretsRequest;
+      if (req.op === "set") log("gate", `secrets set ${req.name} ${req.email ?? ""}`);
+      else if (req.op === "delete") log("gate", `secrets delete ${req.name}`);
+      try {
+        json(await secrets(req));
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -870,7 +884,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | sandcastle | shared | machines | pairlink",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | secrets | sandcastle | shared | machines | pairlink",
       });
       return 2;
   }
