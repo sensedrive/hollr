@@ -1,15 +1,20 @@
 /**
- * Sandcastle board – head bar (project, Board | Läufe, machine chips, reload), data loading and polling.
- * First paint comes from the cache of the last visit; every source (servers, each machine's projects/status/queue,
- * the GitHub board) then loads on its own and re-renders when it arrives – nothing waits for the slowest machine.
+ * Sandcastle board – head bar (project, Tickets | Werkbank, Board | Läufe, machine chips, drift counter, Wächter,
+ * reload), data loading and polling. First paint comes from the cache of the last visit; every source (servers,
+ * each machine's projects/status/queue, the GitHub board, the JIRA board) then loads on its own and re-renders when
+ * it arrives – nothing waits for the slowest machine.
  */
 import { writing } from "./actions";
 import { api, type HostTheme, hostTheme, initToken, sc, servers, hostEvents } from "./api";
 import { dragging } from "./drag";
 import { fill, h, reconcile } from "./dom";
-import { readHash } from "./filter";
+import { readHash, tokenText } from "./filter";
 import { dropOpen, keyProject, type OpenTarget, parseOpen, readOpen } from "./grill";
 import { pumpGrills } from "./grillqueue";
+import { clearTicketCards } from "./views/ticketcard";
+import { openTicketSide, renderTicketLive } from "./views/ticketside";
+import { renderTickets, ticketsView, ticketsVisible } from "./views/tickets";
+import { guardControl, loadGuard } from "./views/guard";
 import {
   cacheGet,
   cacheSet,
@@ -22,12 +27,13 @@ import {
   projects,
   state,
   toast,
+  type Mode,
   type View,
 } from "./state";
-import type { BoardData, Project, QueueState, Server, Status } from "./types";
-import { boardView, renderBoard } from "./views/board";
+import type { BoardData, JiraBoardData, Project, QueueState, Server, Status } from "./types";
+import { boardView, boardVisible, newIssue, renderBoard } from "./views/board";
 import { clearCards } from "./views/cards";
-import { setQuery } from "./views/filterbar";
+import { currentTokens, filterBar, setQuery } from "./views/filterbar";
 import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
 import { closeSidebar, openIssue, renderLive } from "./views/sidebar";
 import { applyTheme } from "./theme";
@@ -48,18 +54,45 @@ hostEvents.onOpen = (ticket) => {
 hostTheme().then(useTheme);
 
 const projectSelect = h("select", { class: "project", "aria-label": "Projekt" });
+const ticketsTab = h("button", { class: "tab", onclick: () => showMode("tickets") }, "Tickets");
+const werkbankTab = h("button", { class: "tab", onclick: () => showMode("werkbank") }, "Werkbank");
 const boardTab = h("button", { class: "tab", onclick: () => show("board") }, "Board");
 const runsTab = h("button", { class: "tab", onclick: () => show("runs") }, "Läufe");
 const chips = h("div", { class: "mchips" });
+const driftChip = h("button", { class: "drift-chip", hidden: true, title: "Nur Tickets mit Abweichungen zeigen", onclick: () => toggleDrift() });
 const reload = h("button", { class: "btn icon", title: "Neu laden", "aria-label": "Neu laden", onclick: () => refreshAll(true) }, "↻");
-const boardHost = h("div", { class: "view" });
+const newIssueBtn = h("button", { class: "btn primary", "aria-label": "Neues Issue", onclick: () => newIssue() }, "+", h("span", { class: "wide-only" }, " Neues Issue"));
+const bar = filterBar(() => (state.mode === "tickets" ? ticketsVisible() : boardVisible()), [newIssueBtn]);
+const werkbankHost = h("div", { class: "view" });
+const ticketsHost = h("div", { class: "view" });
+const boardHost = h("div", { class: "view" }, bar.el, ticketsHost, werkbankHost);
 const runsHost = h("div", { class: "view" });
 const main = h("main", {}, boardHost, runsHost);
 
 document.body.append(
-  h("header", { class: "head" }, h("span", { class: "brand" }, "Sandcastle"), projectSelect, h("div", { class: "tabs" }, boardTab, runsTab), chips, h("span", { class: "grow" }), reload),
+  h(
+    "header",
+    { class: "head" },
+    h("span", { class: "brand" }, "Sandcastle"),
+    projectSelect,
+    h("div", { class: "tabs" }, ticketsTab, werkbankTab),
+    h("div", { class: "tabs" }, boardTab, runsTab),
+    chips,
+    driftChip,
+    guardControl(),
+    h("span", { class: "grow" }),
+    reload,
+  ),
   main,
 );
+
+/** The drift counter sets (or drops) the `drift:` token and shows the Tickets. */
+function toggleDrift(): void {
+  const tokens = currentTokens();
+  const on = tokens.some((t) => t.kind === "drift");
+  setQuery([...tokens.filter((t) => t.kind !== "drift").map(tokenText), ...(on ? [] : ["drift:"])].join(" "));
+  if (!on) showMode("tickets");
+}
 
 // ---- cache → first paint
 
@@ -68,16 +101,20 @@ state.localProjects = cacheGet<Project[]>("localProjects") ?? [];
 for (const [k, v] of Object.entries(cacheGet<Record<string, Project[]>>("machineProjects") ?? {})) state.machineProjects.set(k, v);
 for (const [k, v] of Object.entries(cacheGet<Record<string, Status>>("statuses") ?? {})) state.statuses.set(k, v);
 state.view = prefGet<View>("view") ?? "board";
+state.mode = prefGet<Mode>("mode") ?? "tickets";
 const REFRESH = "__refresh__";
 
 function useSlug(slug: string): void {
   state.slug = slug;
   state.board = cacheGet<BoardData>(`board.${slug}`);
+  state.jira = cacheGet<JiraBoardData>(`jira.${slug}`);
+  state.jiraError = null;
   state.olderClosed = [];
   state.closedOlder = 0;
   state.queues = new Map(Object.entries(cacheGet<Record<string, QueueState>>(`queues.${slug}`) ?? {}));
   prefSet("slug", slug);
   clearCards();
+  clearTicketCards();
 }
 
 function pickSlug(): void {
@@ -87,6 +124,7 @@ function pickSlug(): void {
   if (slug === state.slug) return;
   useSlug(slug);
   loadBoard();
+  loadJira();
   loadQueues();
 }
 
@@ -98,8 +136,12 @@ hooks.render = () => {
   frame = requestAnimationFrame(() => {
     frame = 0;
     renderHead();
-    if (state.view === "board") renderBoard();
-    else renderRuns();
+    if (state.view === "board") {
+      if (state.mode === "tickets") renderTickets();
+      else renderBoard();
+      bar.update();
+    } else renderRuns();
+    renderTicketLive();
     renderLive();
     if (pendingOpen) tryOpen();
   });
@@ -128,6 +170,13 @@ function renderHead(): void {
   const text = n ? `● ${n} ${n === 1 ? "Lauf" : "Läufe"}${machines > 1 ? ` auf ${machines} Maschinen` : ` auf ${live[0]?.s.label}`}` : "○ Keine Läufe";
   const title = live.map((x) => `${x.s.label}: ${x.r.project} · ${x.r.branch} · ${STATUS_TEXT[x.r.status]} · ${x.r.progress.percent} %`).join("\n");
   reconcile(chips, [h("button", { class: `mchip ${status ? `st-${status}` : "idle"}`, title, onclick: () => show("runs") }, h("span", { class: "chip-long" }, text), h("span", { class: "chip-short" }, n ? `● ${n} ${n === 1 ? "Lauf" : "Läufe"}` : "○ 0"))]);
+  // the drift counter: actionable drift items of the project's tickets
+  const drift = state.jira?.counts.drift ?? 0;
+  driftChip.hidden = !drift;
+  driftChip.classList.toggle("on", currentTokens().some((t) => t.kind === "drift"));
+  const driftText = `⚠ ${drift} ${drift === 1 ? "Abweichung" : "Abweichungen"}`;
+  if (driftChip.textContent !== driftText) driftChip.textContent = driftText;
+  driftChip.title = `${state.jira?.counts.tickets ?? 0} Tickets mit Abweichungen zeigen (drift:)`;
 }
 
 function show(view: View): void {
@@ -135,15 +184,43 @@ function show(view: View): void {
   prefSet("view", view);
   boardTab.classList.toggle("active", view === "board");
   runsTab.classList.toggle("active", view === "runs");
-  if (view === "board" && !boardHost.firstChild) boardHost.append(boardView());
   if (view === "runs" && !runsHost.firstChild) runsHost.append(runsView());
   boardHost.hidden = view !== "board";
   runsHost.hidden = view !== "runs";
   if (view === "runs") closeSidebar();
+  showModeHosts();
   hooks.render();
   tick(true);
 }
 hooks.show = show;
+
+/** Tickets (JIRA) or Werkbank (GitHub) inside „Board“; each view is built on first show. */
+function showModeHosts(): void {
+  const mode = state.mode;
+  ticketsTab.classList.toggle("active", mode === "tickets");
+  werkbankTab.classList.toggle("active", mode === "werkbank");
+  if (mode === "tickets" && !ticketsHost.firstChild) ticketsHost.append(ticketsView());
+  if (mode === "werkbank" && !werkbankHost.firstChild) werkbankHost.append(boardView());
+  ticketsHost.hidden = mode !== "tickets";
+  werkbankHost.hidden = mode !== "werkbank";
+  newIssueBtn.hidden = mode !== "werkbank";
+}
+
+function showMode(mode: Mode): void {
+  state.mode = mode;
+  prefSet("mode", mode);
+  if (state.view !== "board") show("board");
+  else {
+    showModeHosts();
+    hooks.render();
+  }
+}
+hooks.showMode = showMode;
+hooks.openTicket = (key: string) => {
+  if (!key) return;
+  showMode("tickets");
+  openTicketSide(key);
+};
 
 projectSelect.addEventListener("change", async () => {
   if (projectSelect.value === REFRESH) {
@@ -156,6 +233,7 @@ projectSelect.addEventListener("change", async () => {
   useSlug(projectSelect.value);
   hooks.render();
   last.board = 0;
+  last.jira = 0;
   last.queues = 0;
   tick(true);
 });
@@ -260,6 +338,42 @@ async function loadBoard(full = false): Promise<void> {
 }
 hooks.reloadBoard = loadBoard;
 
+/** The JIRA board with etag; `full` refetches JIRA (refresh=1). 409 jira-missing → the Tickets view says so. */
+async function loadJira(full = false): Promise<void> {
+  const slug = state.slug;
+  const p = projects().find((x) => x.slug === slug);
+  if (!slug || !p?.jira.projectKey) return;
+  await once(
+    `jira:${slug}`,
+    async () => {
+      const since = state.jira?.etag ? `&since=${encodeURIComponent(state.jira.etag)}` : "";
+      try {
+        const res = await api<JiraBoardData | { same: true }>(`/api/jira/board?slug=${encodeURIComponent(slug)}${since}${full ? "&refresh=1" : ""}`);
+        last.jira = Date.now();
+        state.jiraMissing = false;
+        if (slug !== state.slug) return;
+        state.jiraError = null;
+        if ("same" in res || writing() || dragging()) {
+          hooks.render();
+          return;
+        }
+        state.jira = res;
+        cacheSet(`jira.${slug}`, res);
+        if (res.stale) last.jira = Date.now() - 12_000;
+      } catch (err) {
+        const text = errorText(err);
+        if (text === "jira-missing") {
+          state.jiraMissing = true;
+          state.jira = null;
+        } else if (slug === state.slug) state.jiraError = text;
+      }
+      hooks.render();
+    },
+    true,
+  );
+}
+hooks.reloadJira = () => loadJira();
+
 async function loadQueues(): Promise<void> {
   const slug = state.slug;
   await Promise.all(
@@ -279,7 +393,7 @@ hooks.reloadQueues = loadQueues;
 
 // ---- polling: only what is visible, only while the page is visible
 
-const last = { servers: 0, projects: 0, status: 0, board: 0, queues: 0 };
+const last = { servers: 0, projects: 0, status: 0, board: 0, jira: 0, queues: 0, guard: 0 };
 
 function tick(force = false, full = false): void {
   if (document.hidden) return;
@@ -304,6 +418,14 @@ function tick(force = false, full = false): void {
   if (state.view === "board" && (force || now - last.board >= 15_000)) {
     last.board = now;
     loadBoard(full);
+  }
+  if (state.view === "board" && (force || now - last.jira >= 15_000)) {
+    last.jira = now;
+    loadJira(full);
+  }
+  if (state.view === "board" && (force || now - last.guard >= 30_000)) {
+    last.guard = now;
+    loadGuard();
   }
   if (state.view === "board" && (force || now - last.queues >= 15_000)) {
     last.queues = now;
@@ -356,9 +478,12 @@ function tryOpen(): void {
       closeSidebar();
       useSlug(target.slug);
       last.board = 0;
+      last.jira = 0;
       last.queues = 0;
     }
-    if (state.view !== "board") show("board");
+    // a link to a GitHub issue opens the Werkbank, a key-only link the ticket
+    if (t.n !== null) showMode("werkbank");
+    else if (state.view !== "board") show("board");
     else tick(true);
   }
   if (t.n !== null) {
@@ -366,9 +491,15 @@ function tryOpen(): void {
     openIssue(t.n);
     return;
   }
+  if (state.jira?.tickets.some((x) => x.key === t.key) && t.key) {
+    pendingOpen = null;
+    hooks.openTicket(t.key);
+    return;
+  }
   const issue = state.board?.issues.find((i) => i.jira === t.key);
   if (issue) {
     pendingOpen = null;
+    showMode("werkbank");
     openIssue(issue.number);
   } else if (freshBoard === state.slug) {
     pendingOpen = null;

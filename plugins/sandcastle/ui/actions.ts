@@ -1,31 +1,45 @@
 /**
  * Changes, all optimistic: the board shows the result at once, the network catches up; a failure rolls the local
  * state back and says why. GitHub (labels, open/closed) goes to this plugin's /api, queue order and ticket flags to
- * the machine's gate (`queue-set`).
+ * the machine's gate (`queue-set`), JIRA (status, labels, drift) to /api/jira/* and /api/drift/apply.
  */
 import { api, sc } from "./api";
 import { derive } from "./derive";
-import { placeBefore } from "./model";
+import { isBusy, placeBefore } from "./model";
 import { errorText, hooks, serverLabel, state, toast } from "./state";
-import type { Column, Issue, QueueState, TicketFlags } from "./types";
+import { openChildren } from "./tickets";
+import type { Column, Issue, JiraTicket, QueueState, TicketFlags } from "./types";
 
 interface Snapshot {
   issues: Issue[] | undefined;
   older: Issue[];
   queues: Map<string, QueueState>;
+  tickets: JiraTicket[] | undefined;
 }
 
 const snapshot = (): Snapshot => ({
   issues: state.board?.issues.map((i) => ({ ...i, labels: [...i.labels] })),
   older: state.olderClosed,
   queues: new Map([...state.queues].map(([k, v]) => [k, { order: [...v.order], tickets: { ...v.tickets } }])),
+  tickets: state.jira?.tickets.map((t) => ({ ...t, labels: [...t.labels] })),
 });
 
 function restore(s: Snapshot): void {
   if (state.board && s.issues) state.board.issues = s.issues;
   state.olderClosed = s.older;
   state.queues = s.queues;
+  if (state.jira && s.tickets) state.jira.tickets = s.tickets;
 }
+
+/** Replaces one ticket in the JIRA board data (answer of a write). */
+export function putTicket(ticket: JiraTicket): void {
+  if (!state.jira) return;
+  const i = state.jira.tickets.findIndex((t) => t.key === ticket.key);
+  if (i >= 0) state.jira.tickets[i] = ticket;
+  else state.jira.tickets.push(ticket);
+}
+
+const ticketOf = (key: string) => state.jira?.tickets.find((t) => t.key === key);
 
 /** Replaces one issue in the board data (answer of a write). */
 export function putIssue(issue: Issue): void {
@@ -176,3 +190,123 @@ export async function editLabels(n: number, add: string[], remove: string[]): Pr
     },
   );
 }
+
+// ---- JIRA tickets
+
+/** Moves a ticket to another JIRA status (by target status name). */
+export function transitionTicket(key: string, to: string): Promise<boolean> {
+  const t = ticketOf(key);
+  if (!t || t.status === to) return Promise.resolve(false);
+  const slug = state.slug;
+  const category = state.jira?.statuses.find((s) => s.name === to)?.category ?? t.category;
+  return optimistic(
+    () => {
+      t.status = to;
+      t.category = category;
+    },
+    async () => {
+      const { ticket } = await api<{ ticket: JiraTicket }>("/api/jira/transition", { slug, key, to });
+      if (slug === state.slug) putTicket(ticket);
+    },
+  );
+}
+
+/**
+ * Queues every open child of a ticket on one machine (story and grill ticket are never built): they get the queue
+ * label and go to the end of that machine's queue in child order; children waiting on another machine move over,
+ * children another machine is already working on stay there.
+ */
+export function queueChildren(key: string, server: string): Promise<boolean> {
+  const t = ticketOf(key);
+  const d = derive();
+  if (!t || !d.project) return Promise.resolve(false);
+  const queueLabel = d.project.labels.queue;
+  const children = openChildren(t)
+    .map((n) => d.issues.get(n))
+    .filter((i): i is Issue => !!i && i.state === "open");
+  const movable = children.filter((i) => {
+    const from = d.laneOf.get(i.number);
+    const phase = d.runs.get(i.number)?.issue.phase;
+    return !from || from === server || !phase || phase === "queued";
+  });
+  if (!movable.length) {
+    toast(children.length ? `${key}: alle Kinder laufen schon auf einem anderen Rechner.` : `${key} hat keine offenen Kinder auf GitHub – erst grillen.`, "info");
+    return Promise.resolve(false);
+  }
+  const slug = state.slug;
+  const ns = movable.map((i) => i.number);
+  const writes = new Map<string, number[]>();
+  for (const n of ns) {
+    const from = d.laneOf.get(n);
+    if (from && from !== server && state.queues.get(from)?.order.includes(n))
+      writes.set(from, (writes.get(from) ?? state.queues.get(from)?.order ?? []).filter((x) => x !== n));
+  }
+  let target = d.lanes.find((l) => l.server.id === server)?.order ?? [];
+  for (const n of ns) if (!target.includes(n)) target = placeBefore(target, n, null);
+  writes.set(server, target);
+  const relabel = movable.filter((i) => !i.labels.includes(queueLabel));
+  return optimistic(
+    () => {
+      for (const i of relabel) applyMove(i, "queue");
+      for (const [s, order] of writes) setOrder(s, order);
+    },
+    async () => {
+      for (const i of relabel) {
+        const { issue: fresh } = await api<{ issue: Issue }>("/api/move", { slug, n: i.number, to: "queue" });
+        putIssue(fresh);
+      }
+      await Promise.all(
+        [...writes].map(async ([s, order]) => {
+          const q = await sc.queueSet(s, slug, { order }).catch((err) => {
+            throw new Error(`Warteschlange auf ${serverLabel(s)}: ${errorText(err)}`);
+          });
+          if (slug === state.slug) state.queues.set(s, q);
+        }),
+      );
+    },
+  );
+}
+
+/** Labels on the JIRA ticket; the server takes a label written here off the ticket's GitHub issues. */
+export function editTicketLabels(key: string, add: string[], remove: string[]): Promise<boolean> {
+  const t = ticketOf(key);
+  if (!t) return Promise.resolve(false);
+  const slug = state.slug;
+  const done = optimistic(
+    () => {
+      t.labels = [...t.labels.filter((l) => !remove.includes(l)), ...add.filter((l) => !t.labels.includes(l))];
+    },
+    async () => {
+      const { ticket } = await api<{ ticket: JiraTicket }>("/api/jira/labels", { slug, key, add, remove });
+      if (slug === state.slug) putTicket(ticket);
+    },
+  );
+  // GitHub may have lost the same label: fetch it once polls may write again
+  done.then((ok) => {
+    if (ok) hooks.reloadBoard();
+  });
+  return done;
+}
+
+/** „Angleichen“: product labels from GitHub into the ticket and off GitHub, JIRA status forward. */
+export async function applyTicketDrift(key: string): Promise<boolean> {
+  const slug = state.slug;
+  busy++;
+  try {
+    const { ticket } = await api<{ ticket: JiraTicket }>("/api/drift/apply", { slug, key });
+    if (slug === state.slug) putTicket(ticket);
+    toast(`${key} angeglichen`, "info");
+    return true;
+  } catch (err) {
+    toast(errorText(err));
+    return false;
+  } finally {
+    busy--;
+    // GitHub lost labels: fetch it fresh now that polls may write again
+    hooks.reloadBoard();
+    hooks.render();
+  }
+}
+
+/** Whether any open child of the ticket is being built right now (the card is not moved between lanes then). */
+export const ticketBusy = (t: JiraTicket) => openChildren(t).some((n) => isBusy(derive().runs.get(n)?.issue.phase));

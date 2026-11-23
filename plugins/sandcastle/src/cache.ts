@@ -82,6 +82,11 @@ export class BoardCache {
     return { snap: e.snap, stale, error: e.error };
   }
 
+  /** Fetches what changed since the last fetch (a full fetch when one is due) and waits for it; throws its error. */
+  async sync(slug: string): Promise<void> {
+    await this.refresh(slug, await this.entry(slug));
+  }
+
   /** Takes a written issue as GitHub answered it. */
   async put(slug: string, issue: Issue): Promise<void> {
     const e = await this.entry(slug);

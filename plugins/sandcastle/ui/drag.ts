@@ -2,19 +2,20 @@
  * Drag cards between drop targets and reorder them inside ordered targets (the per-machine Sandcastle lanes) –
  * mouse (pointer events, 5 px threshold) and touch (long press 350 ms, moving 8 px before that scrolls instead).
  * Cards carry `data-card="<n>"`, targets `data-column="<key>"`, a target's card list `data-list`.
- * A drop calls `onDrop(n, key, before)`; `before` is the drop position in ordered targets (null = end / unordered).
+ * A drop calls `onDrop(id, key, before)` with the card ids (`data-card`); `before` is the drop position in ordered
+ * targets (null = end / unordered).
  * Esc or letting go outside a target cancels; the click after a drag is swallowed (cf. desktop/src/lib/sortable.ts).
  */
 
 export interface DragOptions {
-  canDrag(n: number): boolean;
-  onDrop(n: number, to: string, before: number | null): void;
+  canDrag(id: string): boolean;
+  onDrop(id: string, to: string, before: string | null): void;
   /** targets whose order matters (a drop shows a position line there) */
   ordered(key: string): boolean;
 }
 
 interface Active {
-  n: number;
+  id: string;
   card: HTMLElement;
   clone: HTMLElement;
   from: string;
@@ -23,7 +24,7 @@ interface Active {
   x: number;
   y: number;
   target: HTMLElement | null;
-  before: number | null;
+  before: string | null;
   frame: number;
 }
 
@@ -50,7 +51,7 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
     document.body.append(clone);
     card.classList.add("drag-source");
     document.body.classList.add("is-dragging");
-    active = { n: Number(card.dataset.card), card, clone, from, dx: x - rect.left, dy: y - rect.top, x, y, target: null, before: null, frame: 0 };
+    active = { id: card.dataset.card ?? "", card, clone, from, dx: x - rect.left, dy: y - rect.top, x, y, target: null, before: null, frame: 0 };
     move(x, y);
     active.frame = requestAnimationFrame(autoscroll);
   }
@@ -76,7 +77,7 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
         const r = c.getBoundingClientRect();
         return r.top + r.height / 2 > y;
       });
-      active.before = next ? Number(next.dataset.card) : null;
+      active.before = next?.dataset.card ?? null;
       if (next) list.insertBefore(line, next);
       else list.append(line);
     }
@@ -118,13 +119,13 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
     setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 400);
     const to = a.target?.dataset.column;
     if (!drop || !to) return;
-    if (to !== a.from) opts.onDrop(a.n, to, opts.ordered(to) ? a.before : null);
+    if (to !== a.from) opts.onDrop(a.id, to, opts.ordered(to) ? a.before : null);
     else if (opts.ordered(to)) {
       // dropped where it already was: nothing to do
       let next = a.card.nextElementSibling as HTMLElement | null;
       while (next && !next.dataset.card) next = next.nextElementSibling as HTMLElement | null;
-      const current = next?.dataset.card ? Number(next.dataset.card) : null;
-      if (current !== a.before) opts.onDrop(a.n, to, a.before);
+      const current = next?.dataset.card ?? null;
+      if (current !== a.before) opts.onDrop(a.id, to, a.before);
     }
   }
 
@@ -132,7 +133,7 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
   function onPointerDown(e: PointerEvent) {
     if (e.pointerType === "touch" || e.button !== 0) return;
     const card = (e.target as Element).closest<HTMLElement>("[data-card]");
-    if (!card || !root.contains(card) || !opts.canDrag(Number(card.dataset.card))) return;
+    if (!card || !root.contains(card) || !opts.canDrag(card.dataset.card ?? "")) return;
     const sx = e.clientX;
     const sy = e.clientY;
     // once cancelled (Esc) the gesture stays dead until the button goes up
@@ -157,7 +158,7 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
     const t = e.touches[0];
     if (e.touches.length !== 1 || !t) return;
     const card = (e.target as Element).closest<HTMLElement>("[data-card]");
-    if (!card || !root.contains(card) || !opts.canDrag(Number(card.dataset.card))) return;
+    if (!card || !root.contains(card) || !opts.canDrag(card.dataset.card ?? "")) return;
     const sx = t.clientX;
     const sy = t.clientY;
     let lx = sx;

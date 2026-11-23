@@ -6,6 +6,7 @@ import { BoardCache } from "../src/cache";
 import { HttpError } from "../src/env";
 import { toIssue } from "../src/github";
 import type { DriftItem } from "../src/drift";
+import { Guard, guardDeps, type Timers } from "../src/guard";
 import { type Ctx, handleApi } from "../src/http";
 import { JiraAccess, type JiraCredentials } from "../src/jira";
 import { JiraCache } from "../src/jiracache";
@@ -24,6 +25,8 @@ let jira: FakeJira;
 let creds: JiraCredentials | null;
 /** GitHub label writes: issue id, removed label ids, and how many JIRA calls had happened before */
 let ghWrites: { id: string; remove: string[]; jiraCallsBefore: number }[];
+/** timers the guard set (none fire on their own) */
+let timers: { fn: () => void; ms: number }[];
 const TOKEN = "geheim-token-123";
 
 async function gate(command: string, stdin: unknown): Promise<unknown> {
@@ -55,7 +58,7 @@ beforeEach(() => {
     fetchChanged: async () => [],
   };
   const access = new JiraAccess(() => creds, jira.fetch);
-  ctx = {
+  const base: Omit<Ctx, "guard"> = {
     projects: new Projects(dir, gate, () => NOW),
     boards: new BoardCache(dir, fetchers, () => NOW),
     gate,
@@ -79,6 +82,12 @@ beforeEach(() => {
       return { ...before, labels: before.labels.filter((l) => !gone.has(l.toLowerCase())), updatedAt: "2026-11-23T12:00:00Z" };
     },
   };
+  timers = [];
+  const fakeTimers: Timers = {
+    set: (fn, ms) => timers.push({ fn, ms }),
+    clear: () => {},
+  };
+  ctx = { ...base, guard: new Guard(dir, base.prefs, guardDeps(base), () => NOW, fakeTimers) };
   ghWrites = [];
 });
 afterEach(async () => {
@@ -351,5 +360,54 @@ describe("JIRA API", () => {
     ]);
     // everything on GitHub is closed and JIRA is in testing now: only the info that it could be done
     expect((r.body.ticket as Ticket).drift).toEqual([{ kind: "done-candidate", expected: "Done", actual: "Testing" }]);
+  });
+
+  test("guard run: all actionable drift through drift/apply, the info kinds untouched", async () => {
+    const result = await ctx.guard.run(true);
+    expect(result).toMatchObject({ manual: true, projects: 1, tickets: 3, applied: 5, errors: 0, deferred: 0 });
+    const at = new Date(NOW).toISOString();
+    expect((await call("/api/guard")).body.recent).toEqual([
+      {
+        at,
+        project: "o/r",
+        applied: [
+          { key: "R-1", kind: "label-on-gh", issue: 10, label: "backend" },
+          { key: "R-1", kind: "label-on-gh", issue: 11, label: "backend" },
+          { key: "R-1", kind: "state-behind", to: "In Progress" },
+          { key: "R-4", kind: "label-on-gh", issue: 40, label: "frontend" },
+          { key: "R-5", kind: "state-behind", to: "Testing" },
+        ],
+        errors: [],
+      },
+    ]);
+    expect((await call("/api/jira/board?slug=o/r")).body.counts).toMatchObject({ drift: 0, tickets: 0 });
+    // R-2 is only a done candidate: never moved to Done
+    expect(jira.calls.some((c) => c.method === "POST" && c.path === "/rest/api/3/issue/R-2/transitions")).toBe(false);
+    expect(ghWrites.map((w) => w.id)).toEqual(["I_10", "I_11", "I_40"]);
+  });
+});
+
+describe("guard API", () => {
+  test("disabled by default; settings validated, stored and scheduled", async () => {
+    expect((await call("/api/guard")).body).toEqual({
+      enabled: false,
+      intervalMin: 5,
+      lastRun: null,
+      nextRun: null,
+      running: false,
+      lastResult: null,
+      recent: [],
+    });
+    for (const body of [{ intervalMin: 1 }, { intervalMin: 61 }, { intervalMin: 2.5 }, { intervalMin: "5" }, { enabled: "ja" }])
+      expect((await call("/api/guard", { method: "POST", body })).status).toBe(400);
+    const on = await call("/api/guard", { method: "POST", body: { enabled: true, intervalMin: 2 } });
+    expect(on.body).toMatchObject({ enabled: true, intervalMin: 2, nextRun: new Date(NOW + 120_000).toISOString() });
+    expect(timers.at(-1)?.ms).toBe(120_000);
+    expect(ctx.prefs.get().guard).toEqual({ enabled: true, intervalMin: 2 });
+    // /api/prefs cannot switch the guard behind its back
+    await call("/api/prefs", { method: "POST", body: { guard: { enabled: false }, view: "jira" } });
+    expect(ctx.prefs.get()).toEqual({ guard: { enabled: true, intervalMin: 2 }, view: "jira" });
+    const off = await call("/api/guard", { method: "POST", body: { enabled: false } });
+    expect(off.body).toMatchObject({ enabled: false, intervalMin: 2, nextRun: null });
   });
 });

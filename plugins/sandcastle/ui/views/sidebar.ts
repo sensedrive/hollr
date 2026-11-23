@@ -25,20 +25,38 @@ let grillSig = "";
 
 function ensurePanel(): HTMLElement {
   if (panel) return panel;
-  panel = h("aside", { id: "sidebar", "aria-label": "Issue-Details" });
+  panel = h("aside", { id: "sidebar", "aria-label": "Details" });
   document.body.append(panel);
   return panel;
 }
 
-export function closeSidebar(): void {
+/** Whoever fills the panel now (issue or ticket details); told to let go when the other one claims it. */
+let release: (() => void) | null = null;
+
+/** The one details panel, opened for a new owner; the previous owner forgets what it showed. */
+export function claimPanel(onRelease: () => void): HTMLElement {
+  const el = ensurePanel();
+  if (release !== onRelease) release?.();
+  release = onRelease;
+  el.classList.add("open");
+  document.body.classList.add("sidebar-open");
+  return el;
+}
+
+const releaseIssue = () => {
   shown = null;
   detail = null;
+};
+
+export function closeSidebar(): void {
+  release?.();
+  release = null;
   panel?.classList.remove("open");
   document.body.classList.remove("sidebar-open");
 }
 
 /** Public links inside rendered markdown go to the system browser. */
-function externalLinks(el: HTMLElement): HTMLElement {
+export function externalLinks(el: HTMLElement): HTMLElement {
   el.addEventListener("click", (e) => {
     const a = (e.target as Element).closest("a");
     if (!a) return;
@@ -49,15 +67,13 @@ function externalLinks(el: HTMLElement): HTMLElement {
   return el;
 }
 
-const extLink = (text: string, url: string, cls = "link") =>
+export const extLink = (text: string, url: string, cls = "link") =>
   h("a", { href: url, class: cls, onclick: (e: Event) => { e.preventDefault(); openExternal(url); } }, text, " ↗");
 
 export async function openIssue(n: number): Promise<void> {
-  const el = ensurePanel();
+  const el = claimPanel(releaseIssue);
   shown = n;
   detail = null;
-  el.classList.add("open");
-  document.body.classList.add("sidebar-open");
   // what the board already knows shows at once; text and comments follow
   render(n);
   const slug = state.slug;
@@ -112,7 +128,15 @@ function render(n: number): void {
         parent ? h("dt", {}, "Story") : null,
         parent ? h("dd", {}, h("button", { class: "link", onclick: () => openIssue(parent) }, `#${parent} ${d.stories.get(parent) ?? ""}`)) : null,
         jira ? h("dt", {}, "JIRA") : null,
-        jira ? h("dd", {}, p?.jira.baseUrl ? extLink(jira, `${p.jira.baseUrl.replace(/\/+$/, "")}/browse/${jira}`) : jira) : null,
+        jira
+          ? h(
+              "dd",
+              {},
+              h("button", { class: "link", title: "Ticket in „Tickets“ öffnen", onclick: () => hooks.openTicket(jira) }, jira),
+              p?.jira.baseUrl ? " · " : null,
+              p?.jira.baseUrl ? extLink("JIRA", `${p.jira.baseUrl.replace(/\/+$/, "")}/browse/${jira}`) : null,
+            )
+          : null,
       ),
       grillHost,
       live,
@@ -156,7 +180,7 @@ function staticPart(n: number): (HTMLElement | null)[] {
   ];
 }
 
-const commentEl = (c: Comment) =>
+export const commentEl = (c: Comment) =>
   h("div", { class: "comment" }, h("div", { class: "small" }, h("b", {}, c.author), h("span", { class: "muted" }, ` · ${fmtDate(c.createdAt)}`)), externalLinks(html("markdown", c.bodyHtml)));
 
 /** The blocks that follow polls. Called by app.ts after every render. */
@@ -312,5 +336,5 @@ function moveBlock(n: number, d: Derived, col: Column, lane: string | null, busy
 }
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && shown !== null && !document.body.classList.contains("is-dragging") && !document.querySelector(".overlay")) closeSidebar();
+  if (e.key === "Escape" && panel?.classList.contains("open") && !document.body.classList.contains("is-dragging") && !document.querySelector(".overlay")) closeSidebar();
 });

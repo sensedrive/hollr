@@ -60,6 +60,11 @@ export class JiraCache {
     return { snap: e.snap, fetchedAt: e.fetchedAt, stale: this.now() - e.fetchedAt > STALE_MS, error: e.error };
   }
 
+  /** Fetches what changed since the last fetch (a full fetch when one is due) and waits for it; throws its error. */
+  async sync(projectKey: string, states: JiraStates): Promise<void> {
+    await this.refresh(projectKey, states, await this.entry(projectKey, states));
+  }
+
   /** Takes a written ticket as JIRA answered it. */
   async put(projectKey: string, states: JiraStates, ticket: JiraTicket): Promise<void> {
     const e = await this.entry(projectKey, states);

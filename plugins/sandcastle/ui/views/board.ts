@@ -1,7 +1,9 @@
 /**
- * The board: Zu grillen · Backlog · Sandcastle (one lane per machine with this repo) · Erledigt. Built once, then
- * updated in place on every poll (cards reused, lists reconciled), so scroll positions and the open panel stay.
- * Narrow (< 700 px): one column at a time behind a segmented switcher; long press on a card opens a move menu.
+ * The Werkbank: the GitHub issues in Zu grillen · Backlog · Sandcastle (one lane per machine with this repo) ·
+ * Erledigt. Built once, then updated in place on every poll (cards reused, lists reconciled), so scroll positions
+ * and the open panel stay. Every card names its JIRA ticket (a link into „Tickets“) with the ticket's product labels
+ * dimmed, since GitHub carries none. Narrow (< 700 px): one column at a time behind a segmented switcher; long press
+ * on a card opens a move menu. The lane heads are shared with the Tickets view.
  */
 import { moveTicket, putIssue } from "../actions";
 import { api } from "../api";
@@ -9,13 +11,14 @@ import { derive, type Derived, flagsOf, type Lane, openBlockers } from "../deriv
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
+import { issueTickets, type IssueTicket } from "../tickets";
 import { branchColour, classify, isBusy, laneSummary, PHASE_TEXT, segments, shortBranch, since } from "../model";
 import { clearGrillQueue, grillQueue } from "../grillqueue";
 import { errorText, hooks, laneServers, prefGet, prefSet, state, toast } from "../state";
 import type { Column, Issue, Phase, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
 import { cardEl } from "./cards";
-import { filterBar, filterTokens } from "./filterbar";
+import { filterTokens } from "./filterbar";
 import { autoGrillCandidates, cardGrill, grillMenuItems, openGrillAllDialog } from "./grilling";
 import { showMenu } from "./menu";
 import { openIssue } from "./sidebar";
@@ -33,7 +36,7 @@ interface ColumnEls {
 }
 
 const columnEls = {} as Record<Column, ColumnEls>;
-const laneEls = new Map<string, { el: HTMLElement; head: HTMLElement; list: HTMLElement; sig: string }>();
+const laneEls = new Map<string, LaneEl>();
 /** group headings inside lanes, reused across polls (keyed by machine + run, or machine for „Als Nächstes“) */
 const groupEls = new Map<string, HTMLElement>();
 let root: HTMLElement | null = null;
@@ -49,7 +52,8 @@ let grillQueueEl: HTMLElement;
 /** what „Alle auto-grillen“ would queue (the filtered cards of „Zu grillen“ without a grill) */
 let grillCandidates: Issue[] = [];
 let visible = { keys: [] as (string | null)[], count: 0 };
-let bar: ReturnType<typeof filterBar>;
+/** keys and count of the visible cards (the JIRA link button) */
+export const boardVisible = () => visible;
 
 function column(c: Column): ColumnEls {
   const count = h("span", { class: "count" });
@@ -65,9 +69,6 @@ function column(c: Column): ColumnEls {
 export function boardView(): HTMLElement {
   if (root) return root;
   seg = prefGet<Column>("seg") ?? "backlog";
-  bar = filterBar(() => visible, [
-    h("button", { class: "btn primary", "aria-label": "Neues Issue", onclick: () => newIssue() }, "+", h("span", { class: "wide-only" }, " Neues Issue")),
-  ]);
   segsEl = h("div", { class: "segs", role: "tablist" });
   columnsEl = h("div", { class: "columns" });
   for (const c of ["grill", "backlog", "queue", "done"] as Column[]) columnEls[c] = column(c);
@@ -79,26 +80,36 @@ export function boardView(): HTMLElement {
   columnEls.grill.el.insertBefore(h("div", { class: "col-actions" }, grillAllBtn, grillQueueEl), columnEls.grill.list);
   olderBtn = h("button", { class: "btn older", onclick: () => loadOlder() }, "Ältere laden");
   staleEl = h("div", { class: "stale", hidden: true });
-  root = h("div", { class: "board" }, bar.el, staleEl, segsEl, columnsEl);
+  root = h("div", { class: "board" }, staleEl, segsEl, columnsEl);
   root.addEventListener("click", onClick);
   root.addEventListener("keydown", (e) => {
     const card = (e.target as Element).closest<HTMLElement>("[data-card]");
     if (card && e.key === "Enter") openCard(Number(card.dataset.card));
   });
   enableDrag(columnsEl, {
-    canDrag: (n) => !isNarrow() && !isBusy(derive().runs.get(n)?.issue.phase),
+    canDrag: (id) => !isNarrow() && !isBusy(derive().runs.get(Number(id))?.issue.phase),
     ordered: (key) => key.startsWith("queue@"),
-    onDrop,
+    onDrop: (id, key, before) => onDrop(Number(id), key, before === null ? null : Number(before)),
   });
-  longPress(columnsEl);
+  longPress(columnsEl, (id) => cardMenu(Number(id)));
   narrowQuery.addEventListener("change", () => renderBoard());
   return root;
 }
 
 function onClick(e: Event): void {
   const t = e.target as Element;
+  const jira = t.closest<HTMLElement>("[data-jira]");
+  if (jira) {
+    hooks.openTicket(jira.dataset.jira ?? "");
+    return;
+  }
   const card = t.closest<HTMLElement>("[data-card]");
   if (card) openCard(Number(card.dataset.card));
+  laneClick(t);
+}
+
+/** Clicks in a lane head (start, run row, fold) – the Werkbank's and the Tickets view's lanes alike. */
+export function laneClick(t: Element): void {
   const start = t.closest<HTMLElement>("[data-start]");
   if (start) {
     state.startFor = start.dataset.start ?? null;
@@ -144,8 +155,8 @@ function onDrop(n: number, key: string, before: number | null): void {
   } else moveTicket(n, key as Column);
 }
 
-/** Touch: long press opens the move menu (narrow list mode has no dragging). Desktop: right click. */
-function longPress(el: HTMLElement): void {
+/** Touch: long press opens the card's menu (narrow list mode has no dragging). Desktop: right click. */
+export function longPress(el: HTMLElement, menu: (id: string) => void): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   el.addEventListener(
     "touchstart",
@@ -175,7 +186,7 @@ function longPress(el: HTMLElement): void {
         };
         window.addEventListener("click", swallow, { capture: true, once: true });
         setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 600);
-        cardMenu(Number(card.dataset.card));
+        menu(card.dataset.card ?? "");
       }, 450);
       el.addEventListener("touchmove", onMove, { passive: true });
       el.addEventListener("touchend", cancel);
@@ -186,7 +197,7 @@ function longPress(el: HTMLElement): void {
     const card = (e.target as Element).closest<HTMLElement>("[data-card]");
     if (!card) return;
     e.preventDefault();
-    cardMenu(Number(card.dataset.card));
+    menu(card.dataset.card ?? "");
   });
 }
 
@@ -215,6 +226,9 @@ function cardMenu(n: number): void {
 
 // ---- render
 
+/** GitHub issue → its JIRA ticket (from the JIRA board), refreshed per render */
+let ticketsByIssue = new Map<number, IssueTicket>();
+
 function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, laneOrder = false): HTMLElement[] {
   const hide = new Set([d.project?.labels.queue, d.project?.labels.story, d.project?.labels.grill]);
   const out: HTMLElement[] = [];
@@ -225,6 +239,8 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
     const tr = d.runs.get(issue.number);
     // the branch belongs to the ticket while its run has it (also after merging, for the „Erledigt“ column)
     const branch = tr?.run.branch || undefined;
+    const ticket = ticketsByIssue.get(issue.number);
+    const key = ticket?.key ?? issue.jira;
     out.push(
       cardEl({
         issue,
@@ -237,9 +253,10 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
         blockers: issue.state === "open" ? openBlockers(d, issue) : [],
         locked: isBusy(tr?.issue.phase),
         grill: cardGrill(d, issue.number),
+        ticket: { key, labels: ticket?.labels ?? [], drift: ticket?.drift ?? [] },
       }),
     );
-    visible.keys.push(issue.jira);
+    visible.keys.push(key);
     visible.count++;
   }
   return out;
@@ -248,21 +265,29 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
 const empty = (text: string) => h("p", { class: "empty" }, text);
 
 /** machines whose lane is folded to its head (remembered across tunnels in the plugin's prefs) */
-const closedLanes = (): string[] => prefGet<string[]>("lanesClosed") ?? [];
+export const closedLanes = (): string[] => prefGet<string[]>("lanesClosed") ?? [];
 
 function toggleLane(server: string): void {
   const closed = closedLanes();
   prefSet("lanesClosed", closed.includes(server) ? closed.filter((s) => s !== server) : [...closed, server]);
-  renderBoard();
+  hooks.render();
 }
 
-function laneEl(d: Derived, lane: Lane) {
-  let el = laneEls.get(lane.server.id);
+export interface LaneEl {
+  el: HTMLElement;
+  head: HTMLElement;
+  list: HTMLElement;
+  sig: string;
+}
+
+/** A machine lane (head with its runs, card list) from a view's own cache; `dropKey` = its drop target key. */
+export function laneEl(els: Map<string, LaneEl>, d: Derived, lane: Lane, dropKey: string): LaneEl {
+  let el = els.get(lane.server.id);
   if (!el) {
     const head = h("div", { class: "lane-head" });
     const list = h("div", { class: "list", "data-list": true });
-    el = { el: h("div", { class: "lane", "data-column": `queue@${lane.server.id}` }, head, list), head, list, sig: "" };
-    laneEls.set(lane.server.id, el);
+    el = { el: h("div", { class: "lane", "data-column": dropKey }, head, list), head, list, sig: "" };
+    els.set(lane.server.id, el);
   }
   const closed = closedLanes().includes(lane.server.id);
   const live = lane.runs.filter((r) => r.status !== "ended");
@@ -390,7 +415,9 @@ export function renderBoard(): void {
   if (!root || dragging()) return;
   const d = derive();
   const board = state.board;
-  const test = board ? compile(filterTokens(), { viewer: board.viewer, stories: board.stories }) : () => true;
+  ticketsByIssue = state.jira ? issueTickets(state.jira) : new Map();
+  const drift = new Set([...ticketsByIssue].filter(([, t]) => t.drift.length).map(([n]) => n));
+  const test = board ? compile(filterTokens(), { viewer: board.viewer, stories: board.stories, drift }) : () => true;
   visible = { keys: [], count: 0 };
   const hasGrill = !!board?.hasGrill;
   const cols: Column[] = hasGrill ? ["grill", "backlog", "queue", "done"] : ["backlog", "queue", "done"];
@@ -407,7 +434,7 @@ export function renderBoard(): void {
   // Sandcastle: a lane per machine
   let queueCount = 0;
   const lanes = d.lanes.map((lane) => {
-    const el = laneEl(d, lane);
+    const el = laneEl(laneEls, d, lane, `queue@${lane.server.id}`);
     const cards = laneCards(d, lane, test);
     queueCount += cards.filter((c) => c.dataset.card).length;
     // folded lanes keep no cards in the DOM (a drop there appends to its queue)
@@ -447,7 +474,6 @@ export function renderBoard(): void {
     );
   staleEl.hidden = !board?.refreshError;
   staleEl.textContent = board?.refreshError ? `GitHub nicht erreichbar – Stand ${new Date(board.fetchedAt).toLocaleTimeString("de-DE", { timeStyle: "short" })}: ${board.refreshError}` : "";
-  bar.update();
 }
 
 function pickSeg(c: Column): void {
@@ -479,7 +505,7 @@ async function loadOlder(): Promise<void> {
 
 // ---- new issue
 
-function newIssue(): void {
+export function newIssue(): void {
   const d = derive();
   const board = state.board;
   if (!board || !d.project) return;

@@ -1,8 +1,9 @@
 /**
  * The board's JSON API (/api/*), keyed by repo slug (contract C): GitHub issues, and JIRA tickets with their
- * GitHub family and drift (/api/jira/*, /api/drift/*). Queue order, runs and logs are the machines' business
- * (`hollr gate sandcastle`, reached through the Hollr host relay, or /api/host/gate when the page runs outside
- * Hollr). Errors answer {error} with 400, 404, 409 (JIRA: `jira-missing`, transition not possible) or 502.
+ * GitHub family and drift (/api/jira/*, /api/drift/*), and the drift guard (/api/guard). Queue order, runs and
+ * logs are the machines' business (`hollr gate sandcastle`, reached through the Hollr host relay, or
+ * /api/host/gate when the page runs outside Hollr). Errors answer {error} with 400, 404, 409 (JIRA:
+ * `jira-missing`, transition not possible) or 502.
  */
 import { hostname } from "node:os";
 import { renderMarkdown } from "./body";
@@ -10,6 +11,7 @@ import { type Column, COLUMNS, classify, type MovePlan, movePlan } from "./board
 import type { BoardCache } from "./cache";
 import { HttpError } from "./env";
 import * as github from "./github";
+import type { Guard } from "./guard";
 import type { JiraAccess } from "./jira";
 import { applyDrift, jiraBoard, jiraComment, jiraIssue, jiraLabels, jiraTransition } from "./jiraboard";
 import type { JiraCache } from "./jiracache";
@@ -33,6 +35,8 @@ export interface Ctx {
   live: LiveRuns;
   /** the GitHub label/state write of JIRA-driven fixes (github.updateIssue; tests record it) */
   updateIssue: typeof github.updateIssue;
+  /** the drift guard: periodic apply of actionable drift */
+  guard: Guard;
 }
 
 /** Gate commands /api/host/gate passes on – the same allowlist the manifest gives the Hollr relay. */
@@ -205,7 +209,14 @@ async function route(req: Request, url: URL, ctx: Ctx): Promise<unknown> {
   }
 
   if (method === "GET" && path === "/api/prefs") return { prefs: ctx.prefs.get() };
-  if (method === "POST" && path === "/api/prefs") return { prefs: ctx.prefs.patch(await json(req)) };
+  if (method === "POST" && path === "/api/prefs") {
+    // the guard's settings go through /api/guard, which also (re)schedules it
+    const { guard: _, ...patch } = await json(req);
+    return { prefs: ctx.prefs.patch(patch) };
+  }
+
+  if (method === "GET" && path === "/api/guard") return ctx.guard.status();
+  if (method === "POST" && path === "/api/guard") return ctx.guard.update(await json(req));
 
   if (method === "GET" && path === "/api/host/servers")
     return { servers: [{ id: "local", label: hostname().replace(/\.local$/, ""), self: true, online: true }] };

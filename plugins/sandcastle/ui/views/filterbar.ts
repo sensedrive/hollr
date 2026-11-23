@@ -1,13 +1,15 @@
 /**
- * Quick filter above the board: committed tokens as chips, the word being typed in the input, autocomplete from
- * the cached labels/assignees/stories, and a row of frequent labels/assignees to toggle with one tap.
- * `/` focuses, Tab completes, Backspace on an empty input drops the last chip, Esc clears.
+ * Quick filter above both board modes: committed tokens as chips, the word being typed in the input, autocomplete
+ * from the cached labels/assignees/stories (Tickets: JIRA labels, assignees, epics), and a row of frequent ones plus
+ * `drift:` to toggle with one tap. `/` focuses, Tab completes, Backspace on an empty input drops the last chip,
+ * Esc clears.
  */
 import { copyText, fill, h } from "../dom";
 import { derive } from "../derive";
-import { type Suggestion, serialize, suggest, type Token, tokenize, tokenText, writeHash } from "../filter";
+import { type SuggestSource, type Suggestion, serialize, suggest, type Token, tokenize, tokenText, writeHash } from "../filter";
 import { githubOnly, jiraLink } from "../jira";
 import { hooks, prefSet, state, toast } from "../state";
+import { ticketFacets } from "../tickets";
 
 let committed: Token[] = [];
 let active = 0;
@@ -100,17 +102,52 @@ function lastWord(): string {
   return input.value.match(/(\S*)$/)?.[1] ?? "";
 }
 
-function openSuggest(): void {
+/** Suggestions and the one-tap row of the mode on show: Tickets → JIRA, Werkbank → GitHub. */
+function source(): (SuggestSource & { quick: string[] }) | null {
+  const top = (m: Map<string, number>, n: number) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+  const drift = state.jira?.counts.drift ? ["drift:"] : [];
+  if (state.mode === "tickets") {
+    const j = state.jira;
+    if (!j) return null;
+    const f = ticketFacets(j.tickets);
+    return {
+      labels: [...f.labels.keys()].sort((a, b) => a.localeCompare(b, "de")),
+      assignees: [...f.assignees].map(([login, a]) => ({ login, name: a.name })),
+      stories: [...f.epics].map(([key, summary]) => ({ number: key, title: summary })),
+      quick: [
+        ...drift,
+        ...top(f.labels, 7).map((l) => tokenText({ kind: "label", value: l })),
+        ...top(new Map([...f.assignees].map(([login, a]) => [login, a.count])), 4).map((u) => `@${u}`),
+      ],
+    };
+  }
   const b = state.board;
   const p = derive().project;
-  const hidden = new Set([p?.labels.queue, p?.labels.story, p?.labels.grill]);
-  suggestions = b
-    ? suggest(lastWord(), {
-        labels: b.labels.map((l) => l.name).filter((l) => !hidden.has(l)),
-        assignees: b.assignees,
-        stories: b.stories,
-      })
-    : [];
+  if (!b || !p) return null;
+  const hidden = new Set([p.labels.queue, p.labels.story, p.labels.grill]);
+  const labelCount = new Map<string, number>();
+  const userCount = new Map<string, number>();
+  for (const i of b.issues) {
+    if (i.state !== "open") continue;
+    for (const l of i.labels) if (!hidden.has(l)) labelCount.set(l, (labelCount.get(l) ?? 0) + 1);
+    for (const a of i.assignees) userCount.set(a, (userCount.get(a) ?? 0) + 1);
+  }
+  return {
+    labels: b.labels.map((l) => l.name).filter((l) => !hidden.has(l)),
+    assignees: b.assignees,
+    stories: b.stories,
+    quick: [
+      ...drift,
+      ...(b.viewer ? ["@ich"] : []),
+      ...top(labelCount, 7).map((l) => tokenText({ kind: "label", value: l })),
+      ...top(userCount, 4).map((u) => `@${u}`),
+    ],
+  };
+}
+
+function openSuggest(): void {
+  const src = source();
+  suggestions = src ? suggest(lastWord(), src) : [];
   active = 0;
   dropdown.hidden = !suggestions.length;
   fill(
@@ -195,26 +232,7 @@ document.addEventListener("keydown", (e) => {
 
 /** Frequent labels and assignees of the open tickets, for one-tap toggles on touch. */
 function renderQuick(): void {
-  const b = state.board;
-  const p = derive().project;
-  if (!b || !p) {
-    fill(quick);
-    return;
-  }
-  const hidden = new Set([p.labels.queue, p.labels.story, p.labels.grill]);
-  const labelCount = new Map<string, number>();
-  const userCount = new Map<string, number>();
-  for (const i of b.issues) {
-    if (i.state !== "open") continue;
-    for (const l of i.labels) if (!hidden.has(l)) labelCount.set(l, (labelCount.get(l) ?? 0) + 1);
-    for (const a of i.assignees) userCount.set(a, (userCount.get(a) ?? 0) + 1);
-  }
-  const top = (m: Map<string, number>, n: number) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
-  const opts = [
-    ...(b.viewer ? ["@ich"] : []),
-    ...top(labelCount, 7).map((l) => tokenText({ kind: "label", value: l })),
-    ...top(userCount, 4).map((u) => `@${u}`),
-  ];
+  const opts = source()?.quick ?? [];
   const on = new Set(committed.map(tokenText));
   fill(quick, ...opts.map((o) => h("button", { class: `qchip${on.has(o) ? " on" : ""}`, title: o, onclick: () => toggle(o) }, o.replace(/^l:"?|"$/g, ""))));
 }
@@ -228,7 +246,8 @@ async function copyJira(visibleKeys: (string | null)[], visibleCount: number): P
     return;
   }
   const missing = visibleCount - link.keys.length;
-  const gh = githubOnly(currentTokens()).map(tokenText);
+  // in Tickets labels and assignees are JIRA's own: nothing is filtered on GitHub only
+  const gh = state.mode === "tickets" ? [] : githubOnly(currentTokens()).map(tokenText);
   const extra = [
     missing > 0 ? `${missing} ohne JIRA-Schlüssel fehlen` : "",
     gh.length ? `nur in GitHub gefiltert: ${gh.join(" ")}` : "",

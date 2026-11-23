@@ -157,7 +157,8 @@ const WORKFLOW_PREFIXES = ["wayfinder:"];
 /** Whether a GitHub label is a workflow label (GitHub owns it, never drift); names compare case-insensitively. */
 export function workflowMatcher(labels: Project["labels"]): (label: string) => boolean {
   const names = new Set(
-    [labels.queue, labels.story, labels.grill, labels.ready, labels.ciFailed, labels.nogo, ...labels.workflow]
+    // older hollr servers (≤ 0.52.0) don't send `workflow` yet
+    [labels.queue, labels.story, labels.grill, labels.ready, labels.ciFailed, labels.nogo, ...(labels.workflow ?? [])]
       .filter((l): l is string => !!l)
       .concat(DEFAULT_WORKFLOW_LABELS)
       .map((l) => l.toLowerCase()),

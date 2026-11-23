@@ -1,11 +1,11 @@
 /**
  * Quick filter: a tiny token language, parsed and matched per keystroke, client-side only.
- *   l:<label>  -l:<label>  @<login> (@ich = the gh user)  s:<story nr|text>  #<n>  anything else = full text
+ *   l:<label>  -l:<label>  @<login> (@ich = the gh user)  s:<story nr|text>  #<n>  drift:  anything else = full text
  * Same-kind semantics: labels and text narrow (AND), assignees/stories/numbers widen (OR) – "#612 #615" shows both.
  */
 import type { Issue } from "./types";
 
-export type TokenKind = "label" | "nolabel" | "assignee" | "story" | "number" | "text";
+export type TokenKind = "label" | "nolabel" | "assignee" | "story" | "number" | "drift" | "text";
 
 export interface Token {
   kind: TokenKind;
@@ -18,6 +18,8 @@ export interface FilterContext {
   /** login for `@ich`; falsy = unknown (then `@ich` matches nothing) */
   viewer?: string | null;
   stories: { number: number; title: string }[];
+  /** issues with a drift badge (`drift:`); missing = none known */
+  drift?: ReadonlySet<number>;
 }
 
 /** One word → token. Prefixes without a value (`l:`, `@`) stay text so half-typed input doesn't empty the board. */
@@ -26,6 +28,7 @@ export function parseToken(word: string): Token | null {
   if (!w) return null;
   const pick = (kind: TokenKind, value: string): Token =>
     value ? { kind, value } : { kind: "text", value: w };
+  if (/^drift:$/i.test(w)) return { kind: "drift", value: "" };
   if (/^-l:/i.test(w)) return pick("nolabel", w.slice(3));
   if (/^l:/i.test(w)) return pick("label", w.slice(2));
   if (/^s:/i.test(w)) return pick("story", w.slice(2));
@@ -62,6 +65,8 @@ export function tokenText(t: Token): string {
       return `s:${quote(t.value)}`;
     case "number":
       return `#${t.value}`;
+    case "drift":
+      return "drift:";
     default:
       return quote(t.value);
   }
@@ -82,6 +87,7 @@ export function compile(tokens: Token[], ctx: FilterContext): (issue: Issue) => 
     .map((t) => (lc(t.value) === "ich" ? matcher({ ...t, partial: false }, lc(ctx.viewer || "\u0000")) : matcher(t, lc(t.value))));
   const numbers = tokens.filter((t) => t.kind === "number").map((t) => Number(t.value));
   const texts = tokens.filter((t) => t.kind === "text").map((t) => lc(t.value));
+  const drift = tokens.some((t) => t.kind === "drift");
   // s:<nr> or s:<text in the story title> → a set of story numbers
   const storyTokens = tokens.filter((t) => t.kind === "story");
   const stories = new Set<number>();
@@ -96,6 +102,7 @@ export function compile(tokens: Token[], ctx: FilterContext): (issue: Issue) => 
     if (nolabels.some((l) => own.includes(l))) return false;
     if (assignees.length && !issue.assignees.some((a) => assignees.some((m) => m(lc(a))))) return false;
     if (numbers.length && !numbers.includes(issue.number)) return false;
+    if (drift && !ctx.drift?.has(issue.number)) return false;
     if (storyTokens.length && !(issue.parent !== null && stories.has(issue.parent)) && !stories.has(issue.number))
       return false;
     if (texts.length) {
@@ -115,7 +122,8 @@ export interface Suggestion {
 export interface SuggestSource {
   labels: string[];
   assignees: { login: string; name?: string | null }[];
-  stories: { number: number; title: string }[];
+  /** GitHub stories by number, or JIRA epics by key */
+  stories: { number: number | string; title: string }[];
 }
 
 /** Completions for the word being typed (the input's last word). */
@@ -133,7 +141,7 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
       .map((a) => ({ text: `@${a.login}`, hint: a.name ?? undefined }));
   else
     out = src.stories
-      .filter((s) => String(s.number).startsWith(q) || lc(s.title).includes(q))
+      .filter((s) => lc(String(s.number)).startsWith(q) || lc(s.title).includes(q))
       .map((s) => ({ text: `s:${s.number}`, hint: s.title }));
   // prefix matches first, then the rest in source order
   const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|@)"?/i, "")).startsWith(q);

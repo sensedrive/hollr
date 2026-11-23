@@ -3,9 +3,11 @@
  * previous answers and only then catches up with the network (no blocking spinner after the first paint).
  */
 import { api, apiKeepalive } from "./api";
-import type { BoardData, Issue, Project, QueueState, Server, Status } from "./types";
+import type { BoardData, Issue, JiraBoardData, Project, QueueState, Server, Status } from "./types";
 
 export type View = "board" | "runs";
+/** What „Board“ shows: JIRA tickets (default) or the GitHub issues of the Werkbank. */
+export type Mode = "tickets" | "werkbank";
 
 /** What the Läufe view shows on the right: a ticket's or a run's log. */
 export interface LogSelection {
@@ -37,6 +39,13 @@ export const state = {
   grillSel: null as { server: string; id: string } | null,
   /** server whose start form the Läufe view should bring into view */
   startFor: null as string | null,
+  mode: "tickets" as Mode,
+  /** JIRA tickets of the selected project with their GitHub family and drift */
+  jira: null as JiraBoardData | null,
+  /** no JIRA access stored on this machine (409 jira-missing) */
+  jiraMissing: false,
+  /** the last JIRA board load failed (no project key, JIRA down …) */
+  jiraError: null as string | null,
 };
 
 /** All known projects by slug: the own machine's first, then what other machines add. */
@@ -71,6 +80,11 @@ export const hooks = {
   reloadStatus: async (): Promise<void> => {},
   reloadQueues: async (): Promise<void> => {},
   show: (_view: View) => {},
+  /** switches Tickets | Werkbank (and to „Board“) */
+  showMode: (_mode: Mode) => {},
+  reloadJira: async (): Promise<void> => {},
+  /** Tickets view + the ticket's details */
+  openTicket: (_key: string) => {},
 };
 
 // ---- settings (project, view, filter, column, start form) – on the plugin server, because the page origin

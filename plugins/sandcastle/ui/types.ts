@@ -207,3 +207,113 @@ export interface IssueDetail extends Issue {
   bodyHtml: string;
   comments: Comment[];
 }
+
+// ---- C: plugin /api, JIRA (src/jira.ts, src/drift.ts, src/jiraboard.ts)
+
+export type StatusCategory = "new" | "indeterminate" | "done";
+
+export interface JiraStatus {
+  name: string;
+  category: StatusCategory;
+}
+
+/** A GitHub issue of a ticket's family. */
+export interface FamilyMember {
+  n: number;
+  title: string;
+  state: "open" | "closed";
+  labels: string[];
+  /** phase in a live Sandcastle run */
+  phase?: string;
+}
+
+export interface Family {
+  grill?: FamilyMember;
+  story?: FamilyMember;
+  children: FamilyMember[];
+}
+
+export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "no-key";
+
+export interface DriftItem {
+  kind: DriftKind;
+  issue?: number;
+  label?: string;
+  /** label-on-gh: the ticket already has the label in JIRA */
+  inJira?: boolean;
+  expected?: string;
+  actual?: string;
+}
+
+export interface JiraTicket {
+  key: string;
+  summary: string;
+  status: string;
+  category: StatusCategory;
+  labels: string[];
+  assignee: { accountId: string; name: string; avatarUrl: string | null } | null;
+  type: string;
+  subtask: boolean;
+  epic: { key: string; summary: string } | null;
+  parent: string | null;
+  priority: string | null;
+  created: string;
+  updated: string;
+  /** browse link, null without jira.baseUrl */
+  url: string | null;
+  family: Family;
+  derived: "inProgress" | "testing" | null;
+  drift: DriftItem[];
+}
+
+export interface UnlinkedIssue extends FamilyMember {
+  drift: DriftItem[];
+}
+
+export interface JiraBoardData {
+  etag: string;
+  fetchedAt: string;
+  stale: boolean;
+  refreshError?: string;
+  /** workflow order */
+  statuses: JiraStatus[];
+  tickets: JiraTicket[];
+  unlinked: UnlinkedIssue[];
+  counts: { drift: number; info: number; tickets: number };
+}
+
+export interface JiraTransition {
+  id: string;
+  name: string;
+  to: string;
+  category: StatusCategory;
+}
+
+export interface JiraIssueDetail {
+  ticket: JiraTicket;
+  description: string;
+  descriptionHtml: string;
+  comments: Comment[];
+  transitions: JiraTransition[];
+}
+
+// ---- C: the drift guard (/api/guard, src/guard.ts)
+
+export interface GuardApplied {
+  key: string;
+  kind: "label-on-gh" | "state-behind";
+  issue?: number;
+  label?: string;
+  to?: string;
+}
+
+export interface GuardStatus {
+  enabled: boolean;
+  intervalMin: number;
+  lastRun: string | null;
+  nextRun: string | null;
+  running: boolean;
+  lastResult: { at: string; finishedAt: string; manual: boolean; projects: number; tickets: number; applied: number; errors: number; deferred: number } | null;
+  /** project runs with something applied or failed, newest first */
+  recent: { at: string; project: string; applied: GuardApplied[]; errors: { key?: string; message: string }[]; stopped?: boolean }[];
+}
