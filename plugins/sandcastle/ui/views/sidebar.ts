@@ -9,6 +9,7 @@ import { derive, type Derived, flagsOf } from "../derive";
 import { fill, fmtDate, h, html } from "../dom";
 import { branchColour, classify, isBusy, normaliseFlags, PHASE_TEXT } from "../model";
 import { errorText, hooks, serverLabel, state, toast } from "../state";
+import { grillBlock, grillBlockSig } from "./grilling";
 import type { Column, Comment, IssueDetail, TicketFlags } from "../types";
 
 const NAMES: Record<Column, string> = { grill: "Zu grillen", backlog: "Backlog", queue: "Sandcastle", done: "Erledigt" };
@@ -18,6 +19,9 @@ let shown: number | null = null;
 let detail: IssueDetail | null = null;
 let live: HTMLElement | null = null;
 let liveSig = "";
+/** the „Grillen“ block: rebuilt on its own, so a poll of the board does not reset a half-chosen advisor */
+let grillHost: HTMLElement | null = null;
+let grillSig = "";
 
 function ensurePanel(): HTMLElement {
   if (panel) return panel;
@@ -91,6 +95,8 @@ function render(n: number): void {
   const p = d.project;
   live = h("div", { class: "side-live" });
   liveSig = "";
+  grillHost = h("div", { class: "side-grill" });
+  grillSig = "";
   fill(
     el,
     header(n, url),
@@ -108,6 +114,7 @@ function render(n: number): void {
         jira ? h("dt", {}, "JIRA") : null,
         jira ? h("dd", {}, p?.jira.baseUrl ? extLink(jira, `${p.jira.baseUrl.replace(/\/+$/, "")}/browse/${jira}`) : jira) : null,
       ),
+      grillHost,
       live,
       h("div", { class: "side-static" }, ...staticPart(n)),
     ),
@@ -165,6 +172,12 @@ export function renderLive(): void {
   const tr = d.runs.get(n);
   const lane = d.laneOf.get(n) ?? null;
   const flags = flagsOf(d, n);
+  const inGrill = col === "grill";
+  const gSig = grillBlockSig(d, n, inGrill);
+  if (grillHost && gSig !== grillSig) {
+    grillSig = gSig;
+    fill(grillHost, grillBlock(d, n, inGrill));
+  }
   const sig = JSON.stringify([labels, stateText, col, tr?.issue, tr?.run.branch, tr?.run.issues.map((i) => i.n), lane, flags, lane ? d.lanes.find((l) => l.server.id === lane)?.order : null, d.lanes.map((l) => l.server.id), state.board?.labels.length]);
   if (sig === liveSig) return;
   liveSig = sig;
@@ -198,6 +211,7 @@ function labelsBlock(n: number, labels: string[]): HTMLElement {
 
 function jumpToLog(server: string, run: string, n: number | null, path: string | null): void {
   state.selection = { server, run, n, path };
+  state.grillSel = null;
   hooks.show("runs");
 }
 

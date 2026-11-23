@@ -27,6 +27,8 @@ export interface Settings {
   chatOverview: boolean;
   /** prompt snippets (chips) above the composer */
   composerChips: boolean;
+  /** plugins pinned to the sidebar's top navigation (server + plugin id; name as shown when pinned) */
+  pinnedPlugins: { server: string; id: string; name: string }[];
 }
 
 const defaults: Settings = {
@@ -44,6 +46,7 @@ const defaults: Settings = {
   liveHeadphones: false,
   chatOverview: true,
   composerChips: false,
+  pinnedPlugins: [],
 };
 
 function load(): Settings {

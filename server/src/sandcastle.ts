@@ -24,6 +24,15 @@ import {
 } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import {
+  collectGrills,
+  type Grill,
+  grillLabel,
+  grillPrompt,
+  readGrillRecords,
+  recordGrill,
+  validateGrillRequest,
+} from "./grills";
 import { type Agent, execHerdr, Herdr, newChat, promptWhenReady } from "./herdr";
 import { which } from "./tools";
 
@@ -159,6 +168,11 @@ export interface SandcastleRequest {
   order?: unknown;
   tickets?: unknown;
   config?: Record<string, unknown>;
+  /** grill-start */
+  n?: unknown;
+  key?: unknown;
+  mode?: unknown;
+  advisor?: unknown;
 }
 
 /** What a call may replace – tests inject processes and herdr's agents and keep gh out. */
@@ -175,6 +189,8 @@ export interface Deps {
   startSession?: (cwd: string, label: string, prompt: string) => Promise<string>;
   /** the queue-labelled open issues for `start` (default: gh); null = unknown */
   queuedIssues?: (p: Project) => Promise<number[] | null>;
+  /** pane → its herdr tab and workspace labels (default: herdr) */
+  labels?: Map<string, string[]>;
 }
 
 // ── small helpers ──────────────────────────────────────────────────────────────────────────────────
@@ -902,6 +918,28 @@ async function herdrAgents(): Promise<Agent[] | null> {
   }
 }
 
+/** pane → [tab label, workspace label]: grills are recognised by their session label. */
+async function herdrLabels(): Promise<Map<string, string[]>> {
+  const labels = new Map<string, string[]>();
+  try {
+    const [ws, tabs, panes] = (await Promise.all([
+      execHerdr(["workspace", "list"]),
+      execHerdr(["tab", "list"]),
+      execHerdr(["pane", "list"]),
+    ])) as [
+      { workspaces?: { workspace_id?: string; label?: string }[] },
+      { tabs?: { tab_id?: string; label?: string }[] },
+      { panes?: { pane_id?: string; tab_id?: string; workspace_id?: string }[] },
+    ];
+    const wsLabel = new Map((ws.workspaces ?? []).map((w) => [w.workspace_id, w.label ?? ""]));
+    const tabLabel = new Map((tabs.tabs ?? []).map((t) => [t.tab_id, t.label ?? ""]));
+    for (const p of panes.panes ?? [])
+      if (p.pane_id)
+        labels.set(p.pane_id, [tabLabel.get(p.tab_id) ?? "", wsLabel.get(p.workspace_id) ?? ""]);
+  } catch {}
+  return labels;
+}
+
 // ── git facts of a working folder (files only, no git process) ──────────────────────────────────────
 
 /** git dir, common dir and branch of `cwd` from its `.git` (a dir, or a worktree's `gitdir:` file). */
@@ -1221,26 +1259,8 @@ function buildRun(a: RunInput): Run {
   };
 }
 
-/** All runs on this machine: loop processes, the lock's run, folders with logs from the last 24 h. */
-async function scan(
-  deps: Deps,
-  opts: { agents: boolean },
-): Promise<{ runs: Run[]; lock: RunRecord | null }> {
-  const now = deps.now ?? Date.now();
-  const [cache, procs, agents] = await Promise.all([
-    projectCache(deps),
-    deps.procs ? Promise.resolve(deps.procs) : loopProcesses(),
-    !opts.agents
-      ? Promise.resolve(null)
-      : deps.agents !== undefined
-        ? Promise.resolve(deps.agents)
-        : herdrAgents(),
-  ]);
-  const { lock, active } = opts.agents
-    ? evaluateLock(cache, agents)
-    : { lock: readLock(), active: !readLock()?.endedAt };
-  const lockActive = !!lock && active;
-
+/** Repo (git common dir) → project, clones of a slug included. */
+function projectsByCommon(cache: ProjectCache): Map<string, Project> {
   const byCommon = new Map<string, Project>();
   const projectsBySlug = new Map(cache.projects.map((p) => [p.slug, p]));
   for (const c of cache.checkouts) {
@@ -1248,23 +1268,82 @@ async function scan(
     if (p) byCommon.set(c.gitCommonDir, p);
   }
   for (const p of cache.projects) if (!p.error) byCommon.set(p.gitCommonDir, p);
+  return byCommon;
+}
 
-  // candidate folders: cheap to list, most have no recent logs
+/** Working folders runs and grills can live in: project roots, their worktrees, herdr's worktrees. */
+function candidateDirs(cache: ProjectCache, byCommon: Map<string, Project>): Set<string> {
   const dirs = new Set<string>();
-  for (const p of procs) if (p.cwd) dirs.add(p.cwd);
-  if (lockActive && lock) dirs.add(lock.cwd ?? lock.root);
   const roots = [...cache.checkouts.map((c) => c.root), ...cache.projects.map((p) => p.root)];
   for (const root of new Set(roots)) {
     dirs.add(root);
     for (const w of listDir(join(root, ".herdr", "worktrees")))
       dirs.add(join(root, ".herdr", "worktrees", w));
   }
-  for (const common of new Set([...byCommon.keys()]))
-    for (const w of worktreesOf(common)) dirs.add(w);
+  for (const common of byCommon.keys()) for (const w of worktreesOf(common)) dirs.add(w);
   const herdrRoot = join(home(), ".herdr", "worktrees");
   for (const proj of listDir(herdrRoot))
     for (const w of listDir(join(herdrRoot, proj))) dirs.add(join(herdrRoot, proj, w));
+  return dirs;
+}
 
+const grillsFile = () => join(stateDir(), "grills.json");
+
+function grillsOf(a: {
+  cache: ProjectCache;
+  byCommon: Map<string, Project>;
+  dirs: Iterable<string>;
+  agents: Agent[] | null;
+  labels: Map<string, string[]>;
+  now: number;
+}): Grill[] {
+  const known = new Map<string, { slug: string; name: string } | null>();
+  return collectGrills({
+    dirs: a.dirs,
+    agents: a.agents,
+    labels: a.labels,
+    records: readGrillRecords(grillsFile()),
+    projectOf: (cwd) => {
+      if (!known.has(cwd)) {
+        const facts = gitFacts(cwd);
+        const p = facts ? a.byCommon.get(facts.commonDir) : undefined;
+        known.set(cwd, p ? { slug: p.slug, name: p.name } : null);
+      }
+      return known.get(cwd) ?? null;
+    },
+    nameOf: (slug) => a.cache.projects.find((p) => p.slug === slug)?.name ?? null,
+    now: a.now,
+  });
+}
+
+/** All runs on this machine: loop processes, the lock's run, folders with logs from the last 24 h. */
+async function scan(
+  deps: Deps,
+  opts: { agents: boolean },
+): Promise<{ runs: Run[]; lock: RunRecord | null; grills: Grill[] }> {
+  const now = deps.now ?? Date.now();
+  const [cache, procs, agents, labels] = await Promise.all([
+    projectCache(deps),
+    deps.procs ? Promise.resolve(deps.procs) : loopProcesses(),
+    !opts.agents
+      ? Promise.resolve(null)
+      : deps.agents !== undefined
+        ? Promise.resolve(deps.agents)
+        : herdrAgents(),
+    !opts.agents ? Promise.resolve(null) : (deps.labels ?? herdrLabels()),
+  ]);
+  const { lock, active } = opts.agents
+    ? evaluateLock(cache, agents)
+    : { lock: readLock(), active: !readLock()?.endedAt };
+  const lockActive = !!lock && active;
+
+  const byCommon = projectsByCommon(cache);
+  // candidate folders: cheap to list, most have no recent logs
+  const roots = candidateDirs(cache, byCommon);
+  const dirs = new Set<string>();
+  for (const p of procs) if (p.cwd) dirs.add(p.cwd);
+  if (lockActive && lock) dirs.add(lock.cwd ?? lock.root);
+  for (const d of roots) dirs.add(d);
   const runs: Run[] = [];
   for (const cwd of dirs) {
     const own = procs.filter((p) => p.cwd === cwd);
@@ -1302,7 +1381,8 @@ async function scan(
       Number(b.status !== "ended") - Number(a.status !== "ended") ||
       (b.startedAt ?? "").localeCompare(a.startedAt ?? ""),
   );
-  return { runs, lock: lockActive ? lock : null };
+  const grills = labels ? grillsOf({ cache, byCommon, dirs: roots, agents, labels, now }) : [];
+  return { runs, lock: lockActive ? lock : null, grills };
 }
 
 // ── log tail ───────────────────────────────────────────────────────────────────────────────────────
@@ -1401,16 +1481,19 @@ export function skillPrompt(
   ].join("");
 }
 
-/** Held while a run starts: two clicks at once must not both pass the "no active run" check. */
-function takeStartLock(): () => void {
-  const lock = join(stateDir(), "run-start.lock");
+/** Held while a start runs: two clicks at once must not both pass the "nothing running yet" check. */
+function takeStartLock(
+  name = "run-start.lock",
+  busy = "Ein Lauf wird gerade gestartet.",
+): () => void {
+  const lock = join(stateDir(), name);
   mkdirSync(stateDir(), { recursive: true });
   // a start takes at most ~1 min; older locks are left over from a crash
   if (Date.now() - mtimeOf(lock) > 180_000) rmSync(lock, { recursive: true, force: true });
   try {
     mkdirSync(lock);
   } catch {
-    throw new Error("Ein Lauf wird gerade gestartet.");
+    throw new Error(busy);
   }
   return () => rmSync(lock, { recursive: true, force: true });
 }
@@ -1513,6 +1596,60 @@ function releaseRun() {
   return { lock: null };
 }
 
+/** Opens an omp session grilling one ticket – at most one live grill per ticket on this machine. */
+async function startGrill(req: SandcastleRequest, deps: Deps): Promise<{ grill: Grill }> {
+  const cache = await projectCache(deps);
+  const project = projectBySlug(cache, req.slug);
+  const g = validateGrillRequest(req);
+  const release = takeStartLock(
+    `grill-start-${sha1(`${project.slug}#${g.n}`).slice(0, 12)}.lock`,
+    `Für #${g.n} wird gerade ein Grill gestartet.`,
+  );
+  try {
+    const now = deps.now ?? Date.now();
+    const [agents, labels] = await Promise.all([
+      deps.agents !== undefined ? deps.agents : herdrAgents(),
+      deps.labels ?? herdrLabels(),
+    ]);
+    const byCommon = projectsByCommon(cache);
+    const dirs = candidateDirs(cache, byCommon);
+    const live = grillsOf({ cache, byCommon, dirs, agents, labels, now }).find(
+      (x) =>
+        x.slug === project.slug &&
+        x.n === g.n &&
+        (x.status === "running" || x.status === "waiting" || x.status === "idle"),
+    );
+    if (live)
+      throw new Error(`Für #${g.n} läuft schon ein Grill (${hostname().replace(/\.local$/, "")}).`);
+    const label = grillLabel(g);
+    const startedAt = new Date().toISOString();
+    const pane = await (deps.startSession ?? heardSession)(project.root, label, grillPrompt(g));
+    recordGrill(grillsFile(), { slug: project.slug, ...g, pane, startedAt }, now);
+    // herdr may not list the new pane yet: it is the grill, working
+    const started: Agent = {
+      pane,
+      kind: "omp",
+      status: "working",
+      title: label,
+      cwd: project.root,
+      workspace: "",
+    };
+    const grills = grillsOf({
+      cache,
+      byCommon,
+      dirs,
+      agents: [...(agents ?? []).filter((x) => x.pane !== pane), started],
+      labels: new Map([...labels, [pane, [label]]]),
+      now,
+    });
+    const grill = grills.find((x) => x.slug === project.slug && x.n === g.n);
+    if (!grill) throw new Error(`Grill für #${g.n} gestartet, aber nicht gefunden.`);
+    return { grill };
+  } finally {
+    release();
+  }
+}
+
 // ── gate entry ─────────────────────────────────────────────────────────────────────────────────────
 
 export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promise<unknown> {
@@ -1520,8 +1657,8 @@ export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promi
     case "projects":
       return { projects: (await projectCache(deps, req.refresh === true)).projects };
     case "status": {
-      const { runs, lock } = await scan(deps, { agents: true });
-      return { machine: { host: hostname() }, runs, lock };
+      const { runs, lock, grills } = await scan(deps, { agents: true });
+      return { machine: { host: hostname() }, runs, lock, grills };
     }
     case "log": {
       const path = String(req.path ?? "");
@@ -1544,6 +1681,8 @@ export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promi
       });
     case "start":
       return startRun(req, deps);
+    case "grill-start":
+      return startGrill(req, deps);
     case "release":
       return releaseRun();
     default:

@@ -15,7 +15,9 @@
   import Icon from "./git/Icon.svelte";
   import { statusLabel, t } from "../i18n";
   import { settings } from "../settings.svelte";
-  import { allPanes, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
+  import { allPanes, app, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
+  import { grillTicket } from "../grillLabel";
+  import { boardServer } from "../plugins";
   import {
     live, liveAbout, liveActive, startLive as startLiveOn, stopLiveOn,
   } from "../live.svelte";
@@ -72,6 +74,20 @@
     pane.agent ? ({ omp: "omp", claude: "Claude", codex: "Codex" } as Record<string, string>)[pane.agent] ?? pane.agent : "Shell",
   );
   const serverLabel = $derived(serverById(server)?.label ?? server);
+  /** a Grill session („Grill TENDR-1071 · #3551“): its ticket on the Sandcastle board */
+  const grill = $derived(grillTicket(workspace.tabs.find((tb) => tb.panes.some((p) => p.pane === pane.pane))?.label) ?? grillTicket(pane.title));
+  async function showInBoard() {
+    menu = false;
+    const ticket = grill;
+    if (!ticket) return;
+    const at = await boardServer(server, app.servers.map((s) => s.id));
+    if (at) go({ view: "plugin", server: at, id: "sandcastle", open: ticket });
+    else {
+      toast = t("Kein Server hat das Sandcastle-Plugin.");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => (toast = ""), 2500);
+    }
+  }
   /** drafts / ↑ history of this session */
   const key = $derived(draftKey(server, pane.pane));
   const mac = navigator.platform.toLowerCase().includes("mac");
@@ -413,7 +429,7 @@
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   function zoomBy(d: number) {
     settings.zoom = d === 0 ? 1 : Math.round(Math.min(1.6, Math.max(0.7, settings.zoom + d)) * 100) / 100;
-    toast = `${Math.round(settings.zoom * 100)} %`;
+    toast = `Aa ${Math.round(settings.zoom * 100)} %`;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => (toast = ""), 1200);
   }
@@ -821,6 +837,7 @@
               {/if}
               <button class="mi" onclick={() => { menu = false; togglePanel("git"); }}><Icon name="⑂" size={15} /> {t("Git & Dateien")}<kbd>{mod}{shift}G</kbd></button>
               <button class="mi" onclick={() => { menu = false; togglePanel("browser"); }}><Icon name="◍" size={15} /> {t("Browser")}<kbd>{mod}{shift}B</kbd></button>
+              {#if grill}<button class="mi" onclick={showInBoard}><Icon name="list" size={15} /> {t("Im Board zeigen")}</button>{/if}
               <button class="mi" onclick={() => { menu = false; zen = true; }}><Icon name="⤢" size={15} /> {t("Zen-Modus")}<kbd>{mod}{shift}F</kbd></button>
               <button class="mi" onclick={noteHere}><Icon name="＋" size={15} /> {t("Notiz an aktueller Stelle")}</button>
               {#if mode === "chat" && chat && timeline}
@@ -934,7 +951,7 @@
           <button title={`${t("Zen-Modus beenden")} (Esc)`} onclick={() => (zen = false)}><Icon name="⤡" size={15} /></button>
         </div>
       {/if}
-      {#if toast}<div class="toast">Aa {toast}</div>{/if}
+      {#if toast}<div class="toast">{toast}</div>{/if}
     </div>
 
     {#if (panel || browserOpen) && !zen}

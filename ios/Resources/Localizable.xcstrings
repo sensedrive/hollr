@@ -1597,6 +1597,16 @@
         }
       }
     },
+    "Sandcastle-Board: Tickets grillen oder auto-grillen; Chat-Menü › „Im Board zeigen“ bei Grill-Sitzungen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sandcastle board: grill or auto-grill tickets; chat menu › “Show on board” on grill sessions"
+          }
+        }
+      }
+    },
     "Plugins übernehmen das Farbschema von Hollr samt Hell/Dunkel": {
       "localizations": {
         "en": {
@@ -5265,6 +5275,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose folder"
+          }
+        }
+      }
+    },
+    "Im Board zeigen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show on board"
+          }
+        }
+      }
+    },
+    "Kein Server hat das Sandcastle-Plugin.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No server has the Sandcastle plugin."
           }
         }
       }

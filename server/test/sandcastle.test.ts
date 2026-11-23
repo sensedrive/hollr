@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Grill } from "../src/grills";
 import type { Agent } from "../src/herdr";
 import {
   type Deps,
@@ -74,11 +75,13 @@ const agent = (pane: string, cwd: string, status = "working"): Agent => ({
   workspace: "w",
 });
 
-const base: Deps = { prLookup: false, procs: [], agents: [] };
+// labels: herdr's tab/workspace labels – never ask the real herdr
+const base: Deps = { prLookup: false, procs: [], agents: [], labels: new Map() };
 const status = async (deps: Deps = {}) =>
   (await sandcastle({ op: "status" }, { ...base, ...deps })) as {
     runs: Run[];
     lock: { slug: string; pane: string; cwd: string | null } | null;
+    grills: Grill[];
   };
 
 beforeAll(async () => {
@@ -408,6 +411,122 @@ describe("start / release (queue mode via events)", () => {
         { ...deps, queuedIssues: async () => [] },
       ),
     ).rejects.toThrow("Warteschlange ist leer");
+  });
+});
+
+describe("grills", () => {
+  // the real STATUS.md of TENDR-1070, in the project root
+  const md = [
+    "# TENDR-1070 Grill-Status",
+    "",
+    "Grill-Ticket: #3533",
+    "",
+    "- [x] 1 Ticket gelesen (keine Kommentare)",
+    "- [x] 2 Grill (3 Runden, Ergebnis #3533 Kommentar 7096554391)",
+    "- [x] 3 Jira-Kommentar 42640, #3533 geschlossen",
+    "- [x] 4 Spec/ADR-PR #3539 gemergt (…)",
+    "- [ ] 5 Entwurf",
+    "- [ ] 6 Story/Kinder",
+    "- [ ] 7 Bericht",
+    "- [ ] 5 Entwurf läuft (Agent EntwurfBelegExport)",
+    "- Entwurf: Exporte v285, Dialog v286 abgenommen bis auf Kalender; …",
+  ].join("\n");
+  const sessions: { cwd: string; label: string; prompt: string }[] = [];
+  const deps: Deps = {
+    ...base,
+    agents: [agent("w5:p1", shop, "blocked")],
+    labels: new Map([["w5:p1", ["1", "Grill TENDR-1070 · #3533"]]]),
+    startSession: async (cwd, label, prompt) => {
+      sessions.push({ cwd, label, prompt });
+      return `w6:p${sessions.length}`;
+    },
+  };
+
+  test("status lists the STATUS.md grill with its labelled pane; the worktree's grill without one", async () => {
+    mkdirSync(join(shop, ".scratch", "TENDR-1070"), { recursive: true });
+    writeFileSync(join(shop, ".scratch", "TENDR-1070", "STATUS.md"), md);
+    mkdirSync(join(wt, ".scratch", "SHOP-9"), { recursive: true });
+    writeFileSync(join(wt, ".scratch", "SHOP-9", "STATUS.md"), "# Grill\n- [x] 1 gelesen\n");
+    const { grills } = await status(deps);
+    expect(grills.map((g) => [g.id, g.status, g.step, g.pane, g.mode])).toEqual([
+      ["acme/shop#3533", "waiting", 5, "w5:p1", "interactive"],
+      [`${wt}|SHOP-9`, "ended", 2, null, null],
+    ]);
+    expect(grills[0]).toMatchObject({
+      slug: SLUG,
+      project: "shop",
+      key: "TENDR-1070",
+      source: "manual",
+      cwd: shop,
+    });
+  });
+
+  test("grill-start: checks, refuses a live grill, opens the session and records it", async () => {
+    const start = (req: Record<string, unknown>, d: Deps = deps) =>
+      sandcastle({ op: "grill-start", slug: SLUG, ...req }, d) as Promise<{ grill: Grill }>;
+    await expect(start({ slug: "acme/none", n: 1, mode: "auto" })).rejects.toThrow(
+      "nicht ausgecheckt",
+    );
+    await expect(start({ n: -1, mode: "auto" })).rejects.toThrow("ganze Zahl ab 1");
+    await expect(start({ n: 1, key: "x-1", mode: "auto" })).rejects.toThrow("kein JIRA-Schlüssel");
+    await expect(start({ n: 1, mode: "interactive", advisor: "m" })).rejects.toThrow(
+      "nur beim Auto-Grillen",
+    );
+    await expect(start({ n: 3533, key: "TENDR-1070", mode: "auto" })).rejects.toThrow(
+      /Für #3533 läuft schon ein Grill \(.+\)\./,
+    );
+    expect(sessions).toHaveLength(0);
+
+    const { grill } = await start({ n: 41, key: "SHOP-41", mode: "auto", advisor: "gpt-5.5" });
+    expect(sessions[0]).toEqual({
+      cwd: shop,
+      label: "Auto-Grill SHOP-41 · #41",
+      prompt: "/skill:lul-workr-auto-grill-jira-ticket SHOP-41 --advisor=gpt-5.5",
+    });
+    expect(grill).toMatchObject({
+      id: "acme/shop#41",
+      slug: SLUG,
+      project: "shop",
+      n: 41,
+      key: "SHOP-41",
+      mode: "auto",
+      source: "hollr",
+      pane: "w6:p1",
+      status: "running",
+      step: 1,
+      cwd: null,
+    });
+    const second = await start({ n: 42, key: null, mode: "interactive" });
+    expect(sessions[1]).toMatchObject({
+      label: "Grill #42",
+      prompt: "/skill:lul-workr-grill-jira-ticket #42",
+    });
+    expect(second.grill).toMatchObject({ id: "acme/shop#42", mode: "interactive", pane: "w6:p2" });
+
+    const records = JSON.parse(
+      readFileSync(join(root, "state", "sandcastle", "grills.json"), "utf8"),
+    );
+    expect(
+      records.map((r: { n: number; advisor: string | null; pane: string }) => [
+        r.n,
+        r.advisor,
+        r.pane,
+      ]),
+    ).toEqual([
+      [41, "gpt-5.5", "w6:p1"],
+      [42, null, "w6:p2"],
+    ]);
+
+    // the session idles: listed as idle; refused again; once it is closed: ended, a new start goes through
+    const idle: Deps = { ...deps, agents: [agent("w6:p1", shop, "idle")] };
+    const st = await status(idle);
+    expect(st.grills.find((g) => g.n === 41)).toMatchObject({ status: "idle", source: "hollr" });
+    await expect(start({ n: 41, mode: "auto" }, idle)).rejects.toThrow("läuft schon ein Grill");
+    expect((await status({ ...deps, agents: [] })).grills.find((g) => g.n === 41)?.status).toBe(
+      "ended",
+    );
+    await start({ n: 41, mode: "auto" }, { ...deps, agents: [] });
+    expect(sessions).toHaveLength(3);
   });
 });
 

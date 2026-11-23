@@ -354,3 +354,103 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 #toast.info { background: var(--card); color: var(--fg); border: 1px solid var(--border); }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 .expired { margin: auto; padding: 24px; text-align: center; color: var(--muted); font-size: 16px; }
+
+/* ---- grills */
+.seg.waiting { background: var(--orange); }
+.segbar.grill-bar { margin: 0; height: 6px; gap: 4px; }
+.grill-badge { border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid currentColor; color: var(--purple); }
+.grill-badge.waiting { color: var(--orange); }
+.grill-badge.done { color: var(--green); }
+.grill-badge.queued { color: var(--muted); }
+.card-grill { margin-top: 6px; font-size: 11px; color: var(--muted); }
+.col-actions { display: grid; gap: 4px; padding: 0 8px 6px; flex: none; }
+.grill-all-btn { width: 100%; }
+.grill-queue { color: var(--muted); padding: 0 2px; }
+@media (max-width: 699px) {
+  .col-actions { padding: 0 0 8px; }
+}
+.gpill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, transparent); }
+.gpill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.gpill.waiting { color: var(--orange); background: color-mix(in srgb, var(--orange) 16%, transparent); }
+.gpill.idle { color: var(--muted); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.gpill.done { color: var(--green); background: color-mix(in srgb, var(--green) 16%, transparent); }
+.gpill.ended { color: var(--muted); background: none; }
+.side-grill:not(:empty) { margin: 12px 0; }
+.grill-panel { display: grid; gap: 10px; padding: 12px; border-radius: 10px; background: var(--card); font-size: 13px; }
+.grill-panel.waiting { background: color-mix(in srgb, var(--orange) 10%, var(--card)); }
+.grill-panel h3.grill-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; color: var(--fg); text-transform: none; letter-spacing: 0; }
+.grill-icon { font-size: 13px; }
+.grill-field { display: grid; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.grill-label { padding: 0; color: var(--muted); font-size: 12px; font-weight: 500; }
+.grill-field select, .grill-field input[type="text"] { width: 100%; min-height: 34px; }
+.grill-segments { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 3px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--raised); }
+.grill-segment { position: relative; display: flex; }
+.grill-segment input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.grill-segment span { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 8px; border-radius: 6px;
+  color: var(--muted); text-align: center; }
+.grill-segment input:checked + span { background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--fg); font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--accent); }
+.grill-segment input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grill-segment input:disabled { cursor: not-allowed; }
+.grill-segment input:disabled + span { font-style: italic; opacity: .7; text-decoration: line-through; }
+.grill-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.grill-actions { display: grid; gap: 8px; }
+.grill-action { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: center; gap: 12px; }
+.grill-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; align-items: center; }
+.grill-facts dt { color: var(--muted); }
+.grill-facts dd { margin: 0; }
+.grill-progress { display: grid; gap: 6px; }
+.grill-step { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.grill-panel .btn-row { margin: 0; }
+@media (max-width: 699px) {
+  .grill-action { grid-template-columns: 1fr; gap: 4px; }
+  .grill-segment span { min-height: 40px; }
+  .grill-panel .btn-row .btn { flex: 1; padding: 10px; }
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-head h2 { margin: 0; }
+.grill-all-text { margin: 0; }
+.grill-all-tickets { list-style: none; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--card); display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px; max-height: 220px; overflow-y: auto; }
+.grill-all-tickets .nr { color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.grill-all-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 699px) {
+  .overlay.sheet .modal { width: 100%; }
+  .grill-all-fields { grid-template-columns: 1fr; }
+  .grill-all .btn-row .btn { flex: 1; padding: 10px; }
+}
+/* Läufe: grills of a machine and the STATUS protocol on the right */
+.grills { display: grid; gap: 4px; min-width: 0; }
+.grills-head { color: var(--muted); font-weight: 600; }
+.grill-row { all: unset; box-sizing: border-box; display: grid; gap: 4px; width: 100%; min-width: 0; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; }
+.grill-row:hover { background: var(--card); }
+.grill-row.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.grill-row.ended { opacity: .6; }
+.grill-row-title { display: flex; gap: 8px; min-width: 0; font-size: 13px; white-space: nowrap; }
+.grill-row-title .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.grill-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.grill-log { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.grill-log h3 { margin: 6px 0 0; }
+.grill-log-head { display: flex; align-items: center; gap: 10px; }
+.grill-log-head h2 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.grill-log-head .back { display: none; }
+.grill-log-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.grill-log-summary .grow { flex: 1 1 200px; }
+.grill-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.grill-step-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; }
+.grill-step-row .mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.grill-step-row .st { color: var(--muted); font-size: 12px; }
+.grill-step-row.todo .name { color: var(--muted); }
+.grill-step-row.done .mark { background: var(--green); border-color: var(--green); color: var(--on-accent); }
+.grill-step-row.active { background: color-mix(in srgb, var(--blue) 12%, transparent); }
+.grill-step-row.active .mark { border-color: var(--blue); color: var(--blue); }
+.grill-step-row.waiting { background: color-mix(in srgb, var(--orange) 12%, transparent); }
+.grill-step-row.waiting .mark { border-color: var(--orange); color: var(--orange); }
+.grill-step-row.waiting .st { color: var(--orange); font-weight: 700; }
+.grill-notes { margin: 0; padding: 0 0 0 18px; display: grid; gap: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 699px) {
+  .grill-log-head .back { display: inline-block; }
+}

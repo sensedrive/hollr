@@ -1,4 +1,5 @@
 /** Board facts derived from the state, shared by board, details panel and Läufe view. Cheap: recomputed per render. */
+import { type TicketGrill, ticketGrills } from "./grill";
 import { assignLanes, classify, laneRuns, type TicketRun, ticketRuns } from "./model";
 import { currentProject, laneServers, state } from "./state";
 import type { Column, Issue, Project, Run, Server, TicketFlags } from "./types";
@@ -22,6 +23,8 @@ export interface Derived {
   runs: Map<number, TicketRun>;
   open: Set<number>;
   stories: Map<number, string>;
+  /** n → the grill to show for it (any machine) */
+  grills: Map<number, TicketGrill>;
 }
 
 export function derive(): Derived {
@@ -78,6 +81,7 @@ export function derive(): Derived {
     runs,
     open,
     stories: new Map((board?.stories ?? []).map((s) => [s.number, s.title])),
+    grills: ticketGrills(state.statuses, state.slug, new Map([...issues.values()].flatMap((i) => (i.jira ? [[i.jira, i.number] as const] : [])))),
   };
 }
 

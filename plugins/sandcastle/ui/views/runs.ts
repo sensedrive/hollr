@@ -8,7 +8,9 @@ import { derive } from "../derive";
 import { copyText, fill, fmtDate, h, reconcile } from "../dom";
 import { branchColour, PHASE_TEXT, segments, since } from "../model";
 import { errorText, hooks, prefGet, prefSet, projectOn, serverLabel, state, toast } from "../state";
-import type { LogFile, Project, Run, RunStatus, Server } from "../types";
+import { isLiveGrill, modeText, stepText } from "../grill";
+import type { Grill, LogFile, Project, Run, RunStatus, Server } from "../types";
+import { grillBar, grillLog, grillPill } from "./grilling";
 
 export const STATUS_TEXT: Record<RunStatus, string> = {
   running: "läuft",
@@ -28,6 +30,9 @@ let tabs: HTMLElement;
 let pre: HTMLElement;
 let info: HTMLElement;
 let errorsOnly = false;
+let logParts: HTMLElement[];
+let grillPane: HTMLElement;
+let grillPaneSig = "";
 let search = "";
 const machineEls = new Map<string, { el: HTMLElement; sig: string }>();
 const forms = new Map<string, HTMLElement>();
@@ -71,13 +76,11 @@ export function runsView(): HTMLElement {
   const back = h("button", { class: "btn small back", onclick: () => root?.classList.remove("log-open") }, "‹ Läufe");
   pre = h("pre", { class: "log" });
   info = h("div", { class: "log-info muted small" });
-  pane = h(
-    "section",
-    { class: "logpane" },
-    h("div", { class: "log-head" }, back, paneHead, tabs),
-    h("div", { class: "log-tools" }, onlyErrors, find, copy, info),
-    pre,
-  );
+  const logHead = h("div", { class: "log-head" }, back, paneHead, tabs);
+  const logTools = h("div", { class: "log-tools" }, onlyErrors, find, copy, info);
+  grillPane = h("div", { class: "grill-log", hidden: true });
+  logParts = [logHead, logTools, pre];
+  pane = h("section", { class: "logpane" }, logHead, logTools, pre, grillPane);
   root = h("div", { class: "runs" }, tree, pane);
   return root;
 }
@@ -85,7 +88,7 @@ export function runsView(): HTMLElement {
 // ---- tree
 
 function machineSig(s: Server): string {
-  return JSON.stringify([s, state.statuses.get(s.id), state.statusErrors.get(s.id), state.selection, state.slug, projectOn(s.id)?.slug, state.startFor === s.id, derive().lanes.find((l) => l.server.id === s.id)?.order.length]);
+  return JSON.stringify([s, state.statuses.get(s.id), state.statusErrors.get(s.id), state.selection, state.grillSel, state.board?.etag, state.slug, projectOn(s.id)?.slug, state.startFor === s.id, derive().lanes.find((l) => l.server.id === s.id)?.order.length]);
 }
 
 function machineEl(s: Server): HTMLElement {
@@ -113,6 +116,7 @@ function machineEl(s: Server): HTMLElement {
       !s.online ? h("span", { class: "muted small" }, "offline") : !status && !err ? h("span", { class: "muted small" }, "lädt …") : null,
     ),
     err ? h("p", { class: "error small" }, err) : null,
+    status?.grills?.length ? grillsGroup(s.id, status.grills) : null,
     status?.lock && !lockRun
       ? h("div", { class: "lock-row small" }, `Sperre: ${String(status.lock.project ?? "?")} `, releaseButton(s.id))
       : null,
@@ -151,6 +155,7 @@ function releaseButton(server: string): HTMLElement {
 
 function select(server: string, run: string, n: number | null, path: string | null): void {
   state.selection = { server, run, n, path };
+  state.grillSel = null;
   root?.classList.add("log-open");
   renderRuns();
 }
@@ -403,7 +408,60 @@ export function followLog(): void {
   if (r.file.active || r.file.size > log.offset) fetchLog(true);
 }
 
+// ---- grills
+
+function grillsGroup(server: string, grills: Grill[]): HTMLElement {
+  const time = (g: Grill) => Date.parse(g.updatedAt ?? g.startedAt ?? "") || 0;
+  const sorted = [...grills].sort((a, b) => Number(isLiveGrill(b)) - Number(isLiveGrill(a)) || time(b) - time(a));
+  return h(
+    "div",
+    { class: "grills" },
+    h("div", { class: "grills-head small" }, h("span", { "aria-hidden": "true" }, "🔥"), " Grills"),
+    ...sorted.map((g) => {
+      const sel = state.grillSel?.server === server && state.grillSel.id === g.id;
+      const title = g.slug === state.slug && g.n !== null ? state.board?.issues.find((i) => i.number === g.n)?.title : undefined;
+      return h(
+        "button",
+        {
+          class: `grill-row${sel ? " selected" : ""}${isLiveGrill(g) ? "" : " ended"}`,
+          onclick: () => {
+            state.grillSel = { server, id: g.id };
+            state.selection = null;
+            root?.classList.add("log-open");
+            renderRuns();
+          },
+        },
+        h(
+          "span",
+          { class: "grill-row-title" },
+          [g.key, g.n !== null ? `#${g.n}` : null].filter(Boolean).join(" · "),
+          h("span", { class: "t" }, title ?? g.project ?? ""),
+        ),
+        h("span", { class: "grill-row-meta small" }, h("span", { class: "muted" }, modeText(g.mode)), grillPill(g), h("span", { class: "muted" }, stepText(g))),
+        grillBar(g),
+      );
+    }),
+  );
+}
+
+/** Right side: the selected grill instead of the log (same pane, so phones open it full screen the same way). */
+function renderGrillPane(): boolean {
+  const sel = state.grillSel;
+  const showGrill = !!sel;
+  grillPane.hidden = !showGrill;
+  for (const el of logParts) el.hidden = showGrill;
+  if (!sel) return false;
+  const g = state.statuses.get(sel.server)?.grills?.find((x) => x.id === sel.id);
+  const sig = JSON.stringify([sel, g, state.board?.etag, hasHost()]);
+  if (sig !== grillPaneSig) {
+    grillPaneSig = sig;
+    grillLog(grillPane, sel.server, g, () => root?.classList.remove("log-open"));
+  }
+  return true;
+}
+
 function renderPane(): void {
+  if (renderGrillPane()) return;
   const r = resolve();
   const sel = state.selection;
   if (!r) {

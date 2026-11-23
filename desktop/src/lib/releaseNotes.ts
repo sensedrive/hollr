@@ -12,6 +12,17 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 58,
+    version: "0.51.0",
+    date: "23.11.2026",
+    items: [
+      { icon: "🔥", text: "Sandcastle-Board: Tickets grillen oder auto-grillen – auf dem Rechner deiner Wahl. Jeder Grill ist eine normale Sitzung in Hollr; das Board zeigt Fortschritt und „wartet auf dich“, auch für von Hand gestartete Grills." },
+      { icon: "↗", text: "Chat-Menü › „Im Board zeigen“ bei Grill-Sitzungen springt zur Karte im Sandcastle-Board." },
+      { icon: "📌", text: "Plugins anpinnen: angepinnte Plugins stehen direkt oben in der Seitenleiste." },
+      { icon: "✓", text: "Behoben: Das Sandcastle-Board zeigte neue Labels nicht – über die Hollr-Verbindung gestartet, fehlte dem Plugin die GitHub-Anmeldung. „Neu laden“ holt jetzt alles neu." },
+    ],
+  },
+  {
     build: 57,
     version: "0.50.2",
     date: "23.11.2026",

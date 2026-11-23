@@ -308,18 +308,28 @@ export async function openPlugin(
     rmSync(ready, { force: true });
     writeFileSync(log, "");
     const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");
-    // own session so it survives the SSH channel closing (macOS has no setsid binary: perl's POSIX::setsid)
-    const detach = which("setsid")
-      ? ["setsid"]
-      : ["perl", "-MPOSIX", "-e", "POSIX::setsid(); exec @ARGV"];
-    const proc = Bun.spawn([...detach, process.execPath, entryFile], {
-      cwd: dir,
-      env: pluginEnv(id, dir, state, token, cli),
-      stdin: "ignore",
-      stdout: Bun.file(log),
-      stderr: Bun.file(log),
-    });
-    proc.unref();
+    const env = pluginEnv(id, dir, state, token, cli);
+    const argv = [process.execPath, entryFile];
+    // macOS: a launchd job in the user's GUI session. Started from the SSH gate, a plain child lives in the SSH
+    // security session, where the login keychain is out of reach – `gh` (token in the keychain) then runs
+    // unauthenticated and hits the per-IP rate limit. Without a GUI login launchd refuses; then detach as before.
+    const viaLaunchd = launchdStart(id, argv, env, dir, log);
+    let child: { pid: number } | null = null;
+    if (!viaLaunchd) {
+      // own session so it survives the SSH channel closing (macOS has no setsid binary: perl's POSIX::setsid)
+      const detach = which("setsid")
+        ? ["setsid"]
+        : ["perl", "-MPOSIX", "-e", "POSIX::setsid(); exec @ARGV"];
+      const spawned = Bun.spawn([...detach, ...argv], {
+        cwd: dir,
+        env,
+        stdin: "ignore",
+        stdout: Bun.file(log),
+        stderr: Bun.file(log),
+      });
+      spawned.unref();
+      child = spawned;
+    }
 
     const until = Date.now() + 8000;
     while (Date.now() < until) {
@@ -339,9 +349,12 @@ export async function openPlugin(
         return urlFor(s);
       }
     }
-    try {
-      process.kill(proc.pid, "SIGKILL");
-    } catch {}
+    if (viaLaunchd) launchdStop(id);
+    else if (child) {
+      try {
+        process.kill(child.pid, "SIGKILL");
+      } catch {}
+    }
     throw new Error(`Plugin ${id} startet nicht: ${tailLines(log, 20)}`);
   } finally {
     rmSync(lock, { recursive: true, force: true });
@@ -352,6 +365,8 @@ export function stopPlugin(id: string): boolean {
   if (!ID_RE.test(id)) return false;
   const pid = runningPid(id);
   rmSync(join(stateDir(id), "server.json"), { force: true });
+  // a launchd job stays loaded after its process exits; unload it so the next start begins clean
+  launchdStop(id);
   if (!pid) return false;
   try {
     process.kill(pid, "SIGTERM");
@@ -359,4 +374,57 @@ export function stopPlugin(id: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ── macOS: plugins as launchd jobs in the GUI session ───────────────────────────────────────────────
+
+const launchdLabel = (id: string) => `app.hollr.plugin.${id}`;
+const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** A one-shot launchd job (no KeepAlive: the plugin quits when idle and starts again on demand). */
+export function launchdPlist(label: string, argv: string[], env: Record<string, string>, cwd: string, log: string): string {
+  const str = (s: string) => `<string>${xml(s)}</string>`;
+  const envXml = Object.entries(env)
+    .map(([k, v]) => `<key>${xml(k)}</key>${str(v)}`)
+    .join("");
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0"><dict>',
+    `<key>Label</key>${str(label)}`,
+    `<key>ProgramArguments</key><array>${argv.map(str).join("")}</array>`,
+    `<key>WorkingDirectory</key>${str(cwd)}`,
+    `<key>EnvironmentVariables</key><dict>${envXml}</dict>`,
+    `<key>StandardOutPath</key>${str(log)}`,
+    `<key>StandardErrorPath</key>${str(log)}`,
+    "<key>RunAtLoad</key><true/>",
+    "<key>KeepAlive</key><false/>",
+    "<key>ProcessType</key><string>Interactive</string>",
+    "</dict></plist>",
+    "",
+  ].join("\n");
+}
+
+function gui(): string | null {
+  return process.platform === "darwin" && typeof process.getuid === "function" ? `gui/${process.getuid()}` : null;
+}
+
+/** true when launchd took the job; false (not macOS, not from SSH, nobody logged in, launchctl refused) → caller detaches. */
+function launchdStart(id: string, argv: string[], env: Record<string, string>, cwd: string, log: string): boolean {
+  const domain = gui();
+  // a local start already runs in the GUI session (keychain reachable); only the SSH gate needs the detour
+  const fromSsh = !!(Bun.env.SSH_CONNECTION || Bun.env.SSH_CLIENT || Bun.env.SSH_ORIGINAL_COMMAND);
+  if (!domain || !fromSsh) return false;
+  const plist = join(stateDir(id), "launchd.plist");
+  // the token is in the environment: only the user may read the file
+  writeFileSync(plist, launchdPlist(launchdLabel(id), argv, env, cwd, log), { mode: 0o600 });
+  launchdStop(id);
+  const r = Bun.spawnSync(["launchctl", "bootstrap", domain, plist], { stdout: "ignore", stderr: "pipe" });
+  return r.exitCode === 0;
+}
+
+function launchdStop(id: string): void {
+  const domain = gui();
+  if (!domain) return;
+  Bun.spawnSync(["launchctl", "bootout", `${domain}/${launchdLabel(id)}`], { stdout: "ignore", stderr: "ignore" });
 }

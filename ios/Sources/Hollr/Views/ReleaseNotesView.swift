@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 64, date: "23.11.2026", items: [
+            ("flame", String(localized: "Sandcastle-Board: Tickets grillen oder auto-grillen; Chat-Menü › „Im Board zeigen“ bei Grill-Sitzungen")),
+        ]),
         ReleaseNote(build: 63, date: "23.11.2026", items: [
             ("circle.lefthalf.filled", String(localized: "Plugins übernehmen das Farbschema von Hollr samt Hell/Dunkel")),
         ]),

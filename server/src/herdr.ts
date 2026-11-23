@@ -406,8 +406,9 @@ export async function focusCreated(
 export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Promise<string> {
   if (req.kind !== "shell" && !AGENT_KINDS.includes(req.kind))
     throw new HerdrError("bad_kind", `Unbekannter Agent ${req.kind}`);
+  // `#` stays: grill sessions are labelled `Grill <KEY> · #<n>` (grills.ts)
   const label = (req.label ?? "")
-    .replace(/[^\p{L}\p{N} ._·-]/gu, "")
+    .replace(/[^\p{L}\p{N} ._·#-]/gu, "")
     .trim()
     .slice(0, 40);
   let cwd = req.cwd;

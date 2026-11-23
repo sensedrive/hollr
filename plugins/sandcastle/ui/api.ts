@@ -3,7 +3,7 @@
  * host relay to `hollr gate sandcastle` on every paired machine (contract B). Without a Hollr host (plain browser)
  * the relay falls back to /api/host/* of this plugin's own machine.
  */
-import type { LogChunk, Project, QueueState, Server, Status, TicketFlags } from "./types";
+import type { Grill, GrillMode, LogChunk, Project, QueueState, Server, Status, TicketFlags } from "./types";
 
 const KEY = "sc.token";
 let token = "";
@@ -88,14 +88,18 @@ export interface HostTheme {
   vars: Record<string, string>;
 }
 
-/** set by app.ts: Hollr pushes the palette when the user switches it while the page is open */
-export const themeEvents = { onTheme: (_t: HostTheme) => {} };
+/** set by app.ts: Hollr pushes the palette when the user switches it, and `open` („Im Board zeigen“) while the page is open */
+export const hostEvents = { onTheme: (_t: HostTheme) => {}, onOpen: (_ticket: string) => {} };
 
 function onReply(msg: unknown): void {
   if (!msg || typeof msg !== "object" || !("hollr" in msg)) return;
   const e = msg as { hollr?: unknown; event?: unknown; data?: unknown };
   if (e.hollr === 1 && e.event === "theme" && e.data && typeof e.data === "object") {
-    themeEvents.onTheme(e.data as HostTheme);
+    hostEvents.onTheme(e.data as HostTheme);
+    return;
+  }
+  if (e.hollr === 1 && e.event === "open" && e.data && typeof e.data === "object" && "ticket" in e.data) {
+    hostEvents.onOpen(String(e.data.ticket));
     return;
   }
   if (!("id" in msg)) return;
@@ -207,6 +211,8 @@ export const sc = {
   start: (server: string, slug: string, config: { agent: string; parallel: number; screencast: boolean; deploy: boolean }) =>
     gate<{ pane: string | null }>(server, { op: "start", slug, config }, 60_000),
   release: (server: string) => gate(server, { op: "release" }),
+  grillStart: (server: string, slug: string, g: { n: number; key: string | null; mode: GrillMode; advisor: string | null }) =>
+    gate<{ grill: Grill }>(server, { op: "grill-start", slug, ...g }, 60_000).then((r) => r.grill),
 };
 
 /** Opens the run's omp session in Hollr. */

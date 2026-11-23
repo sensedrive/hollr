@@ -106,6 +106,8 @@ extension Palette {
 struct PluginRoute: Hashable {
     let server: Server
     let plugin: PluginInfo
+    /// board ticket to show (`<KEY>:<n>` / `:<n>`, „Im Board zeigen“): fragment `open=` on the first load
+    var open: String? = nil
 }
 
 /// The plugins of every paired server; a plugin opens its own web UI (PluginView).
@@ -210,6 +212,9 @@ private struct PluginRow: View {
 struct PluginView: View {
     let server: Server
     let plugin: PluginInfo
+    var ticket: String? = nil
+    /// whether the fragment already carried `open` (a reload doesn't repeat it)
+    @State private var opened = false
     @Environment(ServerStore.self) private var store
     @Environment(HerdrStore.self) private var herdr
     @State private var model = BrowserModel(start: nil, remembers: false, popupsOutside: true, hostBridge: true)
@@ -245,6 +250,12 @@ struct PluginView: View {
             model.onHostMessage = { body in handleHost(body) }
             model.configure(servers: [server])
             await open()
+        }
+        // „Im Board zeigen“ while this board is on screen: an `open` event instead of a reload
+        .onChange(of: BoardLink.shared.event?.serial) { _, _ in
+            guard let event = BoardLink.shared.event, event.server == server.id else { return }
+            BoardLink.shared.event = nil
+            model.replyToHost(["hollr": 1, "event": "open", "data": ["ticket": event.ticket]])
         }
     }
 
@@ -290,7 +301,9 @@ struct PluginView: View {
         defer { opening = false }
         openError = nil
         do {
-            model.open(try await HollrClient.openPlugin(server, id: plugin.id))
+            let url = try await HollrClient.openPlugin(server, id: plugin.id)
+            model.open(GrillLabel.url(url, opening: opened ? nil : ticket))
+            opened = true
         } catch {
             openError = error.localizedDescription
         }

@@ -16,6 +16,7 @@ let offline: boolean;
 
 const fetchers: Fetchers = {
   async fetchBoard(slug) {
+    if (offline) throw new Error("gh: offline");
     calls.push(`full ${slug}`);
     return structuredClone(full);
   },
@@ -97,22 +98,33 @@ describe("BoardCache", () => {
     const stale = data(await c.board(project()));
     expect(stale.stale).toBe(true);
     expect(stale.issues.some((i) => i.number === 4)).toBe(false);
-    // joins the refresh the request above started
-    await c.board(project(), null, true);
+    // the background refresh the request above started
+    await Bun.sleep(5);
     expect(calls[1]).toStartWith("changed o/r ");
     const fresh = data(await c.board(project()));
     expect(fresh.stale).toBe(false);
     expect(fresh.issues.some((i) => i.number === 4)).toBe(true);
   });
 
-  test("after 10 min the refresh is a full fetch (labels, deleted issues)", async () => {
+  test("after 10 min the background refresh is a full fetch (labels, deleted issues)", async () => {
     const c = make();
     await c.board(project());
     clock += FULL_MS + 1;
     full = snapshot([issue(1)]);
-    await c.board(project(), null, true);
+    await c.board(project());
+    await Bun.sleep(5);
     expect(calls).toEqual(["full o/r", "full o/r"]);
     expect(data(await c.board(project())).issues.map((i) => i.number)).toEqual([1]);
+  });
+
+  test("the reload button (refresh) fetches everything at once – labels created a minute ago show up", async () => {
+    const c = make();
+    await c.board(project());
+    clock += 60_000;
+    full = { ...snapshot([issue(1)]), labels: [...full.labels, { id: "L9", name: "kundenfeedback", color: "ff0000" }] };
+    const b = data(await c.board(project(), null, true));
+    expect(calls).toEqual(["full o/r", "full o/r"]);
+    expect(b.labels.map((l) => l.name)).toContain("kundenfeedback");
   });
 
   test("a written issue beats an older fetched copy (search index lag)", async () => {

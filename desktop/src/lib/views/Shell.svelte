@@ -6,7 +6,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { settings } from "$lib/settings.svelte";
   import {
-    allPanes, app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, poll, refresh, refreshSpaces, tabName,
+    allPanes, app, back, dialogs, drafts, findPane, go, listenFeeds, loadServers, mySessions, nav, pluginsRoute, poll, refresh, refreshSpaces,
+    serverById, tabName,
   } from "$lib/store.svelte";
   import SpacesSidebar from "$lib/components/SpacesSidebar.svelte";
   import WorkspaceTabs from "$lib/components/WorkspaceTabs.svelte";
@@ -40,6 +41,12 @@
   import { startMachines } from "$lib/machines.svelte";
 
   const zoomBy = (d: number) => (settings.zoom = Math.round(Math.min(1.6, Math.max(0.7, settings.zoom + d)) * 100) / 100);
+
+  // pinned plugins of servers still paired; same name on two servers → the server label tells them apart
+  const pinned = $derived(settings.pinnedPlugins.filter((p) => serverById(p.server)));
+  const pinnedNames = $derived(pinned.reduce((m, p) => m.set(p.name, (m.get(p.name) ?? 0) + 1), new Map<string, number>()));
+  const pinnedActive = $derived(nav.route.view === "plugin" && pinned.some((p) => nav.route.view === "plugin" && p.server === nav.route.server && p.id === nav.route.id));
+  const serverLabel = (id: string) => serverById(id)?.label ?? id;
 
   function onKey(e: KeyboardEvent) {
     const mod = e.metaKey || e.ctrlKey;
@@ -220,9 +227,16 @@
       <button class="nav" onclick={() => (palette = true)}>
         <span class="ico"><Icon name="find" size={15} /></span><span class="grow">{t("Suchen …")}</span><kbd>{mod}K</kbd>
       </button>
-      <button class="nav" class:active={nav.route.view === "plugins" || nav.route.view === "plugin"} onclick={() => go({ view: "plugins" })}>
+      <button class="nav" class:active={nav.route.view === "plugins" || (nav.route.view === "plugin" && !pinnedActive)} onclick={() => go(pluginsRoute())}>
         <span class="ico"><Icon name="list" size={15} /></span><span class="grow">{t("Plugins")}</span>
       </button>
+      {#each pinned as p (`${p.server}|${p.id}`)}
+        <button class="nav" class:active={nav.route.view === "plugin" && nav.route.server === p.server && nav.route.id === p.id}
+          title={`${p.name} · ${serverLabel(p.server)}`} onclick={() => go({ view: "plugin", server: p.server, id: p.id })}>
+          <span class="ico"><Icon name="pin" size={15} /></span><span class="grow">{p.name}</span>
+          {#if pinnedNames.get(p.name)! > 1}<span class="pin-srv">{serverLabel(p.server)}</span>{/if}
+        </button>
+      {/each}
     </nav>
     <ServerTabs />
     <div class="list">
@@ -270,7 +284,7 @@
         <Plugins />
       {:else if nav.route.view === "plugin"}
         {#key `${nav.route.server}|${nav.route.id}`}
-          <PluginView server={nav.route.server} id={nav.route.id} />
+          <PluginView server={nav.route.server} id={nav.route.id} open={nav.route.open} />
         {/key}
       {:else}
         <Dashboard />
@@ -310,6 +324,7 @@
   nav { padding: 0 8px 10px; display: grid; gap: 2px; border-bottom: 1px solid var(--border); }
   .nav { all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; color: var(--muted); }
   .nav kbd { font: 11px var(--mono); color: var(--dim); }
+  .pin-srv { font-size: 11px; color: var(--dim); white-space: nowrap; }
   .nav:hover { background: var(--card); color: var(--fg); }
   .nav.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg); }
   .count { min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center;

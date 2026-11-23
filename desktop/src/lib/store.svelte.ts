@@ -36,7 +36,8 @@ export type Route =
   | { view: "serverinfo"; server: string }
   | { view: "tools"; server: string }
   | { view: "plugins" }
-  | { view: "plugin"; server: string; id: string };
+  /** `open`: a board ticket to show (`<KEY>:<n>` / `:<n>`, Sandcastle deep link); never remembered as the last plugin */
+  | { view: "plugin"; server: string; id: string; open?: string };
 
 export type AgentOpen = "terminal" | "git" | "browser";
 

@@ -59,7 +59,8 @@ export class BoardCache {
   /** The board of `project`; `{same:true}` when its etag is `since`. `refresh`: wait for fresh data first. */
   async board(project: Project, since?: string | null, refresh = false): Promise<BoardAnswer> {
     const e = await this.entry(project.slug);
-    if (refresh) await this.refresh(project.slug, e);
+    // refresh=1 is the reload button: everything again, so labels and users created meanwhile show up now
+    if (refresh) await this.refresh(project.slug, e, true);
     else if (this.now() - e.fetchedAt > STALE_MS) void this.refresh(project.slug, e).catch(() => {});
     const body = this.body(e, project);
     if (since && since === body.etag) return { same: true };
@@ -131,11 +132,11 @@ export class BoardCache {
     return e;
   }
 
-  private refresh(slug: string, e: Entry): Promise<void> {
+  private refresh(slug: string, e: Entry, full = false): Promise<void> {
     e.refreshing ??= (async () => {
       const now = this.now();
       try {
-        if (now - e.fullAt > FULL_MS) {
+        if (full || now - e.fullAt > FULL_MS) {
           e.snap = await this.gh.fetchBoard(slug, now);
           e.fullAt = now;
           this.merge(e, []);

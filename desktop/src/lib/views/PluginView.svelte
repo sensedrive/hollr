@@ -10,9 +10,10 @@
   import { app, go, serverById } from "$lib/store.svelte";
   import { parseHostRequest, readTheme, type HostReply } from "$lib/pluginHost";
   import { errText } from "$lib/serverapi";
-  import { listPlugins, openPlugin } from "$lib/plugins";
+  import { isPinned, listPlugins, openPlugin, togglePin } from "$lib/plugins";
 
-  let { server, id }: { server: string; id: string } = $props();
+  /** `open`: board ticket (`<KEY>:<n>` / `:<n>`) – fragment `open=` on the first load, an `open` event once the page is up */
+  let { server, id, open: ticket }: { server: string; id: string; open?: string } = $props();
 
   let src = $state("");
   let error = $state("");
@@ -24,6 +25,8 @@
   let frame = $state<HTMLIFrameElement>();
   let tunnel: number | undefined;
   let destroyed = false;
+  /** the ticket the page was last told about (fragment or event) */
+  let told: string | undefined;
 
   async function open() {
     loading = true;
@@ -31,6 +34,11 @@
     try {
       const { port, url } = await openPlugin(server, id);
       const local = await api.tunnelOpen(server, port);
+      const target = new URL(url);
+      if (ticket && told === undefined) {
+        target.hash += `&open=${encodeURIComponent(ticket)}`;
+        told = ticket;
+      }
       if (destroyed) {
         api.tunnelClose(local).catch(() => {});
         return;
@@ -39,12 +47,20 @@
       tunnel = local;
       // a new object each time: the same address reloads too
       src = "";
-      queueMicrotask(() => (src = viaTunnel(new URL(url), local)));
+      queueMicrotask(() => (src = viaTunnel(target, local)));
     } catch (e) {
       error = errText(e);
     }
     loading = false;
   }
+
+  // a new ticket while the page is already shown: tell it instead of reloading
+  $effect(() => {
+    const next = ticket;
+    if (!next || !src || next === told) return;
+    told = next;
+    frame?.contentWindow?.postMessage({ hollr: 1, event: "open", data: { ticket: next } }, "*");
+  });
 
   /** links to public pages, asked for by the plugin page (it can't open windows from the sandboxed frame) */
   function onMessage(e: MessageEvent) {
@@ -121,6 +137,8 @@
     <button class="ib" title={t("Zurück")} onclick={() => go({ view: "plugins" })}>‹</button>
     <span class="title">{name}</span>
     <span class="srv">{serverById(server)?.label ?? server}</span>
+    <button class="ib" class:pinned={isPinned(server, id)} title={isPinned(server, id) ? t("Aus der Navigation lösen") : t("In der Navigation anpinnen")}
+      aria-pressed={isPinned(server, id)} onclick={() => togglePin(server, id, name)}><Icon name="pin" size={15} /></button>
     <button class="ib" title={t("Neu laden")} disabled={loading} onclick={open}><Icon name="↻" size={15} /></button>
   </div>
   {#if error}
@@ -146,6 +164,7 @@
   .ib { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); font-size: 16px; flex: none; }
   .ib:hover:not(:disabled) { background: var(--card); color: var(--fg); }
   .ib:disabled { opacity: 0.35; cursor: default; }
+  .ib.pinned { color: var(--accent); }
   iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg); }
   .failed { flex: 1; display: grid; place-content: center; justify-items: center; gap: 6px; color: var(--muted); text-align: center; padding: 24px; }
   .failed p { margin: 0; max-width: 460px; }

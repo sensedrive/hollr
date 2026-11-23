@@ -40,6 +40,8 @@ private struct AgentConversation: View {
     @State private var confirmClose = false
     /// herdr refused to close the chat – shown, the chat stays
     @State private var closeError: String?
+    /// „Im Board zeigen“ found no server with the Sandcastle plugin
+    @State private var noBoard = false
     @State private var gitSpace: Space?
     @State private var switchModel = false
     @State private var showTerminal = false
@@ -60,6 +62,15 @@ private struct AgentConversation: View {
     @State private var scaleToast: String?
 
     private var compact: Bool { editing || reading }
+
+    /// the Sandcastle board on this chat's server (or the first that has it), opened at the Grill's ticket
+    private func showInBoard(_ ticket: String) async {
+        guard let (server, plugin) = await BoardLink.shared.target(prefer: ref.server, servers: store.servers) else {
+            noBoard = true
+            return
+        }
+        BoardLink.shared.request = .init(server: server, plugin: plugin, ticket: ticket)
+    }
 
     private func rescale(by delta: Int) {
         scaleIndex = TextScale.step(scaleIndex, system: typeSize, by: delta)
@@ -145,6 +156,9 @@ private struct AgentConversation: View {
                         Button { switchModel = true } label: { Label("Modell wechseln", icon: .cpu) }
                     }
                     Button { showTerminal = true } label: { Label("Terminal", icon: .terminal) }
+                    if let ticket = GrillLabel.ticket(ref.tab) ?? GrillLabel.ticket(ref.pane.title) {
+                        Button { Task { await showInBoard(ticket) } } label: { Label("Im Board zeigen", icon: .list) }
+                    }
                     Section("Textgröße") {
                         Button { rescale(by: 1) } label: { Label("Größer", systemImage: "textformat.size.larger") }
                         Button { rescale(by: -1) } label: { Label("Kleiner", systemImage: "textformat.size.smaller") }
@@ -178,6 +192,7 @@ private struct AgentConversation: View {
         .alert("Chat ließ sich nicht schließen", isPresented: Binding(get: { closeError != nil }, set: { if !$0 { closeError = nil } })) {
             Button("OK") { closeError = nil }
         } message: { Text(closeError ?? "") }
+        .alert("Kein Server hat das Sandcastle-Plugin.", isPresented: $noBoard) { Button("OK") {} }
         // keyed: omp started in a plain shell pane (or left it) switches between stream and history polling –
         // a task that had returned early never streamed the new omp chat
         .task(id: session.usesTimeline) {

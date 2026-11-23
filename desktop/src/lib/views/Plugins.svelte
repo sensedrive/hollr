@@ -3,7 +3,8 @@
   import { t } from "$lib/i18n";
   import { app, go } from "$lib/store.svelte";
   import { errText } from "$lib/serverapi";
-  import { listPlugins, type PluginInfo } from "$lib/plugins";
+  import { isPinned, listPlugins, togglePin, type PluginInfo } from "$lib/plugins";
+  import Icon from "$lib/components/git/Icon.svelte";
 
   type Load = { plugins: PluginInfo[] } | { error: string };
   let loads = $state<Record<string, Load>>({});
@@ -42,11 +43,18 @@
     {:else}
       <div class="rows">
         {#each l.plugins as p (p.id)}
-          <button class="row" disabled={!!p.error} onclick={() => go({ view: "plugin", server: server.id, id: p.id })}>
-            <span class="name">{p.name}</span>
-            {#if p.error}<span class="small bad">{p.error}</span>
-            {:else if p.description}<span class="small muted">{p.description}</span>{/if}
-          </button>
+          {@const on = isPinned(server.id, p.id)}
+          <div class="line">
+            <button class="row" disabled={!!p.error} onclick={() => go({ view: "plugin", server: server.id, id: p.id })}>
+              <span class="name">{p.name}</span>
+              {#if p.error}<span class="small bad">{p.error}</span>
+              {:else if p.description}<span class="small muted">{p.description}</span>{/if}
+            </button>
+            {#if !p.error}
+              <button class="pin" class:on title={on ? t("Aus der Navigation lösen") : t("In der Navigation anpinnen")}
+                aria-pressed={on} onclick={() => togglePin(server.id, p.id, p.name)}><Icon name="pin" size={15} /></button>
+            {/if}
+          </div>
         {/each}
       </div>
     {/if}
@@ -55,7 +63,11 @@
 
 <style>
   .section { margin: 18px 2px 6px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-  .row { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: grid; gap: 2px; padding: 10px 14px; }
+  .line { display: flex; align-items: center; }
+  .row { all: unset; box-sizing: border-box; flex: 1; min-width: 0; cursor: pointer; display: grid; gap: 2px; padding: 10px 14px; }
+  .pin { all: unset; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; color: var(--dim); margin-right: 8px; }
+  .pin:hover { background: var(--card); color: var(--fg); }
+  .pin.on { color: var(--accent); }
   .row:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 5%, transparent); }
   .row:disabled { cursor: default; }
   .row:disabled .name { color: var(--dim); }

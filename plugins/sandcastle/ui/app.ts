@@ -4,10 +4,12 @@
  * the GitHub board) then loads on its own and re-renders when it arrives – nothing waits for the slowest machine.
  */
 import { writing } from "./actions";
-import { api, type HostTheme, hostTheme, initToken, sc, servers, themeEvents } from "./api";
+import { api, type HostTheme, hostTheme, initToken, sc, servers, hostEvents } from "./api";
 import { dragging } from "./drag";
 import { fill, h, reconcile } from "./dom";
 import { readHash } from "./filter";
+import { dropOpen, keyProject, type OpenTarget, parseOpen, readOpen } from "./grill";
+import { pumpGrills } from "./grillqueue";
 import {
   cacheGet,
   cacheSet,
@@ -27,7 +29,7 @@ import { boardView, renderBoard } from "./views/board";
 import { clearCards } from "./views/cards";
 import { setQuery } from "./views/filterbar";
 import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
-import { closeSidebar, renderLive } from "./views/sidebar";
+import { closeSidebar, openIssue, renderLive } from "./views/sidebar";
 import { applyTheme } from "./theme";
 
 initToken();
@@ -38,7 +40,11 @@ applyTheme(prefGet<HostTheme>("theme"));
 const useTheme = (t: HostTheme | null) => {
   if (applyTheme(t)) prefSet("theme", t);
 };
-themeEvents.onTheme = useTheme;
+hostEvents.onTheme = useTheme;
+hostEvents.onOpen = (ticket) => {
+  const t = parseOpen(ticket);
+  if (t) openTicket(t);
+};
 hostTheme().then(useTheme);
 
 const projectSelect = h("select", { class: "project", "aria-label": "Projekt" });
@@ -95,6 +101,7 @@ hooks.render = () => {
     if (state.view === "board") renderBoard();
     else renderRuns();
     renderLive();
+    if (pendingOpen) tryOpen();
   });
 };
 
@@ -221,6 +228,7 @@ async function loadStatus(s: Server): Promise<void> {
     async () => {
       try {
         state.statuses.set(s.id, await sc.status(s.id));
+        pumpGrills();
         if (state.statusErrors.get(s.id)?.startsWith("Status")) state.statusErrors.delete(s.id);
       } catch (err) {
         state.statusErrors.set(s.id, `Status: ${errorText(err)}`);
@@ -233,13 +241,15 @@ async function loadStatus(s: Server): Promise<void> {
 }
 hooks.reloadStatus = () => Promise.all(state.servers.map(loadStatus)).then(() => {});
 
-async function loadBoard(): Promise<void> {
+/** `full`: the reload button – the server fetches everything again (new labels, users), not only changed issues. */
+async function loadBoard(full = false): Promise<void> {
   const slug = state.slug;
   if (!slug) return;
   await once(`board:${slug}`, async () => {
     const since = state.board?.etag ? `&since=${encodeURIComponent(state.board.etag)}` : "";
-    const res = await api<BoardData | { same: true }>(`/api/board?slug=${encodeURIComponent(slug)}${since}`);
+    const res = await api<BoardData | { same: true }>(`/api/board?slug=${encodeURIComponent(slug)}${since}${full ? "&refresh=1" : ""}`);
     last.board = Date.now();
+    if (slug === state.slug) freshBoard = slug;
     if (slug !== state.slug || "same" in res || writing() || dragging()) return;
     state.board = res;
     cacheSet(`board.${slug}`, res);
@@ -271,7 +281,7 @@ hooks.reloadQueues = loadQueues;
 
 const last = { servers: 0, projects: 0, status: 0, board: 0, queues: 0 };
 
-function tick(force = false): void {
+function tick(force = false, full = false): void {
   if (document.hidden) return;
   const now = Date.now();
   if (now - last.servers > 60_000) {
@@ -293,7 +303,7 @@ function tick(force = false): void {
   }
   if (state.view === "board" && (force || now - last.board >= 15_000)) {
     last.board = now;
-    loadBoard();
+    loadBoard(full);
   }
   if (state.view === "board" && (force || now - last.queues >= 15_000)) {
     last.queues = now;
@@ -307,7 +317,7 @@ function refreshAll(button = false): void {
   if (button) last.projects = 0;
   reload.classList.add("spin");
   setTimeout(() => reload.classList.remove("spin"), 600);
-  tick(true);
+  tick(true, button);
 }
 
 setInterval(() => tick(), 1000);
@@ -318,7 +328,58 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshAll();
 });
 
+// ---- deep link `open=KEY:n` / `:n` / `KEY:` and Hollr's `open` event („Im Board zeigen“)
+
+let pendingOpen: OpenTarget | null = null;
+/** the project switch is decided once per link, as soon as projects are known */
+let openSwitched = false;
+/** slug whose board answered from the network since the page opened (a key-only link may then give up) */
+let freshBoard = "";
+
+function openTicket(t: OpenTarget): void {
+  pendingOpen = t;
+  openSwitched = false;
+  tryOpen();
+}
+
+/** Switches to the ticket's project (by JIRA project key, else stays) and opens its details once it can. */
+function tryOpen(): void {
+  const t = pendingOpen;
+  if (!t) return;
+  if (!openSwitched) {
+    const list = projects();
+    if (!list.length) return;
+    openSwitched = true;
+    const key = t.key;
+    const target = key ? list.find((p) => p.jira.projectKey === keyProject(key)) : undefined;
+    if (target && target.slug !== state.slug) {
+      closeSidebar();
+      useSlug(target.slug);
+      last.board = 0;
+      last.queues = 0;
+    }
+    if (state.view !== "board") show("board");
+    else tick(true);
+  }
+  if (t.n !== null) {
+    pendingOpen = null;
+    openIssue(t.n);
+    return;
+  }
+  const issue = state.board?.issues.find((i) => i.jira === t.key);
+  if (issue) {
+    pendingOpen = null;
+    openIssue(issue.number);
+  } else if (freshBoard === state.slug) {
+    pendingOpen = null;
+    toast(`${t.key} ist in diesem Board nicht zu finden.`);
+  }
+}
+
 const initial = readHash(location.hash) || prefGet<string>("filter") || "";
+const linked = readOpen(location.hash);
+if (linked) history.replaceState(null, "", location.pathname + location.search + dropOpen(location.hash));
 pickSlug();
 show(state.view);
 if (initial) setQuery(initial);
+if (linked) openTicket(linked);

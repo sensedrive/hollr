@@ -17,6 +17,8 @@ export interface CardInfo {
   flags: TicketFlags | null;
   blockers: number[];
   locked: boolean;
+  /** grill of the ticket: badge text (`gegrillt 4/7`, `wartet auf dich`, `wartet auf Start`), tone and where */
+  grill?: { badge: string | null; tone: "waiting" | "running" | "done" | "queued"; where: string };
 }
 
 const cache = new Map<number, { sig: string; el: HTMLElement }>();
@@ -25,7 +27,7 @@ const initials = (login: string) => login.replace(/[^a-zA-Z0-9]/g, "").slice(0, 
 
 export function cardEl(c: CardInfo): HTMLElement {
   const i = c.issue;
-  const sig = JSON.stringify([i.title, i.state, i.labels, i.assignees, i.parent, i.jira, c.labels, c.pos, c.phase, c.branch, c.siblings, c.flags, c.blockers, c.locked]);
+  const sig = JSON.stringify([i.title, i.state, i.labels, i.assignees, i.parent, i.jira, c.labels, c.pos, c.phase, c.branch, c.siblings, c.flags, c.blockers, c.locked, c.grill]);
   const hit = cache.get(i.number);
   if (hit?.sig === sig) return hit.el;
   const el = build(c);
@@ -73,6 +75,7 @@ function build(c: CardInfo): HTMLElement {
       c.blockers.length ? h("span", { class: "blocked", title: "Die Schleife überspringt es, bis die Blocker zu sind" }, `wartet auf ${c.blockers.map((b) => `#${b}`).join(", ")}`) : null,
       h("span", { class: "grow" }),
       c.phase && c.phase !== "queued" ? h("span", { class: `phase ${c.phase}` }, busy ? `🔒 ${PHASE_TEXT[c.phase]}` : PHASE_TEXT[c.phase]) : null,
+      c.grill?.badge ? h("span", { class: `grill-badge ${c.grill.tone}` }, c.grill.badge) : null,
     ),
     h("div", { class: "card-title" }, i.title),
     h(
@@ -86,6 +89,7 @@ function build(c: CardInfo): HTMLElement {
         : null,
     ),
     footer,
+    c.grill ? h("div", { class: "card-grill" }, c.grill.where) : null,
   );
 }
 

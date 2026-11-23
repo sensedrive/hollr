@@ -18,6 +18,8 @@ struct RootView: View {
     @State private var sheetAgent: String?
     @State private var spacesPath = NavigationPath()
     @State private var agentPath: [String] = []
+    @State private var pluginPath: [PluginRoute] = []
+    @State private var boardSerial = 0
     @State private var newChat = false
     @Namespace private var zoom
     @State private var shared: SharedItem?
@@ -68,9 +70,21 @@ struct RootView: View {
     }
 
     private var pluginsTab: some View {
-        NavigationStack {
+        NavigationStack(path: $pluginPath) {
             PluginsView()
-                .navigationDestination(for: PluginRoute.self) { PluginView(server: $0.server, plugin: $0.plugin) }
+                .navigationDestination(for: PluginRoute.self) { PluginView(server: $0.server, plugin: $0.plugin, ticket: $0.open) }
+        }
+    }
+
+    /// „Im Board zeigen“ from a chat: the Plugins tab with the board – told about the ticket when it is already shown
+    private func showInBoard(_ request: BoardLink.Request) {
+        sheetAgent = nil
+        tab = .plugins
+        if let shown = pluginPath.last, shown.server.id == request.server.id, shown.plugin.id == request.plugin.id {
+            boardSerial += 1
+            BoardLink.shared.event = (request.server.id, request.ticket, boardSerial)
+        } else {
+            pluginPath = [PluginRoute(server: request.server, plugin: request.plugin, open: request.ticket)]
         }
     }
 
@@ -103,6 +117,11 @@ struct RootView: View {
                     NavigationStack { SettingsView(onPair: { pairing = PairingRequest() }) }
                         .tabItem { TabLabel(title: "Einstellungen", icon: .sliders) }
                         .tag(RootTab.settings)
+                }
+                .onChange(of: BoardLink.shared.request) { _, request in
+                    guard let request else { return }
+                    BoardLink.shared.request = nil
+                    showInBoard(request)
                 }
                 // tapped push notification → open that agent
                 .onChange(of: PushManager.shared.openRequest?.pane) { _, pane in

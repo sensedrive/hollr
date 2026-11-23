@@ -84,10 +84,37 @@ export interface RunRecord {
   [k: string]: unknown;
 }
 
+export type GrillMode = "interactive" | "auto";
+export type GrillStatus = "running" | "waiting" | "idle" | "done" | "ended";
+
+/** A grill on one machine (gate `status.grills`, server/src/grills.ts). */
+export interface Grill {
+  /** `${slug}#${n}`, or `${cwd}|${key}` when slug or n is unknown */
+  id: string;
+  slug: string | null;
+  project: string | null;
+  n: number | null;
+  key: string | null;
+  /** null = hand-started without a Grill label */
+  mode: GrillMode | null;
+  source: "hollr" | "manual";
+  pane: string | null;
+  status: GrillStatus;
+  steps: { n: number; label: string; done: boolean }[];
+  /** first open step, 8 when all are done */
+  step: number;
+  notes: string[];
+  cwd: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+}
+
 export interface Status {
   machine: { host: string };
   runs: Run[];
   lock: RunRecord | null;
+  /** missing on machines with an older hollr */
+  grills?: Grill[];
 }
 
 export interface QueueState {

@@ -6,4 +6,8 @@ export default {
   "Keine Plugins. Auf dem Server: hollr plugin link <ordner>": "No plugins. On the server: hollr plugin link <folder>",
   "Plugin nicht erreichbar": "Plugin not reachable",
   "Erneut versuchen": "Try again",
+  "Im Board zeigen": "Show on board",
+  "Kein Server hat das Sandcastle-Plugin.": "No server has the Sandcastle plugin.",
+  "In der Navigation anpinnen": "Pin to the navigation",
+  "Aus der Navigation lösen": "Unpin from the navigation",
 };

@@ -185,6 +185,14 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle-Board: Tickets grillen oder auto-grillen – auf dem Rechner deiner Wahl. Jeder Grill ist eine normale Sitzung in Hollr; das Board zeigt Fortschritt und „wartet auf dich“, auch für von Hand gestartete Grills.":
+    "Sandcastle board: grill or auto-grill tickets – on the machine of your choice. Every grill is a normal Hollr session; the board shows progress and “waiting for you”, also for grills started by hand.",
+  "Chat-Menü › „Im Board zeigen“ bei Grill-Sitzungen springt zur Karte im Sandcastle-Board.":
+    "Chat menu › “Show on board” on grill sessions jumps to the card on the Sandcastle board.",
+  "Plugins anpinnen: angepinnte Plugins stehen direkt oben in der Seitenleiste.":
+    "Pin plugins: pinned plugins sit right at the top of the sidebar.",
+  "Behoben: Das Sandcastle-Board zeigte neue Labels nicht – über die Hollr-Verbindung gestartet, fehlte dem Plugin die GitHub-Anmeldung. „Neu laden“ holt jetzt alles neu.":
+    "Fixed: the Sandcastle board didn't show new labels – started over the Hollr connection, the plugin lacked the GitHub login. “Reload” now fetches everything again.",
   "„Plugins“ in der Seitenleiste öffnet direkt das zuletzt genutzte Plugin; der Pfeil zurück führt zur Übersicht.":
     "“Plugins” in the sidebar opens the plugin you used last; the back arrow leads to the overview.",
   "Plugins übernehmen das Farbschema von Hollr samt Hell/Dunkel – auch beim Umschalten, während das Plugin offen ist.":

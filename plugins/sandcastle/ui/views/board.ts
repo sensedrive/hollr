@@ -10,11 +10,13 @@ import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
 import { branchColour, classify, isBusy, laneSummary, PHASE_TEXT, segments, shortBranch, since } from "../model";
-import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
+import { clearGrillQueue, grillQueue } from "../grillqueue";
+import { errorText, hooks, laneServers, prefGet, prefSet, state, toast } from "../state";
 import type { Column, Issue, Phase, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
 import { cardEl } from "./cards";
 import { filterBar, filterTokens } from "./filterbar";
+import { autoGrillCandidates, cardGrill, grillMenuItems, openGrillAllDialog } from "./grilling";
 import { showMenu } from "./menu";
 import { openIssue } from "./sidebar";
 
@@ -41,6 +43,11 @@ let lanesEl: HTMLElement;
 let unlanedEl: HTMLElement;
 let olderBtn: HTMLButtonElement;
 let staleEl: HTMLElement;
+/** „Alle auto-grillen“ and the page's auto-grill queue, on top of „Zu grillen“ */
+let grillAllBtn: HTMLButtonElement;
+let grillQueueEl: HTMLElement;
+/** what „Alle auto-grillen“ would queue (the filtered cards of „Zu grillen“ without a grill) */
+let grillCandidates: Issue[] = [];
 let visible = { keys: [] as (string | null)[], count: 0 };
 let bar: ReturnType<typeof filterBar>;
 
@@ -67,6 +74,9 @@ export function boardView(): HTMLElement {
   lanesEl = h("div", { class: "lanes" });
   unlanedEl = h("div", { class: "lane", "data-column": "queue" }, h("div", { class: "list", "data-list": true }));
   columnEls.queue.el.append(lanesEl);
+  grillAllBtn = h("button", { class: "btn grill-all-btn", onclick: () => openGrillAllDialog(grillCandidates) }, h("span", { "aria-hidden": "true" }, "🔥"), " Alle auto-grillen");
+  grillQueueEl = h("div", { class: "grill-queue small", hidden: true });
+  columnEls.grill.el.insertBefore(h("div", { class: "col-actions" }, grillAllBtn, grillQueueEl), columnEls.grill.list);
   olderBtn = h("button", { class: "btn older", onclick: () => loadOlder() }, "Ältere laden");
   staleEl = h("div", { class: "stale", hidden: true });
   root = h("div", { class: "board" }, bar.el, staleEl, segsEl, columnsEl);
@@ -105,6 +115,7 @@ function openRun(server: string, id: string): void {
   const run = state.statuses.get(server)?.runs.find((r) => r.id === id);
   if (!run) return;
   state.selection = { server, run: id, n: null, path: run.logs[0]?.path ?? null };
+  state.grillSel = null;
   hooks.show("runs");
 }
 
@@ -114,6 +125,7 @@ function openCard(n: number): void {
   if (tr && isBusy(tr.issue.phase)) {
     const log = tr.issue.logs.find((l) => l.active) ?? tr.issue.logs[0];
     state.selection = { server: tr.server, run: tr.run.id, n, path: log?.path ?? null };
+    state.grillSel = null;
     hooks.show("runs");
   } else openIssue(n);
 }
@@ -184,7 +196,9 @@ function cardMenu(n: number): void {
   if (!issue) return;
   const busy = isBusy(d.runs.get(n)?.issue.phase);
   const lane = d.laneOf.get(n);
+  const inGrill = !!d.project && classify(issue, d.project.labels, !!state.board?.hasGrill) === "grill";
   const items = [
+    ...(inGrill ? grillMenuItems(d, n) : []),
     ...d.lanes
       .filter((l) => l.server.id !== lane)
       .map((l) => ({ label: `→ Sandcastle auf ${l.server.label}`, disabled: busy, run: () => moveTicket(n, "queue", l.server.id) })),
@@ -222,6 +236,7 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
         flags: flagsOf(d, issue.number),
         blockers: issue.state === "open" ? openBlockers(d, issue) : [],
         locked: isBusy(tr?.issue.phase),
+        grill: cardGrill(d, issue.number),
       }),
     );
     visible.keys.push(issue.jira);
@@ -358,6 +373,19 @@ function laneCards(d: Derived, lane: Lane, test: (i: Issue) => boolean): HTMLEle
   return out;
 }
 
+/** „Alle auto-grillen“ (count of what it would queue) and the waiting part of the page's auto-grill queue. */
+function renderGrillActions(d: Derived, shown: Issue[]): void {
+  grillCandidates = autoGrillCandidates(d, shown);
+  grillAllBtn.disabled = !grillCandidates.length || !laneServers().some((s) => s.online);
+  grillAllBtn.title = grillCandidates.length ? `${grillCandidates.length} Tickets ohne Grill auto-grillen` : "Alle sichtbaren Tickets haben schon einen Grill";
+  const waiting = grillQueue().filter((q) => q.slug === state.slug).length;
+  const text = waiting ? `${waiting} warten auf Start – nur solange diese Seite offen ist` : "";
+  if (grillQueueEl.dataset.text === text) return;
+  grillQueueEl.dataset.text = text;
+  grillQueueEl.hidden = !waiting;
+  fill(grillQueueEl, h("span", {}, text), " ", h("button", { class: "link", onclick: clearGrillQueue }, "Stoppen"));
+}
+
 export function renderBoard(): void {
   if (!root || dragging()) return;
   const d = derive();
@@ -374,6 +402,7 @@ export function renderBoard(): void {
     counts[c] = cards.length;
     reconcile(columnEls[c].list, cards.length ? cards : [empty(board ? "Keine Issues" : "Lädt …")]);
   }
+  renderGrillActions(d, d.columns.grill.filter(test));
 
   // Sandcastle: a lane per machine
   let queueCount = 0;

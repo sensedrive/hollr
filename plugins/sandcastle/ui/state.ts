@@ -33,6 +33,8 @@ export const state = {
   queues: new Map<string, QueueState>(),
   query: "",
   selection: null as LogSelection | null,
+  /** grill shown on the right of „Läufe“ instead of a log (machine + grill id); exclusive with `selection` */
+  grillSel: null as { server: string; id: string } | null,
   /** server whose start form the Läufe view should bring into view */
   startFor: null as string | null,
 };

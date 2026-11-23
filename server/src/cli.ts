@@ -120,7 +120,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.50.2";
+export const VERSION = "0.51.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -567,11 +567,14 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "sandcastle": {
-      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|start|release}
+      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|start|release|grill-start}
       try {
         const req = JSON.parse((await readStdinLine(256 * 1024)) || "{}") as SandcastleRequest;
-        if (["start", "release", "queue-set"].includes(req.op ?? ""))
-          log("gate", `sandcastle ${req.op}${req.slug ? ` ${req.slug}` : ""}`);
+        if (["start", "release", "queue-set", "grill-start"].includes(req.op ?? ""))
+          log(
+            "gate",
+            `sandcastle ${req.op}${req.slug ? ` ${req.slug}` : ""}${req.op === "grill-start" ? ` #${String(req.n)}` : ""}`,
+          );
         json(await sandcastle(req, { cli: hollrCli() }));
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
