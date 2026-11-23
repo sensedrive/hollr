@@ -90,6 +90,29 @@ function icon(paths: string): HTMLSpanElement {
 const EYE = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
 const EYE_OFF = `${EYE}<path d="M3 3l18 18"/>`;
 const TRASH = '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>';
+const COPY = '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>';
+
+/** A query as someone else should get it: switched-off parts (`~`) stay home. */
+function shareable(query: string): { text: string; dropped: number } {
+  const terms = parse(query);
+  const on = terms.filter((t) => !t.off);
+  return { text: serializeTerms(on), dropped: terms.length - on.length };
+}
+
+/** Copies a filter; a blocked clipboard shows the text selected for copying by hand (like the JIRA link). */
+async function copyFilter(query: string): Promise<void> {
+  const { text, dropped } = shareable(query);
+  if (!text) return void toast("Kein aktiver Filter zum Kopieren.", "info");
+  if (await copyText(text)) {
+    fallback.hidden = true;
+    toast(`Filter kopiert: ${text}${dropped ? ` (${dropped} ausgeschaltete${dropped === 1 ? "r Teil" : " Teile"} nicht dabei)` : ""}`, "info");
+    return;
+  }
+  const field = h("input", { class: "grow mono", readonly: true, value: text });
+  fill(fallback, field, h("button", { class: "btn", onclick: () => { fallback.hidden = true; } }, "Schließen"));
+  fallback.hidden = false;
+  field.select();
+}
 
 function renderChips(): void {
   const all = committed.length > 1 ? committed.some((t) => !t.off) : null;
@@ -259,6 +282,15 @@ input.addEventListener("input", () => {
     openSuggest();
     apply();
   }
+});
+// pasting a whole filter (from „Filter kopieren“ or a colleague) turns it into chips at once
+input.addEventListener("paste", (e) => {
+  const text = e.clipboardData?.getData("text/plain")?.trim();
+  if (!text || !/\s|[()|]/.test(text)) return;
+  e.preventDefault();
+  input.value = `${input.value}${input.value && !/\s$/.test(input.value) ? " " : ""}${text}`;
+  if (!unfinished(input.value)) commit(false);
+  else apply();
 });
 input.addEventListener("keydown", (e) => {
   if (e.key === "Tab" && suggestions.length) {
@@ -493,9 +525,24 @@ function renderSaved(): void {
       },
       "Aktuellen Filter speichern …",
     );
+  const copyCurrent = h(
+    "button",
+    {
+      class: "qf-item",
+      role: "menuitem",
+      disabled: !shareable(query).text,
+      title: "Den aktiven Filter als Text kopieren – zum Teilen oder Einfügen ins Filterfeld",
+      onclick: () => {
+        copyFilter(query);
+        closePop();
+      },
+    },
+    "Aktuellen Filter kopieren",
+  );
   fill(
     savedPop,
     head,
+    naming ? null : copyCurrent,
     h("div", { class: "qf-pop-title" }, "Gespeicherte Filter"),
     list.length ? null : h("p", { class: "muted qf-pop-note" }, "Noch keine gespeicherten Filter."),
     ...list.map((f) =>
@@ -516,6 +563,7 @@ function renderSaved(): void {
           h("span", {}, f.name),
           h("span", { class: "muted mono" }, f.query),
         ),
+        h("button", { class: "qf-trash", "aria-label": `${f.name} kopieren`, title: "Kopieren", onclick: () => copyFilter(f.query) }, icon(COPY)),
         h("button", { class: "qf-trash", "aria-label": `${f.name} löschen`, title: "Löschen", onclick: () => { storeSaved(list.filter((x) => x !== f)); renderSaved(); } }, icon(TRASH)),
       ),
     ),
