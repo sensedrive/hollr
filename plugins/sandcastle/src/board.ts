@@ -4,8 +4,8 @@ import type { Project } from "./types";
 export type Column = "grill" | "backlog" | "queue" | "done";
 export const COLUMNS: Column[] = ["grill", "backlog", "queue", "done"];
 
-/** null grill: the project has no grill label – no "Zu grillen" column */
-export type Labels = Project["labels"];
+/** The labels that decide the column; null grill: the project has no grill label – no "Zu grillen" column */
+export type Labels = Pick<Project["labels"], "queue" | "story" | "grill">;
 
 export interface CardState {
   state: "open" | "closed";

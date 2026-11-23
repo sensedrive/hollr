@@ -9,8 +9,25 @@ export interface Project {
   gitCommonDir: string;
   defaultBranch: string;
   engine: string;
-  labels: { queue: string; story: string; grill: string | null };
-  jira: { baseUrl: string | null; projectKey: string | null; boardId: string | null };
+  /** workflow labels (GitHub owns them); ready/ciFailed/nogo are null when not configured */
+  labels: {
+    queue: string;
+    story: string;
+    grill: string | null;
+    ready: string | null;
+    ciFailed: string | null;
+    nogo: string | null;
+    /** further labels the project keeps on GitHub as workflow labels (`github.labels.workflow`) */
+    workflow: string[];
+  };
+  jira: {
+    baseUrl: string | null;
+    projectKey: string | null;
+    boardId: string | null;
+    cloudId: string | null;
+    /** JIRA status names of the lul-workr workflow steps */
+    states: { selected: string | null; inProgress: string | null; testing: string | null; done: string | null };
+  };
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
   queueSupported: boolean;

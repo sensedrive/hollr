@@ -12,8 +12,22 @@ export interface Project {
   gitCommonDir: string;
   defaultBranch: string;
   engine: string;
-  labels: { queue: string; story: string; grill: string | null };
-  jira: { baseUrl: string | null; projectKey: string | null; boardId: string | null };
+  labels: {
+    queue: string;
+    story: string;
+    grill: string | null;
+    ready: string | null;
+    ciFailed: string | null;
+    nogo: string | null;
+    workflow: string[];
+  };
+  jira: {
+    baseUrl: string | null;
+    projectKey: string | null;
+    boardId: string | null;
+    cloudId: string | null;
+    states: { selected: string | null; inProgress: string | null; testing: string | null; done: string | null };
+  };
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
   queueSupported: boolean;

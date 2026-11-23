@@ -8,8 +8,11 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BoardCache } from "./src/cache";
 import { hollrGate, type PluginEnv, pluginEnv } from "./src/env";
-import { fetchBoard, fetchChanged } from "./src/github";
+import { fetchBoard, fetchChanged, updateIssue } from "./src/github";
 import { type Ctx, handleApi } from "./src/http";
+import { JiraAccess } from "./src/jira";
+import { JiraCache } from "./src/jiracache";
+import { LiveRuns } from "./src/live";
 import { Prefs } from "./src/prefs";
 import { Projects } from "./src/projects";
 
@@ -48,11 +51,19 @@ function authorized(req: Request): boolean {
 }
 
 let lastRequest = Date.now();
+const jira = new JiraAccess();
 const ctx: Ctx = {
   projects: new Projects(env.stateDir, hollrGate),
   boards: new BoardCache(env.stateDir, { fetchBoard, fetchChanged }),
   gate: hollrGate,
   prefs: new Prefs(env.stateDir),
+  jira,
+  tickets: new JiraCache(env.stateDir, {
+    fetchBoard: (key, states) => jira.client().fetchBoard(key, states),
+    fetchChanged: (key, since) => jira.client().fetchChanged(key, since),
+  }),
+  live: new LiveRuns(hollrGate),
+  updateIssue,
 };
 
 const server = Bun.serve({

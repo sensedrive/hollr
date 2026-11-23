@@ -61,10 +61,9 @@ export class BoardCache {
     const e = await this.entry(project.slug);
     // refresh=1 is the reload button: everything again, so labels and users created meanwhile show up now
     if (refresh) await this.refresh(project.slug, e, true);
-    else if (this.now() - e.fetchedAt > STALE_MS) void this.refresh(project.slug, e).catch(() => {});
+    const stale = !refresh && this.revalidate(project.slug, e);
     const body = this.body(e, project);
     if (since && since === body.etag) return { same: true };
-    const stale = this.now() - e.fetchedAt > STALE_MS;
     const head = `{"etag":${JSON.stringify(body.etag)},"fetchedAt":${JSON.stringify(new Date(e.fetchedAt).toISOString())},"stale":${stale}`;
     const error = e.error ? `,"refreshError":${JSON.stringify(e.error)}` : "";
     return { json: `${head}${error},${body.json.slice(1)}` };
@@ -73,6 +72,14 @@ export class BoardCache {
   /** The snapshot (loading it if needed) – for writes that need label ids, repo id, the current issue. */
   async snapshot(slug: string): Promise<RepoSnapshot> {
     return (await this.entry(slug)).snap;
+  }
+
+  /** The snapshot like board() keeps it fresh (background refresh when stale, full and awaited on `refresh`). */
+  async current(slug: string, refresh = false): Promise<{ snap: RepoSnapshot; stale: boolean; error?: string }> {
+    const e = await this.entry(slug);
+    if (refresh) await this.refresh(slug, e, true);
+    const stale = !refresh && this.revalidate(slug, e);
+    return { snap: e.snap, stale, error: e.error };
   }
 
   /** Takes a written issue as GitHub answered it. */
@@ -99,6 +106,13 @@ export class BoardCache {
   }
 
   // ---------------------------------------------------------------- internals
+
+  /** Starts a background refresh when the data is older than 15 s; answers whether it is. */
+  private revalidate(slug: string, e: Entry): boolean {
+    const stale = this.now() - e.fetchedAt > STALE_MS;
+    if (stale) void this.refresh(slug, e).catch(() => {});
+    return stale;
+  }
 
   private file(slug: string) {
     return join(this.dir, "boards", `${slug.replace("/", "__")}.json`);

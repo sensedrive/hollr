@@ -1,7 +1,8 @@
 /**
- * The board's JSON API (/api/*), GitHub only, keyed by repo slug (contract C). Queue order, runs and logs are
- * the machines' business (`hollr gate sandcastle`, reached through the Hollr host relay, or /api/host/gate
- * when the page runs outside Hollr). Errors answer {error} with 400, 404 or 502 (gh / hollr).
+ * The board's JSON API (/api/*), keyed by repo slug (contract C): GitHub issues, and JIRA tickets with their
+ * GitHub family and drift (/api/jira/*, /api/drift/*). Queue order, runs and logs are the machines' business
+ * (`hollr gate sandcastle`, reached through the Hollr host relay, or /api/host/gate when the page runs outside
+ * Hollr). Errors answer {error} with 400, 404, 409 (JIRA: `jira-missing`, transition not possible) or 502.
  */
 import { hostname } from "node:os";
 import { renderMarkdown } from "./body";
@@ -9,6 +10,10 @@ import { type Column, COLUMNS, classify, type MovePlan, movePlan } from "./board
 import type { BoardCache } from "./cache";
 import { HttpError } from "./env";
 import * as github from "./github";
+import type { JiraAccess } from "./jira";
+import { applyDrift, jiraBoard, jiraComment, jiraIssue, jiraLabels, jiraTransition } from "./jiraboard";
+import type { JiraCache } from "./jiracache";
+import type { LiveRuns } from "./live";
 import type { Prefs } from "./prefs";
 import type { Gate, Projects } from "./projects";
 import type { CommentOut, Issue, IssueDetail, Project } from "./types";
@@ -20,6 +25,14 @@ export interface Ctx {
   gate: Gate;
   /** last board settings, kept across tunnel origins */
   prefs: Prefs;
+  /** the stored JIRA access (409 jira-missing without one) */
+  jira: JiraAccess;
+  /** JIRA boards per project key */
+  tickets: JiraCache;
+  /** phases of this machine's live runs, for the drift rules */
+  live: LiveRuns;
+  /** the GitHub label/state write of JIRA-driven fixes (github.updateIssue; tests record it) */
+  updateIssue: typeof github.updateIssue;
 }
 
 /** Gate commands /api/host/gate passes on – the same allowlist the manifest gives the Hollr relay. */
@@ -202,6 +215,34 @@ async function route(req: Request, url: URL, ctx: Ctx): Promise<unknown> {
     const command = String(b.command ?? "");
     if (!Object.hasOwn(HOST_GATE, command)) throw new HttpError(400, `Gate-Befehl „${command}“ ist nicht freigegeben.`);
     return ctx.gate(command, b.stdin ?? {});
+  }
+
+  if (method === "GET" && path === "/api/jira/board") {
+    const p = await project(q.get("slug"));
+    return jiraBoard(ctx, p, q.get("since"), q.get("refresh") === "1");
+  }
+
+  if (method === "GET" && path === "/api/jira/issue")
+    return jiraIssue(ctx, await project(q.get("slug")), String(q.get("key") ?? ""));
+
+  if (method === "POST" && path === "/api/jira/transition") {
+    const b = await json(req);
+    return jiraTransition(ctx, await project(b.slug), String(b.key ?? ""), String(b.to ?? "").trim());
+  }
+
+  if (method === "POST" && path === "/api/jira/labels") {
+    const b = await json(req);
+    return jiraLabels(ctx, await project(b.slug), String(b.key ?? ""), strings(b.add), strings(b.remove));
+  }
+
+  if (method === "POST" && path === "/api/jira/comment") {
+    const b = await json(req);
+    return jiraComment(ctx, await project(b.slug), String(b.key ?? ""), String(b.body ?? ""));
+  }
+
+  if (method === "POST" && path === "/api/drift/apply") {
+    const b = await json(req);
+    return applyDrift(ctx, await project(b.slug), String(b.key ?? ""));
   }
 
   throw new HttpError(404, "Unbekannter Pfad.");

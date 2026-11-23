@@ -94,8 +94,14 @@ beforeAll(async () => {
     JSON.stringify({
       project: "shop",
       repo: { slug: SLUG },
-      jira: { baseUrl: "https://j.example/", projectKey: "SHOP", boardId: 7 },
-      github: { queue: "Warteschlange", story: "epic", grillTicket: "grill" },
+      jira: {
+        baseUrl: "https://j.example/",
+        projectKey: "SHOP",
+        boardId: 7,
+        cloudId: "c-1",
+        states: { selected: "Selected", inProgress: "In Arbeit", testing: "Testing", done: "Fertig" },
+      },
+      github: { queue: "Warteschlange", story: "epic", grillTicket: "grill", nogo: "nogo" },
       engine: {
         kind: "sandcastle",
         sandcastle: {
@@ -124,7 +130,15 @@ beforeAll(async () => {
     join(other, ".lul-workr.json"),
     JSON.stringify({
       repo: { slug: "acme/other" },
-      github: { labels: { queue: "Q", grillTicket: "to-grill" } },
+      github: {
+        labels: {
+          queue: "Q",
+          grillTicket: "to-grill",
+          ready: "ready-for-agent",
+          ciFailed: "ci-failed",
+          workflow: ["release", 7, ""],
+        },
+      },
     }),
   );
   git(other, "init", "-q");
@@ -169,18 +183,39 @@ describe("projects", () => {
       name: "shop",
       root: shop,
       engine: "sandcastle",
-      labels: { queue: "Warteschlange", story: "epic", grill: "grill" },
-      jira: { baseUrl: "https://j.example", projectKey: "SHOP", boardId: "7" },
+      labels: {
+        queue: "Warteschlange",
+        story: "epic",
+        grill: "grill",
+        ready: null,
+        ciFailed: null,
+        nogo: "nogo",
+        workflow: [],
+      },
+      jira: {
+        baseUrl: "https://j.example",
+        projectKey: "SHOP",
+        boardId: "7",
+        cloudId: "c-1",
+        states: { selected: "Selected", inProgress: "In Arbeit", testing: "Testing", done: "Fertig" },
+      },
       agents: [
         { key: "opus-5", label: "Claude · Opus 5", harness: "claudeCode", model: "claude-opus-5" },
       ],
       defaults: { agent: "opus-5", parallel: 2 },
       queueSupported: true,
     });
-    expect(projects.find((x) => x.slug === "acme/other")?.labels).toEqual({
-      queue: "Q",
-      story: "story",
-      grill: "to-grill",
+    expect(projects.find((x) => x.slug === "acme/other")).toMatchObject({
+      labels: {
+        queue: "Q",
+        story: "story",
+        grill: "to-grill",
+        ready: "ready-for-agent",
+        ciFailed: "ci-failed",
+        nogo: null,
+        workflow: ["release"],
+      },
+      jira: { cloudId: null, states: { selected: null, inProgress: null, testing: null, done: null } },
     });
     expect(projects.find((x) => x.root.endsWith("broken"))?.error).toContain("kein gültiges JSON");
     // the worktree is no project of its own

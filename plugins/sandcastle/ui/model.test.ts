@@ -13,7 +13,7 @@ import {
 } from "./model";
 import type { Phase, Run, RunIssue, Status } from "./types";
 
-const labels = { queue: "Sandcastle", story: "story", grill: "grillen" };
+const labels = { queue: "Sandcastle", story: "story", grill: "grillen", ready: null, ciFailed: null, nogo: null, workflow: [] };
 
 test("classify precedence", () => {
   expect(classify({ state: "open", labels: ["story", "Sandcastle"] }, labels, true)).toBe("story");

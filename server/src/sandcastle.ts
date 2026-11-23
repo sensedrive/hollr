@@ -46,8 +46,25 @@ export interface Project {
   gitCommonDir: string;
   defaultBranch: string;
   engine: string;
-  labels: { queue: string; story: string; grill: string | null };
-  jira: { baseUrl: string | null; projectKey: string | null; boardId: string | null };
+  /** workflow labels; ready/ciFailed/nogo are null when the project doesn't configure them */
+  labels: {
+    queue: string;
+    story: string;
+    grill: string | null;
+    ready: string | null;
+    ciFailed: string | null;
+    nogo: string | null;
+    /** further labels the project keeps on GitHub as workflow labels (`github.labels.workflow`) */
+    workflow: string[];
+  };
+  jira: {
+    baseUrl: string | null;
+    projectKey: string | null;
+    boardId: string | null;
+    cloudId: string | null;
+    /** JIRA status names of the lul-workr workflow steps */
+    states: { selected: string | null; inProgress: string | null; testing: string | null; done: string | null };
+  };
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
   /** the loop on the default branch knows the queue (lul-workr-setup → Sandcastle nachziehen) */
@@ -300,17 +317,28 @@ function claim(marker: string, ms: number, now: number): boolean {
 
 // ── projects ───────────────────────────────────────────────────────────────────────────────────────
 
+type LabelKey = "queue" | "story" | "grillTicket" | "grill" | "ready" | "ciFailed" | "nogo";
+
 /** `.lul-workr.json` as far as Sandcastle reads it; labels exist as `github.labels.*` and as `github.*`. */
 interface Config {
   project?: unknown;
   repo?: { slug?: unknown; defaultBranch?: unknown };
-  jira?: { baseUrl?: unknown; projectKey?: unknown; boardId?: unknown };
+  jira?: {
+    baseUrl?: unknown;
+    projectKey?: unknown;
+    boardId?: unknown;
+    cloudId?: unknown;
+    states?: { selected?: unknown; inProgress?: unknown; testing?: unknown; done?: unknown };
+  };
   github?: {
-    labels?: { queue?: unknown; story?: unknown; grillTicket?: unknown; grill?: unknown };
+    labels?: Partial<Record<LabelKey, unknown>> & { workflow?: unknown };
     queue?: unknown;
     story?: unknown;
     grillTicket?: unknown;
     grill?: unknown;
+    ready?: unknown;
+    ciFailed?: unknown;
+    nogo?: unknown;
   };
   engine?: {
     kind?: unknown;
@@ -326,8 +354,8 @@ export function projectFromConfig(
   queueSupported: boolean,
 ): Project {
   const gh = cfg.github ?? {};
-  const label = (key: "queue" | "story" | "grillTicket" | "grill") =>
-    str(gh.labels?.[key]) ?? str(gh[key]);
+  const label = (key: LabelKey) => str(gh.labels?.[key]) ?? str(gh[key]);
+  const states = cfg.jira?.states;
   const parallel = cfg.engine?.sandcastle?.defaults?.parallel;
   const rawAgents = cfg.engine?.sandcastle?.agents;
   const boardId = cfg.jira?.boardId;
@@ -343,11 +371,24 @@ export function projectFromConfig(
       queue: label("queue") ?? "Sandcastle",
       story: label("story") ?? "story",
       grill: label("grillTicket") ?? label("grill") ?? null,
+      ready: label("ready") ?? null,
+      ciFailed: label("ciFailed") ?? null,
+      nogo: label("nogo") ?? null,
+      workflow: Array.isArray(gh.labels?.workflow)
+        ? gh.labels.workflow.filter((l): l is string => typeof l === "string" && !!l.trim())
+        : [],
     },
     jira: {
       baseUrl: str(cfg.jira?.baseUrl)?.replace(/\/+$/, "") ?? null,
       projectKey: str(cfg.jira?.projectKey) ?? null,
       boardId: typeof boardId === "number" ? String(boardId) : (str(boardId) ?? null),
+      cloudId: str(cfg.jira?.cloudId) ?? null,
+      states: {
+        selected: str(states?.selected) ?? null,
+        inProgress: str(states?.inProgress) ?? null,
+        testing: str(states?.testing) ?? null,
+        done: str(states?.done) ?? null,
+      },
     },
     agents: (Array.isArray(rawAgents) ? rawAgents : [])
       .map((a: Record<string, unknown>) => ({
@@ -380,10 +421,15 @@ interface Checkout {
 }
 
 interface ProjectCache {
+  /** PROJECTS_VERSION the cache was written with; an older shape is rescanned */
+  version?: number;
   at: number;
   projects: Project[];
   checkouts: Checkout[];
 }
+
+/** Bumped whenever Project gains fields, so cached projects never miss them. */
+const PROJECTS_VERSION = 3;
 
 const projectsFile = () => join(stateDir(), "projects.json");
 
@@ -465,6 +511,7 @@ async function discover(): Promise<ProjectCache> {
     a.name.localeCompare(b.name, "de"),
   );
   return {
+    version: PROJECTS_VERSION,
     at: Date.now(),
     projects,
     checkouts: all
@@ -486,7 +533,7 @@ async function rescan(): Promise<ProjectCache> {
 async function projectCache(deps: Deps, refresh = false): Promise<ProjectCache> {
   if (refresh) return rescan();
   const cache = readJson<ProjectCache>(projectsFile());
-  if (!cache?.projects) return rescan();
+  if (!cache?.projects || cache.version !== PROJECTS_VERSION) return rescan();
   const now = deps.now ?? Date.now();
   if (
     now - cache.at > PROJECTS_TTL &&

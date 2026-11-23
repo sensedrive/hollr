@@ -5,14 +5,26 @@ import { join } from "node:path";
 import { BoardCache } from "../src/cache";
 import { HttpError } from "../src/env";
 import { toIssue } from "../src/github";
+import type { DriftItem } from "../src/drift";
 import { type Ctx, handleApi } from "../src/http";
+import { JiraAccess, type JiraCredentials } from "../src/jira";
+import { JiraCache } from "../src/jiracache";
+import { LiveRuns } from "../src/live";
 import { Prefs } from "../src/prefs";
 import { Projects } from "../src/projects";
+import type { Issue } from "../src/types";
 import { issue, NOW, project, snapshot } from "./fixtures";
+import { type FakeJira, fakeJira } from "./jirafake";
 
 let dir: string;
 let gateCalls: { command: string; stdin: unknown }[];
 let ctx: Ctx;
+let ghIssues: Issue[];
+let jira: FakeJira;
+let creds: JiraCredentials | null;
+/** GitHub label writes: issue id, removed label ids, and how many JIRA calls had happened before */
+let ghWrites: { id: string; remove: string[]; jiraCallsBefore: number }[];
+const TOKEN = "geheim-token-123";
 
 async function gate(command: string, stdin: unknown): Promise<unknown> {
   gateCalls.push({ command, stdin });
@@ -35,14 +47,43 @@ async function call(path: string, init?: { method?: string; body?: unknown }) {
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sc-http-"));
   gateCalls = [];
+  ghIssues = [issue(1, { labels: ["Sandcastle"] }), issue(2, { labels: ["story"] })];
+  jira = fakeJira([]);
+  creds = { site: "x.atlassian.net", email: "m@x.de", token: TOKEN };
   const fetchers = {
-    fetchBoard: async () => snapshot([issue(1, { labels: ["Sandcastle"] }), issue(2, { labels: ["story"] })]),
+    fetchBoard: async () => snapshot(structuredClone(ghIssues)),
     fetchChanged: async () => [],
   };
-  ctx = { projects: new Projects(dir, gate, () => NOW), boards: new BoardCache(dir, fetchers, () => NOW), gate, prefs: new Prefs(dir) };
+  const access = new JiraAccess(() => creds, jira.fetch);
+  ctx = {
+    projects: new Projects(dir, gate, () => NOW),
+    boards: new BoardCache(dir, fetchers, () => NOW),
+    gate,
+    prefs: new Prefs(dir),
+    jira: access,
+    tickets: new JiraCache(
+      dir,
+      {
+        fetchBoard: (key, states) => access.client().fetchBoard(key, states),
+        fetchChanged: (key, since) => access.client().fetchChanged(key, since),
+      },
+      () => NOW,
+    ),
+    live: new LiveRuns(gate, () => NOW),
+    async updateIssue(id, change) {
+      ghWrites.push({ id, remove: change.removeLabelIds, jiraCallsBefore: jira.calls.length });
+      const names = new Map(snapshot([]).labels.map((l) => [l.id, l.name]));
+      const gone = new Set(change.removeLabelIds.map((x) => names.get(x)?.toLowerCase()));
+      const before = ghIssues.find((i) => i.id === id);
+      if (!before) return null;
+      return { ...before, labels: before.labels.filter((l) => !gone.has(l.toLowerCase())), updatedAt: "2026-11-23T12:00:00Z" };
+    },
+  };
+  ghWrites = [];
 });
 afterEach(async () => {
   await ctx.boards.saved();
+  await ctx.tickets.saved();
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -136,5 +177,179 @@ describe("toIssue", () => {
       url: "u",
       commentsCount: 2,
     });
+  });
+});
+
+describe("JIRA API", () => {
+  const keyed = (n: number, key: string, over: Partial<Issue> = {}) => issue(n, { jira: key, ...over });
+  beforeEach(() => {
+    ghIssues = [
+      keyed(9, "R-1", { labels: ["grillTicket"], state: "closed", closedAt: "2026-11-21T10:00:00Z" }),
+      keyed(10, "R-1", { labels: ["story", "backend"] }),
+      issue(11, { parent: 10, labels: ["Sandcastle", "backend", "help wanted", "wayfinder:x"] }),
+      keyed(20, "R-2", { labels: ["story"], state: "closed", closedAt: "2026-11-21T10:00:00Z" }),
+      issue(21, { parent: 20, state: "closed", closedAt: "2026-11-21T10:00:00Z" }),
+      issue(30, { title: "ohne Schlüssel", labels: ["shop"] }),
+      keyed(40, "R-4", { labels: ["frontend"] }),
+      keyed(50, "R-5", { labels: ["story"], state: "closed", closedAt: "2026-11-21T10:00:00Z" }),
+    ];
+    jira.issues.push(
+      { key: "R-1", status: "Selected", labels: ["backend"] },
+      { key: "R-2", status: "Testing" },
+      { key: "R-3", status: "Backlog" },
+      { key: "R-4", status: "In Progress" },
+      { key: "R-5", status: "Backlog" },
+    );
+  });
+
+  type Ticket = { key: string; status: string; drift: DriftItem[]; derived: string | null; family: unknown };
+  const tickets = (body: Record<string, unknown>) => body.tickets as Ticket[];
+  const ticket = (body: Record<string, unknown>, key: string) => tickets(body).find((t) => t.key === key) as Ticket;
+
+  test("without stored credentials every JIRA call answers 409 jira-missing", async () => {
+    creds = null;
+    for (const r of [
+      await call("/api/jira/board?slug=o/r"),
+      await call("/api/jira/issue?slug=o/r&key=R-1"),
+      await call("/api/drift/apply", { method: "POST", body: { slug: "o/r", key: "R-1" } }),
+    ])
+      expect(r).toEqual({ status: 409, body: { error: "jira-missing" } });
+    expect(jira.calls).toEqual([]);
+  });
+
+  test("another site than the project's is a 409 naming both", async () => {
+    creds = { site: "y.atlassian.net", email: "m@x.de", token: TOKEN };
+    const r = await call("/api/jira/board?slug=o/r");
+    expect(r.status).toBe(409);
+    expect(r.body.error).toContain("y.atlassian.net");
+  });
+
+  test("board: statuses in workflow order, paged tickets with family and drift, etag", async () => {
+    const r = await call("/api/jira/board?slug=o/r");
+    expect(r.status).toBe(200);
+    expect(r.body.statuses).toEqual([
+      { name: "Backlog", category: "new" },
+      { name: "Selected", category: "new" },
+      { name: "In Progress", category: "indeterminate" },
+      { name: "Testing", category: "indeterminate" },
+      { name: "Done", category: "done" },
+    ]);
+    // 5 tickets, 2 per page → 3 search calls, each with basic auth (never the bare token)
+    const searches = jira.calls.filter((c) => c.path === "/rest/api/3/search/jql");
+    expect(searches.map((c) => (c.body as { nextPageToken?: string }).nextPageToken)).toEqual([undefined, "2", "4"]);
+    expect((searches[0]?.body as { jql: string }).jql).toBe(
+      'project = R AND (statusCategory != Done OR status changed to "Done" after -14d) ORDER BY Rank ASC',
+    );
+    expect(searches[0]?.auth).toBe(`Basic ${Buffer.from(`m@x.de:${TOKEN}`).toString("base64")}`);
+    expect(tickets(r.body).map((t) => t.key)).toEqual(["R-1", "R-2", "R-3", "R-4", "R-5"]);
+
+    const r1 = ticket(r.body, "R-1");
+    expect(r1.family).toMatchObject({ grill: { n: 9 }, story: { n: 10 }, children: [{ n: 11, state: "open" }] });
+    expect(r1.derived).toBe("inProgress");
+    expect(r1.drift).toEqual([
+      { kind: "label-on-gh", issue: 10, label: "backend", inJira: true },
+      { kind: "label-on-gh", issue: 11, label: "backend", inJira: true },
+      { kind: "state-behind", expected: "In Progress", actual: "Selected" },
+    ]);
+    expect(ticket(r.body, "R-2").drift).toEqual([{ kind: "done-candidate", expected: "Done", actual: "Testing" }]);
+    expect(ticket(r.body, "R-3")).toMatchObject({ derived: null, drift: [], family: { children: [] } });
+    expect(ticket(r.body, "R-4").drift).toEqual([{ kind: "label-on-gh", issue: 40, label: "frontend", inJira: false }]);
+    expect(r.body.unlinked).toEqual([
+      { n: 30, title: "ohne Schlüssel", state: "open", labels: ["shop"], drift: [{ kind: "no-key", issue: 30 }] },
+    ]);
+    expect(r.body.counts).toEqual({ drift: 5, info: 2, tickets: 3 });
+    expect(JSON.stringify(r.body)).not.toContain(TOKEN);
+
+    expect((await call(`/api/jira/board?slug=o/r&since=${r.body.etag}`)).body).toEqual({ same: true });
+  });
+
+  test("issue detail: description and comments as safe HTML, transitions", async () => {
+    const r = await call("/api/jira/issue?slug=o/r&key=R-2");
+    expect(r.body.description).toBe("Text");
+    expect(r.body.descriptionHtml).toContain("<p>Text</p>");
+    expect(r.body.transitions).toEqual([
+      { id: "t-Done", name: "nach Done", to: "Done", category: "done" },
+      { id: "t-In Progress", name: "nach In Progress", to: "In Progress", category: "indeterminate" },
+    ]);
+    expect((await call("/api/jira/issue?slug=o/r&key=kaputt")).status).toBe(400);
+  });
+
+  test("transition by status name; one the workflow doesn't offer is a 409", async () => {
+    const r = await call("/api/jira/transition", { method: "POST", body: { slug: "o/r", key: "R-2", to: "Done" } });
+    expect(r.status).toBe(200);
+    expect((r.body.ticket as Ticket).status).toBe("Done");
+    expect(jira.calls.at(-2)).toMatchObject({
+      method: "POST",
+      path: "/rest/api/3/issue/R-2/transitions",
+      body: { transition: { id: "t-Done" } },
+    });
+    // the cache took the answer: the board shows it without another full fetch
+    expect(ticket((await call("/api/jira/board?slug=o/r")).body, "R-2").status).toBe("Done");
+    const no = await call("/api/jira/transition", { method: "POST", body: { slug: "o/r", key: "R-3", to: "Testing" } });
+    expect(no.status).toBe(409);
+  });
+
+  test("labels: written to JIRA only; the same label comes off the GitHub family", async () => {
+    const r = await call("/api/jira/labels", { method: "POST", body: { slug: "o/r", key: "R-4", add: ["frontend"] } });
+    expect(r.status).toBe(200);
+    expect(jira.calls.find((c) => c.method === "PUT")).toMatchObject({
+      path: "/rest/api/3/issue/R-4",
+      body: { update: { labels: [{ add: "frontend" }] } },
+    });
+    expect(ghWrites.map(({ id, remove }) => ({ id, remove }))).toEqual([{ id: "I_40", remove: ["L_fe"] }]);
+    expect((r.body.ticket as Ticket).drift).toEqual([]);
+    // a label GitHub doesn't carry: JIRA only
+    ghWrites = [];
+    await call("/api/jira/labels", { method: "POST", body: { slug: "o/r", key: "R-3", add: ["neu"] } });
+    expect(ghWrites).toEqual([]);
+    const bad = await call("/api/jira/labels", { method: "POST", body: { slug: "o/r", key: "R-4", add: ["mit leer"] } });
+    expect(bad.status).toBe(400);
+  });
+
+  test("drift/apply: product labels into JIRA first, then off GitHub; state forward", async () => {
+    ghIssues[2] = issue(11, { parent: 10, labels: ["Sandcastle", "backend", "Frontend"] });
+    const before = await call("/api/jira/board?slug=o/r");
+    expect(ticket(before.body, "R-1").drift).toContainEqual({ kind: "label-on-gh", issue: 11, label: "Frontend", inJira: false });
+    const r = await call("/api/drift/apply", { method: "POST", body: { slug: "o/r", key: "R-1" } });
+    expect(r.status).toBe(200);
+    const put = jira.calls.findIndex((c) => c.method === "PUT");
+    expect(jira.calls[put]).toMatchObject({ path: "/rest/api/3/issue/R-1", body: { update: { labels: [{ add: "Frontend" }] } } });
+    expect(ghWrites.map(({ id, remove }) => ({ id, remove }))).toEqual([
+      { id: "I_10", remove: ["L_be"] },
+      { id: "I_11", remove: ["L_be", "L_fe"] },
+    ]);
+    expect(ghWrites.every((w) => w.jiraCallsBefore > put)).toBe(true);
+    expect((r.body.ticket as Ticket).status).toBe("In Progress");
+    expect((r.body.ticket as Ticket).drift).toEqual([]);
+  });
+
+  test("comment goes to JIRA as ADF", async () => {
+    const r = await call("/api/jira/comment", { method: "POST", body: { slug: "o/r", key: "R-1", body: "Hallo\nWelt" } });
+    expect(r.body.comment).toMatchObject({ author: "Martin" });
+    expect(jira.calls.at(-1)?.body).toEqual({
+      body: {
+        version: 1,
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "Hallo" }, { type: "hardBreak" }, { type: "text", text: "Welt" }] },
+        ],
+      },
+    });
+    expect((await call("/api/jira/comment", { method: "POST", body: { slug: "o/r", key: "R-1", body: " " } })).status).toBe(400);
+  });
+
+  test("drift/apply walks the JIRA state forward step by step to the derived one", async () => {
+    await call("/api/jira/board?slug=o/r");
+    const r = await call("/api/drift/apply", { method: "POST", body: { slug: "o/r", key: "R-5" } });
+    expect(r.status).toBe(200);
+    expect((r.body.ticket as Ticket).status).toBe("Testing");
+    const posts = jira.calls.filter((c) => c.method === "POST" && c.path.endsWith("/transitions"));
+    expect(posts.map((c) => (c.body as { transition: { id: string } }).transition.id)).toEqual([
+      "t-Selected",
+      "t-In Progress",
+      "t-Testing",
+    ]);
+    // everything on GitHub is closed and JIRA is in testing now: only the info that it could be done
+    expect((r.body.ticket as Ticket).drift).toEqual([{ kind: "done-candidate", expected: "Done", actual: "Testing" }]);
   });
 });
