@@ -217,6 +217,18 @@ describe("inMain", () => {
       inMain: "yes",
     });
   });
+  test("released with work still open (TENDR-662: early work shipped, the rest in a batch PR) is partly and no done-candidate", () => {
+    const released = { version: "v1.4.0", at: "2026-10-09T10:00:00Z", later: [] };
+    const batch = pr(3531, { title: "✨ 2026-11-21: 26 Stories", state: "draft", mergedAt: null });
+    expect(ticketDrift(ticket("Testing"), familyOf([story, closed(3)]), cfg, [batch], released)).toEqual({
+      derived: "testing",
+      drift: [],
+      inMain: "partly",
+    });
+    // an open child counts as open work too; merged PRs that fell out of the window don't
+    expect(ticketDrift(ticket("In Progress"), familyOf([story, gh(4, { parent: 2 })]), cfg, [], released).inMain).toBe("partly");
+    expect(ticketDrift(ticket("In Progress"), familyOf([story, closed(3)]), cfg, [], released).inMain).toBe("yes");
+  });
 });
 
 describe("planApply", () => {

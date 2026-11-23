@@ -181,12 +181,12 @@ export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null, r
 
 // ---- live / in main (magicfink sandcastle-board: IssueCard „live“, IssueDetails „Stand“)
 
-const dateDe = (iso: string) => new Date(iso).toLocaleDateString("de-DE");
+const dateDe = (iso: string) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 /** A JIRA status as shown, without its leading emoji: „🏗 In Progress“ → „In Progress“ (statusName: lowercased, for matching). */
 export const statusText = (status: string) => status.replace(/^[^\p{L}\p{N}]+/u, "").trim();
 
-export type LiveKind = "live" | "main" | "partial" | "not-main";
+export type LiveKind = "live" | "partlive" | "main" | "partial" | "not-main";
 
 /** How far a ticket is on GitHub: the card's hint (`label`, tooltip `tip`) and the details' „Stand: …“ line. */
 export interface LiveState {
@@ -197,23 +197,34 @@ export interface LiveState {
 }
 
 /**
- * live (code in a version tag, with „ergänzt in“ for later releases) > in main > partly > not in main; null without
- * anything on GitHub. Documentation PRs (src/pulls.ts isDocsPull) are never the ticket's code.
+ * live (code in a version tag, with „ergänzt in“ for later releases) > teilweise live (in a release, but a build PR
+ * or child still open: inMain „partly“ from src/drift.ts) > in main > partly > not in main; null without anything on
+ * GitHub. Documentation PRs (src/pulls.ts isDocsPull) are never the ticket's code.
  */
 export function liveState(t: Pick<JiraTicket, "inMain" | "prs" | "released">): LiveState | null {
+  const build = t.prs.filter((p) => !p.docs);
+  const blocking = build.find((p) => p.state === "open" || p.state === "draft");
   const r = t.released;
+  if (r && t.inMain === "partly") {
+    const rest = blocking ? `#${blocking.n} ${PR_STATE_TEXT[blocking.state]}` : "Kinder noch offen";
+    const tip = blocking ? `Rest in PR #${blocking.n} (${PR_STATE_TEXT[blocking.state]})` : "Kinder noch offen";
+    return {
+      kind: "partlive",
+      label: `teilweise live ${r.version}`,
+      tip: `live seit ${dateDe(r.at)} – ${tip}`,
+      stand: `teilweise live seit ${r.version} (${dateDe(r.at)}) – ${rest}`,
+    };
+  }
   if (r) {
     const later = r.later.length ? `, ergänzt in ${r.later.map((x) => x.version).join(", ")}` : "";
     return { kind: "live", label: `live ${r.version}`, tip: `live seit ${dateDe(r.at)}${later}`, stand: `live seit ${r.version} (${dateDe(r.at)})${later}` };
   }
   if (!t.inMain) return null;
-  const build = t.prs.filter((p) => !p.docs);
   if (t.inMain === "yes") {
     const last = build.map((p) => p.mergedAt).filter((d): d is string => !!d).sort().pop();
     const since = last ? `in main seit ${dateDe(last)}` : "in main";
     return { kind: "main", label: "in main", tip: since, stand: since };
   }
-  const blocking = build.find((p) => p.state === "open" || p.state === "draft");
   const why = blocking
     ? `#${blocking.n} ${PR_STATE_TEXT[blocking.state]}${blocking.checks ? `, ${CI_TEXT[blocking.checks]}` : ""}`
     : t.inMain === "partly"

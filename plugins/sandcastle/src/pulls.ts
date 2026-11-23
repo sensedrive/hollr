@@ -20,6 +20,7 @@ export interface PullNode {
   mergedAt: string | null;
   closedAt: string | null;
   headRefName: string;
+  headRefOid: string;
   baseRefName: string;
   updatedAt: string;
   body: string | null;
@@ -91,10 +92,13 @@ export function toPull(n: PullNode): Pull {
     review: reviewState(n.reviewDecision),
     branch: n.headRefName,
     base: n.baseRefName,
+    head: n.headRefOid,
     mergedAt: n.mergedAt,
     closedAt: n.closedAt,
     updatedAt: n.updatedAt,
     keys: pullKeys(n.title, n.headRefName, body),
+    // src/github.ts withCodeKeys fills them in for open PRs
+    codeKeys: [],
     closes: pullCloses(
       n.closingIssuesReferences.nodes.map((r) => r.number),
       body,
@@ -122,15 +126,16 @@ const when = (p: Pull) => p.mergedAt ?? p.closedAt ?? p.updatedAt;
 export const comparePulls = (a: Pull, b: Pull) => RANK[a.state] - RANK[b.state] || when(b).localeCompare(when(a)) || b.n - a.n;
 
 /**
- * Ticket key → its PRs (sorted, main PR first). `known`: the ticket keys there are – keys a PR names that are no
- * ticket (UTF-8, ISO-8601) don't count, so such a PR still maps through the issues it closes.
+ * Ticket key → its PRs (sorted, main PR first). A PR belongs to the tickets its title, head branch or code commits
+ * name (a batch PR to all it builds); `known`: the ticket keys there are – keys a PR names that are no ticket
+ * (UTF-8, ISO-8601) don't count, so such a PR still maps through the issues it closes.
  */
 export function pullsByTicket(pulls: Pull[], known: ReadonlySet<string>, fam: ReadonlyMap<string, Family>): Map<string, PullOut[]> {
   const keyOf = new Map<number, string>();
   for (const [key, f] of fam) for (const m of [f.grill, f.story, ...f.children]) if (m) keyOf.set(m.n, key);
   const byKey = new Map<string, Pull[]>();
   for (const p of [...pulls].sort(comparePulls)) {
-    const own = p.keys.filter((k) => known.has(k));
+    const own = [...new Set([...p.keys, ...p.codeKeys])].filter((k) => known.has(k));
     const keys = own.length ? own : [...new Set(p.closes.map((n) => keyOf.get(n)).filter((k): k is string => !!k))];
     for (const k of keys) byKey.set(k, [...(byKey.get(k) ?? []), p]);
   }

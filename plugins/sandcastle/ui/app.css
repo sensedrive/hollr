@@ -581,6 +581,9 @@ button.chip.jira:hover { background: color-mix(in srgb, var(--blue) 24%, transpa
 .live-hint { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 0 7px; border: 1px solid var(--border);
   border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; vertical-align: middle; color: var(--muted); cursor: help; }
 .live-hint.live-live { color: var(--green); border-color: var(--green); background: color-mix(in srgb, var(--green) 16%, transparent); }
+/* teilweise live: between live (green) and partly (orange), the dashed border says it too */
+.live-hint.live-partlive { color: color-mix(in srgb, var(--green) 45%, var(--orange)); border-style: dashed;
+  border-color: color-mix(in srgb, var(--green) 45%, var(--orange)); background: color-mix(in srgb, var(--green) 8%, transparent); }
 .live-hint.live-main { color: var(--green); border-color: color-mix(in srgb, var(--green) 50%, transparent); }
 .live-hint.live-partial { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 60%, transparent); }
 .live-ico { display: inline-flex; flex: none; width: 1em; height: 1em; }
@@ -588,6 +591,7 @@ button.chip.jira:hover { background: color-mix(in srgb, var(--blue) 24%, transpa
 .live-info { display: flex; align-items: flex-start; gap: 4px; margin-top: 6px; font-size: 11.5px; color: var(--green); }
 .live-info .live-ico { margin-top: 2px; }
 .main-line.live-live, .main-line.live-main { color: var(--green); }
+.main-line.live-partlive { color: color-mix(in srgb, var(--green) 45%, var(--orange)); }
 .main-line.live-partial { color: var(--orange); }
 .card-pr { margin-top: 6px; font-size: 11.5px; }
 .side-sub { margin: 10px 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }

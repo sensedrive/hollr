@@ -200,21 +200,25 @@ export function inMain(f: Family | undefined, prs: Pick<PullOut, "base" | "docs"
 export interface TicketDrift {
   derived: DerivedState | null;
   drift: DriftItem[];
-  /** released counts as in main */
+  /** released counts as in main – as partly while a build PR or child is still open („teilweise live“) */
   inMain: InMain | null;
 }
 
 /**
  * `released`: the version tag the ticket's code first shipped in (src/releases.ts releasesByKey) – the strongest
- * signal: live > in main > partly > not in main.
+ * signal: live > in main > partly > not in main. Released with a build PR or child still open (early work shipped,
+ * the rest in a batch PR) is partly: live in part, not done.
  */
 export function ticketDrift(t: JiraTicket, f: Family | undefined, cfg: DriftConfig, prs: PullOut[] = [], released: Released | null = null): TicketDrift {
-  const live = released ? "yes" : inMain(f, prs, cfg.defaultBranch ?? "main");
+  const branch = cfg.defaultBranch ?? "main";
+  // open work, not missing merges: merged PRs older than PULL_DAYS are no longer known
+  const open = prs.some((p) => isBuildPull(p, branch) && openish(p)) || !!f?.children.some((c) => c.state === "open");
+  const live = released ? (open ? "partly" : "yes") : inMain(f, prs, branch);
   const drift: DriftItem[] = [];
   // JIRA says done, GitHub says the work isn't (all) in main; info only – JIRA is never moved backwards.
   // No family and no build PR (null) says nothing: older tickets predate the GitHub workflow.
   if (t.category === "done" && (live === "no" || live === "partly")) {
-    const blocking = prs.find((p) => isBuildPull(p, cfg.defaultBranch ?? "main") && openish(p));
+    const blocking = prs.find((p) => isBuildPull(p, branch) && openish(p));
     drift.push({ kind: "done-not-in-main", ...(blocking ? { pr: { n: blocking.n, state: blocking.state, checks: blocking.checks } } : {}) });
   }
   let derived: DerivedState | null = null;
@@ -235,9 +239,9 @@ export function ticketDrift(t: JiraTicket, f: Family | undefined, cfg: DriftConf
     if (target && t.category !== "done" && at >= 0 && goal >= 0 && at < goal)
       drift.push({ kind: "state-behind", expected: target, actual: t.status });
   }
-  // in main and in testing, or shipped in a release while JIRA isn't done yet: it could be done
+  // in main and in testing, or fully shipped in a release while JIRA isn't done yet: it could be done
   const inTesting = live === "yes" && !!cfg.states.testing && t.status === cfg.states.testing;
-  if (inTesting || (released && t.category !== "done"))
+  if (inTesting || (released && live === "yes" && t.category !== "done"))
     drift.push({ kind: "done-candidate", expected: cfg.states.done ?? undefined, actual: t.status });
   return { derived, drift, inMain: live };
 }

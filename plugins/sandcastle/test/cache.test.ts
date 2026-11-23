@@ -18,10 +18,10 @@ let offline: boolean;
 let knownSeen: string[][];
 
 const fetchers: Fetchers = {
-  async fetchBoard(slug, _now, known) {
+  async fetchBoard(slug, _now, prev) {
     if (offline) throw new Error("gh: offline");
     calls.push(`full ${slug}`);
-    knownSeen.push(known.map((r) => r.tag));
+    knownSeen.push(prev.releases.map((r) => r.tag));
     return structuredClone(full);
   },
   async fetchChanged(slug, since) {

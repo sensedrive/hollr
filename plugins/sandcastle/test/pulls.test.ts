@@ -23,6 +23,7 @@ const node = (over: Partial<PullNode> = {}): PullNode => ({
   mergedAt: null,
   closedAt: null,
   headRefName: "feature/TENDR-1069-zeitraumkalender",
+  headRefOid: "e7d64f4c4",
   baseRefName: "main",
   updatedAt: "2026-11-23T10:40:13Z",
   body: "Closes #3537\nFixes: #3538",
@@ -74,10 +75,12 @@ describe("pull request facts", () => {
       review: "review-required",
       branch: "feature/TENDR-1069-zeitraumkalender",
       base: "main",
+      head: "e7d64f4c4",
       mergedAt: null,
       closedAt: null,
       updatedAt: "2026-11-23T10:40:13Z",
       keys: ["TENDR-1069"],
+      codeKeys: [],
       closes: [3537, 3538, 3549],
     });
     // merged PRs come without review and checks
@@ -123,6 +126,14 @@ describe("pullsByTicket", () => {
       mergedAt: null,
       docs: false,
     });
+  });
+
+  test("a batch PR naming no ticket belongs to every ticket its code commits name", () => {
+    const batch = pull(3531, { title: "✨ 2026-11-21: 26 Stories", branch: "feature/batch-2026-11-21", state: "draft", codeKeys: ["T-1", "T-3", "UTF-8"] });
+    const map = pullsByTicket([batch], known, fam);
+    expect(map.get("T-1")?.map((p) => p.n)).toEqual([3531]);
+    expect(map.get("T-3")?.map((p) => p.n)).toEqual([3531]);
+    expect(map.get("T-2")).toBeUndefined();
   });
 
   test("closingPulls: only PRs closing a board issue, with what they close", () => {

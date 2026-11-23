@@ -86,11 +86,18 @@ export interface Pull {
   /** head branch */
   branch: string;
   base: string;
+  /** the head commit (src/github.ts fetches codeKeys once per head) */
+  head: string;
   mergedAt: string | null;
   closedAt: string | null;
   updatedAt: string;
   /** JIRA keys named in title or head branch, else in the body's start */
   keys: string[];
+  /**
+   * JIRA keys its code commits name (not merges, not `docs`, src/releases.ts codeKeys) – how a Sandcastle batch PR,
+   * whose title names no ticket, belongs to every ticket it builds. Read while the PR is open, kept after.
+   */
+  codeKeys: string[];
   /** issues it closes: GitHub's closing references and `Closes #n` in the body */
   closes: number[];
 }

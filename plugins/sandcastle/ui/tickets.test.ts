@@ -149,6 +149,14 @@ describe("card facts", () => {
     expect(notMain).toEqual({ kind: "not-main", label: "nicht in main", tip: "#3550 Entwurf, CI ✗", stand: "nicht in main – #3550 Entwurf, CI ✗" });
     expect(liveState({ inMain: "no", prs: [], released: null })?.tip).toBe("Kein gemergter PR");
     expect(liveState({ inMain: null, prs: [], released: null })).toBeNull();
+    // in a release but the rest still in a (batch) PR: teilweise live, as drawn for HACCP-142
+    const batch = p(3531, "draft", { title: "✨ 2026-11-21: 26 Stories" });
+    expect(liveState({ inMain: "partly", prs: [batch], released: { ...released, at: "2026-10-09T10:00:00Z", later: [] } })).toEqual({
+      kind: "partlive",
+      label: "teilweise live v1.4.0",
+      tip: "live seit 09.10.2026 – Rest in PR #3531 (Entwurf)",
+      stand: "teilweise live seit v1.4.0 (09.10.2026) – #3531 Entwurf",
+    });
   });
   test("live but JIRA not done: the info names the status without its emoji", () => {
     const released = { version: "v1.4.0", at: "2026-10-19T10:00:00Z", later: [] };

@@ -34,10 +34,12 @@ export function pull(n: number, over: Partial<Pull> = {}): Pull {
     review: null,
     branch: `feature/pr-${n}`,
     base: "main",
+    head: `c${n}`,
     mergedAt: null,
     closedAt: null,
     updatedAt: "2026-11-20T10:00:00Z",
     keys: [],
+    codeKeys: [],
     closes: [],
     ...over,
   };

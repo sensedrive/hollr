@@ -12,7 +12,7 @@ import { classify } from "./board";
 import { HttpError } from "./env";
 import { CLOSED_DAYS, type Changes, PULL_DAYS, type RepoSnapshot } from "./github";
 import { closingPulls } from "./pulls";
-import type { Issue, Project, Pull, Release } from "./types";
+import type { Issue, Project, Pull } from "./types";
 
 export const STALE_MS = 15_000;
 export const FULL_MS = 10 * 60_000;
@@ -24,8 +24,10 @@ const DAY = 86_400_000;
 const SLUG = /^[A-Za-z0-9-]+\/[\w-][\w.-]*$/;
 
 export interface Fetchers {
-  fetchBoard(slug: string, now: number, known: Release[]): Promise<RepoSnapshot>;
-  fetchChanged(slug: string, since: string): Promise<Changes>;
+  /** `prev`: the last snapshot, whose release ranges and PR code keys are kept */
+  fetchBoard(slug: string, now: number, prev: Pick<RepoSnapshot, "releases" | "pulls">): Promise<RepoSnapshot>;
+  /** `prev`: the pulls known so far, whose code keys are kept while their head stays */
+  fetchChanged(slug: string, since: string, prev: Pull[]): Promise<Changes>;
 }
 
 interface Stored {
@@ -144,10 +146,12 @@ export class BoardCache {
     const fromDisk = !!stored?.snap?.issues;
     if (!stored || !fromDisk) {
       const now = this.now();
-      stored = { snap: await this.gh.fetchBoard(slug, now, []), fetchedAt: now, fullAt: now };
-    } else if (!stored.snap.pulls || !stored.snap.releases?.every((r) => "oid" in r)) {
-      // a copy from before pull requests or tag releases: none until the next refresh, which is a full one
-      stored = { ...stored, snap: { ...stored.snap, pulls: stored.snap.pulls ?? [], releases: [] }, fullAt: 0 };
+      stored = { snap: await this.gh.fetchBoard(slug, now, { releases: [], pulls: [] }), fetchedAt: now, fullAt: now };
+    } else {
+      // a copy from before PR code keys or tag releases: without them until the next refresh, which is a full one
+      const pulls = stored.snap.pulls?.every((p) => "codeKeys" in p) ? stored.snap.pulls : null;
+      const releases = stored.snap.releases?.every((r) => "oid" in r) ? stored.snap.releases : null;
+      if (!pulls || !releases) stored = { ...stored, snap: { ...stored.snap, pulls: pulls ?? [], releases: releases ?? [] }, fullAt: 0 };
     }
     const e: Entry = { ...stored, overrides: new Map() };
     this.entries.set(slug, e);
@@ -160,11 +164,11 @@ export class BoardCache {
       const now = this.now();
       try {
         if (full || now - e.fullAt > FULL_MS) {
-          e.snap = await this.gh.fetchBoard(slug, now, e.snap.releases);
+          e.snap = await this.gh.fetchBoard(slug, now, e.snap);
           e.fullAt = now;
           this.merge(e, []);
         } else {
-          const c = await this.gh.fetchChanged(slug, new Date(e.fetchedAt - SKEW_MS).toISOString());
+          const c = await this.gh.fetchChanged(slug, new Date(e.fetchedAt - SKEW_MS).toISOString(), e.snap.pulls);
           this.merge(e, c.issues, c.pulls);
         }
         e.fetchedAt = now;

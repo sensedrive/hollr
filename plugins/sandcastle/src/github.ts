@@ -179,9 +179,14 @@ async function closedOnDays(slug: string, fromMs: number, toMs: number): Promise
  * Full fetch of a board. Open issues come in two page chains at once, oldest-first and newest-first, that stop
  * where they meet; the oldest-first chain's first page also brings labels, users, viewer and the count of
  * closed issues before the window. Closed issues come per day in parallel (closedOnDays), pull requests and
- * releases beside them (fetchPulls, fetchReleases). `known`: the releases of the last fetch – their ranges are kept.
+ * releases beside them (fetchPulls, fetchReleases). `prev`: the last snapshot – release ranges and the code keys
+ * of unchanged PRs are kept.
  */
-export async function fetchBoard(slug: string, now = Date.now(), known: Release[] = []): Promise<RepoSnapshot> {
+export async function fetchBoard(
+  slug: string,
+  now = Date.now(),
+  prev: Pick<RepoSnapshot, "releases" | "pulls"> = { releases: [], pulls: [] },
+): Promise<RepoSnapshot> {
   const { owner, name } = splitSlug(slug);
   const fromMs = now - CLOSED_DAYS * DAY;
   const open = new Map<number, Issue>();
@@ -215,11 +220,11 @@ export async function fetchBoard(slug: string, now = Date.now(), known: Release[
 
   const [closed, pulls, rel] = await Promise.all([
     closedOnDays(slug, fromMs, now),
-    fetchPulls(owner, name, slug, now),
+    fetchPulls(owner, name, slug, now).then((pulls) => withCodeKeys(slug, pulls, prev.pulls)),
     // releases failing must not take the board down: keep the last ones and say why
-    fetchReleases(owner, name, slug, known).then(
+    fetchReleases(owner, name, slug, prev.releases).then(
       (releases) => ({ releases, releasesError: null }),
-      (err: unknown) => ({ releases: known, releasesError: err instanceof Error ? err.message : String(err) }),
+      (err: unknown) => ({ releases: prev.releases, releasesError: err instanceof Error ? err.message : String(err) }),
     ),
     chain("ASC"),
     chain("DESC"),
@@ -249,7 +254,7 @@ const MAX_PULLS = 500;
 
 // review and checks cost GitHub seconds per page: only open PRs ask for them ($live)
 const PULL_FIELDS = `fragment P on PullRequest {
-  number title url state isDraft mergedAt closedAt headRefName baseRefName updatedAt body
+  number title url state isDraft mergedAt closedAt headRefName headRefOid baseRefName updatedAt body
   reviewDecision @include(if: $live)
   commits(last: 1) @include(if: $live) { nodes { commit { statusCheckRollup { state } } } }
   closingIssuesReferences(first: 20) { nodes { number } }
@@ -401,8 +406,20 @@ async function rangeCommits(slug: string, base: string, head: string): Promise<R
     });
 }
 
-/** Ranges fetched at once: a first fetch of a repo with many tags stays within GitHub's limits. */
+/** Compares at once (release ranges, PR commits): a first fetch of a repo with many tags stays within GitHub's limits. */
 const RANGE_PARALLEL = 4;
+
+/** `fn` for every item, RANGE_PARALLEL at a time; the first failure fails the whole. */
+async function eachLimited<T>(items: readonly T[], fn: (item: T, i: number) => Promise<void>): Promise<void> {
+  let next = 0;
+  async function worker() {
+    for (let i = next++; i < items.length; i = next++) {
+      const item = items[i];
+      if (item !== undefined) await fn(item, i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(RANGE_PARALLEL, items.length) }, worker));
+}
 
 /**
  * Every version tag with the JIRA keys of its code commits. A range – the commits since the previous version tag,
@@ -414,22 +431,15 @@ async function fetchReleases(owner: string, name: string, slug: string, known: R
   const tags = await versionTags(owner, name, slug);
   const cached = new Map(known.map((r) => [r.tag, r]));
   const out: Release[] = [];
-  let next = 0;
-  async function worker() {
-    while (next < tags.length) {
-      const i = next++;
-      const t = tags[i];
-      if (!t) return;
-      const base = tags[i - 1]?.oid ?? null;
-      const hit = cached.get(t.tag);
-      if (hit && hit.oid === t.oid && hit.base === base) out[i] = { ...hit, at: t.at };
-      else {
-        const commits = base ? await rangeCommits(slug, base, t.oid) : await historyCommits(owner, name, slug, t.oid);
-        out[i] = { tag: t.tag, oid: t.oid, base, at: t.at, keys: codeKeys(commits) };
-      }
+  await eachLimited(tags, async (t, i) => {
+    const base = tags[i - 1]?.oid ?? null;
+    const hit = cached.get(t.tag);
+    if (hit && hit.oid === t.oid && hit.base === base) out[i] = { ...hit, at: t.at };
+    else {
+      const commits = base ? await rangeCommits(slug, base, t.oid) : await historyCommits(owner, name, slug, t.oid);
+      out[i] = { tag: t.tag, oid: t.oid, base, at: t.at, keys: codeKeys(commits) };
     }
-  }
-  await Promise.all(Array.from({ length: RANGE_PARALLEL }, worker));
+  });
   return out;
 }
 
@@ -458,6 +468,24 @@ async function changedPulls(owner: string, name: string, slug: string, since: st
   return [...open, ...ended];
 }
 
+/**
+ * Pulls with the JIRA keys of their code commits (src/releases.ts codeKeys): read from GitHub's compare for an open
+ * PR whose head is new; an unchanged PR, and a merged or closed one, keeps what `prev` found.
+ */
+async function withCodeKeys(slug: string, pulls: Pull[], prev: Pull[]): Promise<Pull[]> {
+  const before = new Map(prev.map((p) => [p.n, p]));
+  const out = pulls.map((p) => {
+    const b = before.get(p.n);
+    const open = p.state === "open" || p.state === "draft";
+    return b && (b.head === p.head || !open) ? { ...p, codeKeys: b.codeKeys ?? [] } : p;
+  });
+  const todo = out.filter((p) => (p.state === "open" || p.state === "draft") && before.get(p.n)?.head !== p.head);
+  await eachLimited(todo, async (p) => {
+    p.codeKeys = codeKeys(await rangeCommits(slug, p.base, p.head));
+  });
+  return out;
+}
+
 const CHANGED_QUERY = `query Changed($owner: String!, $name: String!, $since: DateTime!, $after: String) {
   repository(owner: $owner, name: $name) {
     issues(states: [OPEN, CLOSED], first: 100, after: $after, filterBy: { since: $since },
@@ -476,8 +504,11 @@ export interface Changes {
   pulls: Pull[];
 }
 
-/** Issues (open or closed) and pull requests updated at or after `since` – the cheap refresh between full fetches. */
-export async function fetchChanged(slug: string, since: string): Promise<Changes> {
+/**
+ * Issues (open or closed) and pull requests updated at or after `since` – the cheap refresh between full fetches.
+ * `prev`: the pulls known so far, whose code keys are kept while their head stays.
+ */
+export async function fetchChanged(slug: string, since: string, prev: Pull[] = []): Promise<Changes> {
   const { owner, name } = splitSlug(slug);
   async function issues(): Promise<Issue[]> {
     const out: Issue[] = [];
@@ -495,7 +526,7 @@ export async function fetchChanged(slug: string, since: string): Promise<Changes
     } while (after);
     return out;
   }
-  const [changed, pulls] = await Promise.all([issues(), changedPulls(owner, name, slug, since)]);
+  const [changed, pulls] = await Promise.all([issues(), changedPulls(owner, name, slug, since).then((p) => withCodeKeys(slug, p, prev))]);
   return { issues: changed, pulls };
 }
 
