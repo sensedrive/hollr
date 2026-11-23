@@ -1,12 +1,8 @@
-/** When to ask the host to reopen the plugin (server restarted → old port/token dead): a 401, or two network
- *  failures within 5 s; afterwards quiet for 10 s. */
+/** When to ask the host to reopen the plugin (server restarted → old port/token dead): a 401, or a failed request
+ *  whose health probe failed too (api.ts confirmLost); afterwards quiet for 10 s so a slow reopen isn't asked twice. */
 export function reconnectPolicy(): (kind: "network" | "auth", now: number) => boolean {
-  let lastFail = -Infinity;
   let lastAsk = -Infinity;
-  return (kind, now) => {
-    const repeated = now - lastFail <= 5_000;
-    lastFail = now;
-    if (kind === "network" && !repeated) return false;
+  return (_kind, now) => {
     if (now - lastAsk < 10_000) return false;
     lastAsk = now;
     return true;

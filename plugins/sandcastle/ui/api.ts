@@ -29,6 +29,18 @@ function expired(): void {
 
 const shouldReopen = reconnectPolicy();
 
+/**
+ * A failed fetch can be a blip; the health endpoint (no token) tells whether the server behind our port is gone –
+ * the board polls only every 15 s, so waiting for a second failure would leave a dead page standing for long.
+ */
+async function confirmLost(): Promise<void> {
+  try {
+    const r = await fetch("/__hollr/health", { signal: AbortSignal.timeout(2500) });
+    if (r.ok) return;
+  } catch {}
+  lostServer("network");
+}
+
 /** Inside a host: show „Verbinde neu …“ and let the app reopen us (new port and token, frame reloads). */
 function lostServer(kind: "network" | "auth"): void {
   const post = hostPost();
@@ -63,7 +75,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (err) {
-    if (err instanceof TypeError) lostServer("network");
+    if (err instanceof TypeError) void confirmLost();
     throw err;
   }
   if (res.status === 401) {

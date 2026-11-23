@@ -122,12 +122,24 @@ function cardMenu(key: string): void {
   showMenu(`${t.key} ${t.summary}`, items);
 }
 
+/** Columns folded to a thin rail (e.g. Done), per project; the cards inside aren't rendered while folded. */
+const hiddenCols = (): string[] => prefGet<Record<string, string[]>>("hiddenCols")?.[state.slug] ?? [];
+
+function toggleColumn(key: string): void {
+  const all = prefGet<Record<string, string[]>>("hiddenCols") ?? {};
+  const cur = all[state.slug] ?? [];
+  prefSet("hiddenCols", { ...all, [state.slug]: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
+  renderTickets();
+}
+
 function columnEl(c: TicketColumn): ColumnEls {
   let el = colEls.get(c.key);
   if (!el) {
     const count = h("span", { class: "count" });
     const list = h("div", { class: "list", "data-list": true });
-    const section = h("section", { class: `column tcol-${c.kind}${c.kind === "status" ? ` cat-${c.status.category}` : ""}` }, h("header", {}, h("span", {}, c.name), count));
+    const fold = h("button", { class: "col-fold", title: "Spalte einklappen", "aria-label": `${c.name} einklappen`, onclick: (e: Event) => { e.stopPropagation(); toggleColumn(c.key); } }, "‹›");
+    const header = h("header", { title: "", onclick: () => { if (hiddenCols().includes(c.key)) toggleColumn(c.key); } }, h("span", { class: "col-name" }, c.name), count, fold);
+    const section = h("section", { class: `column tcol-${c.kind}${c.kind === "status" ? ` cat-${c.status.category}` : ""}` }, header);
     if (c.kind === "lanes") section.classList.add("col-queue");
     else section.dataset.column = c.key;
     section.append(list);
@@ -280,8 +292,19 @@ export function renderTickets(): void {
     list.push(t);
   }
   const counts = new Map<string, number>();
+  const folded = new Set(isNarrow() ? [] : hiddenCols());
   for (const c of columns) {
     const els = columnEl(c);
+    const isFolded = folded.has(c.key);
+    els.el.classList.toggle("col-folded", isFolded);
+    els.el.querySelector("header")?.setAttribute("title", isFolded ? `${c.name} – klicken zum Aufklappen` : "");
+    if (isFolded) {
+      // folded: count only, no cards (a dropped card still lands here via the header's data-column)
+      const n = c.kind === "lanes" ? [...byLane.values()].reduce((s, l) => s + l.length, 0) : (byCol.get(c.key)?.length ?? 0);
+      counts.set(c.key, n);
+      reconcile(els.list, []);
+      continue;
+    }
     if (c.kind === "lanes") {
       const lanes = d.lanes.map((lane) => {
         const el = laneEl(laneEls, d, lane, `${LANE_PREFIX}${lane.server.id}`);
