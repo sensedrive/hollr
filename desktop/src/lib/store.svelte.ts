@@ -302,6 +302,8 @@ export async function refreshSpaces(serverId?: string) {
           if (seq !== spacesSeq[s.id]) return;
           app.spaces[s.id] = spaces;
           spacesAt[s.id] = Date.now();
+          // the server answered: a failure of an earlier call must not stay on screen until the next tree
+          delete app.errors[s.id];
         } catch (e) {
           if (seq !== spacesSeq[s.id]) return;
           app.errors[s.id] = String(e instanceof Error ? e.message : e);

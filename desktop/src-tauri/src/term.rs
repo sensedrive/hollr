@@ -125,14 +125,15 @@ pub async fn run_stream(
         })
         .await;
         match opened {
-            Ok(Ok(c)) => Ok(c),
+            // the lease keeps the stream's place on its connection (hollr.rs SESSION_BUDGET)
+            Ok(Ok(c)) => Ok((handle, c)),
             Ok(Err(e)) => {
-                hollr.invalidate(server).await;
+                hollr.drop_stale(server, &handle.arc()).await;
                 Err(e.to_string())
             }
             // a dead pooled connection: the next start reconnects
             Err(_) => {
-                hollr.invalidate(server).await;
+                hollr.drop_stale(server, &handle.arc()).await;
                 Err("Zeitüberschreitung".to_string())
             }
         }
@@ -148,7 +149,7 @@ pub async fn run_stream(
             },
         }
     };
-    let mut channel = match opened {
+    let (lease, mut channel) = match opened {
         Ok(c) => c,
         Err(error) if fatal(&error) => return emit(TermEvent::Failed { error }),
         Err(error) => return emit(TermEvent::End { error: Some(error) }),
@@ -212,7 +213,7 @@ pub async fn run_stream(
             _ = check.tick() => {
                 // no ping for too long: the connection is dead, the next start opens a new one
                 if last_line.elapsed().unwrap_or_default() >= WATCHDOG {
-                    hollr.invalidate(server).await;
+                    hollr.drop_stale(server, &lease.arc()).await;
                     dropped = Some("keine Antwort vom Server".to_string());
                 }
             }

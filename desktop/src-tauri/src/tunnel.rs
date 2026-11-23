@@ -107,7 +107,8 @@ async fn forward(app: AppHandle, mut socket: TcpStream, server: String, remote_p
     let hollr = app.state::<Hollr>();
     let mut channel = None;
     for attempt in 0..2 {
-        let handle = match hollr.handle_for(&server).await {
+        // tunnels open direct-tcpip channels, which sshd's session limit doesn't count: any pooled connection
+        let handle = match hollr.connection_for(&server).await {
             Ok(h) => h,
             Err(e) => {
                 eprintln!("tunnel {server}:{remote_port}: {e:#}");
@@ -125,7 +126,7 @@ async fn forward(app: AppHandle, mut socket: TcpStream, server: String, remote_p
                 eprintln!("tunnel {server}:{remote_port} attempt {attempt}: {e}");
                 // dead connection, or one opened before the server allowed forwarding: reconnect once
                 if attempt == 0 {
-                    hollr.invalidate(&server).await;
+                    hollr.drop_stale(&server, &handle).await;
                 }
             }
         }

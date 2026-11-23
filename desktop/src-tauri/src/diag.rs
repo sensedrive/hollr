@@ -20,7 +20,8 @@ pub fn write(line: &str) {
     }
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        let _ = writeln!(f, "{now} {line}");
+        // one write per line: lines from parallel tasks must not interleave (append writes are atomic)
+        let _ = f.write_all(format!("{now} {line}\n").as_bytes());
     }
 }
 

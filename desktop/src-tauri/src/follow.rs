@@ -70,10 +70,11 @@ async fn run(app: AppHandle, id: u64, server: String, pane: String, mut stopped:
         })
         .await;
         match opened {
-            Ok(Ok(c)) => Some(c),
+            // the lease keeps the stream's place on its connection (hollr.rs SESSION_BUDGET)
+            Ok(Ok(c)) => Some((handle, c)),
             // a dead pooled connection: the next start reconnects
             _ => {
-                hollr.invalidate(&server).await;
+                hollr.drop_stale(&server, &handle.arc()).await;
                 None
             }
         }
@@ -82,7 +83,7 @@ async fn run(app: AppHandle, id: u64, server: String, pane: String, mut stopped:
         c = opened => c,
         _ = &mut stopped => return,
     };
-    let Some(mut channel) = channel else {
+    let Some((_lease, mut channel)) = channel else {
         emit(None, true);
         return;
     };

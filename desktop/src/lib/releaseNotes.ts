@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 54,
+    version: "0.49.1",
+    date: "23.11.2026",
+    items: [
+      { icon: "✓", text: "Behoben: „Keine Verbindung“ obwohl das Terminal lief – bei vielen offenen Chats und Terminals nahm der Server keine weitere Sitzung an. Hollr öffnet dann eine zweite Verbindung." },
+    ],
+  },
+  {
     build: 53,
     version: "0.49.0",
     date: "22.11.2026",

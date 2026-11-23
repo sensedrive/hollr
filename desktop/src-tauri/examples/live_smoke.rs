@@ -25,8 +25,9 @@ async fn main() -> anyhow::Result<()> {
         }
     });
     let lives = Lives::default();
-    let handle = hollr.handle_for(&server).await?;
-    let id = lives.start(emit, handle, pane, Options { headphones: false, audio: false }).await?;
+    // held for the whole run: the call's place on its connection
+    let lease = hollr.handle_for(&server).await?;
+    let id = lives.start(emit, lease.arc(), pane, Options { headphones: false, audio: false }).await?;
     println!("{:>5.1}s started session {id}", t0.elapsed().as_secs_f32());
     let show = |v: &Value| {
         let t = v["t"].as_str().unwrap_or_default();

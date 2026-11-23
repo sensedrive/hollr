@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Behoben: „Keine Verbindung“ obwohl das Terminal lief – bei vielen offenen Chats und Terminals nahm der Server keine weitere Sitzung an. Hollr öffnet dann eine zweite Verbindung.":
+    "Fixed: “No connection” while the terminal kept working – with many open chats and terminals the server refused another session. Hollr now opens a second connection.",
   "Dieselben Rechner auf allen Geräten: wird ein Rechner auf dem iPhone oder einem anderen Mac gekoppelt, koppelt sich Hollr hier selbst damit; Entfernen gilt für alle Geräte.":
     "The same machines on every device: when a machine is paired on the iPhone or another Mac, Hollr pairs with it here by itself; removing applies to all devices.",
   "Prompt-Bausteine und das Diktat-Vokabular sind auf allen Geräten gleich.":

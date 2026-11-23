@@ -81,10 +81,13 @@ async fn gate_long(state: tauri::State<'_, Hollr>, server: String, command: Stri
 #[tauri::command]
 async fn live_start(app: tauri::AppHandle, state: tauri::State<'_, Hollr>, live: tauri::State<'_, live::Lives>, server: String, pane: String, headphones: bool) -> R<u64> {
     use tauri::Emitter;
-    let handle = state.handle_for(&server).await.map_err(err)?;
+    let lease = std::sync::Arc::new(state.handle_for(&server).await.map_err(err)?);
+    let handle = lease.arc();
     let emit: live::Emit = {
         let handle = handle.clone();
         std::sync::Arc::new(move |name: &str, v: serde_json::Value| {
+            // the call's place on its connection lasts as long as the call can still emit
+            let _keep = &lease;
             // connection lost: "Neu verbinden" should get a fresh SSH connection
             if v["t"] == "lost" {
                 let (app, server, handle) = (app.clone(), server.clone(), handle.clone());

@@ -60,6 +60,11 @@ pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
+/// The gate command's name only (logs keep no pane ids or arguments).
+fn first_word(command: &str) -> &str {
+    command.split_whitespace().next().unwrap_or("")
+}
+
 /// `hollr://pair?c=<base64url(JSON)>`
 #[derive(Deserialize)]
 struct PairingPayload {
@@ -75,8 +80,46 @@ struct PairingPayload {
     n: Option<String>,
 }
 
-/// One pooled connection per server; its own lock so a slow connect only blocks that server.
-type Slot = Arc<Mutex<Option<Arc<Handle<Pinned>>>>>;
+/// The pooled connections to one server; its own lock so a slow connect only blocks that server.
+type Slot = Arc<Mutex<Vec<Arc<Conn>>>>;
+
+/// sshd allows 10 session channels per connection (`MaxSessions`). Chats, terminals, the feed and live calls keep
+/// theirs open; past that every further `gate` call is refused with "ConnectFailed" (the server then showed
+/// „Keine Verbindung“ while its terminal kept working). A connection takes at most this many – the next one opens
+/// another connection.
+const SESSION_BUDGET: usize = 8;
+
+/// One SSH connection and how many session channels run on it right now.
+pub struct Conn {
+    handle: Arc<Handle<Pinned>>,
+    sessions: std::sync::atomic::AtomicUsize,
+}
+
+/// A session channel's place on a pooled connection: hold it as long as the channel lives; dropping it frees
+/// the place. Derefs to the connection's handle.
+pub struct Lease {
+    conn: Arc<Conn>,
+}
+
+impl Lease {
+    /// The connection itself (to drop it when it turned out dead).
+    pub fn arc(&self) -> Arc<Handle<Pinned>> {
+        self.conn.handle.clone()
+    }
+}
+
+impl std::ops::Deref for Lease {
+    type Target = Handle<Pinned>;
+    fn deref(&self) -> &Handle<Pinned> {
+        &self.conn.handle
+    }
+}
+
+impl Drop for Lease {
+    fn drop(&mut self) {
+        self.conn.sessions.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
 
 /// Opening a channel on a pooled connection: longer means the connection is dead (e.g. after sleep).
 const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -263,42 +306,49 @@ impl Hollr {
         Err(anyhow!("Server nicht erreichbar: {last}"))
     }
 
-    /// Drops the pooled connection, the next call reconnects (users of the old handle keep it).
+    /// Drops the pooled connections, the next call reconnects (users of the old handles keep them).
     pub async fn invalidate(&self, server_id: &str) {
         self.pool.lock().unwrap().remove(server_id);
     }
 
-    /// Like `invalidate`, but only if the pool still holds this (stale) handle – not a fresh reconnect.
+    /// Drops this (stale) connection from the pool – the others and a fresh reconnect stay.
     pub async fn drop_stale(&self, server_id: &str, stale: &Arc<Handle<Pinned>>) {
         let slot = self.pool.lock().unwrap().get(server_id).cloned();
         if let Some(slot) = slot {
-            let mut h = slot.lock().await;
-            if h.as_ref().is_some_and(|h| Arc::ptr_eq(h, stale)) {
-                *h = None;
-            }
+            slot.lock().await.retain(|c| !Arc::ptr_eq(&c.handle, stale));
         }
     }
 
-    /// Pooled connection to a paired server (live calls open their own channel on it).
-    pub async fn handle_for(&self, server_id: &str) -> Result<Arc<Handle<Pinned>>> {
+    /// A place for one session channel on a pooled connection to a paired server (see `Lease`).
+    pub async fn handle_for(&self, server_id: &str) -> Result<Lease> {
         let server = self.servers().into_iter().find(|s| s.id == server_id).context("Server nicht gefunden")?;
         self.handle(&server).await
     }
 
-    async fn handle(&self, server: &Server) -> Result<Arc<Handle<Pinned>>> {
+    /// Any pooled connection, for channels that aren't sessions (tunnels: sshd's session limit doesn't count them).
+    pub async fn connection_for(&self, server_id: &str) -> Result<Arc<Handle<Pinned>>> {
+        Ok(self.handle_for(server_id).await?.arc())
+    }
+
+    async fn handle(&self, server: &Server) -> Result<Lease> {
+        use std::sync::atomic::Ordering;
         // the map lock is only held for the lookup, the connect waits on this server's slot alone
         let slot = self.pool.lock().unwrap().entry(server.id.clone()).or_default().clone();
         let mut pooled = slot.lock().await;
-        if let Some(h) = pooled.as_ref()
-            && !h.is_closed()
-        {
-            return Ok(h.clone());
+        pooled.retain(|c| !c.handle.is_closed());
+        if let Some(conn) = pooled.iter().find(|c| c.sessions.load(Ordering::Relaxed) < SESSION_BUDGET) {
+            conn.sessions.fetch_add(1, Ordering::Relaxed);
+            return Ok(Lease { conn: conn.clone() });
         }
-        let h = Arc::new(
+        let handle = Arc::new(
             Self::connect(&server.addresses, server.port, &server.user, &server.host_fingerprint, self.device_key()?).await?,
         );
-        *pooled = Some(h.clone());
-        Ok(h)
+        if !pooled.is_empty() {
+            crate::diag::write(&format!("pool {}: connection {} (the others are full)", server.label, pooled.len() + 1));
+        }
+        let conn = Arc::new(Conn { handle, sessions: std::sync::atomic::AtomicUsize::new(1) });
+        pooled.push(conn.clone());
+        Ok(Lease { conn })
     }
 
     /// Runs one `hollr gate` command; `stdin` (one JSON line) is sent first. Returns stdout.
@@ -348,7 +398,11 @@ impl Hollr {
     pub async fn gate_with(&self, server_id: &str, command: &str, stdin: Option<String>, reply: Duration) -> Result<String> {
         let server = self.servers().into_iter().find(|s| s.id == server_id).context("Server nicht gefunden")?;
         let late = reply > REPLY_TIMEOUT;
-        for attempt in 0..2 {
+        for attempt in 0..3 {
+            if attempt == 2 {
+                // right after waking up every stream reconnects at once: give the burst a moment
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
             let handle = self.handle(&server).await?;
             let early = if late { None } else { stdin.as_deref() };
             // a dead connection (e.g. after sleep) never answers the channel open: time out, reconnect once
@@ -356,11 +410,23 @@ impl Hollr {
                 .await
                 .unwrap_or_else(|_| Err(anyhow!("Zeitüberschreitung")));
             let channel = match opened {
-                Ok(c) => c,
+                Ok(c) => {
+                    if attempt > 0 {
+                        crate::diag::write(&format!("gate {}: {} worked after reconnecting", server.label, first_word(command)));
+                    }
+                    c
+                }
                 Err(e) => {
-                    self.drop_stale(&server.id, &handle).await;
-                    if attempt == 0 {
+                    // why a server shows „Keine Verbindung“ while its terminal still works: the open failed on this
+                    // connection (sshd's channel limit after a wake-up burst, a half-dead connection, …)
+                    crate::diag::write(&format!("gate {}: {} channel open failed (try {}): {e}", server.label, first_word(command), attempt + 1));
+                    self.drop_stale(&server.id, &handle.arc()).await;
+                    if attempt < 2 {
                         continue;
+                    }
+                    // russh's "Failed to open channel (ConnectFailed)" means sshd refused one more session
+                    if e.to_string().contains("ConnectFailed") {
+                        return Err(anyhow!("Der Server nimmt gerade keine weitere Sitzung an – gleich wieder versuchen"));
                     }
                     return Err(e);
                 }
@@ -375,7 +441,7 @@ impl Hollr {
             return match tokio::time::timeout(reply, run).await {
                 Ok(out) => out,
                 Err(_) => {
-                    self.drop_stale(&server.id, &handle).await;
+                    self.drop_stale(&server.id, &handle.arc()).await;
                     Err(anyhow!("Zeitüberschreitung – keine Antwort vom Server"))
                 }
             };

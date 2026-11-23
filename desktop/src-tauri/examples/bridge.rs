@@ -92,9 +92,12 @@ async fn main() -> anyhow::Result<()> {
                         Ok(json!(null))
                     }
                     "live_start" => match hollr.handle_for(&s("server")).await {
-                        Ok(handle) => {
+                        Ok(lease) => {
                             let events = events.clone();
+                            let handle = lease.arc();
                             let emit: Emit = Arc::new(move |name: &str, v: Value| {
+                                // the call's place on its connection lasts as long as the call can emit
+                                let _keep = &lease;
                                 let _ = events.send(json!({ "event": name, "payload": v }).to_string());
                             });
                             lives.start(emit, handle, s("pane"), Options { headphones: false, audio: false }).await.map(|id| json!(id))
