@@ -1,17 +1,18 @@
 /**
  * Boards per repo, stale-while-revalidate: answered from memory (or, in a fresh process, from the copy in the
- * state dir) at once; older than 15 s starts a refresh in the background. Refreshes are cheap – only issues
- * updated since the last fetch – with a full fetch every 10 min for labels, users, deleted or transferred
- * issues. Writes put GitHub's answer into the cache right away; for 2 min it beats fetched copies that are
- * older (GitHub's search index lags behind closing and reopening).
+ * state dir) at once; older than 15 s starts a refresh in the background. Refreshes are cheap – only issues and
+ * pull requests updated since the last fetch, plus all open pull requests – with a full fetch every 10 min for
+ * labels, users, deleted or transferred issues. Writes put GitHub's answer into the cache right away; for 2 min it
+ * beats fetched copies that are older (GitHub's search index lags behind closing and reopening).
  */
 import { mkdirSync, readFileSync } from "node:fs";
 import { rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { classify } from "./board";
 import { HttpError } from "./env";
-import { CLOSED_DAYS, type RepoSnapshot } from "./github";
-import type { Issue, Project } from "./types";
+import { CLOSED_DAYS, type Changes, PULL_DAYS, type RepoSnapshot } from "./github";
+import { closingPulls } from "./pulls";
+import type { Issue, Project, Pull } from "./types";
 
 export const STALE_MS = 15_000;
 export const FULL_MS = 10 * 60_000;
@@ -24,7 +25,7 @@ const SLUG = /^[A-Za-z0-9-]+\/[\w-][\w.-]*$/;
 
 export interface Fetchers {
   fetchBoard(slug: string, now: number): Promise<RepoSnapshot>;
-  fetchChanged(slug: string, since: string): Promise<Issue[]>;
+  fetchChanged(slug: string, since: string): Promise<Changes>;
 }
 
 interface Stored {
@@ -144,6 +145,9 @@ export class BoardCache {
     if (!stored || !fromDisk) {
       const now = this.now();
       stored = { snap: await this.gh.fetchBoard(slug, now), fetchedAt: now, fullAt: now };
+    } else if (!stored.snap.pulls) {
+      // a copy from before pull requests: none until the next refresh, which is a full one
+      stored = { ...stored, snap: { ...stored.snap, pulls: [] }, fullAt: 0 };
     }
     const e: Entry = { ...stored, overrides: new Map() };
     this.entries.set(slug, e);
@@ -160,7 +164,8 @@ export class BoardCache {
           e.fullAt = now;
           this.merge(e, []);
         } else {
-          this.merge(e, await this.gh.fetchChanged(slug, new Date(e.fetchedAt - SKEW_MS).toISOString()));
+          const c = await this.gh.fetchChanged(slug, new Date(e.fetchedAt - SKEW_MS).toISOString());
+          this.merge(e, c.issues, c.pulls);
         }
         e.fetchedAt = now;
         e.error = undefined;
@@ -175,8 +180,11 @@ export class BoardCache {
     return e.refreshing;
   }
 
-  /** Puts fetched issues in, then the still valid overrides that are newer than what was fetched. */
-  private merge(e: Entry, fetched: Issue[]) {
+  /**
+   * Puts fetched issues in, then the still valid overrides that are newer than what was fetched. `pulls` (a
+   * refresh): the open ones replace all open ones cached, merged or closed ones are put in.
+   */
+  private merge(e: Entry, fetched: Issue[], pulls?: Pull[]) {
     const now = this.now();
     const windowStart = now - CLOSED_DAYS * DAY - DAY;
     const byNumber = new Map(e.snap.issues.map((i) => [i.number, i]));
@@ -189,7 +197,16 @@ export class BoardCache {
     for (const [n, i] of byNumber)
       if (i.state === "closed" && i.closedAt && Date.parse(i.closedAt) < windowStart && !e.overrides.has(n))
         byNumber.delete(n);
-    e.snap = { ...e.snap, issues: [...byNumber.values()] };
+    const prs = new Map(e.snap.pulls.map((p) => [p.n, p]));
+    if (pulls) {
+      // an open PR missing from the fresh open ones was merged or closed meanwhile: it is among `pulls` too
+      for (const p of e.snap.pulls) if (p.state === "open" || p.state === "draft") prs.delete(p.n);
+      for (const p of pulls) prs.set(p.n, p);
+    }
+    // merged and closed PRs leave with their window too
+    const pullStart = new Date(now - PULL_DAYS * DAY - DAY).toISOString();
+    for (const [n, p] of prs) if (p.closedAt && (p.mergedAt ?? p.closedAt) < pullStart) prs.delete(n);
+    e.snap = { ...e.snap, issues: [...byNumber.values()], pulls: [...prs.values()] };
   }
 
   private changed(slug: string, e: Entry) {
@@ -216,6 +233,7 @@ export class BoardCache {
       hasGrill: !!project.labels.grill,
       closedOlder: e.snap.closedOlder,
       viewer: e.snap.viewer,
+      pulls: closingPulls(e.snap.pulls, new Set(issues.map((i) => i.number))),
     });
     e.body = { labelsKey, json, etag: Bun.hash(json).toString(36) };
     return e.body;

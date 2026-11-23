@@ -81,16 +81,20 @@ function build(c: TicketCardInfo): HTMLElement {
           t.epic ? h("span", { class: "chip epic", title: t.epic.key }, `Epic ${t.epic.summary || t.epic.key}`) : null,
         )
       : null,
-    c.build.text
+    c.build.text || c.build.pr
       ? h(
           "div",
           { class: "build" },
-          h("div", { class: "build-text" }, c.build.text),
+          h("div", { class: "build-text" }, c.build.text, c.build.text && c.build.pr ? " · " : null, c.build.pr ? prLinkEl(c.build.pr) : null),
           c.build.segs.length ? h("span", { class: "segbar" }, ...c.build.segs.map((s) => h("span", { class: `seg ${s}` }))) : null,
         )
       : null,
     driftEl(t.drift, t.derived),
   );
 }
+
+/** A PR as a link („PR #3550 gemergt“); the views open `data-url` in the system browser instead of the card. */
+export const prLinkEl = (pr: { text: string; url: string; state: string }) =>
+  h("a", { class: `pr-link pr-${pr.state}`, href: pr.url, "data-url": pr.url, title: "Auf GitHub öffnen" }, pr.text);
 
 export const clearTicketCards = () => cache.clear();

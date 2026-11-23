@@ -11,6 +11,7 @@ import {
   initials,
   issueTickets,
   openChildren,
+  prText,
   statusColumn,
   ticketColumns,
   ticketLane,
@@ -43,6 +44,7 @@ const ticket = (key: string, extra: Partial<JiraTicket> = {}): JiraTicket => ({
   family: { children: [] },
   derived: null,
   drift: [],
+  prs: [],
   ...extra,
 });
 
@@ -105,7 +107,8 @@ describe("card facts", () => {
     expect(initials("Anna Maria von Berg")).toBe("AB");
     expect(assigneeLogin("Martin Fink")).toBe("martin");
   });
-  test("build line", () => {
+  test("build line: text, segments and the main PR as a link", () => {
+    const pr = { n: 3550, title: "Kalender", url: "https://github.com/o/r/pull/3550", state: "merged" as const, checks: null, review: null, branch: "feature/R-1", mergedAt: "2026-11-23T10:00:00Z" };
     const line = buildLine({
       story: 3540,
       children: [
@@ -115,12 +118,21 @@ describe("card facts", () => {
       ],
       run: { machine: "workr", percent: 43 },
       grill: null,
-      pr: 3550,
+      pr,
     });
-    expect(line.text).toBe("Story #3540 · Kinder 1/3 gemergt · Lauf auf workr 43 % · PR #3550");
+    expect(line.text).toBe("Story #3540 · Kinder 1/3 gemergt · Lauf auf workr 43 %");
+    expect(line.pr).toEqual({ text: "PR #3550 gemergt", url: pr.url, state: "merged" });
     expect(line.segs).toEqual(["merged", "building", "queued"]);
-    expect(buildLine({ story: null, children: [], grill: "Grill 2/7" }).text).toBe("Grill 2/7");
+    expect(buildLine({ story: null, children: [], grill: "Grill 2/7" })).toEqual({ text: "Grill 2/7", segs: [], pr: null });
     expect(buildLine({ story: null, children: [] }).text).toBe("");
+  });
+  test("PR texts: state, CI only while open", () => {
+    expect(prText({ n: 1, state: "merged", checks: "failure" })).toBe("PR #1 gemergt");
+    expect(prText({ n: 2, state: "open", checks: "failure" })).toBe("PR #2 offen · CI ✗");
+    expect(prText({ n: 3, state: "open", checks: "success" })).toBe("PR #3 offen · CI ✓");
+    expect(prText({ n: 4, state: "draft", checks: null })).toBe("PR #4 Entwurf");
+    expect(prText({ n: 5, state: "draft", checks: "pending" })).toBe("PR #5 Entwurf · CI …");
+    expect(prText({ n: 6, state: "closed", checks: null })).toBe("PR #6 geschlossen");
   });
   test("drift texts", () => {
     expect(driftText({ kind: "label-on-gh", issue: 3540, label: "kundenfeedback", inJira: true })).toBe(
@@ -191,6 +203,20 @@ describe("ticket filter", () => {
     expect(pick('t:"Sub-Task" t:epic')).toEqual(["A-1", "A-4"]);
     expect(pick("-t:Epic")).toEqual(["A-2", "A-3", "A-4"]);
     expect(pick("-t:epic t:story")).toEqual(["A-2"]);
+  });
+  test("wildcards: l:patrick* matches every patrick-… label, ? one character, -l: and text too", () => {
+    const w = [
+      ticket("W-1", { labels: ["patrick-2026-10-15"] }),
+      ticket("W-2", { labels: ["patrick-2026-11-12", "shop"], summary: "Rechnungskalender bauen" }),
+      ticket("W-3", { labels: ["kundenfeedback"] }),
+    ];
+    const pick = (q: string) => w.filter(compileTickets(tokenize(q))).map((t) => t.key);
+    expect(pick("l:patrick*")).toEqual(["W-1", "W-2"]);
+    expect(pick("l:patrick-2026-1?-15")).toEqual(["W-1"]);
+    expect(pick("-l:patrick*")).toEqual(["W-3"]);
+    expect(pick("l:*feedback")).toEqual(["W-3"]);
+    expect(pick("rechnung*kalender")).toEqual(["W-2"]);
+    expect(pick("l:patrick")).toEqual([]);
   });
 });
 

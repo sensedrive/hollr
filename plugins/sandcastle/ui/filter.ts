@@ -82,17 +82,45 @@ export const serialize = (tokens: Token[]) => tokens.map(tokenText).join(" ");
 
 const lc = (s: string) => s.toLocaleLowerCase("de");
 
+const WILD = /[*?]/;
+const wildSource = (value: string) =>
+  value
+    .split("")
+    .map((c) => (c === "*" ? ".*" : c === "?" ? "." : c.replace(/[.+^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+
+/**
+ * Matches a whole value (label, assignee, type): `*` any run, `?` one character, e.g. `l:patrick*`. Without
+ * wildcards exact; the word still being typed (`partial`) matches by prefix. `value` is already lower case.
+ */
+export function valueMatcher(t: Pick<Token, "partial">, value: string): (s: string) => boolean {
+  if (WILD.test(value)) {
+    const re = new RegExp(`^${wildSource(value)}${t.partial ? "" : "$"}`);
+    return (s) => re.test(s);
+  }
+  return t.partial ? (s) => s.startsWith(value) : (s) => s === value;
+}
+
+/** Free text: contained anywhere; with wildcards `rech*kalender` spans words. `value` is already lower case. */
+export function textMatcher(value: string): (hay: string) => boolean {
+  if (WILD.test(value)) {
+    const re = new RegExp(wildSource(value));
+    return (hay) => re.test(hay);
+  }
+  return (hay) => hay.includes(value);
+}
+
 /** A predicate over GitHub issues (Werkbank); `t:` is a JIRA field and doesn't narrow issues. */
 export function compile(tokens: Token[], ctx: FilterContext): (issue: Issue) => boolean {
-  const matcher = (t: Token, value: string) => (t.partial ? (s: string) => s.startsWith(value) : (s: string) => s === value);
+  const matcher = valueMatcher;
   const labels = tokens.filter((t) => t.kind === "label").map((t) => matcher(t, lc(t.value)));
   // a half-typed exclusion would hide tickets while typing; it counts once committed
-  const nolabels = tokens.filter((t) => t.kind === "nolabel" && !t.partial).map((t) => lc(t.value));
+  const nolabels = tokens.filter((t) => t.kind === "nolabel" && !t.partial).map((t) => valueMatcher(t, lc(t.value)));
   const assignees = tokens
     .filter((t) => t.kind === "assignee")
     .map((t) => (lc(t.value) === "ich" ? matcher({ ...t, partial: false }, lc(ctx.viewer || "\u0000")) : matcher(t, lc(t.value))));
   const numbers = tokens.filter((t) => t.kind === "number").map((t) => Number(t.value));
-  const texts = tokens.filter((t) => t.kind === "text").map((t) => lc(t.value));
+  const texts = tokens.filter((t) => t.kind === "text").map((t) => textMatcher(lc(t.value)));
   const drift = tokens.some((t) => t.kind === "drift");
   // s:<nr> or s:<text in the story title> → a set of story numbers
   const storyTokens = tokens.filter((t) => t.kind === "story");
@@ -100,12 +128,15 @@ export function compile(tokens: Token[], ctx: FilterContext): (issue: Issue) => 
   for (const t of storyTokens) {
     const nr = Number(t.value.replace(/^#/, ""));
     if (Number.isInteger(nr) && nr > 0) stories.add(nr);
-    else for (const s of ctx.stories) if (lc(s.title).includes(lc(t.value))) stories.add(s.number);
+    else {
+      const m = textMatcher(lc(t.value));
+      for (const s of ctx.stories) if (m(lc(s.title))) stories.add(s.number);
+    }
   }
   return (issue) => {
     const own = issue.labels.map(lc);
     if (labels.some((m) => !own.some(m))) return false;
-    if (nolabels.some((l) => own.includes(l))) return false;
+    if (nolabels.some((m) => own.some(m))) return false;
     if (assignees.length && !issue.assignees.some((a) => assignees.some((m) => m(lc(a))))) return false;
     if (numbers.length && !numbers.includes(issue.number)) return false;
     if (drift && !ctx.drift?.has(issue.number)) return false;
@@ -113,7 +144,7 @@ export function compile(tokens: Token[], ctx: FilterContext): (issue: Issue) => 
       return false;
     if (texts.length) {
       const hay = lc(`${issue.number} #${issue.number} ${issue.title} ${issue.jira ?? ""}`);
-      if (texts.some((t) => !hay.includes(t))) return false;
+      if (texts.some((m) => !m(hay))) return false;
     }
     return true;
   };

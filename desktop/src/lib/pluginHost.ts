@@ -5,7 +5,9 @@ export type HostRequest =
   | { type: "servers"; id: string }
   | { type: "theme"; id: string }
   | { type: "gate"; id: string; server: string; command: string; stdin: Record<string, unknown> }
-  | { type: "open-session"; server: string; pane: string };
+  | { type: "open-session"; server: string; pane: string }
+  /** the page lost its plugin server (restart, new port/token): run the normal open again */
+  | { type: "reopen" };
 
 /** The app's colour variables a plugin page may mirror (theme.ts writes them on <html>). */
 export const THEME_VARS = ["bg", "side", "card", "raised", "fg", "muted", "dim", "border", "accent", "red", "green", "yellow", "orange", "purple", "cyan", "pink", "blue"] as const;
@@ -41,6 +43,7 @@ export function parseHostRequest(
   if (m.type === "open-session") {
     return str(m.server) && str(m.pane, 100) ? { type: "open-session", server: m.server, pane: m.pane } : undefined;
   }
+  if (m.type === "reopen") return { type: "reopen" };
   if (!str(m.id, 100)) return undefined;
   if (m.type === "servers") return { type: "servers", id: m.id };
   if (m.type === "theme") return { type: "theme", id: m.id };
@@ -51,4 +54,14 @@ export function parseHostRequest(
   const stdin = m.stdin ?? {};
   if (typeof stdin !== "object" || Array.isArray(stdin)) return { type: "reject", id: m.id, error: "stdin muss ein Objekt sein" };
   return { type: "gate", id: m.id, server: m.server, command: m.command, stdin: stdin as Record<string, unknown> };
+}
+
+/** Host-side debounce for `reopen`: true when a reopen may run now (none within `windowMs`). */
+export function reopenGate(windowMs = 10_000): (now: number) => boolean {
+  let last = -Infinity;
+  return (now) => {
+    if (now - last < windowMs) return false;
+    last = now;
+    return true;
+  };
 }

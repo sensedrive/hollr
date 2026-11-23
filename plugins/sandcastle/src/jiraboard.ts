@@ -22,7 +22,8 @@ import type { updateIssue } from "./github";
 import type { JiraAccess, JiraClient, JiraStatus, JiraTicket } from "./jira";
 import type { JiraCache } from "./jiracache";
 import type { LiveRuns } from "./live";
-import type { Project } from "./types";
+import { pullsByTicket } from "./pulls";
+import type { Project, PullOut } from "./types";
 
 export interface JiraCtx {
   boards: BoardCache;
@@ -39,6 +40,8 @@ export interface TicketOut extends JiraTicket {
   family: { grill?: FamilyMember; story?: FamilyMember; children: FamilyMember[] };
   derived: "inProgress" | "testing" | null;
   drift: DriftItem[];
+  /** pull requests of the ticket (key in title/branch/body, else closing a family issue), main PR first */
+  prs: PullOut[];
 }
 
 interface View {
@@ -47,6 +50,8 @@ interface View {
   statuses: JiraStatus[];
   tickets: JiraTicket[];
   fam: Families;
+  /** ticket key → its pull requests, main PR first */
+  prs: Map<string, PullOut[]>;
   cfg: DriftConfig;
   fetchedAt: number;
   stale: boolean;
@@ -68,12 +73,15 @@ async function view(ctx: JiraCtx, p: Project, refresh = false): Promise<View> {
   ]);
   const cfg: DriftConfig = { labels: p.labels, states: p.jira.states, statuses: j.snap.statuses };
   const error = [j.error && `JIRA: ${j.error}`, gh.error && `GitHub: ${gh.error}`].filter(Boolean).join(" · ");
+  const fam = families(gh.snap.issues, p.labels, ctx.live.phases(p.slug));
+  const known = new Set([...j.snap.tickets.map((t) => t.key), ...fam.byKey.keys()]);
   return {
     client,
     projectKey,
     statuses: j.snap.statuses,
     tickets: j.snap.tickets,
-    fam: families(gh.snap.issues, p.labels, ctx.live.phases(p.slug)),
+    fam,
+    prs: pullsByTicket(gh.snap.pulls, known, fam.byKey),
     cfg,
     fetchedAt: j.fetchedAt,
     stale: j.stale || gh.stale,
@@ -88,6 +96,7 @@ function ticketOut(p: Project, v: View, t: JiraTicket): TicketOut {
     ...t,
     url: p.jira.baseUrl ? `${p.jira.baseUrl.replace(/\/+$/, "")}/browse/${t.key}` : null,
     family: family ?? { children: [] },
+    prs: v.prs.get(t.key) ?? [],
     derived,
     drift,
   };

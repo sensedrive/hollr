@@ -4,14 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type BoardAnswer, BoardCache, type Fetchers, FULL_MS, STALE_MS } from "../src/cache";
 import type { RepoSnapshot } from "../src/github";
-import type { BoardData, Issue } from "../src/types";
-import { issue, NOW, project, snapshot } from "./fixtures";
+import type { BoardData, Issue, Pull } from "../src/types";
+import { issue, NOW, project, pull, snapshot } from "./fixtures";
 
 let dir: string;
 let clock: number;
 let calls: string[];
 let full: RepoSnapshot;
 let changed: Issue[];
+let changedPulls: Pull[];
 let offline: boolean;
 
 const fetchers: Fetchers = {
@@ -23,7 +24,7 @@ const fetchers: Fetchers = {
   async fetchChanged(slug, since) {
     if (offline) throw new Error("gh: offline");
     calls.push(`changed ${slug} ${since}`);
-    return structuredClone(changed);
+    return structuredClone({ issues: changed, pulls: changedPulls });
   },
 };
 
@@ -43,6 +44,7 @@ beforeEach(() => {
   clock = NOW;
   calls = [];
   changed = [];
+  changedPulls = [];
   offline = false;
   full = snapshot([
     issue(1, { labels: ["Sandcastle"] }),
@@ -145,6 +147,56 @@ describe("BoardCache", () => {
     clock = Date.parse("2026-12-20T12:00:00Z");
     await c.board(project(), null, true);
     expect(data(await c.board(project())).issues.map((i) => i.number)).toEqual([1]);
+  });
+
+  test("pull requests: the board lists those closing its issues; a refresh replaces the open ones", async () => {
+    full = snapshot(
+      [issue(1), issue(3, { state: "closed", closedAt: "2026-11-20T09:00:00Z" })],
+      [
+        pull(10, { closes: [1], state: "draft" }),
+        pull(11, { closes: [99] }),
+        pull(12, { closes: [3], state: "merged", mergedAt: "2026-11-20T09:00:00Z", closedAt: "2026-11-20T09:00:00Z" }),
+        pull(13, { closes: [1], state: "merged", mergedAt: "2026-10-01T09:00:00Z", closedAt: "2026-10-01T09:00:00Z" }),
+      ],
+    );
+    const c = make();
+    // #11 closes nothing on the board
+    const first = data(await c.board(project()));
+    expect(first.pulls.map((p) => [p.n, p.state, p.closes])).toEqual([
+      [10, "draft", [1]],
+      [12, "merged", [3]],
+      [13, "merged", [1]],
+    ]);
+    clock += STALE_MS + 1;
+    // #10 merged meanwhile (comes as updated), #14 opened; open PRs always come all
+    changedPulls = [
+      pull(14, { closes: [1], checks: "failure" }),
+      pull(10, { closes: [1], state: "merged", mergedAt: "2026-11-23T12:00:05Z", closedAt: "2026-11-23T12:00:05Z" }),
+    ];
+    await c.sync("o/r");
+    const next = data(await c.board(project()));
+    // #13 left the 30-day window
+    expect(next.pulls.map((p) => [p.n, p.state, p.checks])).toEqual([
+      [14, "open", "failure"],
+      [10, "merged", null],
+      [12, "merged", null],
+    ]);
+    expect(next.etag).not.toBe(first.etag);
+  });
+
+  test("a disk copy from before pull requests answers without them and refreshes in full", async () => {
+    const a = make();
+    await a.board(project());
+    await a.saved();
+    const file = join(dir, "boards", "o__r.json");
+    const stored = JSON.parse(await Bun.file(file).text());
+    delete stored.snap.pulls;
+    await Bun.write(file, JSON.stringify(stored));
+    calls = [];
+    const b = make();
+    expect(data(await b.board(project())).pulls).toEqual([]);
+    await b.sync("o/r");
+    expect(calls).toEqual(["full o/r"]);
   });
 
   test("a failed refresh keeps the data and says why", async () => {

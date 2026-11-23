@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseHostRequest } from "./pluginHost";
+import { parseHostRequest, reopenGate } from "./pluginHost";
 
 const allow = ["sandcastle"];
 
@@ -33,5 +33,18 @@ describe("parseHostRequest", () => {
     expect(parseHostRequest({ hollr: 1, id: "5", type: "gate", server: "s", command: "sandcastle", stdin: {} }, [])).toMatchObject({
       type: "reject",
     });
+  });
+});
+
+describe("reopen", () => {
+  test("parses without id", () => {
+    expect(parseHostRequest({ hollr: 1, type: "reopen" }, allow)).toEqual({ type: "reopen" });
+  });
+  test("debounces within 10 s", () => {
+    const may = reopenGate();
+    expect(may(1000)).toBe(true);
+    expect(may(5000)).toBe(false);
+    expect(may(10_999)).toBe(false);
+    expect(may(11_000)).toBe(true);
   });
 });

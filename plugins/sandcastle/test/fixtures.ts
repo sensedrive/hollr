@@ -1,6 +1,6 @@
 /** Test data shared by the cache and HTTP tests. */
 import type { RepoSnapshot } from "../src/github";
-import type { Issue, Project } from "../src/types";
+import type { Issue, Project, Pull } from "../src/types";
 
 export const NOW = Date.parse("2026-11-23T12:00:00Z");
 
@@ -24,11 +24,31 @@ export function issue(n: number, over: Partial<Issue> = {}): Issue {
   };
 }
 
-export function snapshot(issues: Issue[]): RepoSnapshot {
+export function pull(n: number, over: Partial<Pull> = {}): Pull {
+  return {
+    n,
+    title: `PR ${n}`,
+    url: `https://github.com/o/r/pull/${n}`,
+    state: "open",
+    checks: null,
+    review: null,
+    branch: `feature/pr-${n}`,
+    base: "main",
+    mergedAt: null,
+    closedAt: null,
+    updatedAt: "2026-11-20T10:00:00Z",
+    keys: [],
+    closes: [],
+    ...over,
+  };
+}
+
+export function snapshot(issues: Issue[], pulls: Pull[] = []): RepoSnapshot {
   return {
     repoId: "R_1",
     viewer: "martin",
     issues,
+    pulls,
     labels: [
       { id: "L_q", name: "Sandcastle", color: "0e8a16" },
       { id: "L_s", name: "story", color: "5319e7" },

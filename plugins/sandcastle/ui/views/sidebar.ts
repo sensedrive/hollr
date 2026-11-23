@@ -9,8 +9,9 @@ import { derive, type Derived, flagsOf } from "../derive";
 import { fill, fmtDate, h, html } from "../dom";
 import { branchColour, classify, isBusy, normaliseFlags, PHASE_TEXT } from "../model";
 import { errorText, hooks, serverLabel, state, toast } from "../state";
+import { CI_TEXT, PR_STATE_TEXT } from "../tickets";
 import { grillBlock, grillBlockSig } from "./grilling";
-import type { Column, Comment, IssueDetail, TicketFlags } from "../types";
+import type { Column, Comment, IssueDetail, PullRequest, TicketFlags } from "../types";
 
 const NAMES: Record<Column, string> = { grill: "Zu grillen", backlog: "Backlog", queue: "Sandcastle", done: "Erledigt" };
 
@@ -69,6 +70,34 @@ export function externalLinks(el: HTMLElement): HTMLElement {
 
 export const extLink = (text: string, url: string, cls = "link") =>
   h("a", { href: url, class: cls, onclick: (e: Event) => { e.preventDefault(); openExternal(url); } }, text, " ↗");
+
+const REVIEW_TEXT: Readonly<Record<string, string>> = { approved: "freigegeben", "changes-requested": "Änderungen gewünscht", "review-required": "Review offen" };
+
+/** Pull requests as rows: state pill, CI dot (open ones), number and title as link, head branch, review. */
+export function prListEl(prs: PullRequest[]): HTMLElement {
+  const live = (p: PullRequest) => p.state === "open" || p.state === "draft";
+  return h(
+    "div",
+    { class: "pr-list" },
+    ...prs.map((p) =>
+      h(
+        "div",
+        { class: "pr-row" },
+        h("span", { class: `pr-state pr-${p.state}` }, PR_STATE_TEXT[p.state]),
+        p.checks && live(p) ? h("span", { class: `ci-dot ci-${p.checks}`, title: CI_TEXT[p.checks], "aria-label": CI_TEXT[p.checks] }) : null,
+        extLink(`#${p.n} ${p.title}`, p.url, "link pr-title"),
+        h(
+          "span",
+          { class: "pr-meta small muted" },
+          h("span", { class: "dot", style: `background:${branchColour(p.branch)}` }),
+          h("span", { class: "mono", title: p.branch }, p.branch),
+          p.review && live(p) ? ` · ${REVIEW_TEXT[p.review] ?? p.review}` : null,
+          p.mergedAt ? ` · gemergt ${fmtDate(p.mergedAt)}` : null,
+        ),
+      ),
+    ),
+  );
+}
 
 export async function openIssue(n: number): Promise<void> {
   const el = claimPanel(releaseIssue);
@@ -202,13 +231,14 @@ export function renderLive(): void {
     grillSig = gSig;
     fill(grillHost, grillBlock(d, n, inGrill));
   }
-  const sig = JSON.stringify([labels, stateText, col, tr?.issue, tr?.run.branch, tr?.run.issues.map((i) => i.n), lane, flags, lane ? d.lanes.find((l) => l.server.id === lane)?.order : null, d.lanes.map((l) => l.server.id), state.board?.labels.length]);
+  const pulls = (state.board?.pulls ?? []).filter((p) => p.closes.includes(n));
+  const sig = JSON.stringify([labels, stateText, col, tr?.issue, tr?.run.branch, tr?.run.issues.map((i) => i.n), lane, flags, lane ? d.lanes.find((l) => l.server.id === lane)?.order : null, d.lanes.map((l) => l.server.id), state.board?.labels.length, pulls]);
   if (sig === liveSig) return;
   liveSig = sig;
   const stateEl = panel.querySelector(".side-state");
   if (stateEl) fill(stateEl, h("span", { class: `state ${stateText === "offen" ? "open" : "closed"}` }, stateText), col && col !== "story" ? ` ${NAMES[col]}${lane ? ` · ${serverLabel(lane)}` : ""}` : col === "story" ? " Story" : "");
   const busy = isBusy(tr?.issue.phase);
-  fill(live, labelsBlock(n, labels), runBlock(n, d), testBlock(n, d, lane ?? tr?.server ?? null, flags, busy), branchBlock(d, n), queueBlock(n, d, lane, busy), col && col !== "story" ? moveBlock(n, d, col, lane, busy) : null);
+  fill(live, labelsBlock(n, labels), runBlock(n, d), pulls.length ? h("section", { class: "side-prs" }, h("h3", {}, "Pull Requests"), prListEl(pulls)) : null, testBlock(n, d, lane ?? tr?.server ?? null, flags, busy), branchBlock(d, n), queueBlock(n, d, lane, busy), col && col !== "story" ? moveBlock(n, d, col, lane, busy) : null);
 }
 
 function labelsBlock(n: number, labels: string[]): HTMLElement {

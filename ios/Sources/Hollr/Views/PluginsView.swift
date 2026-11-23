@@ -56,6 +56,8 @@ enum PluginHostRequest: Equatable {
     case theme(id: String)
     case gate(id: String, server: String, command: String, stdin: [String: AnyHashable])
     case openSession(server: String, pane: String)
+    /// the page lost its plugin server (restart, new port/token): run the normal open again
+    case reopen
     /// a request with an id that can't be served – answered with an error so the page doesn't hang
     case reject(id: String, error: String)
 
@@ -66,6 +68,7 @@ enum PluginHostRequest: Equatable {
             return v
         }
         let type = m["type"] as? String
+        if type == "reopen" { return .reopen }
         if type == "open-session" {
             guard let server = str("server"), let pane = str("pane", max: 100) else { return nil }
             return .openSession(server: server, pane: pane)
@@ -220,6 +223,7 @@ struct PluginView: View {
     @State private var model = BrowserModel(start: nil, remembers: false, popupsOutside: true, hostBridge: true)
     @State private var openError: String?
     @State private var opening = false
+    @State private var lastReopen = Date.distantPast
 
     var body: some View {
         Group {
@@ -273,6 +277,10 @@ struct PluginView: View {
         case let .openSession(serverId, pane):
             guard let target = store.servers.first(where: { $0.id.uuidString == serverId }) else { return }
             PushManager.shared.openRequest = (target.hostFingerprint, pane)
+        case .reopen:
+            guard !opening, Date().timeIntervalSince(lastReopen) >= 10 else { return }
+            lastReopen = Date()
+            Task { await open() }
         case let .reject(id, error):
             model.replyToHost(["hollr": 1, "id": id, "ok": false, "error": error])
         case let .theme(id):

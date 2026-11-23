@@ -70,6 +70,34 @@ export interface Assignee {
   avatarUrl: string;
 }
 
+export type PullState = "open" | "draft" | "merged" | "closed";
+export type ChecksState = "success" | "failure" | "pending";
+
+/** A pull request as the board cache keeps it (src/pulls.ts). */
+export interface Pull {
+  n: number;
+  title: string;
+  url: string;
+  state: PullState;
+  /** status rollup of the last commit; only fetched for open PRs (null otherwise or without checks) */
+  checks: ChecksState | null;
+  /** approved | changes-requested | review-required; only fetched for open PRs */
+  review: string | null;
+  /** head branch */
+  branch: string;
+  base: string;
+  mergedAt: string | null;
+  closedAt: string | null;
+  updatedAt: string;
+  /** JIRA keys named in title or head branch, else in the body's start */
+  keys: string[];
+  /** issues it closes: GitHub's closing references and `Closes #n` in the body */
+  closes: number[];
+}
+
+/** A pull request in the API answers (JIRA ticket `prs`, Werkbank `pulls`). */
+export type PullOut = Pick<Pull, "n" | "title" | "url" | "state" | "checks" | "review" | "branch" | "mergedAt">;
+
 export interface BoardData {
   etag: string;
   /** ISO time of the GitHub fetch the data comes from */
@@ -86,6 +114,8 @@ export interface BoardData {
   closedOlder: number;
   /** gh login of this machine – the filter's `@ich` */
   viewer: string;
+  /** open PRs and those merged/closed in the last 30 days that close an issue of the board, main PR order */
+  pulls: (PullOut & { closes: number[] })[];
   /** the last background refresh failed (the data is the previous one) */
   refreshError?: string;
 }

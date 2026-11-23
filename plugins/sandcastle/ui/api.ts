@@ -3,6 +3,7 @@
  * host relay to `hollr gate sandcastle` on every paired machine (contract B). Without a Hollr host (plain browser)
  * the relay falls back to /api/host/* of this plugin's own machine.
  */
+import { reconnectPolicy } from "./reconnect";
 import type { Grill, GrillMode, LogChunk, Project, QueueState, Server, Status, TicketFlags } from "./types";
 
 const KEY = "sc.token";
@@ -26,6 +27,23 @@ function expired(): void {
   document.body.replaceChildren(el);
 }
 
+const shouldReopen = reconnectPolicy();
+
+/** Inside a host: show „Verbinde neu …“ and let the app reopen us (new port and token, frame reloads). */
+function lostServer(kind: "network" | "auth"): void {
+  const post = hostPost();
+  if (!post) {
+    if (kind === "auth") expired();
+    return;
+  }
+  if (!shouldReopen(kind, Date.now())) return;
+  const el = document.createElement("div");
+  el.className = "expired";
+  el.textContent = "Verbinde neu …";
+  document.body.replaceChildren(el);
+  post({ hollr: 1, type: "reopen" });
+}
+
 /** Fire-and-forget POST that survives the page going away (Hollr removes the frame on navigation). */
 export function apiKeepalive(path: string, body: unknown): void {
   fetch(path, {
@@ -37,13 +55,19 @@ export function apiKeepalive(path: string, body: unknown): void {
 }
 
 export async function api<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (err) {
+    if (err instanceof TypeError) lostServer("network");
+    throw err;
+  }
   if (res.status === 401) {
-    expired();
+    lostServer("auth");
     throw new Error("Sitzung abgelaufen");
   }
   const data: unknown = await res.json().catch(() => ({}));

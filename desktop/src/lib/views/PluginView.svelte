@@ -8,7 +8,7 @@
   import { viaTunnel } from "$lib/agent";
   import { t } from "$lib/i18n";
   import { app, go, serverById } from "$lib/store.svelte";
-  import { parseHostRequest, readTheme, type HostReply } from "$lib/pluginHost";
+  import { parseHostRequest, readTheme, reopenGate, type HostReply } from "$lib/pluginHost";
   import { errText } from "$lib/serverapi";
   import { isPinned, listPlugins, openPlugin, togglePin } from "$lib/plugins";
 
@@ -27,6 +27,8 @@
   let destroyed = false;
   /** the ticket the page was last told about (fragment or event) */
   let told: string | undefined;
+
+  const mayReopen = reopenGate();
 
   async function open() {
     loading = true;
@@ -93,6 +95,10 @@
 
   /** relay (contract B); gate calls run in parallel, each answered by its id */
   async function handleHost(req: NonNullable<ReturnType<typeof parseHostRequest>>) {
+    if (req.type === "reopen") {
+      if (!loading && mayReopen(Date.now())) open();
+      return;
+    }
     if (req.type === "open-session") {
       if (serverById(req.server)) go({ view: "agent", server: req.server, pane: req.pane });
       return;

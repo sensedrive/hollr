@@ -13,14 +13,15 @@ import { JiraCache } from "../src/jiracache";
 import { LiveRuns } from "../src/live";
 import { Prefs } from "../src/prefs";
 import { Projects } from "../src/projects";
-import type { Issue } from "../src/types";
-import { issue, NOW, project, snapshot } from "./fixtures";
+import type { Issue, Pull } from "../src/types";
+import { issue, NOW, project, pull, snapshot } from "./fixtures";
 import { type FakeJira, fakeJira } from "./jirafake";
 
 let dir: string;
 let gateCalls: { command: string; stdin: unknown }[];
 let ctx: Ctx;
 let ghIssues: Issue[];
+let ghPulls: Pull[];
 let jira: FakeJira;
 let creds: JiraCredentials | null;
 /** GitHub label writes: issue id, removed label ids, and how many JIRA calls had happened before */
@@ -51,11 +52,12 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "sc-http-"));
   gateCalls = [];
   ghIssues = [issue(1, { labels: ["Sandcastle"] }), issue(2, { labels: ["story"] })];
+  ghPulls = [];
   jira = fakeJira([]);
   creds = { site: "x.atlassian.net", email: "m@x.de", token: TOKEN };
   const fetchers = {
-    fetchBoard: async () => snapshot(structuredClone(ghIssues)),
-    fetchChanged: async () => [],
+    fetchBoard: async () => snapshot(structuredClone(ghIssues), structuredClone(ghPulls)),
+    fetchChanged: async () => ({ issues: [], pulls: [] }),
   };
   const access = new JiraAccess(() => creds, jira.fetch);
   const base: Omit<Ctx, "guard"> = {
@@ -211,7 +213,14 @@ describe("JIRA API", () => {
     );
   });
 
-  type Ticket = { key: string; status: string; drift: DriftItem[]; derived: string | null; family: unknown };
+  type Ticket = {
+    key: string;
+    status: string;
+    drift: DriftItem[];
+    derived: string | null;
+    family: unknown;
+    prs: { n: number; state: string; checks: string | null; [k: string]: unknown }[];
+  };
   const tickets = (body: Record<string, unknown>) => body.tickets as Ticket[];
   const ticket = (body: Record<string, unknown>, key: string) => tickets(body).find((t) => t.key === key) as Ticket;
 
@@ -270,6 +279,34 @@ describe("JIRA API", () => {
     expect(JSON.stringify(r.body)).not.toContain(TOKEN);
 
     expect((await call(`/api/jira/board?slug=o/r&since=${r.body.etag}`)).body).toEqual({ same: true });
+  });
+
+  test("board: pull requests per ticket – key in title/branch/body, else closing a family issue; main PR first", async () => {
+    ghPulls = [
+      pull(100, { title: "📝 docs: Spec (R-1)", keys: ["R-1"], state: "merged", mergedAt: "2026-11-20T10:00:00Z", closedAt: "2026-11-20T10:00:00Z" }),
+      pull(101, { branch: "feature/R-1-bau", keys: ["R-1"], state: "draft", checks: "pending" }),
+      // no ticket key (UTF-8 is none), closes a child of R-2
+      pull(102, { keys: ["UTF-8"], closes: [21], state: "merged", mergedAt: "2026-11-21T10:00:00Z", closedAt: "2026-11-21T10:00:00Z" }),
+      pull(103, { closes: [999] }),
+    ];
+    const r = await call("/api/jira/board?slug=o/r");
+    const prs = (key: string) => ticket(r.body, key).prs;
+    expect(prs("R-1").map((p) => [p.n, p.state, p.checks])).toEqual([
+      [101, "draft", "pending"],
+      [100, "merged", null],
+    ]);
+    expect(prs("R-2").map((p) => p.n)).toEqual([102]);
+    expect(prs("R-3")).toEqual([]);
+    expect(prs("R-1")[0]).toEqual({
+      n: 101,
+      title: "PR 101",
+      url: "https://github.com/o/r/pull/101",
+      state: "draft",
+      checks: "pending",
+      review: null,
+      branch: "feature/R-1-bau",
+      mergedAt: null,
+    });
   });
 
   test("issue detail: description and comments as safe HTML, transitions", async () => {

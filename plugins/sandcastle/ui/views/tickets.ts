@@ -5,6 +5,7 @@
  * the ticket in JIRA, onto a lane queues its open children on that machine. Built once, updated in place per poll.
  */
 import { queueChildren, transitionTicket } from "../actions";
+import { openExternal } from "../api";
 import { derive, type Derived, type Lane } from "../derive";
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
@@ -64,13 +65,21 @@ export function ticketsView(): HTMLElement {
   root = h("div", { class: "board" }, infoEl, staleEl, noticeEl, segsEl, columnsEl);
   root.addEventListener("click", (e) => {
     const t = e.target as Element;
+    const link = t.closest<HTMLElement>("[data-url]");
+    if (link) {
+      e.preventDefault();
+      openExternal(link.dataset.url ?? "");
+      return;
+    }
     const card = t.closest<HTMLElement>("[data-card]");
     if (card) openTicketSide(card.dataset.card ?? "");
     laneClick(t);
   });
   root.addEventListener("keydown", (e) => {
-    const card = (e.target as Element).closest<HTMLElement>("[data-card]");
-    if (card && e.key === "Enter") openTicketSide(card.dataset.card ?? "");
+    const target = e.target as Element;
+    const card = target.closest<HTMLElement>("[data-card]");
+    // Enter on a PR link is its click
+    if (card && e.key === "Enter" && !target.closest("[data-url]")) openTicketSide(card.dataset.card ?? "");
   });
   enableDrag(columnsEl, { canDrag: () => !isNarrow(), ordered: () => false, onDrop: (key, to) => onDrop(key, to) });
   longPress(columnsEl, cardMenu);
@@ -133,7 +142,7 @@ const PHASE_RANK: Phase[] = ["reviewing", "building", "failed", "no-commits", "p
 function cardInfo(d: Derived, t: JiraTicket, pos?: number): TicketCardInfo {
   const f = t.family;
   let run: { machine: string; percent: number } | null = null;
-  let pr: number | null = null;
+  const pr = t.prs[0] ?? null;
   const phases: Phase[] = [];
   const children = f.children.map((c) => {
     const tr = d.runs.get(c.n);
@@ -141,7 +150,6 @@ function cardInfo(d: Derived, t: JiraTicket, pos?: number): TicketCardInfo {
       run ??= { machine: serverLabel(tr.server), percent: tr.run.progress.percent };
       phases.push(tr.issue.phase);
     }
-    if (tr?.run.pr) pr ??= tr.run.pr;
     return { n: c.n, seg: memberPhase(c, tr?.issue.phase) };
   });
   const tg = f.grill ? d.grills.get(f.grill.n) : undefined;

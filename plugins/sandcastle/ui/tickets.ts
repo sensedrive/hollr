@@ -3,8 +3,8 @@
  * „Zu grillen“ and the Sandcastle lanes, the quick filter over tickets, the build line of a ticket's GitHub family
  * and the drift texts. No DOM, no state – tested in tickets.test.ts.
  */
-import type { Token } from "./filter";
-import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, JiraBoardData, JiraStatus, JiraTicket } from "./types";
+import { textMatcher, type Token, valueMatcher } from "./filter";
+import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, JiraBoardData, JiraStatus, JiraTicket, PullRequest, PullState } from "./types";
 
 // ---- columns
 
@@ -119,15 +119,27 @@ export interface BuildFacts {
   run?: { machine: string; percent: number } | null;
   /** grill progress text („Grill 2/7“) */
   grill?: string | null;
-  pr?: number | null;
+  /** the ticket's main pull request */
+  pr?: PullRequest | null;
 }
 
 export interface BuildLine {
   text: string;
   segs: string[];
+  /** the main PR, shown as a link after the text */
+  pr: { text: string; url: string; state: PullState } | null;
 }
 
-/** „Story #605 · Kinder 0/3 gemergt · Lauf auf workr 43 % · Grill 2/7 · PR #3550“; empty text = nothing built yet. */
+export const PR_STATE_TEXT: Readonly<Record<PullState, string>> = { open: "offen", draft: "Entwurf", merged: "gemergt", closed: "geschlossen" };
+export const CI_TEXT: Readonly<Record<NonNullable<PullRequest["checks"]>, string>> = { success: "CI ✓", failure: "CI ✗", pending: "CI …" };
+
+/** „PR #3550 gemergt“, „PR #3551 offen · CI ✗“, „PR #3552 Entwurf“ – CI only while the PR is open. */
+export function prText(p: Pick<PullRequest, "n" | "state" | "checks">): string {
+  const ci = p.checks && (p.state === "open" || p.state === "draft") ? ` · ${CI_TEXT[p.checks]}` : "";
+  return `PR #${p.n} ${PR_STATE_TEXT[p.state]}${ci}`;
+}
+
+/** „Story #605 · Kinder 0/3 gemergt · Lauf auf workr 43 % · Grill 2/7“ and the main PR; neither = nothing built yet. */
 export function buildLine(f: BuildFacts): BuildLine {
   const merged = f.children.filter((c) => c.seg === "merged").length;
   const parts = [
@@ -135,10 +147,9 @@ export function buildLine(f: BuildFacts): BuildLine {
     f.children.length ? `Kinder ${merged}/${f.children.length} gemergt` : "",
     f.run ? `Lauf auf ${f.run.machine} ${f.run.percent} %` : "",
     f.grill ?? "",
-    f.pr ? `PR #${f.pr}` : "",
   ].filter(Boolean);
   const segs = f.children.map((c) => c.seg).sort((a, b) => SEG_ORDER.indexOf(a) - SEG_ORDER.indexOf(b));
-  return { text: parts.join(" · "), segs };
+  return { text: parts.join(" · "), segs, pr: f.pr ? { text: prText(f.pr), url: f.pr.url, state: f.pr.state } : null };
 }
 
 // ---- drift texts
@@ -213,22 +224,23 @@ const members = (t: Pick<JiraTicket, "family">) => [
  * text in key, summary and epic. Same AND/OR rules as on GitHub issues.
  */
 export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
-  const matcher = (t: Token, value: string) => (t.partial ? (s: string) => s.startsWith(value) : (s: string) => s === value);
+  const matcher = valueMatcher;
   const labels = tokens.filter((t) => t.kind === "label").map((t) => matcher(t, lc(t.value)));
-  const nolabels = tokens.filter((t) => t.kind === "nolabel" && !t.partial).map((t) => lc(t.value));
+  const nolabels = tokens.filter((t) => t.kind === "nolabel" && !t.partial).map((t) => matcher(t, lc(t.value)));
   // `@ich` has no JIRA identity behind it: it matches nobody
   const assignees = tokens.filter((t) => t.kind === "assignee").map((t) => (lc(t.value) === "ich" ? () => false : matcher(t, lc(t.value))));
   const numbers = tokens.filter((t) => t.kind === "number").map((t) => Number(t.value));
   const stories = tokens.filter((t) => t.kind === "story").map((t) => lc(t.value.replace(/^#/, "")));
+  const storyText = stories.map(textMatcher);
   const drift = tokens.some((t) => t.kind === "drift");
   const types = tokens.filter((t) => t.kind === "type").map((t) => matcher(t, lc(t.value)));
   // like -l: a half-typed exclusion would hide tickets while typing; it counts once committed
-  const notypes = tokens.filter((t) => t.kind === "notype" && !t.partial).map((t) => lc(t.value));
-  const texts = tokens.filter((t) => t.kind === "text").map((t) => lc(t.value));
+  const notypes = tokens.filter((t) => t.kind === "notype" && !t.partial).map((t) => matcher(t, lc(t.value)));
+  const texts = tokens.filter((t) => t.kind === "text").map((t) => textMatcher(lc(t.value)));
   return (t) => {
     const own = t.labels.map(lc);
     if (labels.some((m) => !own.some(m))) return false;
-    if (nolabels.some((l) => own.includes(l))) return false;
+    if (nolabels.some((m) => own.some(m))) return false;
     if (assignees.length) {
       const name = lc(t.assignee?.name ?? "");
       const words = name ? [...name.split(/\s+/), name.replace(/\s+/g, "")] : [];
@@ -237,19 +249,19 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
     if (numbers.length && !members(t).some((m) => numbers.includes(m.n))) return false;
     if (stories.length) {
       const epic = t.epic ? [lc(t.epic.key), lc(t.epic.summary)] : [];
-      const ok = stories.some((s) =>
+      const ok = stories.some((s, i) =>
         /^\d+$/.test(s)
           ? t.family.story?.n === Number(s)
-          : epic[0] === s || (!!epic[1] && epic[1].includes(s)),
+          : valueMatcher({}, s)(epic[0] ?? "") || (!!epic[1] && !!storyText[i]?.(epic[1])),
       );
       if (!ok) return false;
     }
     if (drift && !actionable(t).length) return false;
     if (types.length && !types.some((m) => m(lc(t.type)))) return false;
-    if (notypes.includes(lc(t.type))) return false;
+    if (notypes.some((m) => m(lc(t.type)))) return false;
     if (texts.length) {
       const hay = lc(`${t.key} ${t.summary} ${t.epic?.key ?? ""} ${t.epic?.summary ?? ""}`);
-      if (texts.some((x) => !hay.includes(x))) return false;
+      if (texts.some((m) => !m(hay))) return false;
     }
     return true;
   };

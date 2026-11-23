@@ -6,18 +6,18 @@
  * on a card opens a move menu. The lane heads are shared with the Tickets view.
  */
 import { moveTicket, putIssue } from "../actions";
-import { api } from "../api";
+import { api, openExternal } from "../api";
 import { derive, type Derived, flagsOf, type Lane, openBlockers } from "../derive";
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
-import { issueTickets, type IssueTicket } from "../tickets";
+import { issueTickets, type IssueTicket, prText } from "../tickets";
 import { branchColour, classify, isBusy, laneSummary, PHASE_TEXT, segments, shortBranch, since } from "../model";
 import { clearGrillQueue, grillQueue } from "../grillqueue";
 import { errorText, hooks, laneServers, prefGet, prefSet, state, toast } from "../state";
 import type { Column, Issue, Phase, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
-import { cardEl } from "./cards";
+import { type CardInfo, cardEl } from "./cards";
 import { filterTokens } from "./filterbar";
 import { autoGrillCandidates, cardGrill, grillMenuItems, openGrillAllDialog } from "./grilling";
 import { showMenu } from "./menu";
@@ -83,8 +83,10 @@ export function boardView(): HTMLElement {
   root = h("div", { class: "board" }, staleEl, segsEl, columnsEl);
   root.addEventListener("click", onClick);
   root.addEventListener("keydown", (e) => {
-    const card = (e.target as Element).closest<HTMLElement>("[data-card]");
-    if (card && e.key === "Enter") openCard(Number(card.dataset.card));
+    const target = e.target as Element;
+    const card = target.closest<HTMLElement>("[data-card]");
+    // Enter on a PR link is its click
+    if (card && e.key === "Enter" && !target.closest("[data-url]")) openCard(Number(card.dataset.card));
   });
   enableDrag(columnsEl, {
     canDrag: (id) => !isNarrow() && !isBusy(derive().runs.get(Number(id))?.issue.phase),
@@ -98,6 +100,12 @@ export function boardView(): HTMLElement {
 
 function onClick(e: Event): void {
   const t = e.target as Element;
+  const link = t.closest<HTMLElement>("[data-url]");
+  if (link) {
+    e.preventDefault();
+    openExternal(link.dataset.url ?? "");
+    return;
+  }
   const jira = t.closest<HTMLElement>("[data-jira]");
   if (jira) {
     hooks.openTicket(jira.dataset.jira ?? "");
@@ -228,6 +236,8 @@ function cardMenu(n: number): void {
 
 /** GitHub issue → its JIRA ticket (from the JIRA board), refreshed per render */
 let ticketsByIssue = new Map<number, IssueTicket>();
+/** GitHub issue → the main PR closing it, refreshed per render */
+let pullByIssue = new Map<number, NonNullable<CardInfo["pr"]>>();
 
 function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, laneOrder = false): HTMLElement[] {
   const hide = new Set([d.project?.labels.queue, d.project?.labels.story, d.project?.labels.grill]);
@@ -254,6 +264,7 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
         locked: isBusy(tr?.issue.phase),
         grill: cardGrill(d, issue.number),
         ticket: { key, labels: ticket?.labels ?? [], drift: ticket?.drift ?? [] },
+        pr: pullByIssue.get(issue.number) ?? null,
       }),
     );
     visible.keys.push(key);
@@ -416,6 +427,9 @@ export function renderBoard(): void {
   const d = derive();
   const board = state.board;
   ticketsByIssue = state.jira ? issueTickets(state.jira) : new Map();
+  pullByIssue = new Map();
+  // board.pulls come main PR first: the first one closing an issue is its card's
+  for (const p of board?.pulls ?? []) for (const n of p.closes) if (!pullByIssue.has(n)) pullByIssue.set(n, { text: prText(p), url: p.url, state: p.state });
   const drift = new Set([...ticketsByIssue].filter(([, t]) => t.drift.length).map(([n]) => n));
   const test = board ? compile(filterTokens(), { viewer: board.viewer, stories: board.stories, drift }) : () => true;
   visible = { keys: [], count: 0 };

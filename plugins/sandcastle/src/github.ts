@@ -1,11 +1,13 @@
 /**
  * GitHub through `gh api graphql` (gh's login on this computer). One query per board – open issues, closed in the
- * last 14 days, labels, assignable users – paged 100 at a time; every write is one mutation that answers the
- * changed issue, so the cache can take it as is.
+ * last 14 days, labels, assignable users – paged 100 at a time, and beside it the pull requests (open, and merged
+ * or closed in the last 30 days); every write is one mutation that answers the changed issue, so the cache can
+ * take it as is.
  */
 import { blockedByOf, jiraKeyOf, parentOf } from "./body";
 import { firstLine, HttpError, run } from "./env";
-import type { Assignee, Issue, LabelInfo } from "./types";
+import { type PullNode, toPull } from "./pulls";
+import type { Assignee, Issue, LabelInfo, Pull } from "./types";
 
 /** Days the "Erledigt" column covers before „Ältere laden“. */
 export const CLOSED_DAYS = 14;
@@ -17,6 +19,8 @@ export interface RepoSnapshot {
   viewer: string;
   /** with stories – the cache splits them off */
   issues: Issue[];
+  /** open pull requests and those merged or closed in the last PULL_DAYS days */
+  pulls: Pull[];
   labels: (LabelInfo & { id: string })[];
   assignees: Assignee[];
   closedOlder: number;
@@ -146,13 +150,14 @@ async function searchAll(q: string): Promise<Issue[]> {
   do {
     const page: { search: Page<IssueNode | Record<string, never>> } = await graphql(SEARCH_QUERY, { q, after });
     // pull requests match the search too; `...I` leaves them empty
-    for (const n of page.search.nodes) if (isIssue(n)) out.push(toIssue(n));
+    for (const n of page.search.nodes) if (isNode(n)) out.push(toIssue(n));
     after = page.search.pageInfo.hasNextPage ? page.search.pageInfo.endCursor : null;
   } while (after);
   return out;
 }
 
-const isIssue = (n: IssueNode | Record<string, never>): n is IssueNode => "number" in n;
+/** A search node the query's fragment filled (the others come back as `{}`). */
+const isNode = <N extends { number: number }>(n: N | Record<string, never>): n is N => "number" in n;
 
 /**
  * Closed issues of the days from..to, one search per day, all at once: GitHub answers one document's
@@ -168,7 +173,8 @@ async function closedOnDays(slug: string, fromMs: number, toMs: number): Promise
 /**
  * Full fetch of a board. Open issues come in two page chains at once, oldest-first and newest-first, that stop
  * where they meet; the oldest-first chain's first page also brings labels, users, viewer and the count of
- * closed issues before the window. Closed issues come per day in parallel (closedOnDays).
+ * closed issues before the window. Closed issues come per day in parallel (closedOnDays), pull requests beside
+ * them (fetchPulls).
  */
 export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSnapshot> {
   const { owner, name } = splitSlug(slug);
@@ -202,7 +208,12 @@ export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSn
     }
   }
 
-  const [closed] = await Promise.all([closedOnDays(slug, fromMs, now), chain("ASC"), chain("DESC")]);
+  const [closed, pulls] = await Promise.all([
+    closedOnDays(slug, fromMs, now),
+    fetchPulls(owner, name, slug, now),
+    chain("ASC"),
+    chain("DESC"),
+  ]);
   const repo = meta?.repository;
   const issues = new Map(open);
   // an issue closed seconds ago can be in both lists while the search index catches up: closed wins
@@ -211,10 +222,105 @@ export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSn
     repoId: repo?.id ?? "",
     viewer: meta?.viewer?.login ?? "",
     issues: [...issues.values()],
+    pulls,
     labels: repo?.labels?.nodes ?? [],
     assignees: repo?.assignableUsers?.nodes ?? [],
     closedOlder: meta?.older?.issueCount ?? 0,
   };
+}
+
+/** Days of merged and closed pull requests a board keeps. */
+export const PULL_DAYS = 30;
+/** Days one search for merged/closed PRs covers – a busy repo (tendr: ~300 in 30 days) fits one page each. */
+const PULL_WINDOW = 10;
+/** Open pull requests stop at this many, like open issues. */
+const MAX_PULLS = 500;
+
+// review and checks cost GitHub seconds per page: only open PRs ask for them ($live)
+const PULL_FIELDS = `fragment P on PullRequest {
+  number title url state isDraft mergedAt closedAt headRefName baseRefName updatedAt body
+  reviewDecision @include(if: $live)
+  commits(last: 1) @include(if: $live) { nodes { commit { statusCheckRollup { state } } } }
+  closingIssuesReferences(first: 20) { nodes { number } }
+}`;
+
+const PULL_QUERY = `query Pulls($owner: String!, $name: String!, $states: [PullRequestState!]!, $after: String,
+    $live: Boolean!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: $states, first: 100, after: $after, orderBy: { field: UPDATED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ...P }
+    }
+  }
+}
+${PULL_FIELDS}`;
+
+const PULL_SEARCH = `query PullSearch($q: String!, $after: String, $live: Boolean!) {
+  search(query: $q, type: ISSUE, first: 100, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ...P }
+  }
+}
+${PULL_FIELDS}`;
+
+/** Pull requests of `states`, most recently updated first, page after page until one older than `since`. */
+async function pullChain(owner: string, name: string, slug: string, states: string[], since: string | null): Promise<Pull[]> {
+  const live = states.includes("OPEN");
+  const out: Pull[] = [];
+  let after: string | null = null;
+  do {
+    const page: { repository: { pullRequests: Page<PullNode> } | null } = await graphql(PULL_QUERY, {
+      owner,
+      name,
+      states,
+      after,
+      live,
+    });
+    if (!page.repository) throw new HttpError(404, `Repo ${slug} nicht gefunden.`);
+    const { nodes, pageInfo } = page.repository.pullRequests;
+    for (const n of nodes) if (!since || n.updatedAt >= since) out.push(toPull(n));
+    const last = nodes[nodes.length - 1];
+    const done = !pageInfo.hasNextPage || (!!since && !!last && last.updatedAt < since) || out.length >= MAX_PULLS;
+    after = done ? null : pageInfo.endCursor;
+  } while (after);
+  return out;
+}
+
+/** Merged or closed PRs of one search, page after page. */
+async function searchPulls(q: string): Promise<Pull[]> {
+  const out: Pull[] = [];
+  let after: string | null = null;
+  do {
+    const page: { search: Page<PullNode | Record<string, never>> } = await graphql(PULL_SEARCH, { q, after, live: false });
+    for (const n of page.search.nodes) if (isNode(n)) out.push(toPull(n));
+    after = page.search.pageInfo.hasNextPage ? page.search.pageInfo.endCursor : null;
+  } while (after);
+  return out;
+}
+
+/**
+ * Open PRs, and the ones merged or closed in the PULL_DAYS before `now` – those in PULL_WINDOW-day searches at
+ * once (like closedOnDays: one cursor chain would take a round trip per 100).
+ */
+async function fetchPulls(owner: string, name: string, slug: string, now: number): Promise<Pull[]> {
+  const fromMs = now - PULL_DAYS * DAY;
+  const ranges: string[] = [];
+  for (let to = now; day(to) >= day(fromMs); to -= PULL_WINDOW * DAY)
+    ranges.push(`${day(Math.max(fromMs, to - (PULL_WINDOW - 1) * DAY))}..${day(to)}`);
+  const [open, ...ended] = await Promise.all([
+    pullChain(owner, name, slug, ["OPEN"], null),
+    ...ranges.map((r) => searchPulls(`repo:${slug} is:pr is:closed closed:${r}`)),
+  ]);
+  return [...open, ...ended.flat()];
+}
+
+/** Open PRs and the merged or closed ones updated since `since` (the search index may lag; this does not). */
+async function changedPulls(owner: string, name: string, slug: string, since: string): Promise<Pull[]> {
+  const [open, ended] = await Promise.all([
+    pullChain(owner, name, slug, ["OPEN"], null),
+    pullChain(owner, name, slug, ["MERGED", "CLOSED"], since),
+  ]);
+  return [...open, ...ended];
 }
 
 const CHANGED_QUERY = `query Changed($owner: String!, $name: String!, $since: DateTime!, $after: String) {
@@ -228,23 +334,34 @@ const CHANGED_QUERY = `query Changed($owner: String!, $name: String!, $since: Da
 }
 ${ISSUE_FIELDS}`;
 
-/** Issues (open or closed) updated at or after `since` – the cheap refresh between full fetches. */
-export async function fetchChanged(slug: string, since: string): Promise<Issue[]> {
+/** What changed since a fetch: issues and pull requests updated since then, and every open pull request. */
+export interface Changes {
+  issues: Issue[];
+  /** open PRs are always all here – a CI result doesn't touch a PR's updatedAt */
+  pulls: Pull[];
+}
+
+/** Issues (open or closed) and pull requests updated at or after `since` – the cheap refresh between full fetches. */
+export async function fetchChanged(slug: string, since: string): Promise<Changes> {
   const { owner, name } = splitSlug(slug);
-  const out: Issue[] = [];
-  let after: string | null = null;
-  do {
-    const page: { repository: { issues: Page<IssueNode> } | null } = await graphql(CHANGED_QUERY, {
-      owner,
-      name,
-      since,
-      after,
-    });
-    if (!page.repository) throw new HttpError(404, `Repo ${slug} nicht gefunden.`);
-    out.push(...page.repository.issues.nodes.map(toIssue));
-    after = page.repository.issues.pageInfo.hasNextPage ? page.repository.issues.pageInfo.endCursor : null;
-  } while (after);
-  return out;
+  async function issues(): Promise<Issue[]> {
+    const out: Issue[] = [];
+    let after: string | null = null;
+    do {
+      const page: { repository: { issues: Page<IssueNode> } | null } = await graphql(CHANGED_QUERY, {
+        owner,
+        name,
+        since,
+        after,
+      });
+      if (!page.repository) throw new HttpError(404, `Repo ${slug} nicht gefunden.`);
+      out.push(...page.repository.issues.nodes.map(toIssue));
+      after = page.repository.issues.pageInfo.hasNextPage ? page.repository.issues.pageInfo.endCursor : null;
+    } while (after);
+    return out;
+  }
+  const [changed, pulls] = await Promise.all([issues(), changedPulls(owner, name, slug, since)]);
+  return { issues: changed, pulls };
 }
 
 const OLDER_QUERY = `query Older($q: String!) { search(query: $q, type: ISSUE, first: 1) { issueCount } }`;

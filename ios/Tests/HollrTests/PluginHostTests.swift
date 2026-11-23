@@ -16,6 +16,7 @@ final class PluginHostTests: XCTestCase {
         XCTAssertEqual(PluginHostRequest.parse(["hollr": 1, "type": "open-session", "server": "s", "pane": "w1:p2"], allowed: allow),
                        .openSession(server: "s", pane: "w1:p2"))
         XCTAssertNil(PluginHostRequest.parse(["hollr": 1, "type": "open-session", "server": "s"], allowed: allow))
+        XCTAssertEqual(PluginHostRequest.parse(["hollr": 1, "type": "reopen"], allowed: allow), .reopen)
     }
 
     func testGateHonoursAllowlistAndObjectStdin() {

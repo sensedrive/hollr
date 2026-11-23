@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 66, date: "23.11.2026", items: [
+            ("arrow.clockwise", String(localized: "Plugins verbinden sich selbst neu, wenn ihr Dienst auf dem Rechner neu gestartet wurde")),
+        ]),
         ReleaseNote(build: 65, date: "23.11.2026", items: [
             ("key", String(localized: "Einstellungen › Integrationen: JIRA-Zugang einmal eintragen, Hollr hinterlegt ihn auf allen Rechnern")),
         ]),

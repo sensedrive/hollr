@@ -1767,6 +1767,16 @@
         }
       }
     },
+    "Plugins verbinden sich selbst neu, wenn ihr Dienst auf dem Rechner neu gestartet wurde": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plugins reconnect by themselves when their service on the machine was restarted"
+          }
+        }
+      }
+    },
     "Einstellungen › Integrationen: JIRA-Zugang einmal eintragen, Hollr hinterlegt ihn auf allen Rechnern": {
       "localizations": {
         "en": {

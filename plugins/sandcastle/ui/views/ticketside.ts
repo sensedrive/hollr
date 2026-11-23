@@ -13,7 +13,7 @@ import { errorText, hooks, serverLabel, state, toast } from "../state";
 import { actionable, applyHint, buildLine, driftText, INFO_KINDS, jiraLabel, memberPhase, statusColumn, ticketFacets, typeIcon } from "../tickets";
 import type { Comment, FamilyMember, JiraIssueDetail, JiraTicket } from "../types";
 import { grillBlock, grillBlockSig } from "./grilling";
-import { claimPanel, closeSidebar, commentEl, extLink, externalLinks, openIssue } from "./sidebar";
+import { claimPanel, closeSidebar, commentEl, extLink, externalLinks, openIssue, prListEl } from "./sidebar";
 
 let shown: string | null = null;
 let detail: JiraIssueDetail | null = null;
@@ -241,7 +241,6 @@ function buildBlock(t: JiraTicket, d: Derived): HTMLElement {
     story: f.story?.n ?? null,
     children,
     run: live ? { machine: serverLabel(live.server), percent: live.run.progress.percent } : null,
-    pr: f.children.map((c) => d.runs.get(c.n)?.run.pr).find((p) => !!p) ?? null,
   });
   const open = f.children.filter((c) => c.state === "open");
   const busy = open.some((c) => isBusy(d.runs.get(c.n)?.issue.phase));
@@ -249,7 +248,7 @@ function buildBlock(t: JiraTicket, d: Derived): HTMLElement {
     "section",
     { class: "side-build" },
     h("h3", {}, "Bau auf GitHub"),
-    !f.story && !f.children.length && !f.grill ? h("p", { class: "muted small" }, "Noch nichts auf GitHub – erst grillen.") : null,
+    !f.story && !f.children.length && !f.grill && !t.prs.length ? h("p", { class: "muted small" }, "Noch nichts auf GitHub – erst grillen.") : null,
     line.text ? h("p", { class: "build-text" }, line.text) : null,
     line.segs.length ? h("span", { class: "segbar" }, ...line.segs.map((s) => h("span", { class: `seg ${s}` }))) : null,
     h(
@@ -259,6 +258,8 @@ function buildBlock(t: JiraTicket, d: Derived): HTMLElement {
       f.story ? memberRow(d, f.story, "Story") : null,
       ...f.children.map((c) => memberRow(d, c, null)),
     ),
+    t.prs.length ? h("h4", { class: "side-sub" }, "Pull Requests") : null,
+    t.prs.length ? prListEl(t.prs) : null,
     open.length && d.lanes.length
       ? h(
           "div",

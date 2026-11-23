@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 60,
+    version: "0.52.1",
+    date: "23.11.2026",
+    items: [
+      { icon: "↻", text: "Plugins verbinden sich selbst neu, wenn ihr Dienst auf dem Rechner neu gestartet wurde – kein „Load failed“ mehr, kein Wiederöffnen nötig." },
+    ],
+  },
+  {
     build: 59,
     version: "0.52.0",
     date: "23.11.2026",

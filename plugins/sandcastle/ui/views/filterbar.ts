@@ -84,10 +84,14 @@ function renderChips(): void {
           {
             class: "chip-x",
             "aria-label": `${tokenText(t)} entfernen`,
-            onclick: () => {
+            onclick: (e: Event) => {
+              // the box used to be a <label>: its activation clicked the first chip's × as well
+              e.preventDefault();
+              e.stopPropagation();
               committed = committed.filter((_, j) => j !== i);
               renderChips();
               apply();
+              input.focus();
             },
           },
           "×",
@@ -149,7 +153,9 @@ function source(): (SuggestSource & { quick: string[]; typeCounts?: [string, num
 
 function openSuggest(): void {
   const src = source();
-  suggestions = src ? suggest(lastWord(), src) : [];
+  // a token already in the filter (same text, any case) is no suggestion
+  const taken = new Set(committed.map((t) => tokenText(t).toLowerCase()));
+  suggestions = src ? suggest(lastWord(), src, 20).filter((s) => !taken.has(s.text.toLowerCase())).slice(0, 8) : [];
   active = 0;
   dropdown.hidden = !suggestions.length;
   fill(
@@ -315,7 +321,21 @@ export function filterBar(getVisible: () => { keys: (string | null)[]; count: nu
   const el = h(
     "div",
     { class: "qf" },
-    h("div", { class: "qf-row" }, h("label", { class: "qf-box" }, h("span", { class: "qf-icon", "aria-hidden": "true" }, "⌕"), chipsEl, input, dropdown), jiraBtn, ...extra),
+    h(
+      "div",
+      { class: "qf-row" },
+      // a <div>, not a <label>: a label forwards clicks to its first button – the first chip's × (and suggestions)
+      h(
+        "div",
+        { class: "qf-box", onclick: (e: Event) => { if (!(e.target as Element).closest("button")) input.focus(); } },
+        h("span", { class: "qf-icon", "aria-hidden": "true" }, "⌕"),
+        chipsEl,
+        input,
+        dropdown,
+      ),
+      jiraBtn,
+      ...extra,
+    ),
     quick,
     fallback,
   );

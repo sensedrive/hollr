@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Plugins verbinden sich selbst neu, wenn ihr Dienst auf dem Rechner neu gestartet wurde – kein „Load failed“ mehr, kein Wiederöffnen nötig.":
+    "Plugins reconnect by themselves when their service on the machine was restarted – no more “Load failed”, no reopening needed.",
   "Einstellungen › Integrationen: JIRA-Zugang einmal eintragen – Hollr prüft ihn und hinterlegt ihn auf allen gekoppelten Rechnern (nur dort, nie in der App).":
     "Settings › Integrations: enter JIRA access once – Hollr checks it and stores it on every paired machine (only there, never in the app).",
   "Sandcastle-Board: Tickets grillen oder auto-grillen – auf dem Rechner deiner Wahl. Jeder Grill ist eine normale Sitzung in Hollr; das Board zeigt Fortschritt und „wartet auf dich“, auch für von Hand gestartete Grills.":

@@ -182,6 +182,22 @@ export interface Assignee {
   avatarUrl?: string | null;
 }
 
+export type PullState = "open" | "draft" | "merged" | "closed";
+
+/** A pull request (src/pulls.ts PullOut); checks and review are only known for open ones. */
+export interface PullRequest {
+  n: number;
+  title: string;
+  url: string;
+  state: PullState;
+  checks: "success" | "failure" | "pending" | null;
+  /** approved | changes-requested | review-required */
+  review: string | null;
+  /** head branch */
+  branch: string;
+  mergedAt: string | null;
+}
+
 export interface BoardData {
   etag: string;
   fetchedAt: string;
@@ -194,6 +210,8 @@ export interface BoardData {
   closedOlder: number;
   /** gh login of the plugin machine's user, for `@ich` */
   viewer?: string | null;
+  /** PRs closing an issue of the board, main PR first */
+  pulls: (PullRequest & { closes: number[] })[];
   refreshError?: string;
 }
 
@@ -264,6 +282,8 @@ export interface JiraTicket {
   family: Family;
   derived: "inProgress" | "testing" | null;
   drift: DriftItem[];
+  /** its pull requests, main PR first */
+  prs: PullRequest[];
 }
 
 export interface UnlinkedIssue extends FamilyMember {

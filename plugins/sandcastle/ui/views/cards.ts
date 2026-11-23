@@ -6,7 +6,7 @@
 import { h } from "../dom";
 import { branchColour, isBusy, PHASE_TEXT, shortBranch } from "../model";
 import type { DriftItem, Issue, Phase, TicketFlags } from "../types";
-import { driftEl } from "./ticketcard";
+import { driftEl, prLinkEl } from "./ticketcard";
 
 export interface CardInfo {
   issue: Issue;
@@ -23,6 +23,8 @@ export interface CardInfo {
   grill?: { badge: string | null; tone: "waiting" | "running" | "done" | "queued"; where: string };
   /** the JIRA ticket the issue belongs to: key (null = none), its product labels, drift on this issue */
   ticket: { key: string | null; labels: string[]; drift: DriftItem[] };
+  /** the main PR closing the issue, as a link („PR #3550 gemergt“) */
+  pr: { text: string; url: string; state: string } | null;
 }
 
 const cache = new Map<number, { sig: string; el: HTMLElement }>();
@@ -31,7 +33,7 @@ const initials = (login: string) => login.replace(/[^a-zA-Z0-9]/g, "").slice(0, 
 
 export function cardEl(c: CardInfo): HTMLElement {
   const i = c.issue;
-  const sig = JSON.stringify([i.title, i.state, i.labels, i.assignees, i.parent, c.labels, c.pos, c.phase, c.branch, c.siblings, c.flags, c.blockers, c.locked, c.grill, c.ticket]);
+  const sig = JSON.stringify([i.title, i.state, i.labels, i.assignees, i.parent, c.labels, c.pos, c.phase, c.branch, c.siblings, c.flags, c.blockers, c.locked, c.grill, c.ticket, c.pr]);
   const hit = cache.get(i.number);
   if (hit?.sig === sig) return hit.el;
   const el = build(c);
@@ -95,6 +97,7 @@ function build(c: CardInfo): HTMLElement {
         : null,
     ),
     driftEl(c.ticket.drift, null),
+    c.pr ? h("div", { class: "card-pr" }, prLinkEl(c.pr)) : null,
     footer,
     c.grill ? h("div", { class: "card-grill" }, c.grill.where) : null,
   );
