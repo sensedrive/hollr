@@ -17,15 +17,18 @@
   --cyan: #5ed3c1;
   --pink: #f286c4;
   --blue: #5aa9f0;
-  --grey: #5b606b;
+  /* neutral segment/chip grey, derived so it follows Hollr's palette (theme.ts sets the other variables) */
+  --grey: color-mix(in srgb, var(--muted) 45%, var(--border));
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* text on accent/blue fills: dark on dark palettes, white on light ones (like Hollr's Theme.onAccent) */
+  --on-accent: #0b0c0f;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #ffffff; --side: #f4f5f8; --card: #eef0f4; --raised: #f7f8fa; --fg: #1f2328; --muted: #59636e;
     --dim: #6e7781; --border: #d0d7de; --accent: #0969da; --orange: #bc4c00; --green: #1a7f37; --red: #cf222e;
-    --yellow: #9a6700; --purple: #8250df; --grey: #afb8c1; color-scheme: light;
+    --yellow: #9a6700; --purple: #8250df; --on-accent: #ffffff; color-scheme: light;
   }
 }
 
@@ -45,7 +48,7 @@ h3 { font-size: 12px; margin: 16px 0 8px; color: var(--muted); text-transform: u
 .btn { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; white-space: nowrap; }
 .btn:hover:not(:disabled) { border-color: var(--accent); }
 .btn:disabled { opacity: .45; cursor: default; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #0b0c0f; font-weight: 500; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 500; }
 .btn.ghost { background: none; border-color: transparent; padding: 4px 6px; }
 .btn.small { padding: 3px 9px; font-size: 12px; }
 .btn.icon { width: 34px; height: 34px; padding: 0; font-size: 17px; }
@@ -199,7 +202,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .card-title { margin-top: 2px; overflow-wrap: anywhere; }
 .phase { border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 600; white-space: nowrap;
   background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--muted); }
-.phase.building { background: var(--blue); color: #0b0c0f; }
+.phase.building { background: var(--blue); color: var(--on-accent); }
 .phase.reviewing { background: var(--purple); color: #fff; }
 .phase.merged { background: color-mix(in srgb, var(--green) 22%, transparent); color: var(--green); }
 .phase.failed, .phase.no-commits { background: color-mix(in srgb, var(--red) 22%, transparent); color: var(--red); }

@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 56,
+    version: "0.50.1",
+    date: "23.11.2026",
+    items: [
+      { icon: "◐", text: "Plugins übernehmen das Farbschema von Hollr samt Hell/Dunkel – auch beim Umschalten, während das Plugin offen ist." },
+    ],
+  },
+  {
     build: 55,
     version: "0.50.0",
     date: "23.11.2026",

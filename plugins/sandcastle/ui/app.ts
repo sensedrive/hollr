@@ -4,7 +4,7 @@
  * the GitHub board) then loads on its own and re-renders when it arrives – nothing waits for the slowest machine.
  */
 import { writing } from "./actions";
-import { api, initToken, sc, servers } from "./api";
+import { api, type HostTheme, hostTheme, initToken, sc, servers, themeEvents } from "./api";
 import { dragging } from "./drag";
 import { fill, h, reconcile } from "./dom";
 import { readHash } from "./filter";
@@ -28,9 +28,18 @@ import { clearCards } from "./views/cards";
 import { setQuery } from "./views/filterbar";
 import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
 import { closeSidebar, renderLive } from "./views/sidebar";
+import { applyTheme } from "./theme";
 
 initToken();
 await loadPrefs();
+
+// Hollr's palette: the last one at once (no flash), then the live one, then every switch while open
+applyTheme(prefGet<HostTheme>("theme"));
+const useTheme = (t: HostTheme | null) => {
+  if (applyTheme(t)) prefSet("theme", t);
+};
+themeEvents.onTheme = useTheme;
+hostTheme().then(useTheme);
 
 const projectSelect = h("select", { class: "project", "aria-label": "Projekt" });
 const boardTab = h("button", { class: "tab", onclick: () => show("board") }, "Board");

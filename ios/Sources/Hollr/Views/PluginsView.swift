@@ -53,6 +53,7 @@ struct AnyJSON: Decodable {
 /// A message from a plugin page to the app (host relay): validated here, the trust boundary, so it is tested.
 enum PluginHostRequest: Equatable {
     case servers(id: String)
+    case theme(id: String)
     case gate(id: String, server: String, command: String, stdin: [String: AnyHashable])
     case openSession(server: String, pane: String)
     /// a request with an id that can't be served – answered with an error so the page doesn't hang
@@ -71,6 +72,7 @@ enum PluginHostRequest: Equatable {
         }
         guard let id = str("id", max: 100) else { return nil }
         if type == "servers" { return .servers(id: id) }
+        if type == "theme" { return .theme(id: id) }
         guard type == "gate" else { return nil }
         guard let server = str("server"), let command = str("command", max: 40) else {
             return .reject(id: id, error: "Ungültige Anfrage")
@@ -83,6 +85,21 @@ enum PluginHostRequest: Equatable {
             return .reject(id: id, error: "stdin muss ein Objekt sein")
         }
         return .gate(id: id, server: server, command: command, stdin: hashable)
+    }
+}
+
+extension Palette {
+    /// The colour variables a plugin page mirrors (same names and mixes as the desktop app's theme.ts), so the
+    /// page looks like the rest of Hollr. A theme switch rebuilds the view tree (`ThemedRoot` .id), the page asks again.
+    var hostTheme: [String: Any] {
+        func hex(_ v: UInt32) -> String { String(format: "#%06X", v) }
+        let vars: [String: String] = [
+            "bg": hex(bg), "side": hex(isDark ? Palette.mix(bg, surface, 0.5) : surface), "card": hex(surface),
+            "raised": hex(raised), "fg": hex(fg), "muted": hex(muted), "dim": hex(Palette.mix(dim, muted, 0.6)),
+            "border": hex(border), "accent": hex(accent), "red": hex(red), "green": hex(green), "yellow": hex(yellow),
+            "orange": hex(orange), "purple": hex(purple), "cyan": hex(cyan), "pink": hex(pink), "blue": hex(blue),
+        ]
+        return ["dark": isDark, "vars": vars]
     }
 }
 
@@ -247,6 +264,8 @@ struct PluginView: View {
             PushManager.shared.openRequest = (target.hostFingerprint, pane)
         case let .reject(id, error):
             model.replyToHost(["hollr": 1, "id": id, "ok": false, "error": error])
+        case let .theme(id):
+            reply(id, .success(Palette.current.hostTheme))
         case let .servers(id):
             let list: [[String: Any]] = store.servers.map {
                 ["id": $0.id.uuidString, "label": $0.label, "self": $0.id == server.id, "online": herdr.errors[$0.id] == nil]

@@ -3,8 +3,27 @@
 
 export type HostRequest =
   | { type: "servers"; id: string }
+  | { type: "theme"; id: string }
   | { type: "gate"; id: string; server: string; command: string; stdin: Record<string, unknown> }
   | { type: "open-session"; server: string; pane: string };
+
+/** The app's colour variables a plugin page may mirror (theme.ts writes them on <html>). */
+export const THEME_VARS = ["bg", "side", "card", "raised", "fg", "muted", "dim", "border", "accent", "red", "green", "yellow", "orange", "purple", "cyan", "pink", "blue"] as const;
+
+export interface HostTheme {
+  dark: boolean;
+  vars: Record<string, string>;
+}
+
+/** Current palette as the plugin page gets it: `{dark, vars: {bg: "#000000", …}}`. */
+export function readTheme(get: (cssVar: string) => string, dark: boolean): HostTheme {
+  const vars: Record<string, string> = {};
+  for (const k of THEME_VARS) {
+    const v = get(`--${k}`).trim();
+    if (v) vars[k] = v;
+  }
+  return { dark, vars };
+}
 
 export type HostReply = { hollr: 1; id: string; ok: true; data: unknown } | { hollr: 1; id: string; ok: false; error: string };
 
@@ -24,6 +43,7 @@ export function parseHostRequest(
   }
   if (!str(m.id, 100)) return undefined;
   if (m.type === "servers") return { type: "servers", id: m.id };
+  if (m.type === "theme") return { type: "theme", id: m.id };
   if (m.type !== "gate") return undefined;
   if (!str(m.server) || !str(m.command, 40)) return { type: "reject", id: m.id, error: "Ungültige Anfrage" };
   if (!allowed.includes(m.command))

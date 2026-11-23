@@ -83,8 +83,22 @@ function hostPost(): ((msg: unknown) => void) | null {
 const pending = new Map<string, { resolve(v: unknown): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> }>();
 let seq = 0;
 
+export interface HostTheme {
+  dark: boolean;
+  vars: Record<string, string>;
+}
+
+/** set by app.ts: Hollr pushes the palette when the user switches it while the page is open */
+export const themeEvents = { onTheme: (_t: HostTheme) => {} };
+
 function onReply(msg: unknown): void {
-  if (!msg || typeof msg !== "object" || !("hollr" in msg) || !("id" in msg)) return;
+  if (!msg || typeof msg !== "object" || !("hollr" in msg)) return;
+  const e = msg as { hollr?: unknown; event?: unknown; data?: unknown };
+  if (e.hollr === 1 && e.event === "theme" && e.data && typeof e.data === "object") {
+    themeEvents.onTheme(e.data as HostTheme);
+    return;
+  }
+  if (!("id" in msg)) return;
   const r = msg as Reply;
   if (r.hollr !== 1 || typeof r.id !== "string") return;
   const p = pending.get(r.id);
@@ -113,6 +127,16 @@ function hostCall<T>(msg: Record<string, unknown>, timeoutMs: number): Promise<T
   pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
   post({ hollr: 1, id, ...msg });
   return promise;
+}
+
+/** Hollr's current palette; null outside Hollr or with an app that predates the theme request. */
+export async function hostTheme(): Promise<HostTheme | null> {
+  if (!hostPost()) return null;
+  try {
+    return await hostCall<HostTheme>({ type: "theme" }, 3000);
+  } catch {
+    return null;
+  }
 }
 
 /** "host" = relay through Hollr; "local" = standalone, only this machine via /api/host/*. Decided by `servers()`. */

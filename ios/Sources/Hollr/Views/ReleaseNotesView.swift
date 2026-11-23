@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 63, date: "23.11.2026", items: [
+            ("circle.lefthalf.filled", String(localized: "Plugins übernehmen das Farbschema von Hollr samt Hell/Dunkel")),
+        ]),
         ReleaseNote(build: 62, date: "23.11.2026", items: [
             ("list.bullet.rectangle", String(localized: "Sandcastle-Plugin 2: Schnellfilter, Warteschlange je Rechner und die neue Ansicht „Läufe“ mit Logs – auch auf dem iPhone")),
         ]),

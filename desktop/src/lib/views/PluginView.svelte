@@ -8,7 +8,7 @@
   import { viaTunnel } from "$lib/agent";
   import { t } from "$lib/i18n";
   import { app, back, go, serverById } from "$lib/store.svelte";
-  import { parseHostRequest, type HostReply } from "$lib/pluginHost";
+  import { parseHostRequest, readTheme, type HostReply } from "$lib/pluginHost";
   import { errText } from "$lib/serverapi";
   import { listPlugins, openPlugin } from "$lib/plugins";
 
@@ -63,6 +63,18 @@
     frame?.contentWindow?.postMessage(r, "*");
   }
 
+  /** the palette theme.ts wrote on <html>; the page mirrors it so it looks like the rest of Hollr */
+  function currentTheme() {
+    const root = document.documentElement;
+    const style = getComputedStyle(root);
+    return readTheme((v) => style.getPropertyValue(v), root.dataset.theme !== "light");
+  }
+
+  // theme switches (settings, or the system going dark/light) reach an open plugin page at once
+  const themeWatch = new MutationObserver(() => {
+    frame?.contentWindow?.postMessage({ hollr: 1, event: "theme", data: currentTheme() }, "*");
+  });
+
   /** relay (contract B); gate calls run in parallel, each answered by its id */
   async function handleHost(req: NonNullable<ReturnType<typeof parseHostRequest>>) {
     if (req.type === "open-session") {
@@ -70,6 +82,7 @@
       return;
     }
     if (req.type === "reject") return reply({ hollr: 1, id: req.id, ok: false, error: req.error });
+    if (req.type === "theme") return reply({ hollr: 1, id: req.id, ok: true, data: currentTheme() });
     if (req.type === "servers") {
       const data = app.servers.map((s) => ({ id: s.id, label: s.label, self: s.id === server, online: !app.errors[s.id] }));
       return reply({ hollr: 1, id: req.id, ok: true, data });
@@ -84,6 +97,7 @@
 
   onMount(() => {
     window.addEventListener("message", onMessage);
+    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "data-theme"] });
     open();
     listPlugins(server)
       .then((list) => {
@@ -97,6 +111,7 @@
   onDestroy(() => {
     destroyed = true;
     window.removeEventListener("message", onMessage);
+    themeWatch.disconnect();
     if (tunnel !== undefined) api.tunnelClose(tunnel).catch(() => {});
   });
 </script>
