@@ -11,6 +11,7 @@ import { derive, type Derived, flagsOf, type Lane, openBlockers } from "../deriv
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
+import { compileTerms } from "../query";
 import { issueTickets, type IssueTicket, prText } from "../tickets";
 import { branchColour, classify, isBusy, laneSummary, PHASE_TEXT, segments, shortBranch, since } from "../model";
 import { clearGrillQueue, grillQueue } from "../grillqueue";
@@ -18,7 +19,7 @@ import { errorText, hooks, laneServers, prefGet, prefSet, state, toast } from ".
 import type { Column, Issue, Phase, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
 import { type CardInfo, cardEl } from "./cards";
-import { filterTokens } from "./filterbar";
+import { filterTerms } from "./filterbar";
 import { autoGrillCandidates, cardGrill, grillMenuItems, openGrillAllDialog } from "./grilling";
 import { showMenu } from "./menu";
 import { openIssue } from "./sidebar";
@@ -431,7 +432,8 @@ export function renderBoard(): void {
   // board.pulls come main PR first: the first one closing an issue is its card's
   for (const p of board?.pulls ?? []) for (const n of p.closes) if (!pullByIssue.has(n)) pullByIssue.set(n, { text: prText(p), url: p.url, state: p.state });
   const drift = new Set([...ticketsByIssue].filter(([, t]) => t.drift.length).map(([n]) => n));
-  const test = board ? compile(filterTokens(), { viewer: board.viewer, stories: board.stories, drift }) : () => true;
+  const ctx = board && { viewer: board.viewer, stories: board.stories, drift };
+  const test = ctx ? compileTerms(filterTerms(), (tokens) => compile(tokens, ctx)) : () => true;
   visible = { keys: [], count: 0 };
   const hasGrill = !!board?.hasGrill;
   const cols: Column[] = hasGrill ? ["grill", "backlog", "queue", "done"] : ["backlog", "queue", "done"];

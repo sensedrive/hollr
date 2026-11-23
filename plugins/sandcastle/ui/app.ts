@@ -8,7 +8,7 @@ import { writing } from "./actions";
 import { api, type HostTheme, hostTheme, initToken, sc, servers, hostEvents } from "./api";
 import { dragging } from "./drag";
 import { fill, h, reconcile } from "./dom";
-import { readHash, tokenText } from "./filter";
+import { readHash } from "./filter";
 import { dropOpen, keyProject, type OpenTarget, parseOpen, readOpen } from "./grill";
 import { pumpGrills } from "./grillqueue";
 import { clearTicketCards } from "./views/ticketcard";
@@ -33,7 +33,7 @@ import {
 import type { BoardData, JiraBoardData, Project, QueueState, Server, Status } from "./types";
 import { boardView, boardVisible, newIssue, renderBoard } from "./views/board";
 import { clearCards } from "./views/cards";
-import { currentTokens, filterBar, setQuery } from "./views/filterbar";
+import { activeTokens, filterBar, setQuery, toggleToken } from "./views/filterbar";
 import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
 import { closeSidebar, openIssue, renderLive } from "./views/sidebar";
 import { applyTheme } from "./theme";
@@ -88,9 +88,8 @@ document.body.append(
 
 /** The drift counter sets (or drops) the `drift:` token and shows the Tickets. */
 function toggleDrift(): void {
-  const tokens = currentTokens();
-  const on = tokens.some((t) => t.kind === "drift");
-  setQuery([...tokens.filter((t) => t.kind !== "drift").map(tokenText), ...(on ? [] : ["drift:"])].join(" "));
+  const on = activeTokens().some((t) => t.kind === "drift");
+  toggleToken("drift:");
   if (!on) showMode("tickets");
 }
 
@@ -173,7 +172,7 @@ function renderHead(): void {
   // the drift counter: actionable drift items of the project's tickets
   const drift = state.jira?.counts.drift ?? 0;
   driftChip.hidden = !drift;
-  driftChip.classList.toggle("on", currentTokens().some((t) => t.kind === "drift"));
+  driftChip.classList.toggle("on", activeTokens().some((t) => t.kind === "drift"));
   const driftText = `⚠ ${drift} ${drift === 1 ? "Abweichung" : "Abweichungen"}`;
   if (driftChip.textContent !== driftText) driftChip.textContent = driftText;
   driftChip.title = `${state.jira?.counts.tickets ?? 0} Tickets mit Abweichungen zeigen (drift:)`;

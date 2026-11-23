@@ -102,7 +102,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* ---- quick filter */
 .board { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .qf { padding: 10px 12px 4px; display: grid; gap: 6px; flex: none; }
-.qf-row { display: flex; gap: 8px; align-items: center; }
+.qf-row { display: flex; gap: 8px; align-items: center; position: relative; }
 .qf-box { position: relative; flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
   background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 3px 8px; cursor: text; }
 .qf-box:focus-within { border-color: var(--accent); }
@@ -110,11 +110,55 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .qf-chips { display: contents; }
 .qf-input { flex: 1; min-width: 120px; border: 0; background: none; padding: 4px 2px; }
 .qf-input::-webkit-search-cancel-button { display: none; }
-.qf-chip { font-family: var(--mono); color: var(--fg); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.qf-chip { font-family: var(--mono); color: var(--fg); border: 1px solid transparent; background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .qf-chip.k-nolabel { background: color-mix(in srgb, var(--red) 18%, transparent); }
 .qf-chip.k-assignee { background: color-mix(in srgb, var(--green) 18%, transparent); }
 .qf-chip.k-story { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
 .qf-chip.k-text { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.qf-chip.k-expr { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.qf-chip-t { all: unset; cursor: pointer; white-space: pre; display: inline-flex; align-items: center; gap: 3px; }
+.qf-chip-t:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+.qf-neg { color: var(--red); font-weight: 700; }
+.qf-ico { display: inline-flex; flex: none; width: 12px; height: 12px; }
+.qf-ico svg { width: 100%; height: 100%; }
+/* switched off: kept, but ignored by the filter (beats the kind colours, k-drift comes later) */
+.qf-chips .qf-chip.is-off { background: none; border: 1px dashed var(--dim); color: var(--dim); }
+.qf-chip.is-off .qf-chip-text { text-decoration: line-through; }
+/* a group still missing its ")" */
+.qf-chips .qf-chip.broken { border: 1px solid var(--red); }
+.qf-all { all: unset; cursor: pointer; font-size: 11px; color: var(--muted); padding: 0 4px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.qf-all:hover { color: var(--fg); }
+.qf-clear { all: unset; flex: none; margin-left: auto; padding: 0 4px; color: var(--dim); cursor: pointer; font-size: 15px; line-height: 1; }
+.qf-clear:hover { color: var(--fg); }
+.qf-help { all: unset; box-sizing: border-box; flex: none; margin-left: auto; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border);
+  display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.qf-clear + .qf-help { margin-left: 0; }
+.qf-help:hover, .qf-help[aria-expanded="true"] { border-color: var(--accent); color: var(--fg); }
+.qf-menu { position: relative; flex: none; }
+.qf-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 25; width: min(440px, calc(100vw - 24px)); cursor: default;
+  background: var(--side); border: 1px solid var(--border); border-radius: 10px; padding: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / .35);
+  display: grid; gap: 6px; }
+.qf-saved { width: min(320px, calc(100vw - 24px)); padding: 6px; }
+.qf-pop-head { font-size: 14px; font-weight: 700; }
+.qf-pop-title { font-size: 11px; font-weight: 700; color: var(--muted); padding: 4px 4px 0; }
+.qf-pop-note { margin: 0; padding: 0 4px; font-size: 12px; }
+.qf-syntax { margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 8px; font-size: 12px; align-items: baseline; }
+.qf-syntax dt { font-size: 11.5px; font-weight: 700; white-space: pre; }
+.qf-syntax dd { margin: 0; color: var(--dim); }
+.qf-example { all: unset; box-sizing: border-box; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card);
+  font-family: var(--mono); font-size: 11.5px; cursor: pointer; }
+.qf-example:hover { border-color: var(--accent); }
+.qf-trash { all: unset; flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: var(--dim); cursor: pointer; }
+.qf-trash:hover { color: var(--red); background: var(--card); }
+.qf-trash .qf-ico { width: 14px; height: 14px; }
+.qf-item { all: unset; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; cursor: pointer; display: grid; gap: 1px; min-width: 0; }
+.qf-item:hover:not(:disabled) { background: var(--card); }
+.qf-item:disabled { opacity: .4; cursor: default; }
+.qf-item .mono { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qf-saved-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+.qf-saved-row > .qf-item { flex: 1; }
+.qf-saved-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.qf-saved-name { display: flex; gap: 6px; align-items: center; padding: 4px; }
 .qf-suggest { position: absolute; left: 0; top: calc(100% + 4px); z-index: 20; min-width: 260px; max-width: 100%;
   background: var(--side); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: 0 10px 30px rgb(0 0 0 / .35); }
 .qf-opt { all: unset; box-sizing: border-box; display: flex; gap: 10px; width: 100%; padding: 5px 8px; border-radius: 6px; cursor: pointer;
@@ -198,6 +242,9 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .qf-row .btn { padding: 6px 10px; }
   .wide-only { display: none; }
   .qf-input { min-width: 80px; }
+  /* popovers span the whole filter row instead of hanging off their button */
+  .qf-box, .qf-menu { position: static; }
+  .qf-pop { left: 0; right: 0; width: auto; max-height: 70vh; overflow-y: auto; }
 }
 
 /* ---- cards */

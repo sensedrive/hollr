@@ -11,6 +11,7 @@ import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { currentStep, GRILL_STEP_COUNT, isLiveGrill } from "../grill";
 import { branchColour, isBusy, shortBranch } from "../model";
+import { compileTerms } from "../query";
 import { hooks, prefGet, prefSet, serverLabel, state } from "../state";
 import {
   buildLine,
@@ -25,7 +26,7 @@ import {
 } from "../tickets";
 import type { JiraTicket, Phase } from "../types";
 import { closedLanes, isNarrow, type LaneEl, laneClick, laneEl, longPress } from "./board";
-import { filterTokens } from "./filterbar";
+import { filterTerms } from "./filterbar";
 import { cardGrill } from "./grilling";
 import { showMenu } from "./menu";
 import { type TicketCardInfo, ticketCardEl } from "./ticketcard";
@@ -249,7 +250,7 @@ export function renderTickets(): void {
 
   const selected = selectedState(d);
   columns = ticketColumns(jira.statuses, selected);
-  const test = compileTickets(filterTokens());
+  const test = compileTerms(filterTerms(), compileTickets);
   const byCol = new Map<string, JiraTicket[]>(columns.map((c) => [c.key, []]));
   const byLane = new Map<string, { t: JiraTicket; pos: number }[]>(d.lanes.map((l) => [l.server.id, []]));
   const orderOf = (server: string) => d.lanes.find((l) => l.server.id === server)?.order ?? [];
