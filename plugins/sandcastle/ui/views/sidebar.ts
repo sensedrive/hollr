@@ -8,7 +8,7 @@ import { api, openExternal } from "../api";
 import { derive, type Derived, flagsOf } from "../derive";
 import { fill, fmtDate, h, html } from "../dom";
 import { branchColour, classify, isBusy, normaliseFlags, PHASE_TEXT } from "../model";
-import { errorText, hooks, serverLabel, state, toast } from "../state";
+import { errorText, hooks, prefGet, prefSet, serverLabel, state, toast } from "../state";
 import { CI_TEXT, PR_STATE_TEXT } from "../tickets";
 import { grillBlock, grillBlockSig } from "./grilling";
 import type { Column, Comment, IssueDetail, PullRequest, TicketFlags } from "../types";
@@ -24,10 +24,51 @@ let liveSig = "";
 let grillHost: HTMLElement | null = null;
 let grillSig = "";
 
+const SIDE_DEFAULT = 400;
+const SIDE_MIN = 320;
+const sideMax = () => Math.max(SIDE_MIN, Math.round(window.innerWidth * 0.85));
+const setSideWidth = (w: number) => document.documentElement.style.setProperty("--side-w", `${w}px`);
+
+/**
+ * Drag handle on the panel's left edge (a sibling, since owners refill the panel): drag to resize, double click
+ * resets; the width is kept in the plugin's prefs like the other settings.
+ */
+function sideGrip(): HTMLElement {
+  const grip = h("div", {
+    id: "sidebar-grip",
+    role: "separator",
+    "aria-orientation": "vertical",
+    "aria-label": "Breite der Seitenleiste",
+    title: "Ziehen: Breite ändern · Doppelklick: zurücksetzen",
+  });
+  grip.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    document.body.classList.add("is-resizing");
+    const move = (ev: PointerEvent) => setSideWidth(Math.min(sideMax(), Math.max(SIDE_MIN, Math.round(window.innerWidth - ev.clientX))));
+    const up = () => {
+      grip.removeEventListener("pointermove", move);
+      document.body.classList.remove("is-resizing");
+      const w = Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--side-w"), 10);
+      if (Number.isFinite(w)) prefSet("sideWidth", w);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up, { once: true });
+    grip.addEventListener("pointercancel", up, { once: true });
+  });
+  grip.addEventListener("dblclick", () => {
+    setSideWidth(SIDE_DEFAULT);
+    prefSet("sideWidth", SIDE_DEFAULT);
+  });
+  return grip;
+}
+
 function ensurePanel(): HTMLElement {
   if (panel) return panel;
+  const saved = prefGet<number>("sideWidth");
+  setSideWidth(typeof saved === "number" ? Math.min(sideMax(), Math.max(SIDE_MIN, saved)) : SIDE_DEFAULT);
   panel = h("aside", { id: "sidebar", "aria-label": "Details" });
-  document.body.append(panel);
+  document.body.append(panel, sideGrip());
   return panel;
 }
 
