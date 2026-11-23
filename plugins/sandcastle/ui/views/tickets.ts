@@ -74,6 +74,7 @@ export function ticketsView(): HTMLElement {
   });
   enableDrag(columnsEl, { canDrag: () => !isNarrow(), ordered: () => false, onDrop: (key, to) => onDrop(key, to) });
   longPress(columnsEl, cardMenu);
+  matchMedia("(max-width: 699px)").addEventListener("change", () => renderTickets());
   return root;
 }
 
@@ -195,7 +196,7 @@ function laneCards(d: Derived, lane: Lane, tickets: { t: JiraTicket; pos: number
 const empty = (text: string) => h("p", { class: "empty" }, text);
 
 function notice(title: string, text: string, actions: HTMLElement[]): HTMLElement {
-  return h("div", { class: "notice" }, h("b", {}, title), h("p", {}, text), actions.length ? h("div", { class: "btn-row" }, ...actions) : null);
+  return h("div", { class: "notice" }, h("b", {}, title), h("p", { class: "notice-text" }, text), actions.length ? h("div", { class: "btn-row" }, ...actions) : null);
 }
 
 export function renderTickets(): void {
@@ -312,8 +313,11 @@ export function renderTickets(): void {
     : "";
 }
 
-/** „🔖 Selected for Development“ → „Selected“ for the narrow switcher. */
-const shortName = (name: string) => name.replace(/^[^\p{L}\d]+/u, "").split(/\s+/)[0] ?? name;
+/** „🔖 Selected for Development“ → „Selected“, „🏗 In Progress“ → „In Progress“ for the narrow switcher. */
+function shortName(name: string): string {
+  const words = name.replace(/^[^\p{L}\d]+/u, "").split(/\s+/);
+  return (words[0]?.length ?? 0) <= 3 ? words.slice(0, 2).join(" ") : (words[0] ?? name);
+}
 
 function pickSeg(key: string): void {
   seg = key;

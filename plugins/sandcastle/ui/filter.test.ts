@@ -65,6 +65,11 @@ describe("compile", () => {
     expect(run('l:"needs review"')).toEqual([620]);
   });
   test("-l excludes", () => expect(run("l:frontend -l:bug")).toEqual([608]));
+  test("drift: issues with a drift badge (Werkbank)", () => {
+    expect(issues.filter(compile(tokenize("drift:"), { ...ctx, drift: new Set([603, 620]) })).map((i) => i.number)).toEqual([603, 620]);
+    expect(run("drift:")).toEqual([]);
+    expect(tokenize("drift: l:frontend").map((t) => t.kind)).toEqual(["drift", "label"]);
+  });
   test("assignees widen, @ich is the viewer", () => {
     expect(run("@mara @jonas")).toEqual([612, 603]);
     expect(run("@ich")).toEqual([612]);

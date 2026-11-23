@@ -217,7 +217,7 @@ function toWerkbank(n: number): void {
   openIssue(n);
 }
 
-    h("span", { class: "t" }, role ? h("span", { class: "fam-role" }, role) : null, m.title),
+function memberRow(d: Derived, m: FamilyMember, role: string | null): HTMLElement {
   const tr = d.runs.get(m.n);
   const lane = d.laneOf.get(m.n);
   const phase = tr?.issue.phase;
@@ -228,7 +228,7 @@ function toWerkbank(n: number): void {
     "button",
     { class: "fam-row", title: "In der Werkbank öffnen", onclick: () => toWerkbank(m.n) },
     h("span", { class: "num" }, `#${m.n}`),
-    h("span", { class: "t" }, role ? `${role}: ${m.title}` : m.title),
+    h("span", { class: "t" }, role ? h("span", { class: "fam-role" }, role) : null, m.title),
     h("span", { class: `fam-state seg-${seg}` }, where ? `${text} · ${where}` : text),
   );
 }

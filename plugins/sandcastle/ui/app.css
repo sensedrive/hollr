@@ -486,7 +486,7 @@ button.chip.jira:hover { background: color-mix(in srgb, var(--blue) 24%, transpa
 .notice-host { padding: 12px; }
 .notice { max-width: 560px; border: 1px solid var(--orange); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px;
   background: color-mix(in srgb, var(--orange) 8%, var(--side)); }
-.notice p { margin: 0; line-height: 1.45; }
+.notice-text { margin: 0; line-height: 1.45; }
 /* ticket details */
 .jstate { border-radius: 999px; padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--muted);
   background: color-mix(in srgb, var(--fg) 8%, transparent); }
@@ -522,10 +522,13 @@ button.chip.jira:hover { background: color-mix(in srgb, var(--blue) 24%, transpa
 .guard-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .guard-list { margin: 0; padding-left: 18px; font-size: 12px; display: grid; gap: 2px; }
 .guard-list.errors { color: var(--red); }
-@media (max-width: 699px) {
-  .tcolumns { grid-auto-columns: auto; }
-  .guard-pop { left: auto; right: -60px; }
-}
 .tcolumns .column.tcol-lanes > .list > .lane { flex: none; }
 .fam-row { width: 100%; }
 .fam-role { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-right: 6px; }
+.fam { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 699px) {
+  .tcolumns { grid-auto-columns: auto; }
+  .guard-pop { left: auto; right: -60px; }
+  .segs { overflow-x: auto; scrollbar-width: none; }
+  .segs .seg-btn { flex: none; padding: 5px 8px; }
+}
