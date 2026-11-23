@@ -10,11 +10,10 @@ import {
   guardItemText,
   guardSummary,
   initials,
-  inMainLine,
   issueTickets,
+  liveState,
   openChildren,
   prText,
-  statePill,
   statusColumn,
   ticketColumns,
   ticketLane,
@@ -112,7 +111,7 @@ describe("card facts", () => {
     expect(initials("Anna Maria von Berg")).toBe("AB");
     expect(assigneeLogin("Martin Fink")).toBe("martin");
   });
-  test("live > in main > partly > not in main: pill and the „Stand“ line (doc PRs ignored)", () => {
+  test("live > in main > partly > not in main: hint, tooltip and „Stand“ line as in the design (doc PRs ignored)", () => {
     const p = (n: number, state: PullState, extra: Partial<PullRequest> = {}): PullRequest => ({
       n,
       title: "",
@@ -126,22 +125,36 @@ describe("card facts", () => {
       docs: false,
       ...extra,
     });
-    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", later: [] };
-    expect(statePill({ inMain: "yes", released })).toEqual({ text: "live v2.0.0", tone: "live", title: "live seit 13.11.2026" });
-    expect(statePill({ inMain: "yes", released: null })).toEqual({ text: "in main", tone: "yes" });
-    expect(statePill({ inMain: "partly", released: null })?.text).toBe("teilweise in main");
-    expect(statePill({ inMain: null, released: null })).toBeNull();
-    expect(inMainLine({ inMain: "yes", prs: [], released })).toBe("live seit v2.0.0 (13.11.2026)");
-    const more = { ...released, later: [{ version: "v2.1.0", at: "2026-11-20T10:00:00Z" }, { version: "v2.2.0", at: "2026-11-27T10:00:00Z" }] };
-    expect(inMainLine({ inMain: "yes", prs: [], released: more })).toBe("live seit v2.0.0 (13.11.2026), ergänzt in v2.1.0, v2.2.0");
-    expect(statePill({ inMain: "yes", released: more })?.text).toBe("live v2.0.0");
-    expect(inMainLine({ inMain: null, prs: [], released: null })).toBeNull();
-    expect(inMainLine({ inMain: "yes", prs: [p(50, "merged")], released: null })).toBe("in main seit 20.11.2026");
-    expect(
-      inMainLine({ inMain: "no", prs: [p(3550, "draft", { checks: "failure" }), p(3535, "merged", { branch: "docs/R-1", docs: true })], released: null }),
-    ).toBe("nicht in main – #3550 Entwurf, CI ✗");
-    expect(inMainLine({ inMain: "no", prs: [], released: null })).toBe("nicht in main – kein gemergter PR");
-    expect(inMainLine({ inMain: "partly", prs: [p(50, "merged"), p(51, "open")], released: null })).toBe("teilweise in main – #51 offen");
+    const released = { version: "v1.4.0", at: "2026-10-19T10:00:00Z", later: [{ version: "v1.8.0", at: "2026-10-30T10:00:00Z" }] };
+    expect(liveState({ inMain: "yes", prs: [], released })).toEqual({
+      kind: "live",
+      label: "live v1.4.0",
+      tip: "live seit 19.10.2026, ergänzt in v1.8.0",
+      stand: "live seit v1.4.0 (19.10.2026), ergänzt in v1.8.0",
+    });
+    expect(liveState({ inMain: "yes", prs: [], released: { ...released, later: [] } })?.stand).toBe("live seit v1.4.0 (19.10.2026)");
+    expect(liveState({ inMain: "yes", prs: [p(50, "merged")], released: null })).toEqual({
+      kind: "main",
+      label: "in main",
+      tip: "in main seit 20.11.2026",
+      stand: "in main seit 20.11.2026",
+    });
+    expect(liveState({ inMain: "partly", prs: [p(50, "merged"), p(51, "open")], released: null })).toEqual({
+      kind: "partial",
+      label: "teilweise in main",
+      tip: "Gemergt, aber #51 offen",
+      stand: "teilweise in main – #51 offen",
+    });
+    const notMain = liveState({ inMain: "no", prs: [p(3550, "draft", { checks: "failure" }), p(3535, "merged", { branch: "docs/R-1", docs: true })], released: null });
+    expect(notMain).toEqual({ kind: "not-main", label: "nicht in main", tip: "#3550 Entwurf, CI ✗", stand: "nicht in main – #3550 Entwurf, CI ✗" });
+    expect(liveState({ inMain: "no", prs: [], released: null })?.tip).toBe("Kein gemergter PR");
+    expect(liveState({ inMain: null, prs: [], released: null })).toBeNull();
+  });
+  test("live but JIRA not done: the info names the status without its emoji", () => {
+    const released = { version: "v1.4.0", at: "2026-10-19T10:00:00Z", later: [] };
+    expect(driftText({ kind: "done-candidate", expected: "✅ Done", actual: "🏗 In Progress" }, null, released)).toBe(
+      "Live seit v1.4.0 – JIRA steht noch auf In Progress",
+    );
   });
   test("build line: text, segments and the main PR as a link", () => {
     const pr = { n: 3550, title: "Kalender", url: "https://github.com/o/r/pull/3550", state: "merged" as const, checks: null, review: null, branch: "feature/R-1", base: "main", mergedAt: "2026-11-23T10:00:00Z", docs: false };

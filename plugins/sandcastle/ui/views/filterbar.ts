@@ -5,13 +5,13 @@
  * and saved filters per project. `/` focuses, Tab completes, Backspace on an empty input drops the last chip, Esc
  * clears.
  */
-import { copyText, fill, h } from "../dom";
+import { copyText, fill, h, icon } from "../dom";
 import { derive } from "../derive";
 import { type SuggestSource, type Suggestion, suggest, type Token, tokenText, writeHash } from "../filter";
 import { githubOnly, jiraLink } from "../jira";
 import { activeTokens as activeOf, canonical, combine, exprText, isOpen, parse, serializeTerms, type Term, tokensOf, typedWord, unfinished } from "../query";
 import { hooks, prefGet, prefSet, state, toast } from "../state";
-import { ticketFacets, typeIcon } from "../tickets";
+import { statusText, ticketFacets, typeIcon } from "../tickets";
 
 let committed: Term[] = [];
 let active = 0;
@@ -81,12 +81,6 @@ export function toggleToken(text: string): void {
   setCommitted([...committed.filter((t) => !same(t)), ...(on ? [] : parse(text))]);
 }
 
-/** A small stroke icon (constant markup only). */
-function icon(paths: string): HTMLSpanElement {
-  const el = h("span", { class: "qf-ico", "aria-hidden": "true" });
-  el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-  return el;
-}
 const EYE = '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
 const EYE_OFF = `${EYE}<path d="M3 3l18 18"/>`;
 const TRASH = '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>';
@@ -139,7 +133,7 @@ function renderChips(): void {
               setCommitted(committed.map((x, j) => (j === i ? { ...x, off: !x.off } : x)));
             },
           },
-          t.off ? icon(EYE_OFF) : null,
+          t.off ? icon(EYE_OFF, "qf-ico") : null,
           neg ? h("span", { class: "qf-neg" }, "-") : null,
           h("span", { class: "qf-chip-text" }, neg ? text.slice(1) : text),
         ),
@@ -165,7 +159,7 @@ function renderChips(): void {
       : h(
           "button",
           { class: "qf-all", onclick: () => setCommitted(committed.map((t) => ({ ...t, off: all }))) },
-          icon(all ? EYE_OFF : EYE),
+          icon(all ? EYE_OFF : EYE, "qf-ico"),
           all ? "Alle aus" : "Alle an",
         ),
   );
@@ -191,7 +185,7 @@ function source(): (SuggestSource & { quick: string[]; typeCounts?: [string, num
       assignees: [...f.assignees].map(([login, a]) => ({ login, name: a.name })),
       stories: [...f.epics].map(([key, summary]) => ({ number: key, title: summary })),
       types: [...f.types.keys()],
-      statuses: j.statuses.map((s) => s.name.replace(/^[^\p{L}\p{N}]+/u, "").trim()),
+      statuses: j.statuses.map((s) => statusText(s.name)),
       versions: [
         ...new Set(
           j.tickets
@@ -563,8 +557,8 @@ function renderSaved(): void {
           h("span", {}, f.name),
           h("span", { class: "muted mono" }, f.query),
         ),
-        h("button", { class: "qf-trash", "aria-label": `${f.name} kopieren`, title: "Kopieren", onclick: () => copyFilter(f.query) }, icon(COPY)),
-        h("button", { class: "qf-trash", "aria-label": `${f.name} löschen`, title: "Löschen", onclick: () => { storeSaved(list.filter((x) => x !== f)); renderSaved(); } }, icon(TRASH)),
+        h("button", { class: "qf-trash", "aria-label": `${f.name} kopieren`, title: "Kopieren", onclick: () => copyFilter(f.query) }, icon(COPY, "qf-ico")),
+        h("button", { class: "qf-trash", "aria-label": `${f.name} löschen`, title: "Löschen", onclick: () => { storeSaved(list.filter((x) => x !== f)); renderSaved(); } }, icon(TRASH, "qf-ico")),
       ),
     ),
   );

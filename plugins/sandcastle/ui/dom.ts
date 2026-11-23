@@ -26,6 +26,13 @@ export function html(className: string, markup: string): HTMLDivElement {
   return el;
 }
 
+/** A small stroke icon from constant path markup (Lucide's 24×24 grid), sized by `cls`. */
+export function icon(paths: string, cls: string): HTMLSpanElement {
+  const el = h("span", { class: cls, "aria-hidden": "true" });
+  el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  return el;
+}
+
 export const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "";
 

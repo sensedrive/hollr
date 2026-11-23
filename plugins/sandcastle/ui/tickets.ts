@@ -4,7 +4,7 @@
  * and the drift texts. No DOM, no state – tested in tickets.test.ts.
  */
 import { textMatcher, type Token, valueMatcher } from "./filter";
-import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, InMain, JiraBoardData, JiraStatus, JiraTicket, PullRequest, PullState } from "./types";
+import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, JiraBoardData, JiraStatus, JiraTicket, PullRequest, PullState } from "./types";
 
 // ---- columns
 
@@ -168,7 +168,7 @@ export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null, r
         : `JIRA hinkt: auf GitHub wird gebaut, noch ${d.actual}`;
     case "done-candidate":
       return released
-        ? `Live seit ${released.version} – JIRA steht noch auf ${d.actual ?? "?"}`
+        ? `Live seit ${released.version} – JIRA steht noch auf ${d.actual ? statusText(d.actual) : "?"}`
         : `Alles in main – bereit für ${d.expected ?? "Done"}?`;
     case "done-not-in-main":
       return d.pr
@@ -179,33 +179,39 @@ export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null, r
   }
 }
 
-// ---- live / in main
+// ---- live / in main (magicfink sandcastle-board: IssueCard „live“, IssueDetails „Stand“)
 
 const dateDe = (iso: string) => new Date(iso).toLocaleDateString("de-DE");
 
-/** The card's fact pill: live (released) > in main > partly > not in main; null without anything on GitHub. */
-export function statePill(t: Pick<JiraTicket, "inMain" | "released">): { text: string; tone: "live" | InMain; title?: string } | null {
-  if (t.released) return { text: `live ${t.released.version}`, tone: "live", title: `live seit ${dateDe(t.released.at)}` };
-  if (!t.inMain) return null;
-  return { text: { yes: "in main", partly: "teilweise in main", no: "nicht in main" }[t.inMain], tone: t.inMain };
+/** A JIRA status as shown, without its leading emoji: „🏗 In Progress“ → „In Progress“ (statusName: lowercased, for matching). */
+export const statusText = (status: string) => status.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+
+export type LiveKind = "live" | "main" | "partial" | "not-main";
+
+/** How far a ticket is on GitHub: the card's hint (`label`, tooltip `tip`) and the details' „Stand: …“ line. */
+export interface LiveState {
+  kind: LiveKind;
+  label: string;
+  tip: string;
+  stand: string;
 }
 
 /**
- * The „Stand“ line of the details: „live seit v2.0.0 (13.11.2026)“ (with „, ergänzt in v2.1.0“ when later releases
- * shipped more of it), „in main seit 12.11.2026“, „nicht in main – #3550 Entwurf, CI ✗“, „teilweise in main – #3551
- * offen“, „nicht in main – kein gemergter PR“; null without anything.
+ * live (code in a version tag, with „ergänzt in“ for later releases) > in main > partly > not in main; null without
+ * anything on GitHub. Documentation PRs (src/pulls.ts isDocsPull) are never the ticket's code.
  */
-export function inMainLine(t: Pick<JiraTicket, "inMain" | "prs" | "released">): string | null {
-  if (t.released) {
-    const later = t.released.later.length ? `, ergänzt in ${t.released.later.map((r) => r.version).join(", ")}` : "";
-    return `live seit ${t.released.version} (${dateDe(t.released.at)})${later}`;
+export function liveState(t: Pick<JiraTicket, "inMain" | "prs" | "released">): LiveState | null {
+  const r = t.released;
+  if (r) {
+    const later = r.later.length ? `, ergänzt in ${r.later.map((x) => x.version).join(", ")}` : "";
+    return { kind: "live", label: `live ${r.version}`, tip: `live seit ${dateDe(r.at)}${later}`, stand: `live seit ${r.version} (${dateDe(r.at)})${later}` };
   }
   if (!t.inMain) return null;
-  // documentation PRs (src/pulls.ts isDocsPull) are never the ticket's code
   const build = t.prs.filter((p) => !p.docs);
   if (t.inMain === "yes") {
     const last = build.map((p) => p.mergedAt).filter((d): d is string => !!d).sort().pop();
-    return last ? `in main seit ${dateDe(last)}` : "in main";
+    const since = last ? `in main seit ${dateDe(last)}` : "in main";
+    return { kind: "main", label: "in main", tip: since, stand: since };
   }
   const blocking = build.find((p) => p.state === "open" || p.state === "draft");
   const why = blocking
@@ -213,7 +219,9 @@ export function inMainLine(t: Pick<JiraTicket, "inMain" | "prs" | "released">): 
     : t.inMain === "partly"
       ? "Kinder noch offen"
       : "kein gemergter PR";
-  return `${t.inMain === "partly" ? "teilweise in main" : "nicht in main"} – ${why}`;
+  if (t.inMain === "partly")
+    return { kind: "partial", label: "teilweise in main", tip: `Gemergt, aber ${why}`, stand: `teilweise in main – ${why}` };
+  return { kind: "not-main", label: "nicht in main", tip: why.charAt(0).toUpperCase() + why.slice(1), stand: `nicht in main – ${why}` };
 }
 
 /** What „Angleichen“ will do, for the button's title. */
@@ -263,7 +271,7 @@ const members = (t: Pick<JiraTicket, "family">) => [
 ];
 
 /** A status name without its emoji: „✅ Done“ → „done“, „👀 Testing / Review“ → „testing / review“. */
-export const statusName = (status: string) => lc(status.replace(/^[^\p{L}\p{N}]+/u, "").trim());
+export const statusName = (status: string) => lc(statusText(status));
 
 /** z:offen / z:arbeit / z:fertig address the JIRA status category, whatever the project calls its states. */
 const STATUS_CATEGORY: Readonly<Record<string, JiraTicket["category"]>> = {
