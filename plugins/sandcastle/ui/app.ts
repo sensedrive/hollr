@@ -25,7 +25,6 @@ import { clearCards } from "./views/cards";
 import { setQuery } from "./views/filterbar";
 import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
 import { closeSidebar, renderLive } from "./views/sidebar";
-import { laneRun } from "./model";
 
 initToken();
 
@@ -101,21 +100,14 @@ function renderHead(): void {
     );
     projectSelect.value = state.slug;
   }
-  // a chip per machine: its run of this project, else any live run, else idle
-  reconcile(
-    chips,
-    state.servers.map((s) => {
-      const status = state.statuses.get(s.id);
-      const own = laneRun(status, state.slug);
-      const run = own && own.status !== "ended" ? own : status?.runs.find((r) => r.status !== "ended");
-      const text = !s.online
-        ? `${s.label} offline`
-        : run
-          ? `${s.label} ● ${STATUS_TEXT[run.status].split(" –")[0]} · ${run.progress.percent} %${run.slug !== state.slug ? ` (${run.project})` : ""}`
-          : `${s.label} ○ frei`;
-      return h("button", { class: `mchip ${!s.online ? "off" : run ? `st-${run.status}` : "idle"}`, title: run ? `${run.project} · ${run.branch}` : "", onclick: () => show("runs") }, text);
-    }),
-  );
+  // one chip for every live run on every machine (all projects); „wartet auf dich“ wins the colour
+  const live = state.servers.flatMap((s) => (state.statuses.get(s.id)?.runs ?? []).filter((r) => r.status !== "ended").map((r) => ({ s, r })));
+  const machines = new Set(live.map((x) => x.s.id)).size;
+  const status = live.find((x) => x.r.status === "waiting")?.r.status ?? live[0]?.r.status;
+  const n = live.length;
+  const text = n ? `● ${n} ${n === 1 ? "Lauf" : "Läufe"}${machines > 1 ? ` auf ${machines} Maschinen` : ` auf ${live[0]?.s.label}`}` : "○ Keine Läufe";
+  const title = live.map((x) => `${x.s.label}: ${x.r.project} · ${x.r.branch} · ${STATUS_TEXT[x.r.status]} · ${x.r.progress.percent} %`).join("\n");
+  reconcile(chips, [h("button", { class: `mchip ${status ? `st-${status}` : "idle"}`, title, onclick: () => show("runs") }, h("span", { class: "chip-long" }, text), h("span", { class: "chip-short" }, n ? `● ${n} ${n === 1 ? "Lauf" : "Läufe"}` : "○ 0"))]);
 }
 
 function show(view: View): void {

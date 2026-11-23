@@ -1,13 +1,14 @@
 /** Board facts derived from the state, shared by board, details panel and Läufe view. Cheap: recomputed per render. */
-import { assignLanes, classify, laneRun, type TicketRun, ticketRuns } from "./model";
+import { assignLanes, classify, laneRuns, type TicketRun, ticketRuns } from "./model";
 import { currentProject, laneServers, state } from "./state";
 import type { Column, Issue, Project, Run, Server, TicketFlags } from "./types";
 
 export interface Lane {
   server: Server;
-  /** queued tickets of this machine, in its effective order */
+  /** tickets of this machine: those its live runs work on first, then its queue in effective order */
   order: number[];
-  run: Run | null;
+  /** every live run of this repo on the machine, else the newest ended one */
+  runs: Run[];
 }
 
 export interface Derived {
@@ -29,6 +30,13 @@ export function derive(): Derived {
   const issues = new Map<number, Issue>();
   for (const i of state.olderClosed) issues.set(i.number, i);
   for (const i of board?.issues ?? []) issues.set(i.number, i);
+  const runs = ticketRuns(state.statuses, state.slug);
+  // open tickets a live run works on sit in that machine's lane even without the queue label (hand-started runs)
+  const pinned = new Map<number, string>();
+  for (const [server, status] of state.statuses)
+    for (const run of laneRuns(status, state.slug))
+      if (run.status !== "ended")
+        for (const ri of run.issues) if (runs.get(ri.n)?.run === run && issues.get(ri.n)?.state === "open") pinned.set(ri.n, server);
   const columns: Derived["columns"] = { grill: [], backlog: [], done: [] };
   const queued: number[] = [];
   const open = new Set<number>();
@@ -37,7 +45,7 @@ export function derive(): Derived {
       if (i.state === "open") open.add(i.number);
       const col = classify(i, project.labels, board.hasGrill);
       if (col === "story") continue;
-      if (col === "queue") queued.push(i.number);
+      if (col === "queue" || pinned.has(i.number)) queued.push(i.number);
       else columns[col].push(i);
     }
   const byTime = (a: Issue, b: Issue) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
@@ -45,16 +53,20 @@ export function derive(): Derived {
   columns.backlog.sort(byTime);
   columns.done.sort((a, b) => Date.parse(b.closedAt ?? b.updatedAt) - Date.parse(a.closedAt ?? a.updatedAt));
 
+  // every machine with a checkout of the repo, plus any machine running it (scan may not know that checkout)
   const servers = laneServers();
+  for (const s of state.servers)
+    if (!servers.includes(s) && state.statuses.get(s.id)?.runs.some((r) => r.slug === state.slug && r.status !== "ended")) servers.push(s);
   const split = assignLanes(
     queued,
     servers.map((s) => ({ server: s.id, order: state.queues.get(s.id)?.order ?? [] })),
+    pinned,
   );
   const laneOf = new Map<number, string>();
   const lanes = servers.map((server) => {
     const order = split.get(server.id) ?? [];
     for (const n of order) laneOf.set(n, server.id);
-    return { server, order, run: laneRun(state.statuses.get(server.id), state.slug) };
+    return { server, order, runs: laneRuns(state.statuses.get(server.id), state.slug) };
   });
   return {
     project,
@@ -63,7 +75,7 @@ export function derive(): Derived {
     lanes,
     unlaned: servers.length ? [] : [...queued].sort((a, b) => a - b),
     laneOf,
-    runs: ticketRuns(state.statuses, state.slug),
+    runs,
     open,
     stories: new Map((board?.stories ?? []).map((s) => [s.number, s.title])),
   };

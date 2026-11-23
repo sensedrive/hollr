@@ -35,6 +35,21 @@ describe("lanes", () => {
     expect(lanes.get("mbp")).toEqual([3, 4]);
     expect(lanes.get("workr")).toEqual([2, 1]);
   });
+  test("a ticket a live run works on stays in that machine's lane, first, even if another queue file names it", () => {
+    const lanes = assignLanes(
+      [1, 2, 3, 9],
+      [
+        { server: "mbp", order: [9, 3] },
+        { server: "workr", order: [2] },
+      ],
+      new Map([
+        [9, "workr"],
+        [1, "workr"],
+      ]),
+    );
+    expect(lanes.get("workr")).toEqual([9, 1, 2]);
+    expect(lanes.get("mbp")).toEqual([3]);
+  });
   test("no lanes → empty", () => expect(assignLanes([1], []).size).toBe(0));
   test("placeBefore: start, middle, end, self, new", () => {
     expect(placeBefore([1, 2, 3], 3, 1)).toEqual([3, 1, 2]);

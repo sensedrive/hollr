@@ -9,9 +9,9 @@ import { derive, type Derived, flagsOf, type Lane, openBlockers } from "../deriv
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
-import { classify, isBusy, segments, since } from "../model";
+import { branchColour, classify, isBusy, segments, shortBranch, since } from "../model";
 import { cacheGet, cacheSet, errorText, hooks, state, toast } from "../state";
-import type { Column, Issue } from "../types";
+import type { Column, Issue, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
 import { cardEl } from "./cards";
 import { filterBar, filterTokens } from "./filterbar";
@@ -31,7 +31,9 @@ interface ColumnEls {
 }
 
 const columnEls = {} as Record<Column, ColumnEls>;
-const laneEls = new Map<string, { el: HTMLElement; head: HTMLElement; bar: HTMLElement; list: HTMLElement; sig: string }>();
+const laneEls = new Map<string, { el: HTMLElement; head: HTMLElement; list: HTMLElement; sig: string }>();
+/** group headings inside lanes, reused across polls (keyed by machine + run, or machine for „Als Nächstes“) */
+const groupEls = new Map<string, HTMLElement>();
 let root: HTMLElement | null = null;
 let columnsEl: HTMLElement;
 let segsEl: HTMLElement;
@@ -91,6 +93,16 @@ function onClick(e: Event): void {
     state.startFor = start.dataset.start ?? null;
     hooks.show("runs");
   }
+  const run = t.closest<HTMLElement>("[data-run]");
+  if (run) openRun(run.dataset.server ?? "", run.dataset.run ?? "");
+}
+
+/** A run row in a lane head opens that run in „Läufe“ (its planner/merger log). */
+function openRun(server: string, id: string): void {
+  const run = state.statuses.get(server)?.runs.find((r) => r.id === id);
+  if (!run) return;
+  state.selection = { server, run: id, n: null, path: run.logs[0]?.path ?? null };
+  hooks.show("runs");
 }
 
 /** A building card jumps to its log, any other opens the details. */
@@ -221,39 +233,89 @@ function laneEl(lane: Lane) {
   let el = laneEls.get(lane.server.id);
   if (!el) {
     const head = h("div", { class: "lane-head" });
-    const barEl = h("div", { class: "segbar" });
     const list = h("div", { class: "list", "data-list": true });
-    el = { el: h("div", { class: "lane", "data-column": `queue@${lane.server.id}` }, head, barEl, list), head, bar: barEl, list, sig: "" };
+    el = { el: h("div", { class: "lane", "data-column": `queue@${lane.server.id}` }, head, list), head, list, sig: "" };
     laneEls.set(lane.server.id, el);
   }
-  const run = lane.run;
-  const sig = JSON.stringify([lane.server, run?.status, run?.progress, run?.config, run?.issues.map((i) => i.phase), run?.id]);
+  const live = lane.runs.filter((r) => r.status !== "ended");
+  const sig = JSON.stringify([lane.server, lane.runs.map((r) => [r.id, r.status, r.progress, r.config, r.branch, r.issues.map((i) => i.phase)])]);
   if (sig !== el.sig) {
     el.sig = sig;
-    const live = run && run.status !== "ended";
+    const ended = lane.runs.find((r) => r.status === "ended");
     fill(
       el.head,
-      h("span", { class: "lane-machine" }, lane.server.label),
-      run && live
-        ? h(
-            "span",
-            { class: "lane-info" },
-            h("span", { class: `dot st-${run.status}` }),
-            ` ${STATUS_TEXT[run.status]} · ${run.progress.merged + run.progress.failed}/${run.progress.total} · ${run.progress.percent} %`,
-            run.config.agentLabel || run.config.agent ? ` · ${run.config.agentLabel || run.config.agent}` : "",
-            run.config.parallel ? ` · ×${run.config.parallel}` : "",
-          )
-        : h(
-            "span",
-            { class: "lane-info muted" },
-            run ? `beendet vor ${since(run.endedAt ?? run.startedAt)} · ` : "Kein Lauf · ",
-            h("button", { class: "link", "data-start": lane.server.id }, "Lauf starten"),
-          ),
+      h("div", { class: "lane-machine" }, lane.server.label),
+      ...(live.length
+        ? live.map((r) => runRow(lane.server.id, r))
+        : [
+            h(
+              "div",
+              { class: "lane-info muted" },
+              ended ? `beendet vor ${since(ended.endedAt ?? ended.startedAt)} · ` : "Kein Lauf · ",
+              h("button", { class: "link", "data-start": lane.server.id }, "Lauf starten"),
+            ),
+          ]),
     );
-    el.bar.hidden = !(run && live);
-    fill(el.bar, ...(run && live ? segments(run.issues).map((p) => h("span", { class: `seg ${p}` })) : []));
   }
   return el;
+}
+
+function runRow(server: string, r: Run): HTMLElement {
+  const agent = r.config.agentLabel || r.config.agent;
+  return h(
+    "button",
+    { class: "lane-run", "data-server": server, "data-run": r.id, title: `${r.branch} – in „Läufe“ öffnen` },
+    h(
+      "span",
+      { class: "lane-run-top" },
+      h("span", { class: "dot", style: `background:${branchColour(r.branch)}` }),
+      h("b", {}, shortBranch(r.branch) || r.project),
+      h("span", { class: "grow" }),
+      h("span", { class: `st st-${r.status}` }, STATUS_TEXT[r.status].split(" –")[0] ?? ""),
+    ),
+    h(
+      "span",
+      { class: "lane-run-meta" },
+      [`${r.progress.merged + r.progress.failed}/${r.progress.total} · ${r.progress.percent} %`, agent, r.config.parallel ? `×${r.config.parallel}` : ""]
+        .filter(Boolean)
+        .join(" · "),
+    ),
+    h("span", { class: "segbar" }, ...segments(r.issues).map((p) => h("span", { class: `seg ${p}` }))),
+  );
+}
+
+function groupEl(key: string, dot: string | null, text: string): HTMLElement {
+  let el = groupEls.get(key);
+  if (!el) {
+    el = h("div", { class: "lane-group" });
+    groupEls.set(key, el);
+  }
+  const sig = `${dot}|${text}`;
+  if (el.dataset.sig !== sig) {
+    el.dataset.sig = sig;
+    fill(el, dot ? h("span", { class: "dot", style: `background:${dot}` }) : null, text);
+  }
+  return el;
+}
+
+/** Lane body: per live run its tickets (run order), then this machine's queue under „Als Nächstes“. */
+function laneCards(d: Derived, lane: Lane, test: (i: Issue) => boolean): HTMLElement[] {
+  const issue = (n: number) => d.issues.get(n);
+  const live = lane.runs.filter((r) => r.status !== "ended");
+  const inRun = new Set<number>();
+  const out: HTMLElement[] = [];
+  for (const r of live) {
+    const mine = lane.order.filter((n) => d.runs.get(n)?.run === r);
+    for (const n of mine) inRun.add(n);
+    const cards = cardsFor(d, mine.map(issue).filter((i): i is Issue => !!i), test, r.source !== "manual");
+    if (!cards.length) continue;
+    const manual = r.source === "manual" ? " · von Hand gestartet" : "";
+    out.push(groupEl(`${lane.server.id}|${r.id}`, branchColour(r.branch), `Im Lauf ${shortBranch(r.branch)}${manual}`), ...cards);
+  }
+  const next = cardsFor(d, lane.order.filter((n) => !inRun.has(n)).map(issue).filter((i): i is Issue => !!i), test, true);
+  if (next.length && out.length) out.push(groupEl(lane.server.id, null, "Als Nächstes"));
+  out.push(...next);
+  return out;
 }
 
 export function renderBoard(): void {
@@ -277,8 +339,8 @@ export function renderBoard(): void {
   let queueCount = 0;
   const lanes = d.lanes.map((lane) => {
     const el = laneEl(lane);
-    const cards = cardsFor(d, lane.order.map((n) => d.issues.get(n)).filter((i): i is Issue => !!i), test, true);
-    queueCount += cards.length;
+    const cards = laneCards(d, lane, test);
+    queueCount += cards.filter((c) => c.dataset.card).length;
     reconcile(el.list, cards.length ? cards : [empty(lane.order.length ? "Ausgefiltert" : "Leer – hierher ziehen")]);
     return el.el;
   });

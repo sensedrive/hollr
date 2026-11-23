@@ -29,18 +29,23 @@ export interface LaneOrder {
 }
 
 /**
- * Splits the queued issues over the machines' lanes: a ticket goes to the first lane whose queue file names it;
- * one named nowhere goes to the first lane (the plugin's own machine comes first) – that loop would pick it up.
+ * Splits the queued issues over the machines' lanes. A ticket a live run is working on belongs to that run's
+ * machine (pinned, listed first in run order); otherwise the first lane whose queue file names it; one named
+ * nowhere goes to the first lane (the plugin's own machine comes first) – that loop would pick it up.
  */
-export function assignLanes(queued: number[], lanes: LaneOrder[]): Map<string, number[]> {
+export function assignLanes(queued: number[], lanes: LaneOrder[], pinned = new Map<number, string>()): Map<string, number[]> {
   const out = new Map<string, number[]>(lanes.map((l) => [l.server, []]));
   const first = lanes[0];
   if (!first) return out;
+  const top = new Map<string, number[]>(lanes.map((l) => [l.server, []]));
+  for (const [n, server] of pinned) top.get(server)?.push(n);
   for (const n of queued) {
+    const server = pinned.get(n);
+    if (server && top.has(server)) continue;
     const lane = lanes.find((l) => l.order.includes(n)) ?? first;
     out.get(lane.server)?.push(n);
   }
-  for (const l of lanes) out.set(l.server, effectiveOrder(l.order, out.get(l.server) ?? []));
+  for (const l of lanes) out.set(l.server, [...(top.get(l.server) ?? []), ...effectiveOrder(l.order, out.get(l.server) ?? [])]);
   return out;
 }
 
@@ -74,11 +79,14 @@ export function ticketRuns(statuses: Map<string, Status>, slug: string): Map<num
   return out;
 }
 
-/** The newest run of this repo on a machine (live first). */
-export function laneRun(status: Status | undefined, slug: string): Run | null {
+/** The runs of this repo a machine's lane shows: every live one (board-started first, then by start), else the newest ended one. */
+export function laneRuns(status: Status | undefined, slug: string): Run[] {
   const runs = (status?.runs ?? []).filter((r) => r.slug === slug);
-  runs.sort((a, b) => Number(b.status !== "ended") - Number(a.status !== "ended") || Date.parse(b.startedAt ?? "0") - Date.parse(a.startedAt ?? "0"));
-  return runs[0] ?? null;
+  const started = (r: Run) => Date.parse(r.startedAt ?? r.endedAt ?? "0");
+  const live = runs.filter((r) => r.status !== "ended").sort((a, b) => Number(a.source === "manual") - Number(b.source === "manual") || started(a) - started(b));
+  if (live.length) return live;
+  const ended = runs.sort((a, b) => started(b) - started(a))[0];
+  return ended ? [ended] : [];
 }
 
 export const PHASE_TEXT: Record<Phase, string> = {
