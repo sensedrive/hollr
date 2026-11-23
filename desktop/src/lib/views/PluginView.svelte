@@ -7,7 +7,8 @@
   import * as api from "$lib/api";
   import { viaTunnel } from "$lib/agent";
   import { t } from "$lib/i18n";
-  import { back, serverById } from "$lib/store.svelte";
+  import { app, back, go, serverById } from "$lib/store.svelte";
+  import { parseHostRequest, type HostReply } from "$lib/pluginHost";
   import { errText } from "$lib/serverapi";
   import { listPlugins, openPlugin } from "$lib/plugins";
 
@@ -17,6 +18,8 @@
   let error = $state("");
   let loading = $state(false);
   let listed = $state<string>();
+  /** the manifest's host.gate allowlist; empty until the list arrives, so gate requests are refused meanwhile */
+  let allowed: string[] = [];
   const name = $derived(listed ?? id);
   let frame = $state<HTMLIFrameElement>();
   let tunnel: number | undefined;
@@ -46,16 +49,48 @@
   /** links to public pages, asked for by the plugin page (it can't open windows from the sandboxed frame) */
   function onMessage(e: MessageEvent) {
     if (!frame || e.source !== frame.contentWindow) return;
+    const req = parseHostRequest(e.data, allowed);
+    if (req) {
+      handleHost(req);
+      return;
+    }
     const data = e.data as { type?: unknown; url?: unknown } | null;
     if (data?.type !== "hollr-open-url" || typeof data.url !== "string" || !/^https?:\/\//i.test(data.url)) return;
     openUrl(data.url).catch((err) => (error = errText(err)));
+  }
+
+  function reply(r: HostReply) {
+    frame?.contentWindow?.postMessage(r, "*");
+  }
+
+  /** relay (contract B); gate calls run in parallel, each answered by its id */
+  async function handleHost(req: NonNullable<ReturnType<typeof parseHostRequest>>) {
+    if (req.type === "open-session") {
+      if (serverById(req.server)) go({ view: "agent", server: req.server, pane: req.pane });
+      return;
+    }
+    if (req.type === "reject") return reply({ hollr: 1, id: req.id, ok: false, error: req.error });
+    if (req.type === "servers") {
+      const data = app.servers.map((s) => ({ id: s.id, label: s.label, self: s.id === server, online: !app.errors[s.id] }));
+      return reply({ hollr: 1, id: req.id, ok: true, data });
+    }
+    if (!serverById(req.server)) return reply({ hollr: 1, id: req.id, ok: false, error: "Unbekannter Server" });
+    try {
+      reply({ hollr: 1, id: req.id, ok: true, data: await api.gate(req.server, req.command, req.stdin) });
+    } catch (err) {
+      reply({ hollr: 1, id: req.id, ok: false, error: errText(err) });
+    }
   }
 
   onMount(() => {
     window.addEventListener("message", onMessage);
     open();
     listPlugins(server)
-      .then((list) => (listed = list.find((p) => p.id === id)?.name))
+      .then((list) => {
+        const p = list.find((p) => p.id === id);
+        listed = p?.name;
+        allowed = p?.host?.gate ?? [];
+      })
       .catch(() => {});
   });
 

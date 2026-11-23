@@ -2,7 +2,14 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { linkPlugin, listPlugins, openPlugin, runningPid, stopPlugin, unlinkPlugin } from "../src/plugins";
+import {
+  linkPlugin,
+  listPlugins,
+  openPlugin,
+  runningPid,
+  stopPlugin,
+  unlinkPlugin,
+} from "../src/plugins";
 
 const root = mkdtempSync(join(tmpdir(), "hollr-plugins-"));
 const saved = { ...Bun.env };
@@ -51,9 +58,17 @@ afterAll(() => {
 
 describe("plugin host", () => {
   test("link and list, a broken manifest shows as an error entry", () => {
-    const dir = fixture("demo", { id: "demo", name: "Demo", version: "1.0.0", entry: "server.ts" }, SERVER);
+    const dir = fixture(
+      "demo",
+      { id: "demo", name: "Demo", version: "1.0.0", entry: "server.ts" },
+      SERVER,
+    );
     expect(linkPlugin(dir).id).toBe("demo");
-    const broken = fixture("broken", { id: "broken", name: "Broken", version: "1", entry: "server.ts" }, SERVER);
+    const broken = fixture(
+      "broken",
+      { id: "broken", name: "Broken", version: "1", entry: "server.ts" },
+      SERVER,
+    );
     linkPlugin(broken);
     writeFileSync(join(broken, "hollr-plugin.json"), "{nope");
     const list = listPlugins();
@@ -62,16 +77,42 @@ describe("plugin host", () => {
       name: "Demo",
       description: undefined,
       version: "1.0.0",
+      host: undefined,
     });
     const bad = list.find((p) => p.id === "broken");
     expect(bad?.name).toBe("broken");
     expect(bad?.error).toContain("JSON");
   });
 
+  test("host.gate is listed and validated", () => {
+    const ok = fixture(
+      "hosted",
+      { id: "hosted", name: "H", version: "1", entry: "server.ts", host: { gate: ["sandcastle"] } },
+      SERVER,
+    );
+    linkPlugin(ok);
+    expect(listPlugins().find((p) => p.id === "hosted")?.host).toEqual({ gate: ["sandcastle"] });
+    const bad = fixture(
+      "badhost",
+      { id: "badhost", name: "B", version: "1", entry: "server.ts", host: { gate: ["Rm -rf"] } },
+      SERVER,
+    );
+    expect(() => linkPlugin(bad)).toThrow("host.gate");
+  });
+
   test("an entry outside the folder or through .. is refused", () => {
-    const dir = fixture("escape", { id: "escape", name: "E", version: "1", entry: "../demo/server.ts" });
+    const dir = fixture("escape", {
+      id: "escape",
+      name: "E",
+      version: "1",
+      entry: "../demo/server.ts",
+    });
     expect(() => linkPlugin(dir)).toThrow("relativer Pfad");
-    const sub = fixture("sub", { id: "sub", name: "S", version: "1", entry: "sub/../server.ts" }, SERVER);
+    const sub = fixture(
+      "sub",
+      { id: "sub", name: "S", version: "1", entry: "sub/../server.ts" },
+      SERVER,
+    );
     expect(() => linkPlugin(sub)).toThrow("relativer Pfad");
   });
 
@@ -94,7 +135,11 @@ describe("plugin host", () => {
   });
 
   test("unlink stops a running plugin even after its manifest broke", async () => {
-    const dir = fixture("brittle", { id: "brittle", name: "Brittle", version: "1", entry: "server.ts" }, SERVER);
+    const dir = fixture(
+      "brittle",
+      { id: "brittle", name: "Brittle", version: "1", entry: "server.ts" },
+      SERVER,
+    );
     linkPlugin(dir);
     const { port } = await openPlugin("brittle", [process.execPath]);
     writeFileSync(join(dir, "hollr-plugin.json"), "{nope");

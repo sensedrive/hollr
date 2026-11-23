@@ -28,3 +28,36 @@ export function html(className: string, markup: string): HTMLDivElement {
 
 export const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "";
+
+/**
+ * Makes `parent`'s children exactly `nodes`, moving only what is out of place – reused nodes keep focus, open
+ * <details> and scroll position, which a full replaceChildren on every poll would reset.
+ */
+export function reconcile(parent: Element, nodes: Node[]): void {
+  let cur = parent.firstChild;
+  for (const n of nodes) {
+    if (n === cur) cur = cur.nextSibling;
+    else parent.insertBefore(n, cur);
+  }
+  while (cur) {
+    const next = cur.nextSibling;
+    cur.remove();
+    cur = next;
+  }
+}
+
+/** Copies text; the async clipboard API is missing in some embedded webviews, then a selected field + execCommand. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = h("textarea", { readonly: true, style: "position:fixed;opacity:0;top:0" });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  }
+}

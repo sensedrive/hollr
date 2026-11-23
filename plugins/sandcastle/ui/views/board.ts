@@ -1,169 +1,409 @@
-/** The board: Zu grillen · Backlog · Sandcastle · Erledigt, a story filter and "+ Neues Issue". */
+/**
+ * The board: Zu grillen · Backlog · Sandcastle (one lane per machine with this repo) · Erledigt. Built once, then
+ * updated in place on every poll (cards reused, lists reconciled), so scroll positions and the open panel stay.
+ * Narrow (< 700 px): one column at a time behind a segmented switcher; long press on a card opens a move menu.
+ */
+import { moveTicket, putIssue } from "../actions";
 import { api } from "../api";
+import { derive, type Derived, flagsOf, type Lane, openBlockers } from "../derive";
 import { dragging, enableDrag } from "../drag";
-import { fill, h } from "../dom";
-import { errorText, reloadAll, state, toast } from "../state";
-import type { Board, Card, Column } from "../types";
+import { fill, h, reconcile } from "../dom";
+import { compile } from "../filter";
+import { classify, isBusy, segments, since } from "../model";
+import { cacheGet, cacheSet, errorText, hooks, state, toast } from "../state";
+import type { Column, Issue } from "../types";
+import { STATUS_TEXT } from "./runs";
 import { cardEl } from "./cards";
+import { filterBar, filterTokens } from "./filterbar";
+import { showMenu } from "./menu";
 import { openIssue } from "./sidebar";
 
 const NAMES: Record<Column, string> = { grill: "Zu grillen", backlog: "Backlog", queue: "Sandcastle", done: "Erledigt" };
+const narrowQuery = matchMedia("(max-width: 699px)");
+export const isNarrow = () => narrowQuery.matches;
 
+let seg: Column = (cacheGet<Column>("seg") ?? "backlog") as Column;
+
+interface ColumnEls {
+  el: HTMLElement;
+  count: HTMLElement;
+  list: HTMLElement;
+}
+
+const columnEls = {} as Record<Column, ColumnEls>;
+const laneEls = new Map<string, { el: HTMLElement; head: HTMLElement; bar: HTMLElement; list: HTMLElement; sig: string }>();
 let root: HTMLElement | null = null;
 let columnsEl: HTMLElement;
-let filterEl: HTMLSelectElement;
-let rendered = "";
+let segsEl: HTMLElement;
+let lanesEl: HTMLElement;
+let unlanedEl: HTMLElement;
+let olderBtn: HTMLButtonElement;
+let staleEl: HTMLElement;
+let visible = { keys: [] as (string | null)[], count: 0 };
+let bar: ReturnType<typeof filterBar>;
 
-function cardsOf(board: Board, col: Column): Card[] {
-  const cards = board.columns[col] ?? [];
-  if (state.filter === "all") return cards;
-  if (state.filter === "none") return cards.filter((c) => !c.parent);
-  return cards.filter((c) => String(c.parent) === state.filter);
-}
-
-function find(n: number): Card | undefined {
-  for (const cards of Object.values(state.board?.columns ?? {})) {
-    const c = cards?.find((x) => x.number === n);
-    if (c) return c;
+function column(c: Column): ColumnEls {
+  const count = h("span", { class: "count" });
+  const list = h("div", { class: "list", "data-list": true });
+  const el = h("section", { class: `column col-${c}`, "data-col": c }, h("header", {}, h("span", {}, NAMES[c]), count));
+  if (c !== "queue") {
+    el.dataset.column = c;
+    el.append(list);
   }
-  return undefined;
+  return { el, count, list };
 }
 
-async function onDrop(n: number, to: Column, before: number | null): Promise<void> {
-  const from = Object.entries(state.board?.columns ?? {}).find(([, cards]) => cards?.some((c) => c.number === n))?.[0];
-  columnsEl.querySelector(`[data-card="${n}"]`)?.classList.add("pending");
-  try {
-    if (from === to) await api("/api/queue/move", { project: state.projectId, number: n, before });
-    else state.board = await api<Board>("/api/move", { project: state.projectId, number: n, to });
-  } catch (err) {
-    toast(errorText(err));
-  }
-  await reloadAll();
-}
-
-/** The view's element (built once; drag stays attached to the columns). */
 export function boardView(): HTMLElement {
   if (root) return root;
-  filterEl = h("select", {
-    "aria-label": "Nach Story filtern",
-    onchange: () => {
-      state.filter = filterEl.value;
-      rendered = "";
-      renderBoard();
-    },
-  });
+  bar = filterBar(() => visible, [
+    h("button", { class: "btn primary", "aria-label": "Neues Issue", onclick: () => newIssue() }, "+", h("span", { class: "wide-only" }, " Neues Issue")),
+  ]);
+  segsEl = h("div", { class: "segs", role: "tablist" });
   columnsEl = h("div", { class: "columns" });
-  enableDrag(columnsEl, {
-    canDrag: (n) => !find(n)?.running,
-    onDrop: (n, to, before) => void onDrop(n, to, before),
-    reorder: "queue",
+  for (const c of ["grill", "backlog", "queue", "done"] as Column[]) columnEls[c] = column(c);
+  lanesEl = h("div", { class: "lanes" });
+  unlanedEl = h("div", { class: "lane", "data-column": "queue" }, h("div", { class: "list", "data-list": true }));
+  columnEls.queue.el.append(lanesEl);
+  olderBtn = h("button", { class: "btn older", onclick: () => loadOlder() }, "Ältere laden");
+  staleEl = h("div", { class: "stale", hidden: true });
+  root = h("div", { class: "board" }, bar.el, staleEl, segsEl, columnsEl);
+  root.addEventListener("click", onClick);
+  root.addEventListener("keydown", (e) => {
+    const card = (e.target as Element).closest<HTMLElement>("[data-card]");
+    if (card && e.key === "Enter") openCard(Number(card.dataset.card));
   });
-  root = h(
-    "div",
-    { class: "board" },
-    h("div", { class: "toolbar" }, filterEl, h("button", { class: "btn primary", onclick: newIssue }, "+ Neues Issue")),
-    columnsEl,
-  );
+  enableDrag(columnsEl, {
+    canDrag: (n) => !isNarrow() && !isBusy(derive().runs.get(n)?.issue.phase),
+    ordered: (key) => key.startsWith("queue@"),
+    onDrop,
+  });
+  longPress(columnsEl);
+  narrowQuery.addEventListener("change", () => renderBoard());
   return root;
 }
 
-export function renderBoard(): void {
-  const board = state.board;
-  if (!root || dragging()) return;
-  if (!board) {
-    // another project is loading: never leave the previous one's cards on screen
-    rendered = "";
-    fill(columnsEl, h("p", { class: "empty" }, "Lädt …"));
-    return;
-  }
-  // unchanged data: keep the DOM (no flicker, scroll positions stay)
-  const key = JSON.stringify([board, state.filter]);
-  if (key === rendered) return;
-  rendered = key;
-
-  const stories = board.stories;
-  if (state.filter !== "all" && state.filter !== "none" && !stories.some((s) => String(s.number) === state.filter)) state.filter = "all";
-  fill(
-    filterEl,
-    h("option", { value: "all" }, "Alle"),
-    ...stories.map((s) => h("option", { value: String(s.number) }, `#${s.number} ${s.title}`)),
-    h("option", { value: "none" }, "Ohne Story"),
-  );
-  filterEl.value = state.filter;
-
-  const scrollX = columnsEl.scrollLeft;
-  const scrollY = new Map([...columnsEl.querySelectorAll<HTMLElement>("[data-column]")].map((c) => [c.dataset.column, c.querySelector("[data-list]")?.scrollTop ?? 0]));
-  const cols: Column[] = board.hasGrill ? ["grill", "backlog", "queue", "done"] : ["backlog", "queue", "done"];
-  fill(
-    columnsEl,
-    ...cols.map((col) => {
-      const cards = cardsOf(board, col);
-      const list = h(
-        "div",
-        { class: "list", "data-list": true },
-        ...cards.map((c) => cardEl(c, { position: col === "queue" ? (board.columns.queue?.indexOf(c) ?? -1) + 1 : undefined, onOpen: openIssue, locked: c.running })),
-      );
-      if (!cards.length) list.append(h("p", { class: "empty" }, "Keine Issues"));
-      return h(
-        "section",
-        { class: `column col-${col}`, "data-column": col },
-        h("header", {}, h("span", {}, NAMES[col]), h("span", { class: "count" }, cards.length)),
-        list,
-      );
-    }),
-  );
-  columnsEl.scrollLeft = scrollX;
-  for (const c of columnsEl.querySelectorAll<HTMLElement>("[data-column]")) {
-    const list = c.querySelector<HTMLElement>("[data-list]");
-    if (list) list.scrollTop = scrollY.get(c.dataset.column) ?? 0;
+function onClick(e: Event): void {
+  const t = e.target as Element;
+  const card = t.closest<HTMLElement>("[data-card]");
+  if (card) openCard(Number(card.dataset.card));
+  const start = t.closest<HTMLElement>("[data-start]");
+  if (start) {
+    state.startFor = start.dataset.start ?? null;
+    hooks.show("runs");
   }
 }
 
-function newIssue(): void {
-  const title = h("input", { type: "text", placeholder: "Titel", required: true });
-  const body = h("textarea", { rows: 8, placeholder: "Beschreibung (Markdown)" });
-  const column = h(
-    "select",
-    {},
-    ...(state.board?.hasGrill ? [h("option", { value: "grill" }, "Zu grillen")] : []),
-    h("option", { value: "backlog", selected: true }, "Backlog"),
-    h("option", { value: "queue" }, "Sandcastle (ans Ende)"),
-  );
-  const error = h("p", { class: "error" });
-  const create = h("button", { class: "btn primary", type: "submit" }, "Anlegen");
-  const close = () => overlay.remove();
-  const form = h(
-    "form",
-    {
-      class: "modal",
-      onsubmit: async (e: Event) => {
-        e.preventDefault();
-        if (!title.value.trim()) return;
-        create.disabled = true;
-        try {
-          const { number } = await api<{ number: number }>("/api/issue", {
-            project: state.projectId,
-            title: title.value,
-            body: body.value,
-            column: column.value,
-          });
-          close();
-          await reloadAll();
-          openIssue(number);
-        } catch (err) {
-          error.textContent = errorText(err);
-          create.disabled = false;
-        }
-      },
+/** A building card jumps to its log, any other opens the details. */
+function openCard(n: number): void {
+  const tr = derive().runs.get(n);
+  if (tr && isBusy(tr.issue.phase)) {
+    const log = tr.issue.logs.find((l) => l.active) ?? tr.issue.logs[0];
+    state.selection = { server: tr.server, run: tr.run.id, n, path: log?.path ?? null };
+    hooks.show("runs");
+  } else openIssue(n);
+}
+
+function onDrop(n: number, key: string, before: number | null): void {
+  const d = derive();
+  if (key.startsWith("queue@")) {
+    const server = key.slice("queue@".length);
+    const from = d.laneOf.get(n);
+    const phase = d.runs.get(n)?.issue.phase;
+    if (from && from !== server && phase && phase !== "queued") {
+      toast("Zwischen Rechnern nur, solange das Ticket wartet.");
+      return;
+    }
+    moveTicket(n, "queue", server, before);
+  } else moveTicket(n, key as Column);
+}
+
+/** Touch: long press opens the move menu (narrow list mode has no dragging). Desktop: right click. */
+function longPress(el: HTMLElement): void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  el.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!isNarrow()) return;
+      const card = (e.target as Element).closest<HTMLElement>("[data-card]");
+      const t = e.touches[0];
+      if (!card || !t) return;
+      const sx = t.clientX;
+      const sy = t.clientY;
+      const cancel = () => {
+        clearTimeout(timer);
+        el.removeEventListener("touchmove", onMove);
+        el.removeEventListener("touchend", cancel);
+      };
+      const onMove = (ev: TouchEvent) => {
+        const p = ev.touches[0];
+        if (p && Math.hypot(p.clientX - sx, p.clientY - sy) > 8) cancel();
+      };
+      timer = setTimeout(() => {
+        cancel();
+        navigator.vibrate?.(10);
+        // the click that ends the press must not open the details too
+        const swallow = (ev: Event) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        window.addEventListener("click", swallow, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 600);
+        cardMenu(Number(card.dataset.card));
+      }, 450);
+      el.addEventListener("touchmove", onMove, { passive: true });
+      el.addEventListener("touchend", cancel);
     },
-    h("h2", {}, "Neues Issue"),
-    title,
-    body,
-    h("label", {}, "Spalte ", column),
-    error,
-    h("div", { class: "btn-row end" }, h("button", { class: "btn", type: "button", onclick: () => close() }, "Abbrechen"), create),
+    { passive: true },
   );
-  const overlay = h("div", { class: "overlay", onclick: (e: Event) => e.target === overlay && close() }, form);
+  el.addEventListener("contextmenu", (e) => {
+    const card = (e.target as Element).closest<HTMLElement>("[data-card]");
+    if (!card) return;
+    e.preventDefault();
+    cardMenu(Number(card.dataset.card));
+  });
+}
+
+function cardMenu(n: number): void {
+  const d = derive();
+  const issue = d.issues.get(n);
+  if (!issue) return;
+  const busy = isBusy(d.runs.get(n)?.issue.phase);
+  const lane = d.laneOf.get(n);
+  const items = [
+    ...d.lanes
+      .filter((l) => l.server.id !== lane)
+      .map((l) => ({ label: `→ Sandcastle auf ${l.server.label}`, disabled: busy, run: () => moveTicket(n, "queue", l.server.id) })),
+    ...(d.lanes.length ? [] : [{ label: "→ Sandcastle", disabled: busy, run: () => moveTicket(n, "queue") }]),
+    {
+      label: "→ Backlog",
+      disabled: busy || (!!d.project && classify(issue, d.project.labels, !!state.board?.hasGrill) === "backlog"),
+      run: () => moveTicket(n, "backlog"),
+    },
+    { label: "Details", disabled: false, run: () => openCard(n) },
+  ];
+  showMenu(`#${n} ${issue.title}`, items);
+}
+
+// ---- render
+
+function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, laneOrder = false): HTMLElement[] {
+  const hide = new Set([d.project?.labels.queue, d.project?.labels.story, d.project?.labels.grill]);
+  const out: HTMLElement[] = [];
+  let pos = 0;
+  for (const issue of issues) {
+    pos++;
+    if (!test(issue)) continue;
+    const tr = d.runs.get(issue.number);
+    // the branch belongs to the ticket while its run has it (also after merging, for the „Erledigt“ column)
+    const branch = tr?.run.branch || undefined;
+    out.push(
+      cardEl({
+        issue,
+        labels: issue.labels.filter((l) => !hide.has(l)),
+        pos: laneOrder ? pos : undefined,
+        phase: tr?.issue.phase,
+        branch,
+        siblings: tr ? tr.run.issues.map((x) => x.n).filter((x) => x !== issue.number) : undefined,
+        flags: flagsOf(d, issue.number),
+        blockers: issue.state === "open" ? openBlockers(d, issue) : [],
+        locked: isBusy(tr?.issue.phase),
+      }),
+    );
+    visible.keys.push(issue.jira);
+    visible.count++;
+  }
+  return out;
+}
+
+const empty = (text: string) => h("p", { class: "empty" }, text);
+
+function laneEl(lane: Lane) {
+  let el = laneEls.get(lane.server.id);
+  if (!el) {
+    const head = h("div", { class: "lane-head" });
+    const barEl = h("div", { class: "segbar" });
+    const list = h("div", { class: "list", "data-list": true });
+    el = { el: h("div", { class: "lane", "data-column": `queue@${lane.server.id}` }, head, barEl, list), head, bar: barEl, list, sig: "" };
+    laneEls.set(lane.server.id, el);
+  }
+  const run = lane.run;
+  const sig = JSON.stringify([lane.server, run?.status, run?.progress, run?.config, run?.issues.map((i) => i.phase), run?.id]);
+  if (sig !== el.sig) {
+    el.sig = sig;
+    const live = run && run.status !== "ended";
+    fill(
+      el.head,
+      h("span", { class: "lane-machine" }, lane.server.label),
+      run && live
+        ? h(
+            "span",
+            { class: "lane-info" },
+            h("span", { class: `dot st-${run.status}` }),
+            ` ${STATUS_TEXT[run.status]} · ${run.progress.merged + run.progress.failed}/${run.progress.total} · ${run.progress.percent} %`,
+            run.config.agentLabel || run.config.agent ? ` · ${run.config.agentLabel || run.config.agent}` : "",
+            run.config.parallel ? ` · ×${run.config.parallel}` : "",
+          )
+        : h(
+            "span",
+            { class: "lane-info muted" },
+            run ? `beendet vor ${since(run.endedAt ?? run.startedAt)} · ` : "Kein Lauf · ",
+            h("button", { class: "link", "data-start": lane.server.id }, "Lauf starten"),
+          ),
+    );
+    el.bar.hidden = !(run && live);
+    fill(el.bar, ...(run && live ? segments(run.issues).map((p) => h("span", { class: `seg ${p}` })) : []));
+  }
+  return el;
+}
+
+export function renderBoard(): void {
+  if (!root || dragging()) return;
+  const d = derive();
+  const board = state.board;
+  const test = board ? compile(filterTokens(), { viewer: board.viewer, stories: board.stories }) : () => true;
+  visible = { keys: [], count: 0 };
+  const hasGrill = !!board?.hasGrill;
+  const cols: Column[] = hasGrill ? ["grill", "backlog", "queue", "done"] : ["backlog", "queue", "done"];
+  if (!cols.includes(seg)) seg = "backlog";
+  const counts = {} as Record<Column, number>;
+
+  for (const c of ["grill", "backlog"] as const) {
+    const cards = cardsFor(d, d.columns[c], test);
+    counts[c] = cards.length;
+    reconcile(columnEls[c].list, cards.length ? cards : [empty(board ? "Keine Issues" : "Lädt …")]);
+  }
+
+  // Sandcastle: a lane per machine
+  let queueCount = 0;
+  const lanes = d.lanes.map((lane) => {
+    const el = laneEl(lane);
+    const cards = cardsFor(d, lane.order.map((n) => d.issues.get(n)).filter((i): i is Issue => !!i), test, true);
+    queueCount += cards.length;
+    reconcile(el.list, cards.length ? cards : [empty(lane.order.length ? "Ausgefiltert" : "Leer – hierher ziehen")]);
+    return el.el;
+  });
+  if (!d.lanes.length) {
+    const cards = cardsFor(d, d.unlaned.map((n) => d.issues.get(n)).filter((i): i is Issue => !!i), test);
+    queueCount = cards.length;
+    const list = unlanedEl.firstElementChild as HTMLElement;
+    reconcile(list, cards.length ? cards : [empty(state.servers.length ? "Kein Rechner hat dieses Projekt ausgecheckt" : "Rechner werden gesucht …")]);
+    lanes.push(unlanedEl);
+  }
+  reconcile(lanesEl, lanes);
+  counts.queue = queueCount;
+
+  const done = cardsFor(d, d.columns.done, test);
+  counts.done = done.length;
+  const closedOlder = state.olderClosed.length ? state.closedOlder : (board?.closedOlder ?? 0);
+  olderBtn.textContent = `Ältere laden (${closedOlder})`;
+  reconcile(columnEls.done.list, [...(done.length ? done : [empty("Keine Issues")]), ...(closedOlder > 0 ? [olderBtn] : [])]);
+
+  for (const c of cols) columnEls[c].count.textContent = String(counts[c]);
+  const narrow = isNarrow();
+  reconcile(columnsEl, cols.map((c) => columnEls[c].el));
+  for (const c of cols) columnEls[c].el.classList.toggle("seg-hidden", narrow && c !== seg);
+  segsEl.hidden = !narrow;
+  if (narrow)
+    reconcile(
+      segsEl,
+      cols.map((c) => {
+        const b = h("button", { class: `seg-btn${c === seg ? " active" : ""}`, role: "tab", onclick: () => pickSeg(c) }, NAMES[c], h("span", { class: "count" }, counts[c]));
+        return b;
+      }),
+    );
+  staleEl.hidden = !board?.refreshError;
+  staleEl.textContent = board?.refreshError ? `GitHub nicht erreichbar – Stand ${new Date(board.fetchedAt).toLocaleTimeString("de-DE", { timeStyle: "short" })}: ${board.refreshError}` : "";
+  bar.update();
+}
+
+function pickSeg(c: Column): void {
+  seg = c;
+  cacheSet("seg", c);
+  renderBoard();
+  columnsEl.scrollTop = 0;
+}
+
+async function loadOlder(): Promise<void> {
+  const d = derive();
+  const oldest = d.columns.done.reduce<string | null>((min, i) => (i.closedAt && (!min || i.closedAt < min) ? i.closedAt : min), null);
+  const slug = state.slug;
+  olderBtn.disabled = true;
+  try {
+    const page = await api<{ issues: Issue[]; closedOlder: number }>(
+      `/api/board/closed?slug=${encodeURIComponent(slug)}&before=${encodeURIComponent(oldest ?? new Date().toISOString())}`,
+    );
+    if (slug !== state.slug) return;
+    state.olderClosed = [...state.olderClosed, ...page.issues.filter((i) => !d.issues.has(i.number))];
+    state.closedOlder = page.closedOlder;
+    renderBoard();
+  } catch (err) {
+    toast(errorText(err));
+  } finally {
+    olderBtn.disabled = false;
+  }
+}
+
+// ---- new issue
+
+function newIssue(): void {
+  const d = derive();
+  const board = state.board;
+  if (!board || !d.project) return;
+  const title = h("input", { placeholder: "Titel", required: true });
+  const body = h("textarea", { rows: 6, placeholder: "Beschreibung (Markdown)" });
+  const col = h(
+    "select",
+    { "aria-label": "Spalte" },
+    ...(board.hasGrill ? [h("option", { value: "grill" }, "Zu grillen")] : []),
+    h("option", { value: "backlog", selected: true }, "Backlog"),
+    ...(d.lanes.length ? d.lanes.map((l) => h("option", { value: `queue@${l.server.id}` }, `Sandcastle · ${l.server.label}`)) : [h("option", { value: "queue" }, "Sandcastle")]),
+  );
+  const story = h("select", { "aria-label": "Story" }, h("option", { value: "" }, "Ohne Story"), ...board.stories.map((s) => h("option", { value: s.number }, `#${s.number} ${s.title}`)));
+  const error = h("p", { class: "error" });
+  const submit = h("button", { class: "btn primary", type: "submit" }, "Anlegen");
+  const close = () => overlay.remove();
+  const overlay = h(
+    "div",
+    { class: "overlay", onclick: (e: Event) => e.target === overlay && close() },
+    h(
+      "form",
+      {
+        class: "modal",
+        onsubmit: async (e: Event) => {
+          e.preventDefault();
+          if (!title.value.trim()) return;
+          submit.disabled = true;
+          error.textContent = "";
+          const [column, server] = col.value.split("@");
+          const slug = state.slug;
+          try {
+            const { issue } = await api<{ issue: Issue }>("/api/issue", {
+              slug,
+              title: title.value.trim(),
+              body: body.value,
+              column,
+              ...(story.value ? { parent: Number(story.value) } : {}),
+            });
+            if (slug !== state.slug) return close();
+            putIssue(issue);
+            close();
+            if (server) await moveTicket(issue.number, "queue", server, null);
+            hooks.render();
+            toast(`#${issue.number} angelegt`, "info");
+          } catch (err) {
+            error.textContent = errorText(err);
+            submit.disabled = false;
+          }
+        },
+      },
+      h("h2", {}, "Neues Issue"),
+      title,
+      body,
+      h("div", { class: "row" }, h("label", {}, "Spalte ", col), h("label", {}, "Story ", story)),
+      error,
+      h("div", { class: "btn-row end" }, h("button", { class: "btn", type: "button", onclick: close }, "Abbrechen"), submit),
+    ),
+  );
   document.body.append(overlay);
   title.focus();
 }

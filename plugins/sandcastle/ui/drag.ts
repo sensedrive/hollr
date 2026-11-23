@@ -1,24 +1,23 @@
 /**
- * Drag cards between columns and reorder them inside the Sandcastle column – mouse (pointer events, 5 px
- * threshold) and touch (long press 350 ms, moving 8 px before that scrolls instead). Cards carry
- * `data-card="<n>"`, columns `data-column="<column>"`, a column's card list `data-list`.
- * A drop calls `onDrop(n, column, before)`; `before` only for reordering inside `reorder` (else null).
- * Esc or letting go outside a column cancels; the click after a drag is swallowed (cf. desktop/src/lib/sortable.ts).
+ * Drag cards between drop targets and reorder them inside ordered targets (the per-machine Sandcastle lanes) –
+ * mouse (pointer events, 5 px threshold) and touch (long press 350 ms, moving 8 px before that scrolls instead).
+ * Cards carry `data-card="<n>"`, targets `data-column="<key>"`, a target's card list `data-list`.
+ * A drop calls `onDrop(n, key, before)`; `before` is the drop position in ordered targets (null = end / unordered).
+ * Esc or letting go outside a target cancels; the click after a drag is swallowed (cf. desktop/src/lib/sortable.ts).
  */
-import type { Column } from "./types";
 
 export interface DragOptions {
   canDrag(n: number): boolean;
-  onDrop(n: number, to: Column, before: number | null): void;
-  /** the column whose order can be changed by dragging (the queue) */
-  reorder?: Column;
+  onDrop(n: number, to: string, before: number | null): void;
+  /** targets whose order matters (a drop shows a position line there) */
+  ordered(key: string): boolean;
 }
 
 interface Active {
   n: number;
   card: HTMLElement;
   clone: HTMLElement;
-  from: Column;
+  from: string;
   dx: number;
   dy: number;
   x: number;
@@ -42,7 +41,7 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
   const columnOf = (el: Element | null) => el?.closest<HTMLElement>("[data-column]") ?? null;
 
   function start(card: HTMLElement, x: number, y: number) {
-    const from = columnOf(card)?.dataset.column as Column | undefined;
+    const from = columnOf(card)?.dataset.column;
     if (!from) return;
     const rect = card.getBoundingClientRect();
     const clone = card.cloneNode(true) as HTMLElement;
@@ -70,7 +69,7 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
     }
     active.before = null;
     line.remove();
-    if (col && col.dataset.column === active.from && active.from === opts.reorder) {
+    if (col?.dataset.column && opts.ordered(col.dataset.column)) {
       const list = col.querySelector<HTMLElement>("[data-list]") ?? col;
       const cards = [...list.querySelectorAll<HTMLElement>("[data-card]")].filter((c) => c !== active?.card);
       const next = cards.find((c) => {
@@ -117,12 +116,13 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
     };
     window.addEventListener("click", swallow, { capture: true, once: true });
     setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 400);
-    const to = a.target?.dataset.column as Column | undefined;
+    const to = a.target?.dataset.column;
     if (!drop || !to) return;
-    if (to !== a.from) opts.onDrop(a.n, to, null);
-    else if (to === opts.reorder) {
+    if (to !== a.from) opts.onDrop(a.n, to, opts.ordered(to) ? a.before : null);
+    else if (opts.ordered(to)) {
       // dropped where it already was: nothing to do
-      const next = a.card.nextElementSibling as HTMLElement | null;
+      let next = a.card.nextElementSibling as HTMLElement | null;
+      while (next && !next.dataset.card) next = next.nextElementSibling as HTMLElement | null;
       const current = next?.dataset.card ? Number(next.dataset.card) : null;
       if (current !== a.before) opts.onDrop(a.n, to, a.before);
     }

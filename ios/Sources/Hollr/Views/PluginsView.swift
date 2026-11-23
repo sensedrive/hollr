@@ -6,7 +6,16 @@ extension HollrClient {
         let name: String
         let description: String?
         let version: String?
+        /// gate commands the app relays for the plugin page (manifest `host.gate`)
+        let host: Host?
         let error: String?
+
+        struct Host: Decodable, Hashable { let gate: [String] }
+    }
+
+    /// A relayed gate call: any JSON answer, handed back to the plugin page as it came.
+    static func pluginGate(_ server: Server, command: String, stdin: [String: Any]) async throws -> Any {
+        try await fs(server, stdin, as: AnyJSON.self, command: command).value
     }
 
     /// Plugins linked on the server (`hollr plugin link`).
@@ -25,6 +34,57 @@ extension HollrClient {
 }
 
 typealias PluginInfo = HollrClient.PluginInfo
+
+/// Any JSON value, for answers the app passes through without knowing their shape.
+struct AnyJSON: Decodable {
+    let value: Any
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { value = NSNull() }
+        else if let b = try? c.decode(Bool.self) { value = b }
+        else if let n = try? c.decode(Double.self) { value = n }
+        else if let s = try? c.decode(String.self) { value = s }
+        else if let a = try? c.decode([AnyJSON].self) { value = a.map(\.value) }
+        else { value = try c.decode([String: AnyJSON].self).mapValues(\.value) }
+    }
+}
+
+/// A message from a plugin page to the app (host relay): validated here, the trust boundary, so it is tested.
+enum PluginHostRequest: Equatable {
+    case servers(id: String)
+    case gate(id: String, server: String, command: String, stdin: [String: AnyHashable])
+    case openSession(server: String, pane: String)
+    /// a request with an id that can't be served – answered with an error so the page doesn't hang
+    case reject(id: String, error: String)
+
+    static func parse(_ body: Any, allowed: [String]) -> PluginHostRequest? {
+        guard let m = body as? [String: Any], (m["hollr"] as? NSNumber)?.intValue == 1 else { return nil }
+        func str(_ key: String, max: Int = 200) -> String? {
+            guard let v = m[key] as? String, !v.isEmpty, v.count <= max else { return nil }
+            return v
+        }
+        let type = m["type"] as? String
+        if type == "open-session" {
+            guard let server = str("server"), let pane = str("pane", max: 100) else { return nil }
+            return .openSession(server: server, pane: pane)
+        }
+        guard let id = str("id", max: 100) else { return nil }
+        if type == "servers" { return .servers(id: id) }
+        guard type == "gate" else { return nil }
+        guard let server = str("server"), let command = str("command", max: 40) else {
+            return .reject(id: id, error: "Ungültige Anfrage")
+        }
+        guard allowed.contains(command) else {
+            return .reject(id: id, error: "Gate-Befehl \(command) ist für dieses Plugin nicht freigegeben")
+        }
+        let raw = m["stdin"] ?? [String: Any]()
+        guard let stdin = raw as? [String: Any], let hashable = stdin as? [String: AnyHashable] else {
+            return .reject(id: id, error: "stdin muss ein Objekt sein")
+        }
+        return .gate(id: id, server: server, command: command, stdin: hashable)
+    }
+}
 
 struct PluginRoute: Hashable {
     let server: Server
@@ -133,7 +193,9 @@ private struct PluginRow: View {
 struct PluginView: View {
     let server: Server
     let plugin: PluginInfo
-    @State private var model = BrowserModel(start: nil, remembers: false, popupsOutside: true)
+    @Environment(ServerStore.self) private var store
+    @Environment(HerdrStore.self) private var herdr
+    @State private var model = BrowserModel(start: nil, remembers: false, popupsOutside: true, hostBridge: true)
     @State private var openError: String?
     @State private var opening = false
 
@@ -163,8 +225,44 @@ struct PluginView: View {
             }
         }
         .task {
+            model.onHostMessage = { body in handleHost(body) }
             model.configure(servers: [server])
             await open()
+        }
+    }
+
+    /// Host relay (contract B): servers, allowlisted gate calls (in parallel, answered by id), opening a session.
+    private func handleHost(_ body: Any) {
+        guard let request = PluginHostRequest.parse(body, allowed: plugin.host?.gate ?? []) else { return }
+        let model = model
+        func reply(_ id: String, _ result: Result<Any, Error>) {
+            switch result {
+            case let .success(data): model.replyToHost(["hollr": 1, "id": id, "ok": true, "data": data])
+            case let .failure(error): model.replyToHost(["hollr": 1, "id": id, "ok": false, "error": error.localizedDescription])
+            }
+        }
+        switch request {
+        case let .openSession(serverId, pane):
+            guard let target = store.servers.first(where: { $0.id.uuidString == serverId }) else { return }
+            PushManager.shared.openRequest = (target.hostFingerprint, pane)
+        case let .reject(id, error):
+            model.replyToHost(["hollr": 1, "id": id, "ok": false, "error": error])
+        case let .servers(id):
+            let list: [[String: Any]] = store.servers.map {
+                ["id": $0.id.uuidString, "label": $0.label, "self": $0.id == server.id, "online": herdr.errors[$0.id] == nil]
+            }
+            reply(id, .success(list))
+        case let .gate(id, serverId, command, stdin):
+            guard let target = store.servers.first(where: { $0.id.uuidString == serverId }) else {
+                return model.replyToHost(["hollr": 1, "id": id, "ok": false, "error": "Unbekannter Server"])
+            }
+            Task {
+                do {
+                    reply(id, .success(try await HollrClient.pluginGate(target, command: command, stdin: stdin)))
+                } catch {
+                    reply(id, .failure(error))
+                }
+            }
         }
     }
 

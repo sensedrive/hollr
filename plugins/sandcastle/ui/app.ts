@@ -1,170 +1,319 @@
-/** Sandcastle board – head bar (project, Board | Lauf, run pill, reload) and polling of the visible view. */
-import { api, initToken } from "./api";
+/**
+ * Sandcastle board – head bar (project, Board | Läufe, machine chips, reload), data loading and polling.
+ * First paint comes from the cache of the last visit; every source (servers, each machine's projects/status/queue,
+ * the GitHub board) then loads on its own and re-renders when it arrives – nothing waits for the slowest machine.
+ */
+import { writing } from "./actions";
+import { api, initToken, sc, servers } from "./api";
 import { dragging } from "./drag";
-import { fill, h } from "./dom";
-import { errorText, hooks, state, toast } from "./state";
-import type { Board, Project, RunResponse } from "./types";
+import { fill, h, reconcile } from "./dom";
+import { readHash } from "./filter";
+import {
+  cacheGet,
+  cacheSet,
+  errorText,
+  hooks,
+  laneServers,
+  projects,
+  state,
+  toast,
+  type View,
+} from "./state";
+import type { BoardData, Project, QueueState, Server, Status } from "./types";
 import { boardView, renderBoard } from "./views/board";
-import { renderRun, runView, STATUS_TEXT } from "./views/run";
-import { closeSidebar } from "./views/sidebar";
-
-const PROJECT_KEY = "sc.project";
-const REFRESH = "__refresh__";
+import { clearCards } from "./views/cards";
+import { setQuery } from "./views/filterbar";
+import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
+import { closeSidebar, renderLive } from "./views/sidebar";
+import { laneRun } from "./model";
 
 initToken();
 
-const projectSelect = h("select", { "aria-label": "Projekt", onchange: () => onProjectChange() });
+const projectSelect = h("select", { class: "project", "aria-label": "Projekt" });
 const boardTab = h("button", { class: "tab", onclick: () => show("board") }, "Board");
-const runTab = h("button", { class: "tab", onclick: () => show("run") }, "Lauf");
-const pill = h("button", { class: "pill", hidden: true, onclick: () => show("run") });
-const reload = h("button", { class: "btn icon", title: "Neu laden", "aria-label": "Neu laden", onclick: () => refreshNow() }, "↻");
-const main = h("main");
-const notice = h("div", { class: "notice", hidden: true });
+const runsTab = h("button", { class: "tab", onclick: () => show("runs") }, "Läufe");
+const chips = h("div", { class: "mchips" });
+const reload = h("button", { class: "btn icon", title: "Neu laden", "aria-label": "Neu laden", onclick: () => refreshAll(true) }, "↻");
+const boardHost = h("div", { class: "view" });
+const runsHost = h("div", { class: "view" });
+const main = h("main", {}, boardHost, runsHost);
 
 document.body.append(
-  h("header", { class: "head" }, projectSelect, h("div", { class: "tabs" }, boardTab, runTab), pill, h("span", { class: "grow" }), reload),
-  notice,
+  h("header", { class: "head" }, h("span", { class: "brand" }, "Sandcastle"), projectSelect, h("div", { class: "tabs" }, boardTab, runsTab), chips, h("span", { class: "grow" }), reload),
   main,
 );
 
-let lastBoard = 0;
-let lastRun = 0;
-let loading = false;
+// ---- cache → first paint
 
-function renderProjects(): void {
-  const names = state.projects.map((p) => p.name);
-  // two checkouts can carry the same project name (tackline/tendr, tackline/tackline): add the folder
-  const label = (p: Project) =>
-    names.indexOf(p.name) !== names.lastIndexOf(p.name) ? `${p.name} – ${p.root.split("/").pop()}` : p.name;
-  fill(
-    projectSelect,
-    ...state.projects.map((p) => h("option", { value: p.id, disabled: !!p.error }, p.error ? `${label(p)} (${p.error})` : label(p))),
-    h("option", { value: REFRESH }, "↻ Projekte neu suchen …"),
-  );
-  projectSelect.value = state.projectId;
+state.servers = cacheGet<Server[]>("servers") ?? [];
+state.localProjects = cacheGet<Project[]>("localProjects") ?? [];
+for (const [k, v] of Object.entries(cacheGet<Record<string, Project[]>>("machineProjects") ?? {})) state.machineProjects.set(k, v);
+for (const [k, v] of Object.entries(cacheGet<Record<string, Status>>("statuses") ?? {})) state.statuses.set(k, v);
+state.view = cacheGet<View>("view") ?? "board";
+const REFRESH = "__refresh__";
+
+function useSlug(slug: string): void {
+  state.slug = slug;
+  state.board = cacheGet<BoardData>(`board.${slug}`);
+  state.olderClosed = [];
+  state.closedOlder = 0;
+  state.queues = new Map(Object.entries(cacheGet<Record<string, QueueState>>(`queues.${slug}`) ?? {}));
+  cacheSet("slug", slug);
+  clearCards();
 }
 
-function selectProject(id: string): void {
-  if (id === state.projectId) return;
-  state.projectId = id;
-  state.board = null;
-  state.run = null;
-  renderBoard();
-  renderRun();
-  state.filter = "all";
-  localStorage.setItem(PROJECT_KEY, id);
-  projectSelect.value = id;
+function pickSlug(): void {
+  const list = projects();
+  const want = state.slug || cacheGet<string>("slug") || "";
+  const slug = list.find((p) => p.slug === want)?.slug ?? list[0]?.slug ?? "";
+  if (slug === state.slug) return;
+  useSlug(slug);
+  loadBoard();
+  loadQueues();
+}
+
+// ---- rendering (coalesced into one frame)
+
+let frame = 0;
+hooks.render = () => {
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    renderHead();
+    if (state.view === "board") renderBoard();
+    else renderRuns();
+    renderLive();
+  });
+};
+
+let projectSig = "";
+function renderHead(): void {
+  const list = projects();
+  const sig = JSON.stringify([list.map((p) => p.slug), state.slug]);
+  if (sig !== projectSig) {
+    projectSig = sig;
+    const names = list.map((p) => p.name);
+    fill(
+      projectSelect,
+      ...(list.length ? [] : [h("option", { value: "" }, "Projekte werden gesucht …")]),
+      ...list.map((p) => h("option", { value: p.slug }, names.indexOf(p.name) !== names.lastIndexOf(p.name) ? `${p.name} (${p.slug})` : p.name)),
+      h("option", { value: REFRESH }, "↻ Projekte neu suchen …"),
+    );
+    projectSelect.value = state.slug;
+  }
+  // a chip per machine: its run of this project, else any live run, else idle
+  reconcile(
+    chips,
+    state.servers.map((s) => {
+      const status = state.statuses.get(s.id);
+      const own = laneRun(status, state.slug);
+      const run = own && own.status !== "ended" ? own : status?.runs.find((r) => r.status !== "ended");
+      const text = !s.online
+        ? `${s.label} offline`
+        : run
+          ? `${s.label} ● ${STATUS_TEXT[run.status].split(" –")[0]} · ${run.progress.percent} %${run.slug !== state.slug ? ` (${run.project})` : ""}`
+          : `${s.label} ○ frei`;
+      return h("button", { class: `mchip ${!s.online ? "off" : run ? `st-${run.status}` : "idle"}`, title: run ? `${run.project} · ${run.branch}` : "", onclick: () => show("runs") }, text);
+    }),
+  );
+}
+
+function show(view: View): void {
+  state.view = view;
+  cacheSet("view", view);
+  boardTab.classList.toggle("active", view === "board");
+  runsTab.classList.toggle("active", view === "runs");
+  if (view === "board" && !boardHost.firstChild) boardHost.append(boardView());
+  if (view === "runs" && !runsHost.firstChild) runsHost.append(runsView());
+  boardHost.hidden = view !== "board";
+  runsHost.hidden = view !== "runs";
+  if (view === "runs") closeSidebar();
+  hooks.render();
+  tick(true);
+}
+hooks.show = show;
+
+projectSelect.addEventListener("change", async () => {
+  if (projectSelect.value === REFRESH) {
+    projectSelect.value = state.slug;
+    toast("Projekte werden neu gesucht …", "info");
+    await loadProjects(true);
+    return;
+  }
   closeSidebar();
+  useSlug(projectSelect.value);
+  hooks.render();
+  last.board = 0;
+  last.queues = 0;
+  tick(true);
+});
+
+// ---- loading
+
+const inflight = new Set<string>();
+/** Runs a load once at a time per key; errors become toasts unless `quiet`. */
+async function once(key: string, fn: () => Promise<void>, quiet = false): Promise<void> {
+  if (inflight.has(key)) return;
+  inflight.add(key);
+  try {
+    await fn();
+  } catch (err) {
+    if (!quiet) toast(errorText(err));
+  } finally {
+    inflight.delete(key);
+  }
+}
+
+const saveMap = <T>(key: string, m: Map<string, T>) => cacheSet(key, Object.fromEntries(m));
+
+async function loadServers(): Promise<void> {
+  await once("servers", async () => {
+    const list = await servers();
+    // data of machines no longer paired (or ids from the other channel) would show as ghost lanes
+    const ids = new Set(list.map((s) => s.id));
+    for (const m of [state.statuses, state.machineProjects, state.queues, state.statusErrors])
+      for (const k of m.keys()) if (!ids.has(k)) m.delete(k);
+    state.servers = list;
+    cacheSet("servers", list);
+    hooks.render();
+  });
+}
+
+async function loadMachineProjects(s: Server, refresh = false): Promise<void> {
+  if (!s.online) return;
+  await once(`projects:${s.id}`, async () => {
+    try {
+      state.machineProjects.set(s.id, await sc.projects(s.id, refresh));
+      state.statusErrors.delete(s.id);
+    } catch (err) {
+      state.machineProjects.set(s.id, []);
+      state.statusErrors.set(s.id, `Projekte: ${errorText(err)}`);
+    }
+    saveMap("machineProjects", state.machineProjects);
+    // this machine may have become a lane of the selected project
+    if (state.slug && !state.queues.has(s.id)) loadQueues();
+    pickSlug();
+    hooks.render();
+  });
 }
 
 async function loadProjects(refresh = false): Promise<void> {
-  fill(notice, refresh ? "Suche Projekte …" : "Lade Projekte …");
-  notice.hidden = false;
-  try {
-    const { projects } = await api<{ projects: Project[] }>(`/api/projects${refresh ? "?refresh=1" : ""}`);
-    state.projects = projects;
-    const usable = projects.filter((p) => !p.error);
-    const saved = localStorage.getItem(PROJECT_KEY);
-    state.projectId = usable.find((p) => p.id === (state.projectId || saved))?.id ?? usable[0]?.id ?? "";
-    renderProjects();
-    notice.hidden = !!usable.length;
-    if (!usable.length) fill(notice, "Keine lul-workr-Projekte gefunden (Hauptordner mit .lul-workr.json unter ~).");
-  } catch (err) {
-    fill(notice, errorText(err));
-  }
+  const local = once("localProjects", async () => {
+    const { projects: list } = await api<{ projects: Project[] }>(`/api/projects${refresh ? "?refresh=1" : ""}`);
+    state.localProjects = list;
+    cacheSet("localProjects", list);
+    pickSlug();
+    hooks.render();
+  });
+  await Promise.all([local, ...state.servers.map((s) => loadMachineProjects(s, refresh))]);
+  last.projects = Date.now();
 }
 
-async function onProjectChange(): Promise<void> {
-  if (projectSelect.value === REFRESH) {
-    projectSelect.value = state.projectId;
-    await loadProjects(true);
-  } else selectProject(projectSelect.value);
-  await refreshNow();
+async function loadStatus(s: Server): Promise<void> {
+  if (!s.online) return;
+  await once(
+    `status:${s.id}`,
+    async () => {
+      try {
+        state.statuses.set(s.id, await sc.status(s.id));
+        if (state.statusErrors.get(s.id)?.startsWith("Status")) state.statusErrors.delete(s.id);
+      } catch (err) {
+        state.statusErrors.set(s.id, `Status: ${errorText(err)}`);
+      }
+      saveMap("statuses", state.statuses);
+      hooks.render();
+    },
+    true,
+  );
 }
+hooks.reloadStatus = () => Promise.all(state.servers.map(loadStatus)).then(() => {});
 
-hooks.reloadBoard = async () => {
-  if (!state.projectId) return;
-  const id = state.projectId;
-  try {
-    const board = await api<Board>(`/api/board?project=${id}`);
-    if (id !== state.projectId) return;
-    state.board = board;
-    lastBoard = Date.now();
-    renderBoard();
-  } catch (err) {
-    toast(errorText(err));
-  }
-};
-
-hooks.reloadRun = async () => {
-  try {
-    const id = state.projectId;
-    let data = await api<RunResponse>(`/api/run?project=${id}`);
-    if (id !== state.projectId) return;
-    const active = data.run && data.run.status !== "ended" ? data.run : null;
-    // with a run going, the run view is about its project
-    if (active && state.view === "run" && active.project.id !== state.projectId) {
-      selectProject(active.project.id);
-      data = await api<RunResponse>(`/api/run?project=${state.projectId}`);
-    }
-    state.run = data;
-    lastRun = Date.now();
-    renderPill();
-    renderRun();
-  } catch (err) {
-    toast(errorText(err));
-  }
-};
-
-function renderPill(): void {
-  const run = state.run?.run;
-  pill.hidden = !run;
-  if (!run) return;
-  pill.className = `pill ${run.status}`;
-  pill.textContent = `${run.project.name}: ${STATUS_TEXT[run.status] ?? run.status}`;
+async function loadBoard(): Promise<void> {
+  const slug = state.slug;
+  if (!slug) return;
+  await once(`board:${slug}`, async () => {
+    const since = state.board?.etag ? `&since=${encodeURIComponent(state.board.etag)}` : "";
+    const res = await api<BoardData | { same: true }>(`/api/board?slug=${encodeURIComponent(slug)}${since}`);
+    last.board = Date.now();
+    if (slug !== state.slug || "same" in res || writing() || dragging()) return;
+    state.board = res;
+    cacheSet(`board.${slug}`, res);
+    // the server refreshes a stale answer in the background: ask again soon
+    if (res.stale) last.board = Date.now() - 12_000;
+    hooks.render();
+  });
 }
+hooks.reloadBoard = loadBoard;
 
-function show(view: "board" | "run"): void {
-  state.view = view;
-  boardTab.classList.toggle("active", view === "board");
-  runTab.classList.toggle("active", view === "run");
-  fill(main, view === "board" ? boardView() : runView());
-  if (view === "board") renderBoard();
-  else renderRun();
-  refreshNow();
+async function loadQueues(): Promise<void> {
+  const slug = state.slug;
+  await Promise.all(
+    laneServers().map((s) =>
+      once(`queue:${s.id}:${slug}`, async () => {
+        const q = await sc.queue(s.id, slug);
+        if (slug !== state.slug || writing() || dragging()) return;
+        state.queues.set(s.id, q);
+        saveMap(`queues.${slug}`, state.queues);
+        hooks.render();
+      }, true),
+    ),
+  );
+  last.queues = Date.now();
 }
+hooks.reloadQueues = loadQueues;
 
-/** One refresh at a time; a request during one runs once more after it (a project switch must not get lost). */
-let again = false;
-async function refreshNow(): Promise<void> {
-  if (loading) {
-    again = true;
-    return;
-  }
-  loading = true;
-  reload.classList.add("spin");
-  try {
-    do {
-      again = false;
-      // the pill needs the run on the board too
-      await Promise.all([state.view === "board" ? hooks.reloadBoard() : Promise.resolve(), hooks.reloadRun()]);
-    } while (again);
-  } finally {
-    loading = false;
-    reload.classList.remove("spin");
-  }
-}
+// ---- polling: only what is visible, only while the page is visible
 
-// board every 10 s, run every 5 s – only what is visible, not while hidden or mid-drag
-setInterval(() => {
-  if (document.hidden || dragging() || loading || !state.projectId) return;
+const last = { servers: 0, projects: 0, status: 0, board: 0, queues: 0 };
+
+function tick(force = false): void {
+  if (document.hidden) return;
   const now = Date.now();
-  if (state.view === "board" && now - lastBoard >= 10_000) refreshNow();
-  else if (state.view === "run" && now - lastRun >= 5_000) refreshNow();
-}, 1000);
+  if (now - last.servers > 60_000) {
+    last.servers = now;
+    loadServers().then(() => {
+      for (const s of state.servers) {
+        if (!state.machineProjects.has(s.id)) loadMachineProjects(s);
+        if (!state.statuses.has(s.id)) loadStatus(s);
+      }
+    });
+  }
+  if (now - last.projects > 10 * 60_000) {
+    last.projects = now;
+    loadProjects();
+  }
+  if (force || now - last.status >= 4000) {
+    last.status = now;
+    hooks.reloadStatus();
+  }
+  if (state.view === "board" && (force || now - last.board >= 15_000)) {
+    last.board = now;
+    loadBoard();
+  }
+  if (state.view === "board" && (force || now - last.queues >= 15_000)) {
+    last.queues = now;
+    loadQueues();
+  }
+}
+
+/** Reload button / visibility return: everything now, projects re-scanned only on the button. */
+function refreshAll(button = false): void {
+  last.servers = 0;
+  if (button) last.projects = 0;
+  reload.classList.add("spin");
+  setTimeout(() => reload.classList.remove("spin"), 600);
+  tick(true);
+}
+
+setInterval(() => tick(), 1000);
+setInterval(() => {
+  if (!document.hidden && state.view === "runs") followLog();
+}, 1500);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshNow();
+  if (!document.hidden) refreshAll();
 });
 
-await loadProjects();
-show("board");
+const initial = readHash(location.hash);
+pickSlug();
+show(state.view);
+if (initial) setQuery(initial);

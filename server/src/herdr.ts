@@ -458,6 +458,22 @@ export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Pr
   return pane;
 }
 
+/** A first prompt for a freshly started agent: it needs a moment after `agent start` before it takes
+ *  prompts, so "not ready" / "blocked" refusals are retried once a second. */
+export async function promptWhenReady(herdr: Herdr, pane: string, text: string, attempts = 20) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await herdr.prompt(pane, text);
+      return;
+    } catch (err) {
+      const waiting =
+        err instanceof HerdrError && ["agent_not_ready", "agent_blocked"].includes(err.code);
+      if (!waiting || attempt >= attempts) throw err;
+      await Bun.sleep(1000);
+    }
+  }
+}
+
 /** The main omp session JSONL a process has open (Linux /proc, macOS lsof). */
 export function openSessionFile(pid: number): string | undefined {
   const isSession = (p: string) => /\/\.omp\/agent\/sessions\/[^/]+\/[^/]+\.jsonl$/.test(p);

@@ -190,18 +190,25 @@ final class BrowserModel: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     var tunneled: Bool { current.map(ServerLocal.isLoopback) ?? false }
 
+    /// plugin pages only: messages from `window.webkit.messageHandlers.hollr` (host relay, PluginHostRequest)
+    var onHostMessage: ((Any) -> Void)?
+
     /// `popupsOutside`: window.open / target=_blank to public pages opens Safari (embedded plugin UIs)
-    init(start: URL?, remembers: Bool = true, popupsOutside: Bool = false) {
+    /// `hostBridge`: registers the `hollr` message handler – never for the general browser, whose pages are foreign
+    init(start: URL?, remembers: Bool = true, popupsOutside: Bool = false, hostBridge: Bool = false) {
         self.start = start
         self.remembers = remembers
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+        let bridge = HostBridge()
+        if hostBridge { config.userContentController.add(bridge, name: "hollr") }
         webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
         webView.isInspectable = true
         super.init()
         webView.navigationDelegate = self
         if popupsOutside { webView.uiDelegate = self }
+        bridge.model = self
         observers = [
             webView.observe(\.estimatedProgress) { [weak self] view, _ in
                 Task { @MainActor in self?.progress = view.isLoading ? view.estimatedProgress : 1 }
@@ -297,6 +304,13 @@ final class BrowserModel: NSObject, WKNavigationDelegate, WKUIDelegate {
         if url.host() == "127.0.0.1", let port = url.port, tunnels[port] != nil { return .allow }
         open(url)
         return .cancel
+    }
+
+    /// Answers a host request; the page installs `window.__hollrHost` to receive it.
+    func replyToHost(_ reply: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: reply),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.__hollrHost && window.__hollrHost(\(json))", completionHandler: nil)
     }
 
     // MARK: WKUIDelegate (only with popupsOutside)
@@ -414,4 +428,16 @@ extension EnvironmentValues {
 
 extension View {
     func linkChooser() -> some View { modifier(LinkChooser()) }
+}
+
+/// The user content controller retains its handlers: a weak hop so the model (and its web view) can go away.
+private final class HostBridge: NSObject, WKScriptMessageHandler {
+    weak var model: BrowserModel?
+
+    @MainActor
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        // only the main frame: the plugin page itself, not something it embeds
+        guard message.frameInfo.isMainFrame else { return }
+        model?.onHostMessage?(message.body)
+    }
 }

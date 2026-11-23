@@ -6,8 +6,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type PluginEnv, pluginEnv } from "./src/env";
-import { handleApi } from "./src/http";
+import { BoardCache } from "./src/cache";
+import { hollrGate, type PluginEnv, pluginEnv } from "./src/env";
+import { fetchBoard, fetchChanged } from "./src/github";
+import { type Ctx, handleApi } from "./src/http";
+import { Projects } from "./src/projects";
 
 let env: PluginEnv;
 try {
@@ -44,7 +47,11 @@ function authorized(req: Request): boolean {
 }
 
 let lastRequest = Date.now();
-const stateDir = env.stateDir;
+const ctx: Ctx = {
+  projects: new Projects(env.stateDir, hollrGate),
+  boards: new BoardCache(env.stateDir, { fetchBoard, fetchChanged }),
+  gate: hollrGate,
+};
 
 const server = Bun.serve({
   hostname: "127.0.0.1",
@@ -58,7 +65,7 @@ const server = Bun.serve({
     if (url.pathname === "/__hollr/health") return send("ok", "text/plain");
     if (url.pathname.startsWith("/api/")) {
       if (!authorized(req)) return Response.json({ error: "unauthorized" }, { status: 401, headers: HEADERS });
-      const res = await handleApi(req, url, { stateDir });
+      const res = await handleApi(req, url, ctx);
       for (const [k, v] of Object.entries(HEADERS)) res.headers.set(k, v);
       return res;
     }

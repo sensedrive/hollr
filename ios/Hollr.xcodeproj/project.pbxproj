@@ -60,6 +60,7 @@
 		78CCEBB0E72DFCAC43E32264 /* NetworkWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD595A5C80A8354EB416881 /* NetworkWatch.swift */; };
 		7AC03E84EBDEE5EBBDB59B79 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D5C6613C409FB4F134C940D7 /* WhisperKit */; };
 		7B511442CA99ED540DB3A035 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCC47BCB74150F1DCE4C6AF /* Skeleton.swift */; };
+		7D375A536A3543AF48681B43 /* PluginHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC530192CB16B81325172349 /* PluginHostTests.swift */; };
 		7FEFCF27BF04D32BC74438D3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ABBE520DEF8D78F79A9E5F6 /* SettingsView.swift */; };
 		803D6476F6760DA7C5D5DFFD /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 9187047D32EDFD713E43E6A8 /* Localizable.xcstrings */; };
 		831DF3CFA3E88A34A57DA0F3 /* TimelineViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C577BF328A3A26A824FF673 /* TimelineViews.swift */; };
@@ -239,6 +240,7 @@
 		A55104AD94854AC1E2EA3A6B /* HollrWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HollrWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A92221483A7A40DA45402706 /* DiffViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffViewer.swift; sourceTree = "<group>"; };
 		A9D74665FCCEB4F12743D171 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		AC530192CB16B81325172349 /* PluginHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginHostTests.swift; sourceTree = "<group>"; };
 		ACA1716A49A0CA301933CD58 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		ADD30786A137989AB17C7DDA /* SharedKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedKeychain.swift; sourceTree = "<group>"; };
 		AF5CA60C68CE01EC72C2754E /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
@@ -521,6 +523,7 @@
 				BA5936D3405E68394D4F9C20 /* DraftTests.swift */,
 				2FF87247E6B2C42C39C700C1 /* InboxTests.swift */,
 				2606E4E9AE0DD45632BCB5A7 /* MachinesTests.swift */,
+				AC530192CB16B81325172349 /* PluginHostTests.swift */,
 				6D3180E113553B70CDF4810A /* ProtocolTests.swift */,
 				4B70BD04E14E54458A80F887 /* SharedStateTests.swift */,
 			);
@@ -800,6 +803,7 @@
 				2D7C5884F52A6D1C08649E2A /* DraftTests.swift in Sources */,
 				4BD5EA36B53748EBE45321B2 /* InboxTests.swift in Sources */,
 				5A24A9601868C4D3DC8A6385 /* MachinesTests.swift in Sources */,
+				7D375A536A3543AF48681B43 /* PluginHostTests.swift in Sources */,
 				3BC1022267AE120516B0D60A /* ProtocolTests.swift in Sources */,
 				0B47E97203F5E026ED31CFF7 /* SharedStateTests.swift in Sources */,
 			);
@@ -995,7 +999,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 61;
+				CURRENT_PROJECT_VERSION = 62;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1015,7 +1019,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.49.1;
+				MARKETING_VERSION = 0.50.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1104,7 +1108,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 61;
+				CURRENT_PROJECT_VERSION = 62;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1118,7 +1122,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.49.1;
+				MARKETING_VERSION = 0.50.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

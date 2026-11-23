@@ -185,6 +185,10 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle-Plugin 2: Schnellfilter (/ – l:label @person s:story #nr), „JIRA-Link“ für das Team, Warteschlange je Rechner, Fortschritt und Einstellungen jedes Laufs, Deploy/Video/Branch an den Karten.":
+    "Sandcastle plugin 2: quick filter (/ – l:label @person s:story #nr), “JIRA link” for the team, a queue per machine, progress and settings of every run, deploy/video/branch on the cards.",
+  "Neue Ansicht „Läufe“: welche Sandcastle-Läufe auf welchem Rechner laufen – auch von Hand gestartete –, mit den Logs jedes Tickets live.":
+    "New view “Runs”: which Sandcastle runs are going on which machine – also ones started by hand – with every ticket's logs live.",
   "Behoben: „Keine Verbindung“ obwohl das Terminal lief – bei vielen offenen Chats und Terminals nahm der Server keine weitere Sitzung an. Hollr öffnet dann eine zweite Verbindung.":
     "Fixed: “No connection” while the terminal kept working – with many open chats and terminals the server refused another session. Hollr now opens a second connection.",
   "Dieselben Rechner auf allen Geräten: wird ein Rechner auf dem iPhone oder einem anderen Mac gekoppelt, koppelt sich Hollr hier selbst damit; Entfernen gilt für alle Geräte.":

@@ -57,13 +57,13 @@ export interface RunResult {
 
 export async function run(
   cmd: string[],
-  opts: { cwd?: string; timeoutMs?: number; stdin?: string } = {},
+  opts: { cwd?: string; timeoutMs?: number; stdin?: string; env?: Record<string, string> } = {},
 ): Promise<RunResult> {
   let proc: Bun.Subprocess<"pipe" | "ignore", "pipe", "pipe">;
   try {
     proc = Bun.spawn(cmd, {
       cwd: opts.cwd,
-      env: cleanEnv(),
+      env: { ...cleanEnv(), ...opts.env },
       stdin: opts.stdin === undefined ? "ignore" : new TextEncoder().encode(opts.stdin),
       stdout: "pipe",
       stderr: "pipe",
@@ -88,10 +88,26 @@ export async function run(
   }
 }
 
-/** Runs this computer's hollr (HOLLR_CLI: the compiled binary, or bun + cli.ts in development). */
-export function hollr(args: string[], opts: { timeoutMs?: number } = {}): Promise<RunResult> {
+/**
+ * One `hollr gate <command>` call on this computer (HOLLR_CLI: the compiled binary, or bun + cli.ts in
+ * development): stdin one JSON line, the answer one JSON line. A gate `{error}` throws 400, a failed call 502.
+ */
+export async function hollrGate(command: string, stdin: unknown, timeoutMs = 60_000): Promise<unknown> {
   const cli = JSON.parse(process.env.HOLLR_CLI ?? "[]") as string[];
-  return run([...cli, ...args], opts);
+  const r = await run([...cli, "gate"], {
+    stdin: `${JSON.stringify(stdin ?? {})}\n`,
+    timeoutMs,
+    env: { SSH_ORIGINAL_COMMAND: command },
+  });
+  const line = r.out.trim().split("\n").at(-1) ?? "";
+  let data: unknown;
+  try {
+    data = JSON.parse(line);
+  } catch {
+    throw new HttpError(502, `hollr gate ${command}: ${firstLine(r.err || r.out)}`);
+  }
+  if (data && typeof data === "object" && "error" in data) throw new HttpError(400, String(data.error));
+  return data;
 }
 
 /** First non-empty line of a tool's error output. */

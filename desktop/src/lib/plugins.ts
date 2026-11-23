@@ -6,6 +6,8 @@ export interface PluginInfo {
   name: string;
   description?: string;
   version?: string;
+  /** gate commands the app relays for the plugin page */
+  host?: { gate: string[] };
   error?: string;
 }
 

@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 55,
+    version: "0.50.0",
+    date: "23.11.2026",
+    items: [
+      { icon: "▤", text: "Sandcastle-Plugin 2: Schnellfilter (/ – l:label @person s:story #nr), „JIRA-Link“ für das Team, Warteschlange je Rechner, Fortschritt und Einstellungen jedes Laufs, Deploy/Video/Branch an den Karten." },
+      { icon: "≡", text: "Neue Ansicht „Läufe“: welche Sandcastle-Läufe auf welchem Rechner laufen – auch von Hand gestartete –, mit den Logs jedes Tickets live." },
+    ],
+  },
+  {
     build: 54,
     version: "0.49.2",
     date: "23.11.2026",

@@ -1,29 +1,18 @@
-/** Which column an issue belongs in, and what moving a card means on GitHub and in the queue. */
+/** Which column an issue belongs in, and what moving a card means on GitHub. */
+import type { Project } from "./types";
 
 export type Column = "grill" | "backlog" | "queue" | "done";
 export const COLUMNS: Column[] = ["grill", "backlog", "queue", "done"];
 
-export interface Labels {
-  queue: string;
-  story: string;
-  /** null: the project has no grill label – no "Zu grillen" column */
-  grill: string | null;
-}
+/** null grill: the project has no grill label – no "Zu grillen" column */
+export type Labels = Project["labels"];
 
-export interface Card {
-  number: number;
-  title: string;
-  labels: string[];
+export interface CardState {
   state: "open" | "closed";
-  parent?: number;
-  jira?: string;
-  url: string;
-  updatedAt?: string;
-  closedAt?: string;
-  running?: boolean;
+  labels: string[];
 }
 
-export function classify(issue: { state: "open" | "closed"; labels: string[] }, labels: Labels): Column | "story" {
+export function classify(issue: CardState, labels: Labels): Column | "story" {
   if (issue.labels.includes(labels.story)) return "story";
   if (issue.state === "closed") return "done";
   if (issue.labels.includes(labels.queue)) return "queue";
@@ -36,10 +25,11 @@ export interface MovePlan {
   close: boolean;
   add: string[];
   remove: string[];
+  /** what the machine's queue order should do – the UI applies it via `queue-set` (contract A) */
   queue: "append" | "remove" | "keep";
 }
 
-export function movePlan(card: Card, to: Column, labels: Labels): MovePlan {
+export function movePlan(card: CardState, to: Column, labels: Labels): MovePlan {
   const from = classify(card, labels);
   if (from === "story") throw new Error("Stories stehen nicht auf dem Board.");
   if (to === "grill" && !labels.grill) throw new Error("Dieses Projekt hat kein Grill-Label.");

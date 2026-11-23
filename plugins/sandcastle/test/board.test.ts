@@ -1,14 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { type Card, classify, type Labels, movePlan } from "../src/board";
+import { type CardState, classify, type Labels, movePlan } from "../src/board";
 
 const L: Labels = { queue: "Sandcastle", story: "story", grill: "grillTicket" };
-const card = (labels: string[], state: "open" | "closed" = "open"): Card => ({
-  number: 7,
-  title: "t",
-  labels,
-  state,
-  url: "",
-});
+const card = (labels: string[], state: "open" | "closed" = "open"): CardState => ({ labels, state });
 
 describe("classify", () => {
   test("story first, then closed, then queue before grill", () => {

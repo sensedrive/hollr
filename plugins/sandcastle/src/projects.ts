@@ -1,140 +1,69 @@
 /**
- * lul-workr projects on this computer: main checkouts with a `.lul-workr.json` under $HOME (worktrees and
- * sandbox copies left out). Cached for 6 h – the search walks the home folder.
+ * This machine's lul-workr projects, from `hollr gate sandcastle {"op":"projects"}` (the gate scans and caches
+ * for 6 h). The gate is a process start: the answer is kept in memory and in the state dir, so a board request
+ * of a fresh plugin process never waits for it; older than 10 min it is asked again in the background.
  */
-import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
-import type { Labels } from "./board";
-import { HttpError, run } from "./env";
+import { join } from "node:path";
+import { HttpError } from "./env";
+import type { Project } from "./types";
 
-export interface Project {
-  id: string;
-  name: string;
-  root: string;
-  gitCommonDir: string;
-  slug: string;
-  defaultBranch: string;
-  engine: string;
-  labels: Labels;
-  defaults: { agent: string; parallel: number };
-  /** the loop on the default branch knows the queue (lul-workr-setup → Sandcastle nachziehen) */
-  queueSupported: boolean;
-  jiraBaseUrl: string | null;
-  error?: string;
-}
+const REFRESH_MS = 10 * 60_000;
 
-const TTL = 6 * 3600_000;
+export type Gate = (command: string, stdin: unknown) => Promise<unknown>;
 
-/** `.lul-workr.json` as far as the board reads it. */
-interface Config {
-  project?: string;
-  repo?: { slug?: string; defaultBranch?: string };
-  jira?: { baseUrl?: string };
-  github?: { labels?: { queue?: string; story?: string; grillTicket?: string } };
-  engine?: { kind?: string; sandcastle?: { defaults?: { agent?: string; parallel?: number } } };
-}
+export class Projects {
+  private memo: { at: number; projects: Project[] } | undefined;
+  private pending: Promise<Project[]> | undefined;
 
-const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v : undefined);
+  constructor(
+    private stateDir: string,
+    private gate: Gate,
+    private now: () => number = Date.now,
+  ) {}
 
-export async function measureQueueSupport(root: string, defaultBranch: string): Promise<boolean> {
-  const r = await run(["git", "-C", root, "show", `origin/${defaultBranch}:.sandcastle/queue.mts`]);
-  return r.ok && r.out.includes("hollr-sandcastle");
-}
-
-async function projectAt(dir: string): Promise<Project | undefined> {
-  const git = await run(["git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"]);
-  const [gitDir, gitCommonDir] = git.out.trim().split("\n");
-  // worktrees have their own git dir next to the shared one: only main checkouts count
-  if (!git.ok || !gitDir || gitDir !== gitCommonDir) return undefined;
-  const id = createHash("sha1").update(gitCommonDir).digest("hex").slice(0, 12);
-  let cfg: Config;
-  try {
-    cfg = JSON.parse(readFileSync(join(dir, ".lul-workr.json"), "utf8"));
-  } catch {
-    return broken(id, dir, gitCommonDir, ".lul-workr.json ist kein gültiges JSON");
+  /** `refresh`: the gate re-scans the computer and the answer is awaited. */
+  async list(refresh = false): Promise<Project[]> {
+    if (!this.memo && !refresh) {
+      try {
+        this.memo = JSON.parse(readFileSync(this.file(), "utf8"));
+      } catch {}
+    }
+    if (refresh || !this.memo) return this.ask(refresh);
+    if (this.now() - this.memo.at > REFRESH_MS) void this.ask(false).catch(() => {});
+    return this.memo.projects;
   }
-  const slug = str(cfg.repo?.slug);
-  if (!slug) return broken(id, dir, gitCommonDir, ".lul-workr.json: repo.slug fehlt");
-  const defaultBranch = str(cfg.repo?.defaultBranch) ?? "main";
-  const parallel = cfg.engine?.sandcastle?.defaults?.parallel;
-  return {
-    id,
-    name: str(cfg.project) ?? basename(dir),
-    root: dir,
-    gitCommonDir,
-    slug,
-    defaultBranch,
-    engine: str(cfg.engine?.kind) ?? "implement",
-    labels: {
-      queue: str(cfg.github?.labels?.queue) ?? "Sandcastle",
-      story: str(cfg.github?.labels?.story) ?? "story",
-      grill: str(cfg.github?.labels?.grillTicket) ?? null,
-    },
-    defaults: {
-      agent: str(cfg.engine?.sandcastle?.defaults?.agent) ?? "opus-5.5",
-      parallel: typeof parallel === "number" && Number.isInteger(parallel) && parallel >= 1 ? parallel : 1,
-    },
-    queueSupported: await measureQueueSupport(dir, defaultBranch),
-    jiraBaseUrl: str(cfg.jira?.baseUrl)?.replace(/\/+$/, "") ?? null,
-  };
-}
 
-function broken(id: string, dir: string, gitCommonDir: string, error: string): Project {
-  return {
-    id,
-    name: basename(dir),
-    root: dir,
-    gitCommonDir,
-    slug: "",
-    defaultBranch: "main",
-    engine: "implement",
-    labels: { queue: "Sandcastle", story: "story", grill: null },
-    defaults: { agent: "opus-5.5", parallel: 1 },
-    queueSupported: false,
-    jiraBaseUrl: null,
-    error,
-  };
-}
-
-async function discover(): Promise<Project[]> {
-  const home = process.env.HOME ?? homedir();
-  // permission errors make find exit 1 – what it printed still counts
-  const found = await run(
-    [
-      "find", home, "-maxdepth", "5", "-name", ".lul-workr.json",
-      "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.herdr/*",
-      "-not", "-path", "*/.sandcastle/*", "-not", "-path", "*/Library/*",
-    ],
-    { timeoutMs: 120_000 },
-  );
-  const dirs = found.out.split("\n").filter(Boolean).map((f) => dirname(f));
-  const projects = (await Promise.all(dirs.map(projectAt))).filter((p): p is Project => !!p);
-  return projects.sort((a, b) => a.name.localeCompare(b.name, "de"));
-}
-
-let memo: { at: number; projects: Project[] } | undefined;
-
-export async function loadProjects(stateDir: string, refresh = false): Promise<Project[]> {
-  const file = join(stateDir, "projects.json");
-  if (!memo && !refresh) {
-    try {
-      memo = JSON.parse(readFileSync(file, "utf8"));
-    } catch {}
+  async get(slug: string): Promise<Project> {
+    const find = (list: Project[]) => list.find((p) => p.slug === slug);
+    // a project checked out since the last answer: ask once more before saying no
+    const p = find(await this.list()) ?? find(await this.ask(false));
+    if (!p) throw new HttpError(404, `Projekt ${slug} gibt es auf diesem Rechner nicht.`);
+    if (p.error) throw new HttpError(400, p.error);
+    return p;
   }
-  if (!refresh && memo && Date.now() - memo.at < TTL) return memo.projects;
-  memo = { at: Date.now(), projects: await discover() };
-  mkdirSync(stateDir, { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(memo));
-  renameSync(tmp, file);
-  return memo.projects;
-}
 
-export async function getProject(stateDir: string, id: string): Promise<Project> {
-  const p = (await loadProjects(stateDir)).find((x) => x.id === id);
-  if (!p) throw new HttpError(404, "Projekt nicht gefunden.");
-  if (p.error) throw new HttpError(400, p.error);
-  return p;
+  private file() {
+    return join(this.stateDir, "projects.json");
+  }
+
+  private ask(refresh: boolean): Promise<Project[]> {
+    if (this.pending && !refresh) return this.pending;
+    const p = (async () => {
+      const data = (await this.gate("sandcastle", refresh ? { op: "projects", refresh: true } : { op: "projects" })) as {
+        projects?: Project[];
+      };
+      if (!Array.isArray(data?.projects)) throw new HttpError(502, "hollr gate sandcastle: keine Projektliste.");
+      this.memo = { at: this.now(), projects: data.projects };
+      mkdirSync(this.stateDir, { recursive: true });
+      const tmp = `${this.file()}.${process.pid}.tmp`;
+      writeFileSync(tmp, JSON.stringify(this.memo));
+      renameSync(tmp, this.file());
+      return data.projects;
+    })().finally(() => {
+      if (this.pending === p) this.pending = undefined;
+    });
+    this.pending = p;
+    return p;
+  }
 }

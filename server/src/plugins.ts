@@ -5,7 +5,15 @@
  * so the server needs neither bun nor node. The apps reach it through their SSH tunnel; every /api call
  * needs the per-start token, which only travels in the URL fragment.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { toolPathDirs, which } from "./tools";
@@ -16,6 +24,8 @@ export interface PluginManifest {
   description?: string;
   version: string;
   entry: string;
+  /** Gate commands the host apps may relay for the plugin page (contract B). */
+  host?: { gate: string[] };
 }
 
 export interface PluginInfo {
@@ -23,6 +33,7 @@ export interface PluginInfo {
   name: string;
   description?: string;
   version?: string;
+  host?: { gate: string[] };
   error?: string;
 }
 
@@ -39,9 +50,11 @@ interface ServerState {
 }
 
 const ID_RE = /^[a-z0-9-]{1,40}$/;
+const GATE_RE = /^[a-z][a-z0-9-]{0,30}$/;
 const MANIFEST = "hollr-plugin.json";
 
-export const pluginsFile = () => Bun.env.HOLLR_PLUGINS_FILE ?? join(homedir(), ".config", "hollr", "plugins.json");
+export const pluginsFile = () =>
+  Bun.env.HOLLR_PLUGINS_FILE ?? join(homedir(), ".config", "hollr", "plugins.json");
 const stateDir = (id: string) =>
   join(Bun.env.HOLLR_STATE_DIR ?? join(homedir(), ".local", "state", "hollr"), "plugins", id);
 
@@ -50,7 +63,8 @@ export function loadRegistry(file = pluginsFile()): RegistryEntry[] {
     const data = JSON.parse(readFileSync(file, "utf8")) as { plugins?: unknown };
     return Array.isArray(data.plugins)
       ? data.plugins.filter(
-          (e): e is RegistryEntry => typeof e?.id === "string" && ID_RE.test(e.id) && typeof e?.dir === "string",
+          (e): e is RegistryEntry =>
+            typeof e?.id === "string" && ID_RE.test(e.id) && typeof e?.dir === "string",
         )
       : [];
   } catch {
@@ -98,12 +112,22 @@ export function readManifest(dir: string): PluginManifest {
   const entryFile = join(dir, entry);
   if (!existsSync(entryFile) || !statSync(entryFile).isFile())
     throw new Error(`${MANIFEST}: entry ${entry} gibt es nicht`);
+  let host: PluginManifest["host"];
+  if (raw.host !== undefined) {
+    const gate = (raw.host as { gate?: unknown } | null)?.gate;
+    if (!Array.isArray(gate) || !gate.every((g) => typeof g === "string" && GATE_RE.test(g)))
+      throw new Error(
+        `${MANIFEST}: host.gate muss eine Liste von Gate-Befehlen sein (a-z, 0-9, -)`,
+      );
+    host = { gate };
+  }
   return {
     id: raw.id,
     name: raw.name,
     description: nonEmpty(raw.description) ? raw.description : undefined,
     version: raw.version,
     entry,
+    host,
   };
 }
 
@@ -128,7 +152,13 @@ export function listPlugins(): PluginInfo[] {
   return loadRegistry().map(({ id, dir }) => {
     try {
       const m = readManifest(dir);
-      return { id: m.id, name: m.name, description: m.description, version: m.version };
+      return {
+        id: m.id,
+        name: m.name,
+        description: m.description,
+        version: m.version,
+        host: m.host,
+      };
     } catch (err) {
       return { id, name: id, error: err instanceof Error ? err.message : String(err) };
     }
@@ -197,7 +227,11 @@ async function alreadyRunning(id: string, entryFile: string) {
 
 function tailLines(file: string, n: number): string {
   try {
-    return readFileSync(file, "utf8").split("\n").filter((l) => l.trim()).slice(-n).join("\n");
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .slice(-n)
+      .join("\n");
   } catch {
     return "";
   }
@@ -224,7 +258,10 @@ function pluginEnv(id: string, dir: string, state: string, token: string, cli: s
 }
 
 /** Starts the plugin unless it already runs; at most one start at a time (a lock dir). */
-export async function openPlugin(id: string, cli: string[]): Promise<{ port: number; url: string }> {
+export async function openPlugin(
+  id: string,
+  cli: string[],
+): Promise<{ port: number; url: string }> {
   const { dir, manifest } = entryOf(id);
   const entryFile = join(dir, manifest.entry);
   const running = await alreadyRunning(id, entryFile);
@@ -252,7 +289,8 @@ export async function openPlugin(id: string, cli: string[]): Promise<{ port: num
       await Bun.sleep(200);
       const now = await alreadyRunning(id, entryFile);
       if (now) return now;
-      if (Date.now() > deadline) throw new Error(`Plugin ${id} startet gerade – bitte erneut versuchen`);
+      if (Date.now() > deadline)
+        throw new Error(`Plugin ${id} startet gerade – bitte erneut versuchen`);
     }
   }
   try {
@@ -291,7 +329,12 @@ export async function openPlugin(id: string, cli: string[]): Promise<{ port: num
         got = JSON.parse(readFileSync(ready, "utf8"));
       } catch {}
       if (typeof got?.port === "number" && typeof got.pid === "number") {
-        const s: ServerState = { pid: got.pid, port: got.port, token, startedAt: new Date().toISOString() };
+        const s: ServerState = {
+          pid: got.pid,
+          port: got.port,
+          token,
+          startedAt: new Date().toISOString(),
+        };
         writeJson(join(state, "server.json"), s);
         return urlFor(s);
       }

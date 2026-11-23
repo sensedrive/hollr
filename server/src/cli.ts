@@ -38,6 +38,7 @@ import {
   installedKinds,
   type NewChatRequest,
   newChat,
+  promptWhenReady,
 } from "./herdr";
 import { toLang } from "./i18n";
 import { runLive } from "./live";
@@ -101,6 +102,7 @@ import {
   statusLine,
   usageLimits,
 } from "./spaces";
+import { type SandcastleRequest, sandcastle } from "./sandcastle";
 import { type SummarizeRequest, summarize } from "./summarize";
 import { restartWatcher, sysinfo } from "./sysinfo";
 import { ompLive, readTimeline } from "./timeline";
@@ -118,7 +120,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.49.2";
+export const VERSION = "0.50.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -179,20 +181,7 @@ async function sessionNew(args: string[]): Promise<number> {
     cwd,
     label,
   });
-  if (prompt) {
-    // the agent needs a moment after `agent start` before it takes prompts
-    for (let attempt = 1; ; attempt++) {
-      try {
-        await herdr.prompt(pane, prompt);
-        break;
-      } catch (err) {
-        const waiting =
-          err instanceof HerdrError && ["agent_not_ready", "agent_blocked"].includes(err.code);
-        if (!waiting || attempt >= 20) throw err;
-        await Bun.sleep(1000);
-      }
-    }
-  }
+  if (prompt) await promptWhenReady(herdr, pane, prompt);
   console.log(JSON.stringify({ pane }));
   return 0;
 }
@@ -285,6 +274,8 @@ async function gate(): Promise<number> {
       "job",
       "skills",
       "plugins",
+      // polled by every open Sandcastle board; start/release/queue-set are logged below
+      "sandcastle",
       "shared",
       "diag",
       "machines",
@@ -570,6 +561,18 @@ async function gate(): Promise<number> {
           log("gate", `plugins open ${req.id}`);
           json(await openPlugin(req.id ?? "", hollrCli()));
         } else json({ plugins: listPlugins() });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "sandcastle": {
+      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|start|release}
+      try {
+        const req = JSON.parse((await readStdinLine(256 * 1024)) || "{}") as SandcastleRequest;
+        if (["start", "release", "queue-set"].includes(req.op ?? ""))
+          log("gate", `sandcastle ${req.op}${req.slug ? ` ${req.slug}` : ""}`);
+        json(await sandcastle(req, { cli: hollrCli() }));
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -864,7 +867,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | shared | machines | pairlink",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | sandcastle | shared | machines | pairlink",
       });
       return 2;
   }

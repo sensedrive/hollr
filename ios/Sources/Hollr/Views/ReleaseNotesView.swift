@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 62, date: "23.11.2026", items: [
+            ("list.bullet.rectangle", String(localized: "Sandcastle-Plugin 2: Schnellfilter, Warteschlange je Rechner und die neue Ansicht „Läufe“ mit Logs – auch auf dem iPhone")),
+        ]),
         ReleaseNote(build: 61, date: "22.11.2026", items: [
             ("checkmark.circle", String(localized: "Behoben: Absturz kurz nach dem Öffnen, wenn sich Listen (Spaces, Agents) gleichzeitig änderten")),
         ]),
