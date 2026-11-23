@@ -7,6 +7,7 @@
 import { renderMarkdown } from "./body";
 import type { BoardCache } from "./cache";
 import {
+  type DerivedState,
   type DriftConfig,
   type DriftItem,
   type Families,
@@ -40,7 +41,7 @@ export interface TicketOut extends JiraTicket {
   /** browse link, null without jira.baseUrl */
   url: string | null;
   family: { grill?: FamilyMember; story?: FamilyMember; children: FamilyMember[] };
-  derived: "inProgress" | "testing" | null;
+  derived: DerivedState | null;
   drift: DriftItem[];
   /** pull requests of the ticket (key in title/branch/body, else closing a family issue), main PR first */
   prs: PullOut[];

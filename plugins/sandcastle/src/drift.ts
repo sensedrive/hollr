@@ -3,8 +3,9 @@
  * - JIRA owns content, product labels, assignee and state; GitHub owns only the workflow labels and build
  *   progress. GitHub issues reference their ticket and carry no product labels: one found on an open family
  *   issue is drift (moved to JIRA if JIRA lacks it, then removed from GitHub).
- * - The JIRA state follows GitHub progress forward only: work picked or a story grilled → at least
- *   „in progress“, everything built and closed → at least „testing“. Done is never derived.
+ * - The JIRA state follows GitHub progress forward only: a story grilled or a child queued → at least
+ *   „selected“, a child picked by a run → at least „in progress“, everything built and closed → at least
+ *   „testing“. Done is never derived.
  * A family is what GitHub holds for one ticket: the grill ticket, the story, the story's children – linked by
  * the `## JIRA` section of their bodies (children may inherit the key from their story's `## Parent`).
  */
@@ -58,7 +59,7 @@ export interface DriftItem {
   pr?: { n: number; state: PullOut["state"]; checks: PullOut["checks"] };
 }
 
-export type DerivedState = "inProgress" | "testing";
+export type DerivedState = "selected" | "inProgress" | "testing";
 
 export interface DriftConfig {
   labels: Project["labels"];
@@ -129,11 +130,12 @@ const PICKED: Record<string, true> = {
 export function deriveState(f: Family, labels: Project["labels"]): DerivedState | null {
   const built = [...(f.story ? [f.story] : []), ...f.children];
   if (built.length && built.every((m) => m.state === "closed")) return "testing";
-  const working = f.children.some(
-    (c) => c.state === "open" && (c.labels.includes(labels.queue) || (!!c.phase && Object.hasOwn(PICKED, c.phase))),
-  );
+  const picked = f.children.some((c) => c.state === "open" && !!c.phase && Object.hasOwn(PICKED, c.phase));
+  if (picked) return "inProgress";
+  // grilled or waiting in the queue: ready to build, nobody building yet
+  const queued = f.children.some((c) => c.state === "open" && c.labels.includes(labels.queue));
   const grilled = !!f.story && (!f.grill || f.grill.state === "closed");
-  return working || grilled ? "inProgress" : null;
+  return queued || grilled ? "selected" : null;
 }
 
 const members = (f: Family) => [...(f.grill ? [f.grill] : []), ...(f.story ? [f.story] : []), ...f.children];

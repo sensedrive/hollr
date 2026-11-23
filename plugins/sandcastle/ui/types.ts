@@ -296,7 +296,7 @@ export interface JiraTicket {
   /** browse link, null without jira.baseUrl */
   url: string | null;
   family: Family;
-  derived: "inProgress" | "testing" | null;
+  derived: "selected" | "inProgress" | "testing" | null;
   drift: DriftItem[];
   /** its pull requests, main PR first */
   prs: PullRequest[];

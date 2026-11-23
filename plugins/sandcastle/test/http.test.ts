@@ -212,7 +212,7 @@ describe("JIRA API", () => {
       keyed(50, "R-5", { labels: ["story"], state: "closed", closedAt: "2026-11-21T10:00:00Z" }),
     ];
     jira.issues.push(
-      { key: "R-1", status: "Selected", labels: ["backend"] },
+      { key: "R-1", status: "Backlog", labels: ["backend"] },
       { key: "R-2", status: "Testing" },
       { key: "R-3", status: "Backlog" },
       { key: "R-4", status: "In Progress" },
@@ -271,11 +271,11 @@ describe("JIRA API", () => {
 
     const r1 = ticket(r.body, "R-1");
     expect(r1.family).toMatchObject({ grill: { n: 9 }, story: { n: 10 }, children: [{ n: 11, state: "open" }] });
-    expect(r1.derived).toBe("inProgress");
+    expect(r1.derived).toBe("selected");
     expect(r1.drift).toEqual([
       { kind: "label-on-gh", issue: 10, label: "backend", inJira: true },
       { kind: "label-on-gh", issue: 11, label: "backend", inJira: true },
-      { kind: "state-behind", expected: "In Progress", actual: "Selected" },
+      { kind: "state-behind", expected: "Selected", actual: "Backlog" },
     ]);
     // all closed, but no build PR merged into main: not yet a done candidate
     expect(ticket(r.body, "R-2")).toMatchObject({ drift: [], inMain: "no" });
@@ -392,7 +392,7 @@ describe("JIRA API", () => {
       { id: "I_11", remove: ["L_be", "L_fe"] },
     ]);
     expect(ghWrites.every((w) => w.jiraCallsBefore > put)).toBe(true);
-    expect((r.body.ticket as Ticket).status).toBe("In Progress");
+    expect((r.body.ticket as Ticket).status).toBe("Selected");
     expect((r.body.ticket as Ticket).drift).toEqual([]);
   });
 
@@ -437,7 +437,7 @@ describe("JIRA API", () => {
         applied: [
           { key: "R-1", kind: "label-on-gh", issue: 10, label: "backend" },
           { key: "R-1", kind: "label-on-gh", issue: 11, label: "backend" },
-          { key: "R-1", kind: "state-behind", to: "In Progress" },
+          { key: "R-1", kind: "state-behind", to: "Selected" },
           { key: "R-4", kind: "label-on-gh", issue: 40, label: "frontend" },
           { key: "R-5", kind: "state-behind", to: "Testing" },
         ],

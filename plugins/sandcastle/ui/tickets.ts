@@ -165,7 +165,9 @@ export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null, r
     case "state-behind":
       return derived === "testing"
         ? `JIRA hinkt: alle Kinder gemergt, noch ${d.actual}`
-        : `JIRA hinkt: auf GitHub wird gebaut, noch ${d.actual}`;
+        : derived === "selected"
+          ? `JIRA hinkt: gegrillt oder in der Warteschlange, noch ${d.actual}`
+          : `JIRA hinkt: auf GitHub wird gebaut, noch ${d.actual}`;
     case "done-candidate":
       return released
         ? `Live seit ${released.version} – JIRA steht noch auf ${d.actual ? statusText(d.actual) : "?"}`

@@ -97,31 +97,34 @@ describe("deriveState", () => {
   test("open grill ticket alone implies nothing", () => {
     expect(f([gh(1, { jira: "R-1", labels: ["grillTicket"] })])).toBeNull();
   });
-  test("grill finished with a story → inProgress; story with the grill still open → nothing", () => {
+  test("grill finished with a story → selected; story with the grill still open → nothing", () => {
     expect(f([gh(1, { jira: "R-1", labels: ["grillTicket"], state: "closed" }), gh(2, { jira: "R-1", labels: ["story"] })])).toBe(
-      "inProgress",
+      "selected",
     );
     expect(f([gh(1, { jira: "R-1", labels: ["grillTicket"] }), gh(2, { jira: "R-1", labels: ["story"] })])).toBeNull();
   });
-  test("a queued or picked child → inProgress", () => {
+  test("a queued child → selected; only a child picked by a run → inProgress", () => {
     const grill = gh(1, { jira: "R-1", labels: ["grillTicket"] });
-    expect(f([grill, gh(3, { jira: "R-1", labels: ["Sandcastle"] })])).toBe("inProgress");
+    expect(f([grill, gh(3, { jira: "R-1", labels: ["Sandcastle"] })])).toBe("selected");
+    expect(f([grill, gh(3, { jira: "R-1", labels: ["Sandcastle"] })], new Map([[3, "building"]]))).toBe("inProgress");
     expect(f([grill, gh(3, { jira: "R-1" })], new Map([[3, "planned"]]))).toBe("inProgress");
     expect(f([grill, gh(3, { jira: "R-1" })], new Map([[3, "queued"]]))).toBeNull();
   });
   test("story and all children closed → testing", () => {
     const story = gh(2, { jira: "R-1", labels: ["story"], state: "closed" });
     expect(f([story, gh(3, { parent: 2, state: "closed" })])).toBe("testing");
-    expect(f([story, gh(3, { parent: 2 })])).toBe("inProgress");
+    expect(f([story, gh(3, { parent: 2 })])).toBe("selected");
   });
 });
 
 describe("ticketDrift", () => {
   test("forward only: a ticket further on is never pulled back", () => {
     const fam = familyOf([gh(2, { jira: "R-1", labels: ["story"] })]);
-    expect(ticketDrift(ticket("Selected"), fam, cfg).drift).toEqual([
-      { kind: "state-behind", expected: "In Progress", actual: "Selected" },
+    expect(ticketDrift(ticket("Backlog"), fam, cfg).drift).toEqual([
+      { kind: "state-behind", expected: "Selected", actual: "Backlog" },
     ]);
+    expect(ticketDrift(ticket("Selected"), fam, cfg).drift).toEqual([]);
+    expect(ticketDrift(ticket("In Progress"), fam, cfg).drift).toEqual([]);
     expect(ticketDrift(ticket("Testing"), fam, cfg).drift).toEqual([]);
     expect(ticketDrift(ticket("Blocked"), fam, cfg).drift).toEqual([]);
     // Done with nothing merged into main: info only, never a step backwards
