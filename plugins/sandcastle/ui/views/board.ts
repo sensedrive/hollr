@@ -10,7 +10,7 @@ import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
 import { branchColour, classify, isBusy, segments, shortBranch, since } from "../model";
-import { cacheGet, cacheSet, errorText, hooks, state, toast } from "../state";
+import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
 import type { Column, Issue, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
 import { cardEl } from "./cards";
@@ -22,7 +22,7 @@ const NAMES: Record<Column, string> = { grill: "Zu grillen", backlog: "Backlog",
 const narrowQuery = matchMedia("(max-width: 699px)");
 export const isNarrow = () => narrowQuery.matches;
 
-let seg: Column = (cacheGet<Column>("seg") ?? "backlog") as Column;
+let seg: Column = "backlog";
 
 interface ColumnEls {
   el: HTMLElement;
@@ -57,6 +57,7 @@ function column(c: Column): ColumnEls {
 
 export function boardView(): HTMLElement {
   if (root) return root;
+  seg = prefGet<Column>("seg") ?? "backlog";
   bar = filterBar(() => visible, [
     h("button", { class: "btn primary", "aria-label": "Neues Issue", onclick: () => newIssue() }, "+", h("span", { class: "wide-only" }, " Neues Issue")),
   ]);
@@ -380,7 +381,7 @@ export function renderBoard(): void {
 
 function pickSeg(c: Column): void {
   seg = c;
-  cacheSet("seg", c);
+  prefSet("seg", c);
   renderBoard();
   columnsEl.scrollTop = 0;
 }

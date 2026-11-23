@@ -7,7 +7,7 @@ import { copyText, fill, h } from "../dom";
 import { derive } from "../derive";
 import { type Suggestion, serialize, suggest, type Token, tokenize, tokenText, writeHash } from "../filter";
 import { githubOnly, jiraLink } from "../jira";
-import { hooks, state, toast } from "../state";
+import { hooks, prefSet, state, toast } from "../state";
 
 let committed: Token[] = [];
 let active = 0;
@@ -41,6 +41,7 @@ export function filterTokens(): Token[] {
 
 function apply(): void {
   state.query = serialize(currentTokens());
+  prefSet("filter", state.query);
   history.replaceState(null, "", location.pathname + location.search + writeHash(state.query));
   hooks.render();
 }

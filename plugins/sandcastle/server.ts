@@ -10,6 +10,7 @@ import { BoardCache } from "./src/cache";
 import { hollrGate, type PluginEnv, pluginEnv } from "./src/env";
 import { fetchBoard, fetchChanged } from "./src/github";
 import { type Ctx, handleApi } from "./src/http";
+import { Prefs } from "./src/prefs";
 import { Projects } from "./src/projects";
 
 let env: PluginEnv;
@@ -51,6 +52,7 @@ const ctx: Ctx = {
   projects: new Projects(env.stateDir, hollrGate),
   boards: new BoardCache(env.stateDir, { fetchBoard, fetchChanged }),
   gate: hollrGate,
+  prefs: new Prefs(env.stateDir),
 };
 
 const server = Bun.serve({

@@ -14,6 +14,9 @@ import {
   errorText,
   hooks,
   laneServers,
+  loadPrefs,
+  prefGet,
+  prefSet,
   projects,
   state,
   toast,
@@ -27,6 +30,7 @@ import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
 import { closeSidebar, renderLive } from "./views/sidebar";
 
 initToken();
+await loadPrefs();
 
 const projectSelect = h("select", { class: "project", "aria-label": "Projekt" });
 const boardTab = h("button", { class: "tab", onclick: () => show("board") }, "Board");
@@ -48,7 +52,7 @@ state.servers = cacheGet<Server[]>("servers") ?? [];
 state.localProjects = cacheGet<Project[]>("localProjects") ?? [];
 for (const [k, v] of Object.entries(cacheGet<Record<string, Project[]>>("machineProjects") ?? {})) state.machineProjects.set(k, v);
 for (const [k, v] of Object.entries(cacheGet<Record<string, Status>>("statuses") ?? {})) state.statuses.set(k, v);
-state.view = cacheGet<View>("view") ?? "board";
+state.view = prefGet<View>("view") ?? "board";
 const REFRESH = "__refresh__";
 
 function useSlug(slug: string): void {
@@ -57,13 +61,13 @@ function useSlug(slug: string): void {
   state.olderClosed = [];
   state.closedOlder = 0;
   state.queues = new Map(Object.entries(cacheGet<Record<string, QueueState>>(`queues.${slug}`) ?? {}));
-  cacheSet("slug", slug);
+  prefSet("slug", slug);
   clearCards();
 }
 
 function pickSlug(): void {
   const list = projects();
-  const want = state.slug || cacheGet<string>("slug") || "";
+  const want = state.slug || prefGet<string>("slug") || "";
   const slug = list.find((p) => p.slug === want)?.slug ?? list[0]?.slug ?? "";
   if (slug === state.slug) return;
   useSlug(slug);
@@ -112,7 +116,7 @@ function renderHead(): void {
 
 function show(view: View): void {
   state.view = view;
-  cacheSet("view", view);
+  prefSet("view", view);
   boardTab.classList.toggle("active", view === "board");
   runsTab.classList.toggle("active", view === "runs");
   if (view === "board" && !boardHost.firstChild) boardHost.append(boardView());
@@ -305,7 +309,7 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshAll();
 });
 
-const initial = readHash(location.hash);
+const initial = readHash(location.hash) || prefGet<string>("filter") || "";
 pickSlug();
 show(state.view);
 if (initial) setQuery(initial);

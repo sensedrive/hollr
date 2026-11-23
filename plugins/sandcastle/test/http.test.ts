@@ -6,6 +6,7 @@ import { BoardCache } from "../src/cache";
 import { HttpError } from "../src/env";
 import { toIssue } from "../src/github";
 import { type Ctx, handleApi } from "../src/http";
+import { Prefs } from "../src/prefs";
 import { Projects } from "../src/projects";
 import { issue, NOW, project, snapshot } from "./fixtures";
 
@@ -38,7 +39,7 @@ beforeEach(() => {
     fetchBoard: async () => snapshot([issue(1, { labels: ["Sandcastle"] }), issue(2, { labels: ["story"] })]),
     fetchChanged: async () => [],
   };
-  ctx = { projects: new Projects(dir, gate, () => NOW), boards: new BoardCache(dir, fetchers, () => NOW), gate };
+  ctx = { projects: new Projects(dir, gate, () => NOW), boards: new BoardCache(dir, fetchers, () => NOW), gate, prefs: new Prefs(dir) };
 });
 afterEach(async () => {
   await ctx.boards.saved();
@@ -56,6 +57,13 @@ describe("API", () => {
     expect(gateCalls).toEqual([]);
     await call("/api/projects?refresh=1");
     expect(gateCalls).toEqual([{ command: "sandcastle", stdin: { op: "projects", refresh: true } }]);
+  });
+
+  test("prefs survive a new process; null removes a key", async () => {
+    await call("/api/prefs", { method: "POST", body: { slug: "o/r", view: "runs" } });
+    await call("/api/prefs", { method: "POST", body: { view: null, filter: "l:bug" } });
+    ctx.prefs = new Prefs(dir);
+    expect((await call("/api/prefs")).body.prefs).toEqual({ slug: "o/r", filter: "l:bug" });
   });
 
   test("board by slug; since=etag answers {same:true}", async () => {

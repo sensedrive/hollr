@@ -9,6 +9,7 @@ import { type Column, COLUMNS, classify, type MovePlan, movePlan } from "./board
 import type { BoardCache } from "./cache";
 import { HttpError } from "./env";
 import * as github from "./github";
+import type { Prefs } from "./prefs";
 import type { Gate, Projects } from "./projects";
 import type { CommentOut, Issue, IssueDetail, Project } from "./types";
 
@@ -17,6 +18,8 @@ export interface Ctx {
   boards: BoardCache;
   /** `hollr gate` on this machine */
   gate: Gate;
+  /** last board settings, kept across tunnel origins */
+  prefs: Prefs;
 }
 
 /** Gate commands /api/host/gate passes on – the same allowlist the manifest gives the Hollr relay. */
@@ -187,6 +190,9 @@ async function route(req: Request, url: URL, ctx: Ctx): Promise<unknown> {
     const b = await json(req);
     return { issue: await create(ctx, await project(b.slug), b) };
   }
+
+  if (method === "GET" && path === "/api/prefs") return { prefs: ctx.prefs.get() };
+  if (method === "POST" && path === "/api/prefs") return { prefs: ctx.prefs.patch(await json(req)) };
 
   if (method === "GET" && path === "/api/host/servers")
     return { servers: [{ id: "local", label: hostname().replace(/\.local$/, ""), self: true, online: true }] };

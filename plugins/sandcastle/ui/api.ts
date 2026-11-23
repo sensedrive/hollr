@@ -26,6 +26,16 @@ function expired(): void {
   document.body.replaceChildren(el);
 }
 
+/** Fire-and-forget POST that survives the page going away (Hollr removes the frame on navigation). */
+export function apiKeepalive(path: string, body: unknown): void {
+  fetch(path, {
+    method: "POST",
+    keepalive: true,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method: body === undefined ? "GET" : "POST",

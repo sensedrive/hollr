@@ -7,7 +7,7 @@ import { hasHost, openExternal, openSession, sc } from "../api";
 import { derive } from "../derive";
 import { copyText, fill, fmtDate, h, reconcile } from "../dom";
 import { branchColour, PHASE_TEXT, segments, since } from "../model";
-import { cacheGet, cacheSet, errorText, hooks, projectOn, serverLabel, state, toast } from "../state";
+import { errorText, hooks, prefGet, prefSet, projectOn, serverLabel, state, toast } from "../state";
 import type { LogFile, Project, Run, RunStatus, Server } from "../types";
 
 export const STATUS_TEXT: Record<RunStatus, string> = {
@@ -232,7 +232,7 @@ function startForm(s: Server, p: Project): HTMLElement {
           ? "Die Warteschlange auf diesem Rechner ist leer – im Board Karten in seine Sandcastle-Spalte ziehen."
           : "";
   if (!form) {
-    const last = cacheGet<{ agent: string; parallel: number; screencast: boolean; deploy: boolean }>(`cfg.${p.slug}`);
+    const last = prefGet<{ agent: string; parallel: number; screencast: boolean; deploy: boolean }>(`cfg.${p.slug}`);
     const agents = p.agents.length ? p.agents : [{ key: p.defaults.agent, label: p.defaults.agent, harness: "", model: "" }];
     const agent = h("select", { name: "agent" }, ...agents.map((a) => h("option", { value: a.key }, a.model && a.model !== a.label ? `${a.label} (${a.model})` : a.label)));
     agent.value = agents.some((a) => a.key === last?.agent) ? (last?.agent ?? "") : p.defaults.agent;
@@ -260,7 +260,7 @@ function startForm(s: Server, p: Project): HTMLElement {
           error.textContent = "";
           try {
             const res = await sc.start(s.id, p.slug, config);
-            cacheSet(`cfg.${p.slug}`, config);
+            prefSet(`cfg.${p.slug}`, config);
             toast(`Lauf auf ${s.label} gestartet`, "info");
             if (res.pane && hasHost()) openSession(s.id, res.pane);
             state.startFor = null;

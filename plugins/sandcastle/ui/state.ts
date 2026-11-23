@@ -2,6 +2,7 @@
  * Shared state of the views plus the last-known data in localStorage, so a reopened board paints at once from the
  * previous answers and only then catches up with the network (no blocking spinner after the first paint).
  */
+import { api, apiKeepalive } from "./api";
 import type { BoardData, Issue, Project, QueueState, Server, Status } from "./types";
 
 export type View = "board" | "runs";
@@ -69,6 +70,46 @@ export const hooks = {
   reloadQueues: async (): Promise<void> => {},
   show: (_view: View) => {},
 };
+
+// ---- settings (project, view, filter, column, start form) – on the plugin server, because the page origin
+// changes with every Hollr tunnel and localStorage would start empty each time
+
+let prefs: Record<string, unknown> = {};
+let pending: Record<string, unknown> = {};
+let prefTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Before the first paint; a failure keeps the defaults (the board still works). */
+export async function loadPrefs(): Promise<void> {
+  try {
+    prefs = (await api<{ prefs: Record<string, unknown> }>("/api/prefs")).prefs;
+  } catch {
+    prefs = {};
+  }
+}
+
+export const prefGet = <T>(key: string): T | null => (prefs[key] as T | undefined) ?? null;
+
+export function prefSet(key: string, value: unknown): void {
+  if (JSON.stringify(prefs[key]) === JSON.stringify(value)) return;
+  prefs[key] = value;
+  pending[key] = value;
+  clearTimeout(prefTimer);
+  prefTimer = setTimeout(flushPrefs, 200);
+}
+
+function flushPrefs(): void {
+  clearTimeout(prefTimer);
+  if (!Object.keys(pending).length) return;
+  const body = pending;
+  pending = {};
+  apiKeepalive("/api/prefs", body);
+}
+
+// the frame may vanish any moment (view switch in Hollr, reload): write what is pending right away
+addEventListener("pagehide", flushPrefs);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) flushPrefs();
+});
 
 const PREFIX = "sc.v2.";
 
