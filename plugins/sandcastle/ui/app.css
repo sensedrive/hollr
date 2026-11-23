@@ -633,9 +633,12 @@ button.chip.jira:hover { background: color-mix(in srgb, var(--blue) 24%, transpa
 .col-fold:hover { color: var(--fg); background: var(--card); }
 .columns > .column.col-folded { flex: 0 0 40px; cursor: pointer; }
 .tcolumns > .column.col-folded { min-width: 0; }
-.column.col-folded > header { writing-mode: vertical-rl; flex: 1; justify-content: flex-start; padding: 12px 0; align-items: center; cursor: pointer; }
-.column.col-folded > header .col-name { overflow: visible; }
-.column.col-folded .col-fold { opacity: 1; }
+.column.col-folded > header { writing-mode: vertical-rl; flex: 1; justify-content: flex-start; gap: 8px; padding: 10px 0; align-items: center; cursor: pointer; }
+/* the count leads (the rail may be taller than the window), as a small pill read upright */
+.column.col-folded > header .col-name { flex: none; overflow: visible; }
+.column.col-folded > header .count { order: -1; writing-mode: horizontal-tb; min-width: 22px; padding: 1px 5px; border-radius: 999px;
+  text-align: center; font-size: 11px; font-weight: 600; color: var(--fg); background: var(--card); border: 1px solid var(--border); }
+.column.col-folded .col-fold { order: -2; opacity: 1; writing-mode: horizontal-tb; }
 .column.col-folded > .list { display: none; }
 @media (max-width: 699px) {
   .columns > .column, .tcolumns > .column { flex: none; }
