@@ -88,12 +88,19 @@ type Slot = Arc<Mutex<Vec<Arc<Conn>>>>;
 /// „Keine Verbindung“ while its terminal kept working). A connection takes at most this many – the next one opens
 /// another connection.
 const SESSION_BUDGET: usize = 8;
+/// Connections per server; calls past their places wait for one to free up.
+const MAX_CONNECTIONS: usize = 3;
 
 /// One SSH connection and how many session channels run on it right now.
 pub struct Conn {
     handle: Arc<Handle<Pinned>>,
     sessions: std::sync::atomic::AtomicUsize,
+    /// when its last session ended (ms) – a spare connection goes only after it was quiet for `SPARE_IDLE_MS`
+    idle_since: std::sync::atomic::AtomicU64,
 }
+
+/// A spare connection (opened by a burst) closes after this long without any session.
+const SPARE_IDLE_MS: u64 = 60_000;
 
 /// A session channel's place on a pooled connection: hold it as long as the channel lives; dropping it frees
 /// the place. Derefs to the connection's handle.
@@ -117,7 +124,9 @@ impl std::ops::Deref for Lease {
 
 impl Drop for Lease {
     fn drop(&mut self) {
-        self.conn.sessions.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        if self.conn.sessions.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) == 1 {
+            self.conn.idle_since.store(now_ms(), std::sync::atomic::Ordering::Relaxed);
+        }
     }
 }
 
@@ -334,21 +343,47 @@ impl Hollr {
         use std::sync::atomic::Ordering;
         // the map lock is only held for the lookup, the connect waits on this server's slot alone
         let slot = self.pool.lock().unwrap().entry(server.id.clone()).or_default().clone();
-        let mut pooled = slot.lock().await;
-        pooled.retain(|c| !c.handle.is_closed());
-        if let Some(conn) = pooled.iter().find(|c| c.sessions.load(Ordering::Relaxed) < SESSION_BUDGET) {
-            conn.sessions.fetch_add(1, Ordering::Relaxed);
-            return Ok(Lease { conn: conn.clone() });
+        let until = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            {
+                let mut pooled = slot.lock().await;
+                pooled.retain(|c| !c.handle.is_closed());
+                // a burst (app start, wake-up) opened spare connections: keep one quiet one, close the rest once
+                // they were quiet for a minute (closing them at once would reconnect on every next burst)
+                let now = now_ms();
+                let mut spare = false;
+                pooled.retain(|c| {
+                    c.sessions.load(Ordering::Relaxed) > 0
+                        || !std::mem::replace(&mut spare, true)
+                        || now.saturating_sub(c.idle_since.load(Ordering::Relaxed)) < SPARE_IDLE_MS
+                });
+                if let Some(conn) = pooled.iter().find(|c| c.sessions.load(Ordering::Relaxed) < SESSION_BUDGET) {
+                    conn.sessions.fetch_add(1, Ordering::Relaxed);
+                    return Ok(Lease { conn: conn.clone() });
+                }
+                if pooled.len() < MAX_CONNECTIONS {
+                    let handle = Arc::new(
+                        Self::connect(&server.addresses, server.port, &server.user, &server.host_fingerprint, self.device_key()?)
+                            .await?,
+                    );
+                    if !pooled.is_empty() {
+                        crate::diag::write(&format!("pool {}: connection {} (the others are full)", server.label, pooled.len() + 1));
+                    }
+                    let conn = Arc::new(Conn {
+                        handle,
+                        sessions: std::sync::atomic::AtomicUsize::new(1),
+                        idle_since: std::sync::atomic::AtomicU64::new(now),
+                    });
+                    pooled.push(conn.clone());
+                    return Ok(Lease { conn });
+                }
+            }
+            // every connection is full: wait for a place instead of flooding sshd with more connections
+            if std::time::Instant::now() > until {
+                bail!("Zu viele offene Sitzungen auf {} – schließe ein paar Chats oder Terminals", server.label);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
         }
-        let handle = Arc::new(
-            Self::connect(&server.addresses, server.port, &server.user, &server.host_fingerprint, self.device_key()?).await?,
-        );
-        if !pooled.is_empty() {
-            crate::diag::write(&format!("pool {}: connection {} (the others are full)", server.label, pooled.len() + 1));
-        }
-        let conn = Arc::new(Conn { handle, sessions: std::sync::atomic::AtomicUsize::new(1) });
-        pooled.push(conn.clone());
-        Ok(Lease { conn })
     }
 
     /// Runs one `hollr gate` command; `stdin` (one JSON line) is sent first. Returns stdout.
