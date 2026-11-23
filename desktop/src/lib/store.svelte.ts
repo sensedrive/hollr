@@ -48,6 +48,27 @@ export function go(route: Route) {
   nav.route = route;
   if (route.view === "agent") mySessions.touch(`${route.server}|${route.pane}`, true);
   rememberTab(route);
+  rememberPlugin(route);
+}
+
+// ---- „Plugins“ in the sidebar reopens the plugin shown last; the overview only when that was the last stop
+const LAST_PLUGIN_KEY = "hollr.lastPlugin";
+
+function rememberPlugin(route: Route) {
+  if (route.view !== "plugin" && route.view !== "plugins") return;
+  try {
+    if (route.view === "plugin") localStorage.setItem(LAST_PLUGIN_KEY, JSON.stringify({ server: route.server, id: route.id }));
+    else localStorage.removeItem(LAST_PLUGIN_KEY);
+  } catch {}
+}
+
+export function pluginsRoute(): Route {
+  try {
+    const last = JSON.parse(localStorage.getItem(LAST_PLUGIN_KEY) ?? "null") as { server?: unknown; id?: unknown } | null;
+    if (last && typeof last.server === "string" && typeof last.id === "string" && serverById(last.server))
+      return { view: "plugin", server: last.server, id: last.id };
+  } catch {}
+  return { view: "plugins" };
 }
 
 // ---- the tab each space had selected last (its overview or a session): switching spaces comes back to it

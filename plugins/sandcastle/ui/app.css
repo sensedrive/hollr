@@ -146,10 +146,17 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .lane .list { overflow: visible; flex: none; padding: 4px 6px 6px; min-height: 48px; }
 .lane-head { display: flex; flex-direction: column; gap: 6px; padding: 7px 8px 6px; font-size: 12px; }
 .lane-machine { font-weight: 700; font-size: 13px; }
-.lane-info { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.lane-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lane-toggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-width: 0; border-radius: 6px; padding: 1px 4px 1px 0; }
+.lane-toggle .chev { width: 14px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1; }
+.lane-toggle:hover .chev, .lane-toggle:focus-visible .chev { color: var(--fg); }
+.lane-info { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); padding-left: 20px; }
 /* one block per live run of this repo on the machine; several when runs overlap (board + hand-started) */
-.lane-run { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 3px; padding: 6px 4px 2px; border-top: 1px solid var(--border); border-radius: 6px; }
-.lane-machine + .lane-run { border-top: 0; }
+.lane-run { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 3px; padding: 6px 4px 2px 20px; border-top: 1px solid var(--border); border-radius: 6px; }
+.lane-top + .lane-run { border-top: 0; }
+.lane-summary { display: grid; gap: 3px; padding: 2px 4px 2px 20px; color: var(--fg); }
+.lane-summary .warn { color: var(--orange); }
+.lane.closed .lane-head { padding-bottom: 8px; }
 .lane-run:hover { background: var(--card); }
 .lane-run-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .lane-run-top b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

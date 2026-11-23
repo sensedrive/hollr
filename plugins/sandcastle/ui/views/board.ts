@@ -9,9 +9,9 @@ import { derive, type Derived, flagsOf, type Lane, openBlockers } from "../deriv
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { compile } from "../filter";
-import { branchColour, classify, isBusy, segments, shortBranch, since } from "../model";
+import { branchColour, classify, isBusy, laneSummary, PHASE_TEXT, segments, shortBranch, since } from "../model";
 import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
-import type { Column, Issue, Run } from "../types";
+import type { Column, Issue, Phase, Run } from "../types";
 import { STATUS_TEXT } from "./runs";
 import { cardEl } from "./cards";
 import { filterBar, filterTokens } from "./filterbar";
@@ -96,6 +96,8 @@ function onClick(e: Event): void {
   }
   const run = t.closest<HTMLElement>("[data-run]");
   if (run) openRun(run.dataset.server ?? "", run.dataset.run ?? "");
+  const fold = t.closest<HTMLElement>("[data-lane-toggle]");
+  if (fold) toggleLane(fold.dataset.laneToggle ?? "");
 }
 
 /** A run row in a lane head opens that run in „Läufe“ (its planner/merger log). */
@@ -230,7 +232,16 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
 
 const empty = (text: string) => h("p", { class: "empty" }, text);
 
-function laneEl(lane: Lane) {
+/** machines whose lane is folded to its head (remembered across tunnels in the plugin's prefs) */
+const closedLanes = (): string[] => prefGet<string[]>("lanesClosed") ?? [];
+
+function toggleLane(server: string): void {
+  const closed = closedLanes();
+  prefSet("lanesClosed", closed.includes(server) ? closed.filter((s) => s !== server) : [...closed, server]);
+  renderBoard();
+}
+
+function laneEl(d: Derived, lane: Lane) {
   let el = laneEls.get(lane.server.id);
   if (!el) {
     const head = h("div", { class: "lane-head" });
@@ -238,31 +249,58 @@ function laneEl(lane: Lane) {
     el = { el: h("div", { class: "lane", "data-column": `queue@${lane.server.id}` }, head, list), head, list, sig: "" };
     laneEls.set(lane.server.id, el);
   }
+  const closed = closedLanes().includes(lane.server.id);
   const live = lane.runs.filter((r) => r.status !== "ended");
-  const sig = JSON.stringify([lane.server, lane.runs.map((r) => [r.id, r.status, r.progress, r.config, r.branch, r.issues.map((i) => i.phase)])]);
+  const summary = closed
+    ? laneSummary(lane.order, (n) => d.runs.get(n)?.issue.phase, (n) => {
+        const i = d.issues.get(n);
+        return !!i && openBlockers(d, i).length > 0;
+      })
+    : null;
+  const sig = JSON.stringify([lane.server, closed, summary, lane.runs.map((r) => [r.id, r.status, r.progress, r.config, r.branch, r.issues.map((i) => i.phase)])]);
   if (sig !== el.sig) {
     el.sig = sig;
+    el.el.classList.toggle("closed", closed);
     const ended = lane.runs.find((r) => r.status === "ended");
+    // folded: the last ended run still says how it went; open: just a line, the cards tell the rest
+    const runs = live.length ? live : closed && ended ? [ended] : [];
     fill(
       el.head,
-      h("div", { class: "lane-machine" }, lane.server.label),
-      ...(live.length
-        ? live.map((r) => runRow(lane.server.id, r))
-        : [
-            h(
-              "div",
-              { class: "lane-info muted" },
-              ended ? `beendet vor ${since(ended.endedAt ?? ended.startedAt)} · ` : "Kein Lauf · ",
-              h("button", { class: "link", "data-start": lane.server.id }, "Lauf starten"),
-            ),
-          ]),
+      h(
+        "div",
+        { class: "lane-top" },
+        h(
+          "button",
+          { class: "lane-toggle", "aria-expanded": String(!closed), "data-lane-toggle": lane.server.id, title: closed ? "Aufklappen" : "Zuklappen" },
+          h("span", { class: "chev" }, closed ? "›" : "⌄"),
+          h("span", { class: "lane-machine" }, lane.server.label),
+        ),
+        h("span", { class: "grow" }),
+        live.length ? null : h("button", { class: "link", "data-start": lane.server.id }, "Lauf starten"),
+      ),
+      ...runs.map((r) => runRow(lane.server.id, r)),
+      !runs.length ? h("div", { class: "lane-info muted" }, ended ? `beendet vor ${since(ended.endedAt ?? ended.startedAt)}` : "Kein Lauf") : null,
+      summary ? summaryEl(summary) : null,
     );
   }
   return el;
 }
 
+function summaryEl(s: ReturnType<typeof laneSummary>): HTMLElement | null {
+  if (!s.total) return null;
+  const phases = (Object.entries(s.phases) as [Phase, number][]).filter(([, n]) => n > 0);
+  return h(
+    "div",
+    { class: "lane-summary" },
+    s.queued ? h("div", {}, `${s.queued} in der Warteschlange`) : null,
+    s.blocked ? h("div", { class: "warn" }, `davon ${s.blocked} blockiert`) : null,
+    phases.length ? h("div", { class: "chips" }, ...phases.map(([p, n]) => h("span", { class: `phase ${p}` }, `${PHASE_TEXT[p]} ${n}`))) : null,
+  );
+}
+
 function runRow(server: string, r: Run): HTMLElement {
   const agent = r.config.agentLabel || r.config.agent;
+  const done = r.status === "ended";
   return h(
     "button",
     { class: "lane-run", "data-server": server, "data-run": r.id, title: `${r.branch} – in „Läufe“ öffnen` },
@@ -272,12 +310,13 @@ function runRow(server: string, r: Run): HTMLElement {
       h("span", { class: "dot", style: `background:${branchColour(r.branch)}` }),
       h("b", {}, shortBranch(r.branch) || r.project),
       h("span", { class: "grow" }),
-      h("span", { class: `st st-${r.status}` }, STATUS_TEXT[r.status].split(" –")[0] ?? ""),
+      done ? null : h("span", { class: `st st-${r.status}` }, STATUS_TEXT[r.status].split(" –")[0] ?? ""),
     ),
+    done ? h("span", { class: "lane-run-meta" }, `beendet vor ${since(r.endedAt ?? r.startedAt)}`) : null,
     h(
       "span",
       { class: "lane-run-meta" },
-      [`${r.progress.merged + r.progress.failed}/${r.progress.total} · ${r.progress.percent} %`, agent, r.config.parallel ? `×${r.config.parallel}` : ""]
+      [`${r.progress.merged + r.progress.failed}/${r.progress.total} · ${r.progress.percent} %`, done ? "" : agent, !done && r.config.parallel ? `×${r.config.parallel}` : ""]
         .filter(Boolean)
         .join(" · "),
     ),
@@ -339,10 +378,13 @@ export function renderBoard(): void {
   // Sandcastle: a lane per machine
   let queueCount = 0;
   const lanes = d.lanes.map((lane) => {
-    const el = laneEl(lane);
+    const el = laneEl(d, lane);
     const cards = laneCards(d, lane, test);
     queueCount += cards.filter((c) => c.dataset.card).length;
-    reconcile(el.list, cards.length ? cards : [empty(lane.order.length ? "Ausgefiltert" : "Leer – hierher ziehen")]);
+    // folded lanes keep no cards in the DOM (a drop there appends to its queue)
+    el.list.hidden = closedLanes().includes(lane.server.id);
+    if (el.list.hidden) reconcile(el.list, []);
+    else reconcile(el.list, cards.length ? cards : [empty(lane.order.length ? "Ausgefiltert" : "Leer – hierher ziehen")]);
     return el.el;
   });
   if (!d.lanes.length) {

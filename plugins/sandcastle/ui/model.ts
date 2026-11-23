@@ -108,6 +108,30 @@ export function segments(issues: RunIssue[]): Phase[] {
   return issues.map((i) => i.phase).sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
+export interface LaneSummary {
+  /** tickets in the lane (running + queued) */
+  total: number;
+  /** waiting in the queue, not picked by a run yet */
+  queued: number;
+  /** of the queued ones: waiting for an open blocker */
+  blocked: number;
+  /** phase counts of tickets in a live run */
+  phases: Partial<Record<Phase, number>>;
+}
+
+/** What a collapsed lane says about its tickets; `phaseOf`/`blocked` come from the derived board. */
+export function laneSummary(order: number[], phaseOf: (n: number) => Phase | undefined, blocked: (n: number) => boolean): LaneSummary {
+  const out: LaneSummary = { total: order.length, queued: 0, blocked: 0, phases: {} };
+  for (const n of order) {
+    const phase = phaseOf(n);
+    if (!phase || phase === "queued") {
+      out.queued++;
+      if (blocked(n)) out.blocked++;
+    } else out.phases[phase] = (out.phases[phase] ?? 0) + 1;
+  }
+  return out;
+}
+
 /** `feature/queue-2026-11-23-1402` → `queue-11-23-1402`, `feature/TENDR-1069-x-y` → `TENDR-1069-…`. */
 export function shortBranch(branch: string): string {
   const b = branch.replace(/^[^/]+\//, "").replace(/-20\d\d-(\d\d-\d\d)/, "-$1");

@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 57,
+    version: "0.50.2",
+    date: "23.11.2026",
+    items: [
+      { icon: "▤", text: "„Plugins“ in der Seitenleiste öffnet direkt das zuletzt genutzte Plugin; der Pfeil zurück führt zur Übersicht." },
+    ],
+  },
+  {
     build: 56,
     version: "0.50.1",
     date: "23.11.2026",

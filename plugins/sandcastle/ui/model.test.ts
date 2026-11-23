@@ -4,13 +4,14 @@ import {
   branchColour,
   classify,
   effectiveOrder,
+  laneSummary,
   normaliseFlags,
   placeBefore,
   segments,
   shortBranch,
   ticketRuns,
 } from "./model";
-import type { Run, RunIssue, Status } from "./types";
+import type { Phase, Run, RunIssue, Status } from "./types";
 
 const labels = { queue: "Sandcastle", story: "story", grill: "grillen" };
 
@@ -49,6 +50,11 @@ describe("lanes", () => {
     );
     expect(lanes.get("workr")).toEqual([9, 1, 2]);
     expect(lanes.get("mbp")).toEqual([3]);
+  });
+  test("lane summary: queued (incl. blocked) vs. phases of picked tickets", () => {
+    const phase: Record<number, Phase> = { 1: "building", 2: "reviewing", 3: "building", 4: "queued", 7: "failed" };
+    const s = laneSummary([1, 2, 3, 4, 5, 6, 7], (n) => phase[n], (n) => n === 5);
+    expect(s).toEqual({ total: 7, queued: 3, blocked: 1, phases: { building: 2, reviewing: 1, failed: 1 } });
   });
   test("no lanes → empty", () => expect(assignLanes([1], []).size).toBe(0));
   test("placeBefore: start, middle, end, self, new", () => {

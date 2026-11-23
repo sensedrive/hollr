@@ -7,7 +7,7 @@
   import * as api from "$lib/api";
   import { viaTunnel } from "$lib/agent";
   import { t } from "$lib/i18n";
-  import { app, back, go, serverById } from "$lib/store.svelte";
+  import { app, go, serverById } from "$lib/store.svelte";
   import { parseHostRequest, readTheme, type HostReply } from "$lib/pluginHost";
   import { errText } from "$lib/serverapi";
   import { listPlugins, openPlugin } from "$lib/plugins";
@@ -118,7 +118,7 @@
 
 <div class="plugin">
   <div class="bar">
-    <button class="ib" title={t("Zurück")} onclick={back}>‹</button>
+    <button class="ib" title={t("Zurück")} onclick={() => go({ view: "plugins" })}>‹</button>
     <span class="title">{name}</span>
     <span class="srv">{serverById(server)?.label ?? server}</span>
     <button class="ib" title={t("Neu laden")} disabled={loading} onclick={open}><Icon name="↻" size={15} /></button>
