@@ -13,7 +13,7 @@ import { errorText, hooks, serverLabel, state, toast } from "../state";
 import { actionable, applyHint, buildLine, driftText, INFO_KINDS, jiraLabel, liveState, memberPhase, statusColumn, ticketFacets, typeIcon } from "../tickets";
 import type { Comment, FamilyMember, JiraIssueDetail, JiraTicket } from "../types";
 import { grillBlock, grillBlockSig } from "./grilling";
-import { claimPanel, closeSidebar, commentEl, extLink, externalLinks, openIssue, prListEl } from "./sidebar";
+import { claimPanel, closeSidebar, commentList, extLink, externalLinks, openIssue, prListEl } from "./sidebar";
 
 let shown: string | null = null;
 let detail: JiraIssueDetail | null = null;
@@ -85,8 +85,9 @@ function render(key: string): void {
 function staticPart(key: string): (HTMLElement | null)[] {
   if (!detail) return [h("p", { class: "muted" }, "Beschreibung und Kommentare laden …")];
   const d = detail;
-  const comments = h("div", { class: "comments" }, ...d.comments.map(commentEl));
-  const heading = h("h3", {}, `Kommentare (${d.comments.length})`);
+  const list = commentList(d.comments);
+  const comments = list.el;
+  const heading = list.heading;
   const text = h("textarea", { rows: 3, placeholder: "Kommentar schreiben …" });
   const send = h("button", { class: "btn primary" }, "Kommentieren");
   send.addEventListener("click", async () => {
@@ -98,8 +99,7 @@ function staticPart(key: string): (HTMLElement | null)[] {
       text.value = "";
       if (shown === key) {
         d.comments.push(comment);
-        comments.append(commentEl(comment));
-        heading.textContent = `Kommentare (${d.comments.length})`;
+        list.add(comment);
       }
     } catch (err) {
       toast(errorText(err));

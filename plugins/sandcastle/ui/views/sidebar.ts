@@ -219,8 +219,9 @@ function render(n: number): void {
 function staticPart(n: number): (HTMLElement | null)[] {
   if (!detail) return [h("p", { class: "muted" }, "Text und Kommentare laden …")];
   const d = detail;
-  const comments = h("div", { class: "comments" }, ...d.comments.map(commentEl));
-  const heading = h("h3", {}, `Kommentare (${d.comments.length})`);
+  const list = commentList(d.comments);
+  const comments = list.el;
+  const heading = list.heading;
   const text = h("textarea", { rows: 3, placeholder: "Kommentar schreiben …" });
   const send = h("button", { class: "btn primary" }, "Kommentieren");
   send.addEventListener("click", async () => {
@@ -232,8 +233,7 @@ function staticPart(n: number): (HTMLElement | null)[] {
       text.value = "";
       if (shown === n) {
         d.comments.push(comment);
-        comments.append(commentEl(comment));
-        heading.textContent = `Kommentare (${d.comments.length})`;
+        list.add(comment);
       }
     } catch (err) {
       toast(errorText(err));
@@ -250,8 +250,70 @@ function staticPart(n: number): (HTMLElement | null)[] {
   ];
 }
 
-export const commentEl = (c: Comment) =>
-  h("div", { class: "comment" }, h("div", { class: "small" }, h("b", {}, c.author), h("span", { class: "muted" }, ` · ${fmtDate(c.createdAt)}`)), externalLinks(html("markdown", c.bodyHtml)));
+/** „vor 5 Min.“ … „vor 3 Wochen“; older ones as a date. The exact time sits in the title. */
+export function ago(iso: string, now = Date.now()): string {
+  const min = Math.round((now - Date.parse(iso)) / 60_000);
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min} Min.`;
+  const hours = Math.round(min / 60);
+  if (hours < 24) return `vor ${hours} Std.`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return "gestern";
+  if (days < 14) return `vor ${days} Tagen`;
+  if (days < 60) return `vor ${Math.round(days / 7)} Wochen`;
+  return new Date(iso).toLocaleDateString("de-DE");
+}
+
+/** A comment that folds: the head shows who, when (relative, exact on hover) and, folded, the first words. */
+export function commentEl(c: Comment, open = true): HTMLDetailsElement {
+  const body = externalLinks(html("markdown", c.bodyHtml));
+  const preview = (body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+  return h(
+    "details",
+    { class: "comment", open },
+    h(
+      "summary",
+      {},
+      h("b", {}, c.author),
+      // fresh ones read best relative („vor 3 Std.“); older ones need the exact day and time to tell apart
+      Date.now() - Date.parse(c.createdAt) < 48 * 3600_000
+        ? h("span", { class: "muted", title: fmtDate(c.createdAt) }, ` · ${ago(c.createdAt)}`)
+        : h("span", { class: "muted", title: ago(c.createdAt) }, ` · ${fmtDate(c.createdAt)}`),
+      h("span", { class: "comment-preview muted" }, preview),
+    ),
+    body,
+  ) as HTMLDetailsElement;
+}
+
+/** Comments oldest first; only the newest starts open. „Alle auf/zu“ in the heading. */
+export function commentList(all: Comment[]): { el: HTMLElement; heading: HTMLElement; add(c: Comment): void } {
+  const el = h("div", { class: "comments" }, ...all.map((c, i) => commentEl(c, i === all.length - 1)));
+  const label = h("span", { class: "grow" });
+  const setAll = (open: boolean) => {
+    for (const d of el.querySelectorAll<HTMLDetailsElement>("details.comment")) d.open = open;
+  };
+  const toggles = h(
+    "span",
+    { class: "comment-toggles" },
+    h("button", { class: "link", onclick: () => setAll(true) }, "Alle auf"),
+    " · ",
+    h("button", { class: "link", onclick: () => setAll(false) }, "Alle zu"),
+  );
+  const heading = h("h3", { class: "comments-head" }, label, toggles);
+  const count = () => {
+    label.textContent = `Kommentare (${el.children.length})`;
+    toggles.hidden = el.children.length < 2;
+  };
+  count();
+  return {
+    el,
+    heading,
+    add(c) {
+      el.append(commentEl(c, true));
+      count();
+    },
+  };
+}
 
 /** The blocks that follow polls. Called by app.ts after every render. */
 export function renderLive(): void {
