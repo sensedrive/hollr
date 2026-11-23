@@ -5,7 +5,7 @@
  */
 import type { Issue } from "./types";
 
-export type TokenKind = "label" | "nolabel" | "assignee" | "story" | "type" | "number" | "drift" | "text";
+export type TokenKind = "label" | "nolabel" | "assignee" | "story" | "type" | "notype" | "number" | "drift" | "text";
 
 export interface Token {
   kind: TokenKind;
@@ -32,6 +32,7 @@ export function parseToken(word: string): Token | null {
   if (/^-l:/i.test(w)) return pick("nolabel", w.slice(3));
   if (/^l:/i.test(w)) return pick("label", w.slice(2));
   if (/^s:/i.test(w)) return pick("story", w.slice(2));
+  if (/^-t:/i.test(w)) return pick("notype", w.slice(3));
   if (/^t:/i.test(w)) return pick("type", w.slice(2));
   if (w.startsWith("@")) return pick("assignee", w.slice(1));
   if (/^#\d+$/.test(w)) return { kind: "number", value: w.slice(1) };
@@ -43,7 +44,7 @@ export function parseToken(word: string): Token | null {
  */
 export function tokenize(query: string): Token[] {
   const out: Token[] = [];
-  const re = /(-?l:|s:|t:|@)?"([^"]*)"?|(\S+)/g;
+  const re = /(-?l:|s:|-?t:|@)?"([^"]*)"?|(\S+)/g;
   for (const m of query.matchAll(re)) {
     const word = m[3] ?? `${m[1] ?? ""}${m[2] ?? ""}`;
     const t = parseToken(word);
@@ -66,6 +67,8 @@ export function tokenText(t: Token): string {
       return `s:${quote(t.value)}`;
     case "type":
       return `t:${quote(t.value)}`;
+    case "notype":
+      return `-t:${quote(t.value)}`;
     case "number":
       return `#${t.value}`;
     case "drift":
@@ -133,14 +136,15 @@ export interface SuggestSource {
 
 /** Completions for the word being typed (the input's last word). */
 export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion[] {
-  const m = word.match(/^(-l:|l:|s:|t:|@)(.*)$/i);
+  const m = word.match(/^(-l:|l:|s:|-?t:|@)(.*)$/i);
   if (!m) return [];
   const prefix = (m[1] ?? "").toLowerCase();
   const q = lc((m[2] ?? "").replace(/^"/, ""));
   let out: Suggestion[];
   if (prefix === "l:" || prefix === "-l:")
     out = src.labels.filter((l) => lc(l).includes(q)).map((l) => ({ text: `${prefix}${quote(l)}` }));
-  else if (prefix === "t:") out = (src.types ?? []).filter((x) => lc(x).includes(q)).map((x) => ({ text: `t:${quote(x)}` }));
+  else if (prefix === "t:" || prefix === "-t:")
+    out = (src.types ?? []).filter((x) => lc(x).includes(q)).map((x) => ({ text: `${prefix}${quote(x)}` }));
   else if (prefix === "@")
     out = [{ login: "ich", name: "ich (gh-Nutzer)" }, ...src.assignees]
       .filter((a) => lc(a.login).includes(q) || lc(a.name ?? "").includes(q))
@@ -150,7 +154,7 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
       .filter((s) => lc(String(s.number)).startsWith(q) || lc(s.title).includes(q))
       .map((s) => ({ text: `s:${s.number}`, hint: s.title }));
   // prefix matches first, then the rest in source order
-  const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|t:|@)"?/i, "")).startsWith(q);
+  const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|-?t:|@)"?/i, "")).startsWith(q);
   return [...out.filter(starts), ...out.filter((s) => !starts(s))].slice(0, limit);
 }
 

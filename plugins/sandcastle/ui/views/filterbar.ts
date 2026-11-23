@@ -245,14 +245,16 @@ function renderQuick(): void {
   const opts = src?.quick ?? [];
   const on = new Set(committed.map(tokenText));
   const types = src?.typeCounts ?? [];
-  const anyType = committed.some((t) => t.kind === "type");
+  const anyType = committed.some((t) => t.kind === "type" || t.kind === "notype");
   const typeGroup = types.length
     ? [
         h("span", { class: "qf-group" }, "Typ"),
         h("button", { class: `qchip${anyType ? "" : " on"}`, title: "Alle Typen", onclick: () => clearTypes() }, "Alle"),
         ...types.map(([type, n]) => {
-          const text = tokenText({ kind: "type", value: type });
-          return h("button", { class: `qchip${on.has(text) ? " on" : ""}`, title: text, onclick: () => toggle(text) }, `${typeIcon(type)} ${type} `, h("span", { class: "qf-count" }, String(n)));
+          const only = on.has(tokenText({ kind: "type", value: type }));
+          const hidden = on.has(tokenText({ kind: "notype", value: type }));
+          const title = only ? `nur ${type} – Klick: ${type} ausblenden` : hidden ? `${type} ausgeblendet – Klick: wieder zeigen` : `Klick: nur ${type} (mehrere möglich)`;
+          return h("button", { class: `qchip${only ? " on" : hidden ? " off" : ""}`, title, "aria-pressed": only ? "true" : hidden ? "mixed" : "false", onclick: () => cycleType(type) }, `${typeIcon(type)} ${type} `, h("span", { class: "qf-count" }, String(n)));
         }),
         h("span", { class: "qf-sep", "aria-hidden": "true" }),
       ]
@@ -261,7 +263,17 @@ function renderQuick(): void {
 }
 
 function clearTypes(): void {
-  committed = committed.filter((t) => t.kind !== "type");
+  committed = committed.filter((t) => t.kind !== "type" && t.kind !== "notype");
+  renderChips();
+  apply();
+}
+
+/** A type chip cycles: off → only this type (t:) → hide this type (-t:) → off. */
+function cycleType(type: string): void {
+  const same = (t: Token) => (t.kind === "type" || t.kind === "notype") && t.value.toLowerCase() === type.toLowerCase();
+  const cur = committed.find(same)?.kind;
+  const rest = committed.filter((t) => !same(t));
+  committed = cur === "type" ? [...rest, { kind: "notype", value: type }] : cur === "notype" ? rest : [...rest, { kind: "type", value: type }];
   renderChips();
   apply();
 }

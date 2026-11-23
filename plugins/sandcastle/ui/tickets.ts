@@ -222,6 +222,8 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
   const stories = tokens.filter((t) => t.kind === "story").map((t) => lc(t.value.replace(/^#/, "")));
   const drift = tokens.some((t) => t.kind === "drift");
   const types = tokens.filter((t) => t.kind === "type").map((t) => matcher(t, lc(t.value)));
+  // like -l: a half-typed exclusion would hide tickets while typing; it counts once committed
+  const notypes = tokens.filter((t) => t.kind === "notype" && !t.partial).map((t) => lc(t.value));
   const texts = tokens.filter((t) => t.kind === "text").map((t) => lc(t.value));
   return (t) => {
     const own = t.labels.map(lc);
@@ -244,6 +246,7 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
     }
     if (drift && !actionable(t).length) return false;
     if (types.length && !types.some((m) => m(lc(t.type)))) return false;
+    if (notypes.includes(lc(t.type))) return false;
     if (texts.length) {
       const hay = lc(`${t.key} ${t.summary} ${t.epic?.key ?? ""} ${t.epic?.summary ?? ""}`);
       if (texts.some((x) => !hay.includes(x))) return false;

@@ -189,6 +189,8 @@ describe("ticket filter", () => {
     expect(pick("t:Story l:shop")).toEqual(["A-2"]);
     expect(pick("t:sub-task")).toEqual(["A-4"]);
     expect(pick('t:"Sub-Task" t:epic')).toEqual(["A-1", "A-4"]);
+    expect(pick("-t:Epic")).toEqual(["A-2", "A-3", "A-4"]);
+    expect(pick("-t:epic t:story")).toEqual(["A-2"]);
   });
 });
 
