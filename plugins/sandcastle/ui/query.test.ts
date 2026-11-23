@@ -23,6 +23,8 @@ const ticket = (key: string, extra: Partial<JiraTicket> = {}): JiraTicket => ({
   derived: null,
   drift: [],
   prs: [],
+  inMain: null,
+  released: null,
   ...extra,
 });
 const person = (name: string) => ({ accountId: name, name, avatarUrl: null });

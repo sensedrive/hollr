@@ -10,14 +10,16 @@ import {
   guardItemText,
   guardSummary,
   initials,
+  inMainLine,
   issueTickets,
   openChildren,
   prText,
+  statePill,
   statusColumn,
   ticketColumns,
   ticketLane,
 } from "./tickets";
-import type { JiraStatus, JiraTicket } from "./types";
+import type { JiraStatus, JiraTicket, PullRequest, PullState } from "./types";
 
 const statuses: JiraStatus[] = [
   { name: "Backlog", category: "new" },
@@ -46,6 +48,8 @@ const ticket = (key: string, extra: Partial<JiraTicket> = {}): JiraTicket => ({
   derived: null,
   drift: [],
   prs: [],
+  inMain: null,
+  released: null,
   ...extra,
 });
 
@@ -108,8 +112,35 @@ describe("card facts", () => {
     expect(initials("Anna Maria von Berg")).toBe("AB");
     expect(assigneeLogin("Martin Fink")).toBe("martin");
   });
+  test("live > in main > partly > not in main: pill and the „Stand“ line (doc PRs ignored)", () => {
+    const p = (n: number, state: PullState, extra: Partial<PullRequest> = {}): PullRequest => ({
+      n,
+      title: "",
+      url: "",
+      state,
+      checks: null,
+      review: null,
+      branch: `feature/R-${n}`,
+      base: "main",
+      mergedAt: state === "merged" ? "2026-11-20T10:00:00Z" : null,
+      ...extra,
+    });
+    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", pr: 3300 };
+    expect(statePill({ inMain: "yes", released })).toEqual({ text: "live v2.0.0", tone: "live", title: "live seit 13.11.2026" });
+    expect(statePill({ inMain: "yes", released: null })).toEqual({ text: "in main", tone: "yes" });
+    expect(statePill({ inMain: "partly", released: null })?.text).toBe("teilweise in main");
+    expect(statePill({ inMain: null, released: null })).toBeNull();
+    expect(inMainLine({ inMain: "yes", prs: [], released })).toBe("live seit v2.0.0 (13.11.2026)");
+    expect(inMainLine({ inMain: null, prs: [], released: null })).toBeNull();
+    expect(inMainLine({ inMain: "yes", prs: [p(50, "merged")], released: null })).toBe("in main seit 20.11.2026");
+    expect(
+      inMainLine({ inMain: "no", prs: [p(3550, "draft", { checks: "failure" }), p(3535, "merged", { branch: "docs/R-1" })], released: null }),
+    ).toBe("nicht in main – #3550 Entwurf, CI ✗");
+    expect(inMainLine({ inMain: "no", prs: [], released: null })).toBe("nicht in main – kein gemergter PR");
+    expect(inMainLine({ inMain: "partly", prs: [p(50, "merged"), p(51, "open")], released: null })).toBe("teilweise in main – #51 offen");
+  });
   test("build line: text, segments and the main PR as a link", () => {
-    const pr = { n: 3550, title: "Kalender", url: "https://github.com/o/r/pull/3550", state: "merged" as const, checks: null, review: null, branch: "feature/R-1", mergedAt: "2026-11-23T10:00:00Z" };
+    const pr = { n: 3550, title: "Kalender", url: "https://github.com/o/r/pull/3550", state: "merged" as const, checks: null, review: null, branch: "feature/R-1", base: "main", mergedAt: "2026-11-23T10:00:00Z" };
     const line = buildLine({
       story: 3540,
       children: [
@@ -146,6 +177,10 @@ describe("card facts", () => {
     expect(driftText({ kind: "state-behind", expected: "In Progress", actual: "Selected" }, "inProgress")).toBe(
       "JIRA hinkt: auf GitHub wird gebaut, noch Selected",
     );
+    expect(driftText({ kind: "done-not-in-main", pr: { n: 3550, state: "draft", checks: "failure" } })).toBe(
+      "In JIRA Done, aber nicht in main – PR #3550 ist Entwurf",
+    );
+    expect(driftText({ kind: "done-not-in-main" })).toBe("In JIRA Done, aber nicht in main – kein gemergter PR");
     expect(driftText({ kind: "no-key", issue: 3170 })).toBe("GitHub #3170 ohne JIRA-Schlüssel");
   });
   test("GitHub issue → ticket, its labels and the drift on that issue", () => {
@@ -170,6 +205,19 @@ describe("ticket filter", () => {
       drift: [{ kind: "label-on-gh", issue: 612, label: "x", inJira: true }],
     }),
     ticket("HACCP-3", { drift: [{ kind: "done-candidate", expected: "Done", actual: "Testing" }] }),
+    ticket("HACCP-4", {
+      status: "Done",
+      category: "done",
+      inMain: "no",
+      drift: [{ kind: "done-not-in-main" }],
+      prs: [{ n: 1, title: "", url: "", state: "merged", checks: null, review: null, branch: "docs/HACCP-4", base: "main", mergedAt: "2026-11-20T10:00:00Z" }],
+    }),
+    ticket("HACCP-5", {
+      inMain: "yes",
+      prs: [{ n: 2, title: "", url: "", state: "merged", checks: null, review: null, branch: "feature/HACCP-5", base: "main", mergedAt: "2026-11-20T10:00:00Z" }],
+    }),
+    ticket("HACCP-6", { inMain: "partly" }),
+    ticket("HACCP-7", { inMain: "yes", released: { version: "v2.0.0", at: "2026-11-13T10:00:00Z", pr: 3300 } }),
   ];
   const run = (q: string, partialLast = false) => {
     const tokens = tokenize(q);
@@ -180,7 +228,7 @@ describe("ticket filter", () => {
   test("labels, assignees, epic, numbers, text", () => {
     expect(run("l:kundenfeedback")).toEqual(["HACCP-1"]);
     expect(run("l:kunden", true)).toEqual(["HACCP-1"]);
-    expect(run("-l:kundenfeedback")).toEqual(["HACCP-2", "HACCP-3"]);
+    expect(run("-l:kundenfeedback")).toEqual(["HACCP-2", "HACCP-3", "HACCP-4", "HACCP-5", "HACCP-6", "HACCP-7"]);
     expect(run("@martin")).toEqual(["HACCP-1"]);
     expect(run("@schulz")).toEqual(["HACCP-1"]);
     expect(run("@ich")).toEqual([]);
@@ -194,6 +242,20 @@ describe("ticket filter", () => {
   test("drift: only tickets with drift to apply", () => {
     expect(run("drift:")).toEqual(["HACCP-2"]);
     expect(tokenize("drift:")[0]?.kind).toBe("drift");
+  });
+  test("live: released (live:v2.0* by version), main: in main incl. released, negations, drift:done, pr:gemergt only build PRs", () => {
+    const pick = (q: string) => tickets.filter(compileTerms(parse(q), (tok) => compileTickets(tok))).map((t) => t.key);
+    expect(pick("live:")).toEqual(["HACCP-7"]);
+    expect(pick("live:v2.0*")).toEqual(["HACCP-7"]);
+    expect(pick("live:v1*")).toEqual([]);
+    expect(pick("-live: haccp-")).toEqual(["HACCP-1", "HACCP-2", "HACCP-3", "HACCP-4", "HACCP-5", "HACCP-6"]);
+    expect(pick("main:")).toEqual(["HACCP-5", "HACCP-7"]);
+    expect(pick("main:teilweise")).toEqual(["HACCP-6"]);
+    expect(pick("-main: haccp-")).toEqual(["HACCP-1", "HACCP-2", "HACCP-3", "HACCP-4", "HACCP-6"]);
+    expect(pick("drift:done")).toEqual(["HACCP-4"]);
+    expect(pick("pr:gemergt")).toEqual(["HACCP-5"]);
+    expect(tokenize("main:teilweise")[0]).toEqual({ kind: "main", value: "teilweise" });
+    expect(tokenize("drift:done")[0]).toEqual({ kind: "drift", value: "done" });
   });
   test("t: types widen each other (OR) and narrow the rest (AND); Sub-Task with a dash stays one token", () => {
     const typed = [ticket("A-1", { type: "Epic" }), ticket("A-2", { type: "Story", labels: ["shop"] }), ticket("A-3", { type: "Task" }), ticket("A-4", { type: "Sub-Task" })];

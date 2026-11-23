@@ -560,6 +560,15 @@ button.chip.jira:hover { background: color-mix(in srgb, var(--blue) 24%, transpa
 .pr-link { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; }
 .pr-link.pr-merged { color: var(--purple); }
 .pr-link.pr-closed { color: var(--muted); }
+/* live (released) > in main > partly > not in main – the real state, whatever JIRA's Done says */
+.main-pill { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: 10.5px; font-weight: 600; white-space: nowrap;
+  color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.main-pill.main-live { color: var(--green); background: color-mix(in srgb, var(--green) 16%, transparent); }
+.main-pill.main-yes { color: var(--blue); background: color-mix(in srgb, var(--blue) 16%, transparent); }
+.main-pill.main-partly { color: var(--orange); background: color-mix(in srgb, var(--orange) 18%, transparent); }
+.main-line.main-live { color: var(--green); }
+.main-line.main-yes { color: var(--blue); }
+.main-line.main-partly { color: var(--orange); }
 .card-pr { margin-top: 6px; font-size: 11.5px; }
 .side-sub { margin: 10px 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .pr-list { display: grid; gap: 6px; margin: 4px 0 8px; }

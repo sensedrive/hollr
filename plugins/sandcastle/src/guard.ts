@@ -56,7 +56,7 @@ export const isBlocking = (message: string) => BLOCKING.test(message);
 
 export interface AppliedItem {
   key: string;
-  kind: Exclude<DriftKind, "done-candidate" | "no-key">;
+  kind: Exclude<DriftKind, "done-candidate" | "done-not-in-main" | "no-key">;
   /** label-on-gh: the GitHub issue and label */
   issue?: number;
   label?: string;

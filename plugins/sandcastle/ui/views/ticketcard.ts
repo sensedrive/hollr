@@ -4,7 +4,7 @@
  */
 import { h } from "../dom";
 import { PHASE_TEXT } from "../model";
-import { type BuildLine, driftText, INFO_KINDS, initials, typeIcon } from "../tickets";
+import { type BuildLine, driftText, INFO_KINDS, initials, statePill, typeIcon } from "../tickets";
 import type { DriftItem, JiraTicket, Phase } from "../types";
 import type { CardInfo } from "./cards";
 
@@ -12,7 +12,7 @@ import type { CardInfo } from "./cards";
 const MAX_LINES = 2;
 
 /** „⚠ Abweichung“ with up to two lines to apply; info items below in muted text. Null without drift. */
-export function driftEl(items: DriftItem[], derived: JiraTicket["derived"]): HTMLElement | null {
+export function driftEl(items: DriftItem[], derived: JiraTicket["derived"], released: JiraTicket["released"] = null): HTMLElement | null {
   if (!items.length) return null;
   const act = items.filter((d) => !INFO_KINDS[d.kind]);
   const info = items.filter((d) => INFO_KINDS[d.kind]);
@@ -21,9 +21,9 @@ export function driftEl(items: DriftItem[], derived: JiraTicket["derived"]): HTM
     "div",
     { class: "drift" },
     act.length ? h("span", { class: "drift-badge" }, act.length > 1 ? `⚠ ${act.length} Abweichungen` : "⚠ Abweichung") : null,
-    ...act.slice(0, MAX_LINES).map((d) => h("div", { class: "drift-line" }, driftText(d, derived))),
+    ...act.slice(0, MAX_LINES).map((d) => h("div", { class: "drift-line" }, driftText(d, derived, released))),
     more > 0 ? h("div", { class: "drift-line" }, `+ ${more} weitere`) : null,
-    ...info.map((d) => h("div", { class: "drift-line info" }, `ℹ ${driftText(d, derived)}`)),
+    ...info.map((d) => h("div", { class: "drift-line info" }, `ℹ ${driftText(d, derived, released)}`)),
   );
 }
 
@@ -43,7 +43,7 @@ const cache = new Map<string, { sig: string; el: HTMLElement }>();
 
 export function ticketCardEl(c: TicketCardInfo): HTMLElement {
   const t = c.t;
-  const sig = JSON.stringify([t.summary, t.status, t.type, t.labels, t.assignee?.name, t.epic, t.drift, t.derived, c.pos, c.build, c.phase, c.grill, c.busy]);
+  const sig = JSON.stringify([t.summary, t.status, t.type, t.labels, t.assignee?.name, t.epic, t.drift, t.derived, t.inMain, t.released, c.pos, c.build, c.phase, c.grill, c.busy]);
   const hit = cache.get(t.key);
   if (hit?.sig === sig) return hit.el;
   const el = build(c);
@@ -54,6 +54,7 @@ export function ticketCardEl(c: TicketCardInfo): HTMLElement {
 function build(c: TicketCardInfo): HTMLElement {
   const t = c.t;
   const hasDrift = t.drift.some((d) => !INFO_KINDS[d.kind]);
+  const pill = statePill(t);
   return h(
     "article",
     {
@@ -81,15 +82,22 @@ function build(c: TicketCardInfo): HTMLElement {
           t.epic ? h("span", { class: "chip epic", title: t.epic.key }, `Epic ${t.epic.summary || t.epic.key}`) : null,
         )
       : null,
-    c.build.text || c.build.pr
+    c.build.text || c.build.pr || pill
       ? h(
           "div",
           { class: "build" },
-          h("div", { class: "build-text" }, c.build.text, c.build.text && c.build.pr ? " · " : null, c.build.pr ? prLinkEl(c.build.pr) : null),
+          h(
+            "div",
+            { class: "build-text" },
+            c.build.text,
+            c.build.text && c.build.pr ? " · " : null,
+            c.build.pr ? prLinkEl(c.build.pr) : null,
+            pill ? h("span", { class: `main-pill main-${pill.tone}`, ...(pill.title ? { title: pill.title } : {}) }, pill.text) : null,
+          ),
           c.build.segs.length ? h("span", { class: "segbar" }, ...c.build.segs.map((s) => h("span", { class: `seg ${s}` }))) : null,
         )
       : null,
-    driftEl(t.drift, t.derived),
+    driftEl(t.drift, t.derived, t.released),
   );
 }
 

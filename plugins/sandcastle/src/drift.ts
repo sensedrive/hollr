@@ -9,7 +9,7 @@
  * the `## JIRA` section of their bodies (children may inherit the key from their story's `## Parent`).
  */
 import type { JiraStates, JiraStatus, JiraTicket } from "./jira";
-import type { Project } from "./types";
+import type { Project, PullOut, Released } from "./types";
 
 export interface GhIssue {
   number: number;
@@ -35,13 +35,14 @@ export interface Family {
   children: FamilyMember[];
 }
 
-export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "no-key";
+export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "done-not-in-main" | "no-key";
 
 /** Kinds that only inform – nothing to apply. */
 export const INFO_KINDS: Readonly<Record<DriftKind, boolean>> = {
   "label-on-gh": false,
   "state-behind": false,
   "done-candidate": true,
+  "done-not-in-main": true,
   "no-key": true,
 };
 
@@ -53,6 +54,8 @@ export interface DriftItem {
   inJira?: boolean;
   expected?: string;
   actual?: string;
+  /** done-not-in-main: the open/draft build PR keeping the work out of main (absent: no merged PR at all) */
+  pr?: { n: number; state: PullOut["state"]; checks: PullOut["checks"] };
 }
 
 export type DerivedState = "inProgress" | "testing";
@@ -62,6 +65,8 @@ export interface DriftConfig {
   states: JiraStates;
   /** in workflow order */
   statuses: JiraStatus[];
+  /** the project's default branch (build PRs target it); default main */
+  defaultBranch?: string;
 }
 
 /** Issue number → phase of the issue in a live run on this machine. */
@@ -172,33 +177,70 @@ export function workflowMatcher(labels: Project["labels"]): (label: string) => b
 /** A GitHub label as JIRA label: JIRA labels have no spaces. */
 export const jiraLabel = (label: string) => label.trim().replace(/\s+/g, "-");
 
+export type InMain = "yes" | "partly" | "no";
+
+/** A PR that builds the ticket: into the default branch, not a grill doc PR (`docs/<KEY>-…`). */
+export const isBuildPull = (p: Pick<PullOut, "base" | "branch">, defaultBranch: string) =>
+  p.base === defaultBranch && !p.branch.startsWith("docs/");
+
+const openish = (p: Pick<PullOut, "state">) => p.state === "open" || p.state === "draft";
+
+/**
+ * Whether the ticket's work is in the default branch – the real state, whatever JIRA says. Children closed into a
+ * feature branch don't count; only merged build PRs do. null: neither a GitHub family nor a build PR.
+ */
+export function inMain(f: Family | undefined, prs: Pick<PullOut, "base" | "branch" | "state">[], defaultBranch: string): InMain | null {
+  const build = prs.filter((p) => isBuildPull(p, defaultBranch));
+  const family = !!f && (!!f.grill || !!f.story || f.children.length > 0);
+  if (!build.length && !family) return null;
+  if (!build.some((p) => p.state === "merged")) return "no";
+  if (build.some(openish) || f?.children.some((c) => c.state === "open")) return "partly";
+  return "yes";
+}
+
 export interface TicketDrift {
   derived: DerivedState | null;
   drift: DriftItem[];
+  /** released counts as in main */
+  inMain: InMain | null;
 }
 
-export function ticketDrift(t: JiraTicket, f: Family | undefined, cfg: DriftConfig): TicketDrift {
-  if (!f) return { derived: null, drift: [] };
+/**
+ * `released`: the release PR the ticket first shipped in (src/pulls.ts releasesByKey) – the strongest signal: live
+ * > in main > partly > not in main.
+ */
+export function ticketDrift(t: JiraTicket, f: Family | undefined, cfg: DriftConfig, prs: PullOut[] = [], released: Released | null = null): TicketDrift {
+  const live = released ? "yes" : inMain(f, prs, cfg.defaultBranch ?? "main");
   const drift: DriftItem[] = [];
-  const isWorkflow = workflowMatcher(cfg.labels);
-  const inJira = new Set(t.labels.map((l) => l.toLowerCase()));
-  for (const m of members(f)) {
-    if (m.state !== "open") continue;
-    for (const label of m.labels)
-      if (!isWorkflow(label))
-        drift.push({ kind: "label-on-gh", issue: m.n, label, inJira: inJira.has(jiraLabel(label).toLowerCase()) });
+  // JIRA says done, GitHub says the work isn't (all) in main; info only – JIRA is never moved backwards.
+  // No family and no build PR (null) says nothing: older tickets predate the GitHub workflow.
+  if (t.category === "done" && (live === "no" || live === "partly")) {
+    const blocking = prs.find((p) => isBuildPull(p, cfg.defaultBranch ?? "main") && openish(p));
+    drift.push({ kind: "done-not-in-main", ...(blocking ? { pr: { n: blocking.n, state: blocking.state, checks: blocking.checks } } : {}) });
   }
-  const derived = deriveState(f, cfg.labels);
-  const at = cfg.statuses.findIndex((s) => s.name === t.status);
-  const target = derived ? cfg.states[derived] : null;
-  const goal = target ? cfg.statuses.findIndex((s) => s.name === target) : -1;
-  // forward only: a done or unknown status is never pulled back, nor is anything past the goal
-  if (target && t.category !== "done" && at >= 0 && goal >= 0 && at < goal)
-    drift.push({ kind: "state-behind", expected: target, actual: t.status });
-  const all = members(f);
-  if (all.length && all.every((m) => m.state === "closed") && cfg.states.testing && t.status === cfg.states.testing)
+  let derived: DerivedState | null = null;
+  if (f) {
+    const isWorkflow = workflowMatcher(cfg.labels);
+    const inJira = new Set(t.labels.map((l) => l.toLowerCase()));
+    for (const m of members(f)) {
+      if (m.state !== "open") continue;
+      for (const label of m.labels)
+        if (!isWorkflow(label))
+          drift.push({ kind: "label-on-gh", issue: m.n, label, inJira: inJira.has(jiraLabel(label).toLowerCase()) });
+    }
+    derived = deriveState(f, cfg.labels);
+    const at = cfg.statuses.findIndex((s) => s.name === t.status);
+    const target = derived ? cfg.states[derived] : null;
+    const goal = target ? cfg.statuses.findIndex((s) => s.name === target) : -1;
+    // forward only: a done or unknown status is never pulled back, nor is anything past the goal
+    if (target && t.category !== "done" && at >= 0 && goal >= 0 && at < goal)
+      drift.push({ kind: "state-behind", expected: target, actual: t.status });
+  }
+  // in main and in testing, or shipped in a release while JIRA isn't done yet: it could be done
+  const inTesting = live === "yes" && !!cfg.states.testing && t.status === cfg.states.testing;
+  if (inTesting || (released && t.category !== "done"))
     drift.push({ kind: "done-candidate", expected: cfg.states.done ?? undefined, actual: t.status });
-  return { derived, drift };
+  return { derived, drift, inMain: live };
 }
 
 export interface ApplyPlan {

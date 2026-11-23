@@ -10,7 +10,7 @@ import { derive, type Derived } from "../derive";
 import { fill, fmtDate, h, html } from "../dom";
 import { isBusy, PHASE_TEXT } from "../model";
 import { errorText, hooks, serverLabel, state, toast } from "../state";
-import { actionable, applyHint, buildLine, driftText, INFO_KINDS, jiraLabel, memberPhase, statusColumn, ticketFacets, typeIcon } from "../tickets";
+import { actionable, applyHint, buildLine, driftText, INFO_KINDS, inMainLine, jiraLabel, memberPhase, statusColumn, ticketFacets, typeIcon } from "../tickets";
 import type { Comment, FamilyMember, JiraIssueDetail, JiraTicket } from "../types";
 import { grillBlock, grillBlockSig } from "./grilling";
 import { claimPanel, closeSidebar, commentEl, extLink, externalLinks, openIssue, prListEl } from "./sidebar";
@@ -244,12 +244,14 @@ function buildBlock(t: JiraTicket, d: Derived): HTMLElement {
   });
   const open = f.children.filter((c) => c.state === "open");
   const busy = open.some((c) => isBusy(d.runs.get(c.n)?.issue.phase));
+  const stand = inMainLine(t);
   return h(
     "section",
     { class: "side-build" },
     h("h3", {}, "Bau auf GitHub"),
     !f.story && !f.children.length && !f.grill && !t.prs.length ? h("p", { class: "muted small" }, "Noch nichts auf GitHub – erst grillen.") : null,
     line.text ? h("p", { class: "build-text" }, line.text) : null,
+    stand ? h("p", { class: `build-text main-line main-${t.released ? "live" : t.inMain}` }, `Stand: ${stand}`) : null,
     line.segs.length ? h("span", { class: "segbar" }, ...line.segs.map((s) => h("span", { class: `seg ${s}` }))) : null,
     h(
       "div",
@@ -288,8 +290,8 @@ function driftBlock(t: JiraTicket): HTMLElement {
     { class: "side-drift" },
     h("h3", {}, "Abgleich"),
     !t.drift.length ? h("p", { class: "ok small" }, "✓ JIRA und GitHub stimmen überein.") : null,
-    act.length ? h("ul", { class: "drift-list" }, ...act.map((x) => h("li", {}, driftText(x, t.derived)))) : null,
-    info.length ? h("ul", { class: "drift-list info" }, ...info.map((x) => h("li", {}, driftText(x, t.derived)))) : null,
+    act.length ? h("ul", { class: "drift-list" }, ...act.map((x) => h("li", {}, driftText(x, t.derived, t.released)))) : null,
+    info.length ? h("ul", { class: "drift-list info" }, ...info.map((x) => h("li", {}, driftText(x, t.derived, t.released)))) : null,
     act.length ? h("div", { class: "btn-row" }, apply, h("span", { class: "muted small" }, applyHint(t))) : null,
     checked ? h("p", { class: "muted small" }, `Zuletzt geprüft: ${checked}`) : null,
   );

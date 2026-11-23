@@ -1,6 +1,7 @@
 /**
  * Quick filter: a tiny token language, parsed and matched per keystroke, client-side only.
- *   l:<label>  -l:<label>  @<login> (@ich = the gh user)  s:<story nr|text>  t:<JIRA issue type>  #<n>  drift:  anything else = full text
+ *   l:<label>  -l:<label>  @<login> (@ich = the gh user)  s:<story nr|text>  t:<JIRA issue type>  #<n>  drift:  drift:done
+ *   live:  live:v2.0*  main:  main:teilweise  anything else = full text
  * Same-kind semantics: labels and text narrow (AND), assignees/stories/types/numbers widen (OR) – "#612 #615" shows both.
  */
 import type { Issue } from "./types";
@@ -15,6 +16,8 @@ export type TokenKind =
   | "status"
   | "sandcastle"
   | "pr"
+  | "live"
+  | "main"
   | "number"
   | "drift"
   | "text";
@@ -40,9 +43,13 @@ export function parseToken(word: string): Token | null {
   if (!w) return null;
   const pick = (kind: TokenKind, value: string): Token =>
     value ? { kind, value } : { kind: "text", value: w };
-  if (/^drift:$/i.test(w)) return { kind: "drift", value: "" };
+  // drift: = drift to apply; drift:done = JIRA Done although the work is not in main
+  if (/^drift:/i.test(w)) return { kind: "drift", value: w.slice(6) };
   // sc: = a ticket Sandcastle is working on right now; sc:eingereiht also counts tickets waiting in a run's queue
   if (/^sc:/i.test(w)) return { kind: "sandcastle", value: w.slice(3) };
+  // live: = shipped in a release, live:v2.0* = in that version; main: = in main (released too), main:teilweise = partly
+  if (/^live:/i.test(w)) return { kind: "live", value: w.slice(5) };
+  if (/^main:/i.test(w)) return { kind: "main", value: w.slice(5) };
   if (/^z:/i.test(w)) return pick("status", w.slice(2));
   if (/^pr:/i.test(w)) return pick("pr", w.slice(3));
   if (/^-l:/i.test(w)) return pick("nolabel", w.slice(3));
@@ -88,9 +95,13 @@ export function tokenText(t: Token): string {
     case "number":
       return `#${t.value}`;
     case "drift":
-      return "drift:";
+      return `drift:${t.value}`;
     case "sandcastle":
       return `sc:${t.value}`;
+    case "live":
+      return `live:${t.value}`;
+    case "main":
+      return `main:${t.value}`;
     case "status":
       return `z:${quote(t.value)}`;
     case "pr":
@@ -187,11 +198,13 @@ export interface SuggestSource {
   types?: string[];
   /** JIRA status names without emoji (Tickets view) */
   statuses?: string[];
+  /** release versions the tickets shipped in, newest first (Tickets view) */
+  versions?: string[];
 }
 
 /** Completions for the word being typed (the input's last word). */
 export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion[] {
-  const m = word.match(/^(-l:|l:|s:|-?t:|z:|pr:|sc:|@)(.*)$/i);
+  const m = word.match(/^(-l:|l:|s:|-?t:|z:|pr:|sc:|live:|main:|drift:|@)(.*)$/i);
   if (!m) return [];
   const prefix = (m[1] ?? "").toLowerCase();
   const q = lc((m[2] ?? "").replace(/^"/, ""));
@@ -209,7 +222,7 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
     ].filter((s) => lc(s.text.slice(2)).includes(q));
   else if (prefix === "pr:")
     out = [
-      { text: "pr:gemergt", hint: "PR in main" },
+      { text: "pr:gemergt", hint: "Bau-PR in main (Doku-PRs zählen nicht)" },
       { text: "pr:offen" },
       { text: "pr:entwurf" },
       { text: "pr:geschlossen", hint: "ohne Merge" },
@@ -221,6 +234,21 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
       { text: "sc:", hint: "Sandcastle arbeitet gerade daran" },
       { text: "sc:eingereiht", hint: "… oder es wartet in einem Lauf" },
     ].filter((s) => s.text.slice(3).startsWith(q));
+  else if (prefix === "live:")
+    out = [
+      { text: "live:", hint: "in einem Release ausgeliefert" },
+      ...(src.versions ?? []).map((v) => ({ text: `live:${v}` })),
+    ].filter((s) => lc(s.text.slice(5)).startsWith(q));
+  else if (prefix === "main:")
+    out = [
+      { text: "main:", hint: "Arbeit ist in main (auch ausgeliefert)" },
+      { text: "main:teilweise", hint: "nur teilweise in main" },
+    ].filter((s) => s.text.slice(5).startsWith(q));
+  else if (prefix === "drift:")
+    out = [
+      { text: "drift:", hint: "Abweichung zum Angleichen" },
+      { text: "drift:done", hint: "JIRA Done, aber nicht in main" },
+    ].filter((s) => s.text.slice(6).startsWith(q));
   else if (prefix === "@")
     out = [{ login: "ich", name: "ich (gh-Nutzer)" }, ...src.assignees]
       .filter((a) => lc(a.login).includes(q) || lc(a.name ?? "").includes(q))
@@ -230,7 +258,7 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
       .filter((s) => lc(String(s.number)).startsWith(q) || lc(s.title).includes(q))
       .map((s) => ({ text: `s:${s.number}`, hint: s.title }));
   // prefix matches first, then the rest in source order
-  const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|-?t:|z:|pr:|sc:|@)"?/i, "")).startsWith(q);
+  const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|-?t:|z:|pr:|sc:|live:|main:|drift:|@)"?/i, "")).startsWith(q);
   return [...out.filter(starts), ...out.filter((s) => !starts(s))].slice(0, limit);
 }
 

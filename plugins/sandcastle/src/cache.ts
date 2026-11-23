@@ -145,9 +145,9 @@ export class BoardCache {
     if (!stored || !fromDisk) {
       const now = this.now();
       stored = { snap: await this.gh.fetchBoard(slug, now), fetchedAt: now, fullAt: now };
-    } else if (!stored.snap.pulls) {
-      // a copy from before pull requests: none until the next refresh, which is a full one
-      stored = { ...stored, snap: { ...stored.snap, pulls: [] }, fullAt: 0 };
+    } else if (!stored.snap.pulls || !stored.snap.releases) {
+      // a copy from before pull requests or releases: none until the next refresh, which is a full one
+      stored = { ...stored, snap: { ...stored.snap, pulls: stored.snap.pulls ?? [], releases: stored.snap.releases ?? [] }, fullAt: 0 };
     }
     const e: Entry = { ...stored, overrides: new Map() };
     this.entries.set(slug, e);

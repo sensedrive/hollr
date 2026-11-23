@@ -11,6 +11,7 @@ import {
   type DriftItem,
   type Families,
   type FamilyMember,
+  type InMain,
   families,
   INFO_KINDS,
   jiraLabel,
@@ -22,8 +23,8 @@ import type { updateIssue } from "./github";
 import type { JiraAccess, JiraClient, JiraStatus, JiraTicket } from "./jira";
 import type { JiraCache } from "./jiracache";
 import type { LiveRuns } from "./live";
-import { pullsByTicket } from "./pulls";
-import type { Project, PullOut } from "./types";
+import { pullsByTicket, releasesByKey } from "./pulls";
+import type { Project, PullOut, Released } from "./types";
 
 export interface JiraCtx {
   boards: BoardCache;
@@ -42,6 +43,10 @@ export interface TicketOut extends JiraTicket {
   drift: DriftItem[];
   /** pull requests of the ticket (key in title/branch/body, else closing a family issue), main PR first */
   prs: PullOut[];
+  /** whether the work is merged into the default branch (src/drift.ts inMain); null: nothing on GitHub */
+  inMain: InMain | null;
+  /** the release PR the ticket first shipped in (key in its title or changelog), null when none */
+  released: Released | null;
 }
 
 interface View {
@@ -52,6 +57,8 @@ interface View {
   fam: Families;
   /** ticket key → its pull requests, main PR first */
   prs: Map<string, PullOut[]>;
+  /** ticket key → the release it first shipped in */
+  released: Map<string, Released>;
   cfg: DriftConfig;
   fetchedAt: number;
   stale: boolean;
@@ -71,7 +78,7 @@ async function view(ctx: JiraCtx, p: Project, refresh = false): Promise<View> {
     ctx.tickets.board(projectKey, p.jira.states, refresh),
     ctx.boards.current(p.slug, refresh),
   ]);
-  const cfg: DriftConfig = { labels: p.labels, states: p.jira.states, statuses: j.snap.statuses };
+  const cfg: DriftConfig = { labels: p.labels, states: p.jira.states, statuses: j.snap.statuses, defaultBranch: p.defaultBranch };
   const error = [j.error && `JIRA: ${j.error}`, gh.error && `GitHub: ${gh.error}`].filter(Boolean).join(" · ");
   const fam = families(gh.snap.issues, p.labels, ctx.live.phases(p.slug));
   const known = new Set([...j.snap.tickets.map((t) => t.key), ...fam.byKey.keys()]);
@@ -82,6 +89,7 @@ async function view(ctx: JiraCtx, p: Project, refresh = false): Promise<View> {
     tickets: j.snap.tickets,
     fam,
     prs: pullsByTicket(gh.snap.pulls, known, fam.byKey),
+    released: releasesByKey(gh.snap.releases, p.defaultBranch, p.releaseBranch ?? null),
     cfg,
     fetchedAt: j.fetchedAt,
     stale: j.stale || gh.stale,
@@ -91,12 +99,16 @@ async function view(ctx: JiraCtx, p: Project, refresh = false): Promise<View> {
 
 function ticketOut(p: Project, v: View, t: JiraTicket): TicketOut {
   const family = v.fam.byKey.get(t.key);
-  const { derived, drift } = ticketDrift(t, family, v.cfg);
+  const prs = v.prs.get(t.key) ?? [];
+  const released = v.released.get(t.key) ?? null;
+  const { derived, drift, inMain } = ticketDrift(t, family, v.cfg, prs, released);
   return {
     ...t,
     url: p.jira.baseUrl ? `${p.jira.baseUrl.replace(/\/+$/, "")}/browse/${t.key}` : null,
     family: family ?? { children: [] },
-    prs: v.prs.get(t.key) ?? [],
+    prs,
+    inMain,
+    released,
     derived,
     drift,
   };

@@ -5,7 +5,7 @@
  * issue it closes. A ticket can have several (the doc PR from the grill, the build PR from the run).
  */
 import type { Family } from "./drift";
-import type { ChecksState, Pull, PullOut, PullState } from "./types";
+import type { ChecksState, Pull, PullOut, PullState, Released, ReleasePull } from "./types";
 
 /** The part of a PR body searched for keys and `Closes #n`. */
 export const BODY_CHARS = 2000;
@@ -93,6 +93,37 @@ export function toPull(n: PullNode): Pull {
   };
 }
 
+/** A merged PR as release candidate, with every JIRA key of its title and whole body (changelogs are short). */
+export function toRelease(n: PullNode): ReleasePull | null {
+  if (n.state !== "MERGED" || !n.mergedAt) return null;
+  const keys = [...new Set(keysIn(`${n.title}\n${n.body ?? ""}`))];
+  return { n: n.number, title: n.title, url: n.url, base: n.baseRefName, branch: n.headRefName, mergedAt: n.mergedAt, keys };
+}
+
+const RELEASE_TITLE = /chore\(release\)|^\W*release\b/i;
+const VERSION = /v\d+\.\d+\.\d+/;
+
+/**
+ * A release PR: merged into a branch other than the default one – the configured release branch, or else one whose
+ * head is `release-prep/…` or whose title reads like a release („🔖 chore(release): v2.0.0“).
+ */
+export function isReleasePull(r: Pick<ReleasePull, "base" | "branch" | "title">, defaultBranch: string, releaseBranch: string | null): boolean {
+  if (r.base === defaultBranch) return false;
+  if (releaseBranch) return r.base === releaseBranch;
+  return r.branch.startsWith("release-prep/") || RELEASE_TITLE.test(r.title);
+}
+
+/** Ticket key → the earliest release PR naming it (word-boundary key match in title or body). */
+export function releasesByKey(releases: ReleasePull[], defaultBranch: string, releaseBranch: string | null): Map<string, Released> {
+  const out = new Map<string, Released>();
+  const sorted = releases.filter((r) => isReleasePull(r, defaultBranch, releaseBranch)).sort((a, b) => a.mergedAt.localeCompare(b.mergedAt));
+  for (const r of sorted) {
+    const version = (r.title.match(VERSION) ?? r.branch.match(VERSION))?.[0] ?? null;
+    for (const k of r.keys) if (!out.has(k)) out.set(k, { version, at: r.mergedAt, pr: r.n });
+  }
+  return out;
+}
+
 export const pullOut = (p: Pull): PullOut => ({
   n: p.n,
   title: p.title,
@@ -101,6 +132,7 @@ export const pullOut = (p: Pull): PullOut => ({
   checks: p.checks,
   review: p.review,
   branch: p.branch,
+  base: p.base,
   mergedAt: p.mergedAt,
 });
 

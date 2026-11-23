@@ -4,7 +4,7 @@
  * and the drift texts. No DOM, no state – tested in tickets.test.ts.
  */
 import { textMatcher, type Token, valueMatcher } from "./filter";
-import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, JiraBoardData, JiraStatus, JiraTicket, PullRequest, PullState } from "./types";
+import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, InMain, JiraBoardData, JiraStatus, JiraTicket, PullRequest, PullState, Released } from "./types";
 
 // ---- columns
 
@@ -21,6 +21,7 @@ export const INFO_KINDS: Readonly<Record<DriftKind, boolean>> = {
   "label-on-gh": false,
   "state-behind": false,
   "done-candidate": true,
+  "done-not-in-main": true,
   "no-key": true,
 };
 
@@ -155,7 +156,7 @@ export function buildLine(f: BuildFacts): BuildLine {
 // ---- drift texts
 
 /** One sentence per drift item, saying exactly what is off and where. */
-export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null): string {
+export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null, released: JiraTicket["released"] = null): string {
   switch (d.kind) {
     case "label-on-gh":
       return d.inJira
@@ -166,10 +167,50 @@ export function driftText(d: DriftItem, derived: JiraTicket["derived"] = null): 
         ? `JIRA hinkt: alle Kinder gemergt, noch ${d.actual}`
         : `JIRA hinkt: auf GitHub wird gebaut, noch ${d.actual}`;
     case "done-candidate":
-      return `Alles gebaut und geschlossen – bereit für ${d.expected ?? "Done"}?`;
+      return released
+        ? `Live seit ${released.version ?? `Release #${released.pr}`} – JIRA steht noch auf ${d.actual ?? "?"}`
+        : `Alles in main – bereit für ${d.expected ?? "Done"}?`;
+    case "done-not-in-main":
+      return d.pr
+        ? `In JIRA Done, aber nicht in main – PR #${d.pr.n} ist ${d.pr.state === "draft" ? "Entwurf" : "offen"}`
+        : "In JIRA Done, aber nicht in main – kein gemergter PR";
     case "no-key":
       return `GitHub #${d.issue} ohne JIRA-Schlüssel`;
   }
+}
+
+// ---- live / in main
+
+const dateDe = (iso: string) => new Date(iso).toLocaleDateString("de-DE");
+const versionOf = (r: Released) => r.version ?? `#${r.pr}`;
+
+/** The card's fact pill: live (released) > in main > partly > not in main; null without anything on GitHub. */
+export function statePill(t: Pick<JiraTicket, "inMain" | "released">): { text: string; tone: "live" | InMain; title?: string } | null {
+  if (t.released) return { text: `live ${versionOf(t.released)}`, tone: "live", title: `live seit ${dateDe(t.released.at)}` };
+  if (!t.inMain) return null;
+  return { text: { yes: "in main", partly: "teilweise in main", no: "nicht in main" }[t.inMain], tone: t.inMain };
+}
+
+/**
+ * The „Stand“ line of the details: „live seit v2.0.0 (13.11.2026)“, „in main seit 12.11.2026“, „nicht in main –
+ * #3550 Entwurf, CI ✗“, „teilweise in main – #3551 offen“, „nicht in main – kein gemergter PR“; null without anything.
+ */
+export function inMainLine(t: Pick<JiraTicket, "inMain" | "prs" | "released">): string | null {
+  if (t.released) return `live seit ${versionOf(t.released)} (${dateDe(t.released.at)})`;
+  if (!t.inMain) return null;
+  // grill doc PRs (`docs/<KEY>-…`) are never the ticket's code
+  const build = t.prs.filter((p) => !p.branch.startsWith("docs/"));
+  if (t.inMain === "yes") {
+    const last = build.map((p) => p.mergedAt).filter((d): d is string => !!d).sort().pop();
+    return last ? `in main seit ${dateDe(last)}` : "in main";
+  }
+  const blocking = build.find((p) => p.state === "open" || p.state === "draft");
+  const why = blocking
+    ? `#${blocking.n} ${PR_STATE_TEXT[blocking.state]}${blocking.checks ? `, ${CI_TEXT[blocking.checks]}` : ""}`
+    : t.inMain === "partly"
+      ? "Kinder noch offen"
+      : "kein gemergter PR";
+  return `${t.inMain === "partly" ? "teilweise in main" : "nicht in main"} – ${why}`;
 }
 
 /** What „Angleichen“ will do, for the button's title. */
@@ -249,8 +290,10 @@ const PR_STATE: Readonly<Record<string, string>> = {
 /**
  * The quick filter's tokens on tickets: l: JIRA labels, @ assignee (first name or any name word), s: epic (key or
  * summary) or story number, t: issue type (OR), z: status (name or offen/arbeit/fertig, OR), sc: Sandcastle working on
- * it now, pr: pull request state, #n any GitHub issue of the family, drift: tickets with drift to apply, text in key,
- * summary and epic. Same AND/OR rules as on GitHub issues.
+ * it now, pr: pull request state (pr:gemergt only build PRs, never a `docs/` PR), live: shipped in a release
+ * (live:v2.0* by version), main: in main incl. released (main:teilweise partly), #n any GitHub issue of the family,
+ * drift: tickets with drift to apply (drift:done: JIRA Done but not in main), text in key, summary and epic. Same
+ * AND/OR rules as on GitHub issues.
  */
 /** `livePhase`: a GitHub issue's phase in a live run on any machine (the view knows all machines; the server only its own). */
 export function compileTickets(tokens: Token[], livePhase?: (n: number) => string | undefined): (t: JiraTicket) => boolean {
@@ -262,7 +305,18 @@ export function compileTickets(tokens: Token[], livePhase?: (n: number) => strin
   const numbers = tokens.filter((t) => t.kind === "number").map((t) => Number(t.value));
   const stories = tokens.filter((t) => t.kind === "story").map((t) => lc(t.value.replace(/^#/, "")));
   const storyText = stories.map(textMatcher);
-  const drift = tokens.some((t) => t.kind === "drift");
+  const drift = tokens.some((t) => t.kind === "drift" && !t.value);
+  const driftDone = tokens.some((t) => t.kind === "drift" && /^(done|fertig)$/i.test(t.value));
+  // live: released, live:v2.0* a version (wildcards); main: in main, main:teilweise partly – several widen (OR)
+  const live = tokens
+    .filter((t) => t.kind === "live")
+    .map((tok) => {
+      const m = tok.value ? valueMatcher(tok, lc(tok.value)) : null;
+      return (t: JiraTicket) => !!t.released && (!m || m(lc(t.released.version ?? "")));
+    });
+  const main = tokens
+    .filter((t) => t.kind === "main")
+    .map((t) => (/^(teilweise|partly)$/i.test(t.value) ? "partly" : /^(nein|nicht|no)$/i.test(t.value) ? "no" : "yes"));
   const types = tokens.filter((t) => t.kind === "type").map((t) => matcher(t, lc(t.value)));
   // like -l: a half-typed exclusion would hide tickets while typing; it counts once committed
   const notypes = tokens.filter((t) => t.kind === "notype" && !t.partial).map((t) => matcher(t, lc(t.value)));
@@ -294,6 +348,8 @@ export function compileTickets(tokens: Token[], livePhase?: (n: number) => strin
       if (v === "keiner" || v === "none" || v === "") return (t: JiraTicket) => !t.prs.length;
       if (v === "rot" || v === "ci-rot" || v === "failing") return (t: JiraTicket) => t.prs.some((p) => p.checks === "failure");
       const state = PR_STATE[v];
+      // only build PRs count as merged: a grill doc PR (`docs/<KEY>-…`) is merged long before the work is
+      if (state === "merged") return (t: JiraTicket) => t.prs.some((p) => p.state === "merged" && !p.branch.startsWith("docs/"));
       return (t: JiraTicket) => !!state && t.prs.some((p) => p.state === state);
     });
   return (t) => {
@@ -316,6 +372,9 @@ export function compileTickets(tokens: Token[], livePhase?: (n: number) => strin
       if (!ok) return false;
     }
     if (drift && !actionable(t).length) return false;
+    if (driftDone && !t.drift.some((d) => d.kind === "done-not-in-main")) return false;
+    if (live.length && !live.some((m) => m(t))) return false;
+    if (main.length && !main.some((v) => t.inMain === v)) return false;
     if (types.length && !types.some((m) => m(lc(t.type)))) return false;
     if (notypes.some((m) => m(lc(t.type)))) return false;
     // several z: / pr: widen (OR) like types; sc: tokens all ask the same question

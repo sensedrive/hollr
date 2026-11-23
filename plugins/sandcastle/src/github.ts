@@ -6,8 +6,8 @@
  */
 import { blockedByOf, jiraKeyOf, parentOf } from "./body";
 import { firstLine, HttpError, run } from "./env";
-import { type PullNode, toPull } from "./pulls";
-import type { Assignee, Issue, LabelInfo, Pull } from "./types";
+import { type PullNode, toPull, toRelease } from "./pulls";
+import type { Assignee, Issue, LabelInfo, Pull, ReleasePull } from "./types";
 
 /** Days the "Erledigt" column covers before „Ältere laden“. */
 export const CLOSED_DAYS = 14;
@@ -21,6 +21,8 @@ export interface RepoSnapshot {
   issues: Issue[];
   /** open pull requests and those merged or closed in the last PULL_DAYS days */
   pulls: Pull[];
+  /** every merged PR titled like a release, however old (few) – src/pulls.ts isReleasePull picks the releases */
+  releases: ReleasePull[];
   labels: (LabelInfo & { id: string })[];
   assignees: Assignee[];
   closedOlder: number;
@@ -208,9 +210,10 @@ export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSn
     }
   }
 
-  const [closed, pulls] = await Promise.all([
+  const [closed, pulls, releases] = await Promise.all([
     closedOnDays(slug, fromMs, now),
     fetchPulls(owner, name, slug, now),
+    fetchReleases(slug),
     chain("ASC"),
     chain("DESC"),
   ]);
@@ -223,6 +226,7 @@ export async function fetchBoard(slug: string, now = Date.now()): Promise<RepoSn
     viewer: meta?.viewer?.login ?? "",
     issues: [...issues.values()],
     pulls,
+    releases,
     labels: repo?.labels?.nodes ?? [],
     assignees: repo?.assignableUsers?.nodes ?? [],
     closedOlder: meta?.older?.issueCount ?? 0,
@@ -287,15 +291,21 @@ async function pullChain(owner: string, name: string, slug: string, states: stri
 }
 
 /** Merged or closed PRs of one search, page after page. */
-async function searchPulls(q: string): Promise<Pull[]> {
-  const out: Pull[] = [];
+async function searchPullNodes(q: string): Promise<PullNode[]> {
+  const out: PullNode[] = [];
   let after: string | null = null;
   do {
     const page: { search: Page<PullNode | Record<string, never>> } = await graphql(PULL_SEARCH, { q, after, live: false });
-    for (const n of page.search.nodes) if (isNode(n)) out.push(toPull(n));
+    for (const n of page.search.nodes) if (isNode(n)) out.push(n);
     after = page.search.pageInfo.hasNextPage ? page.search.pageInfo.endCursor : null;
   } while (after);
   return out;
+}
+
+/** All merged PRs with „release“ in the title, of any age (a repo has few); bodies whole for their changelogs. */
+async function fetchReleases(slug: string): Promise<ReleasePull[]> {
+  const nodes = await searchPullNodes(`repo:${slug} is:pr is:merged release in:title`);
+  return nodes.map(toRelease).filter((r): r is ReleasePull => !!r);
 }
 
 /**
@@ -309,7 +319,7 @@ async function fetchPulls(owner: string, name: string, slug: string, now: number
     ranges.push(`${day(Math.max(fromMs, to - (PULL_WINDOW - 1) * DAY))}..${day(to)}`);
   const [open, ...ended] = await Promise.all([
     pullChain(owner, name, slug, ["OPEN"], null),
-    ...ranges.map((r) => searchPulls(`repo:${slug} is:pr is:closed closed:${r}`)),
+    ...ranges.map(async (r) => (await searchPullNodes(`repo:${slug} is:pr is:closed closed:${r}`)).map(toPull)),
   ]);
   return [...open, ...ended.flat()];
 }

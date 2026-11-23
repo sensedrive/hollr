@@ -195,6 +195,8 @@ export interface PullRequest {
   review: string | null;
   /** head branch */
   branch: string;
+  /** base branch */
+  base: string;
   mergedAt: string | null;
 }
 
@@ -251,7 +253,7 @@ export interface Family {
   children: FamilyMember[];
 }
 
-export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "no-key";
+export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "done-not-in-main" | "no-key";
 
 export interface DriftItem {
   kind: DriftKind;
@@ -261,6 +263,18 @@ export interface DriftItem {
   inJira?: boolean;
   expected?: string;
   actual?: string;
+  /** done-not-in-main: the open/draft build PR keeping the work out of main (absent: no merged PR at all) */
+  pr?: { n: number; state: PullState; checks: PullRequest["checks"] };
+}
+
+/** Whether the work is merged into the default branch (src/drift.ts inMain; released counts as yes); null: nothing on GitHub. */
+export type InMain = "yes" | "partly" | "no";
+
+/** The release a ticket first shipped in (src/types.ts Released). */
+export interface Released {
+  version: string | null;
+  at: string;
+  pr: number;
 }
 
 export interface JiraTicket {
@@ -284,6 +298,8 @@ export interface JiraTicket {
   drift: DriftItem[];
   /** its pull requests, main PR first */
   prs: PullRequest[];
+  inMain: InMain | null;
+  released: Released | null;
 }
 
 export interface UnlinkedIssue extends FamilyMember {

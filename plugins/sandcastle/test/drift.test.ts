@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { type DriftConfig, deriveState, families, type GhIssue, planApply, ticketDrift } from "../src/drift";
+import { type DriftConfig, deriveState, families, type GhIssue, inMain, planApply, ticketDrift } from "../src/drift";
 import type { JiraTicket } from "../src/jira";
+import type { PullOut } from "../src/types";
 import { project } from "./fixtures";
 
 const labels = project().labels;
@@ -45,6 +46,19 @@ const ticket = (status: string, over: Partial<JiraTicket> = {}): JiraTicket => (
 });
 
 const familyOf = (issues: GhIssue[], live?: Map<number, string>) => families(issues, labels, live).byKey.get("R-1");
+
+const pr = (n: number, over: Partial<PullOut> = {}): PullOut => ({
+  n,
+  title: `PR ${n}`,
+  url: `https://github.com/o/r/pull/${n}`,
+  state: "merged",
+  checks: null,
+  review: null,
+  branch: `feature/R-1-${n}`,
+  base: "main",
+  mergedAt: "2026-11-20T10:00:00Z",
+  ...over,
+});
 
 describe("families", () => {
   test("children inherit the key from their story; keyless roots are reported once", () => {
@@ -118,19 +132,39 @@ describe("ticketDrift", () => {
     ]);
     expect(ticketDrift(ticket("Testing"), fam, cfg).drift).toEqual([]);
     expect(ticketDrift(ticket("Blocked"), fam, cfg).drift).toEqual([]);
-    expect(ticketDrift(ticket("Done"), fam, cfg).drift).toEqual([]);
+    // Done with nothing merged into main: info only, never a step backwards
+    expect(ticketDrift(ticket("Done"), fam, cfg).drift).toEqual([{ kind: "done-not-in-main" }]);
     expect(ticketDrift(ticket("Unbekannt"), fam, cfg).drift).toEqual([]);
   });
 
-  test("everything closed: Selected is behind testing; in Testing only done-candidate (Done is never derived)", () => {
+  test("everything closed: Selected is behind testing; in Testing done-candidate only once it's in main (Done is never derived)", () => {
     const fam = familyOf([gh(2, { jira: "R-1", labels: ["story"], state: "closed" }), gh(3, { parent: 2, state: "closed" })]);
     expect(ticketDrift(ticket("Selected"), fam, cfg).drift).toEqual([
       { kind: "state-behind", expected: "Testing", actual: "Selected" },
     ]);
-    expect(ticketDrift(ticket("Testing"), fam, cfg)).toEqual({
+    // children closed into a feature branch alone are not in main
+    expect(ticketDrift(ticket("Testing"), fam, cfg)).toEqual({ derived: "testing", drift: [], inMain: "no" });
+    expect(ticketDrift(ticket("Testing"), fam, cfg, [pr(50)])).toEqual({
       derived: "testing",
       drift: [{ kind: "done-candidate", expected: "Done", actual: "Testing" }],
+      inMain: "yes",
     });
+  });
+
+  test("done-not-in-main names the open build PR, else says no merged PR; null (nothing on GitHub) stays quiet", () => {
+    const fam = familyOf([gh(2, { jira: "R-1", labels: ["story"], state: "closed" }), gh(3, { parent: 2, state: "closed" })]);
+    const draft = pr(3550, { state: "draft", checks: "failure", mergedAt: null });
+    expect(ticketDrift(ticket("Done"), fam, cfg, [draft, pr(3535, { branch: "docs/R-1-spec" })]).drift).toEqual([
+      { kind: "done-not-in-main", pr: { n: 3550, state: "draft", checks: "failure" } },
+    ]);
+    expect(ticketDrift(ticket("Done"), fam, cfg, [pr(50), pr(51, { state: "open", mergedAt: null })]).drift).toEqual([
+      { kind: "done-not-in-main", pr: { n: 51, state: "open", checks: null } },
+    ]);
+    expect(ticketDrift(ticket("Done"), fam, cfg, [pr(50)]).drift).toEqual([]);
+    expect(ticketDrift(ticket("Done"), undefined, cfg)).toEqual({ derived: null, drift: [], inMain: null });
+    expect(ticketDrift(ticket("Done"), undefined, cfg, [pr(52, { state: "closed", mergedAt: null })]).drift).toEqual([
+      { kind: "done-not-in-main" },
+    ]);
   });
 
   test("product labels on open family issues are drift; workflow labels and closed issues are left alone", () => {
@@ -151,7 +185,42 @@ describe("ticketDrift", () => {
   });
 
   test("a ticket without family has no drift", () => {
-    expect(ticketDrift(ticket("Selected"), undefined, cfg)).toEqual({ derived: null, drift: [] });
+    expect(ticketDrift(ticket("Selected"), undefined, cfg)).toEqual({ derived: null, drift: [], inMain: null });
+  });
+});
+
+describe("inMain", () => {
+  const closed = (n: number) => gh(n, { parent: 2, state: "closed" });
+  const story = gh(2, { jira: "R-1", labels: ["story"], state: "closed" });
+
+  test("TENDR-1069 shape: children closed into the feature branch, build PR a draft, doc PR merged → no", () => {
+    const fam = familyOf([story, closed(3537), closed(3538), closed(3549)]);
+    const prs = [pr(3550, { state: "draft", mergedAt: null, branch: "feature/TENDR-1069-zeitraumkalender" }), pr(3535, { branch: "docs/TENDR-1069-zeitraumkalender" })];
+    expect(inMain(fam, prs, "main")).toBe("no");
+  });
+  test("merged build PR and all children closed → yes", () => {
+    expect(inMain(familyOf([story, closed(3)]), [pr(50)], "main")).toBe("yes");
+  });
+  test("merged build PR plus an open draft, or children still open → partly", () => {
+    expect(inMain(familyOf([story, closed(3)]), [pr(50), pr(51, { state: "draft", mergedAt: null })], "main")).toBe("partly");
+    expect(inMain(familyOf([story, closed(3), gh(4, { parent: 2 })]), [pr(50)], "main")).toBe("partly");
+  });
+  test("only build PRs count: doc PRs and PRs into other branches don't", () => {
+    expect(inMain(undefined, [pr(3535, { branch: "docs/R-1-spec" })], "main")).toBeNull();
+    expect(inMain(familyOf([story]), [pr(3535, { branch: "docs/R-1-spec" })], "main")).toBe("no");
+    expect(inMain(familyOf([story, closed(3)]), [pr(50, { base: "feature/R-1" })], "main")).toBe("no");
+    expect(inMain(undefined, [pr(50, { base: "develop" })], "develop")).toBe("yes");
+    expect(inMain(undefined, [], "main")).toBeNull();
+  });
+  test("released: counts as in main – no done-not-in-main; done-candidate for any status short of Done", () => {
+    const released = { version: "v2.0.0", at: "2026-11-13T10:00:00Z", pr: 3300 };
+    const fam = familyOf([story, closed(3)]);
+    expect(ticketDrift(ticket("Done"), fam, cfg, [], released)).toEqual({ derived: "testing", drift: [], inMain: "yes" });
+    expect(ticketDrift(ticket("In Progress"), undefined, cfg, [], released)).toEqual({
+      derived: null,
+      drift: [{ kind: "done-candidate", expected: "Done", actual: "In Progress" }],
+      inMain: "yes",
+    });
   });
 });
 

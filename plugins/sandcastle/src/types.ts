@@ -8,6 +8,8 @@ export interface Project {
   root: string;
   gitCommonDir: string;
   defaultBranch: string;
+  /** branch release PRs merge into (`github.releaseBranch`); null/missing (older servers) = detect by head/title */
+  releaseBranch?: string | null;
   engine: string;
   /** workflow labels (GitHub owns them); ready/ciFailed/nogo are null when not configured */
   labels: {
@@ -96,7 +98,26 @@ export interface Pull {
 }
 
 /** A pull request in the API answers (JIRA ticket `prs`, Werkbank `pulls`). */
-export type PullOut = Pick<Pull, "n" | "title" | "url" | "state" | "checks" | "review" | "branch" | "mergedAt">;
+export type PullOut = Pick<Pull, "n" | "title" | "url" | "state" | "checks" | "review" | "branch" | "base" | "mergedAt">;
+
+/** A merged PR that may be a release (src/pulls.ts toRelease): the JIRA keys of its whole title and body. */
+export interface ReleasePull {
+  n: number;
+  title: string;
+  url: string;
+  base: string;
+  branch: string;
+  mergedAt: string;
+  keys: string[];
+}
+
+/** The release a ticket first shipped in (src/pulls.ts releasesByKey). */
+export interface Released {
+  /** vX.Y.Z from title or head, null when neither names one */
+  version: string | null;
+  at: string;
+  pr: number;
+}
 
 export interface BoardData {
   etag: string;

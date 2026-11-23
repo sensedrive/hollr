@@ -269,13 +269,15 @@ describe("JIRA API", () => {
       { kind: "label-on-gh", issue: 11, label: "backend", inJira: true },
       { kind: "state-behind", expected: "In Progress", actual: "Selected" },
     ]);
-    expect(ticket(r.body, "R-2").drift).toEqual([{ kind: "done-candidate", expected: "Done", actual: "Testing" }]);
+    // all closed, but no build PR merged into main: not yet a done candidate
+    expect(ticket(r.body, "R-2")).toMatchObject({ drift: [], inMain: "no" });
     expect(ticket(r.body, "R-3")).toMatchObject({ derived: null, drift: [], family: { children: [] } });
     expect(ticket(r.body, "R-4").drift).toEqual([{ kind: "label-on-gh", issue: 40, label: "frontend", inJira: false }]);
     expect(r.body.unlinked).toEqual([
       { n: 30, title: "ohne Schlüssel", state: "open", labels: ["shop"], drift: [{ kind: "no-key", issue: 30 }] },
     ]);
-    expect(r.body.counts).toEqual({ drift: 5, info: 2, tickets: 3 });
+    // info: only the keyless issue – R-2 is no done candidate while nothing is merged into main
+    expect(r.body.counts).toEqual({ drift: 5, info: 1, tickets: 3 });
     expect(JSON.stringify(r.body)).not.toContain(TOKEN);
 
     expect((await call(`/api/jira/board?slug=o/r&since=${r.body.etag}`)).body).toEqual({ same: true });
@@ -299,6 +301,7 @@ describe("JIRA API", () => {
     expect(prs("R-3")).toEqual([]);
     expect(prs("R-1")[0]).toEqual({
       n: 101,
+      base: "main",
       title: "PR 101",
       url: "https://github.com/o/r/pull/101",
       state: "draft",
@@ -395,8 +398,8 @@ describe("JIRA API", () => {
       "t-In Progress",
       "t-Testing",
     ]);
-    // everything on GitHub is closed and JIRA is in testing now: only the info that it could be done
-    expect((r.body.ticket as Ticket).drift).toEqual([{ kind: "done-candidate", expected: "Done", actual: "Testing" }]);
+    // everything on GitHub is closed, but nothing is merged into main: no done candidate yet
+    expect((r.body.ticket as Ticket).drift).toEqual([]);
   });
 
   test("guard run: all actionable drift through drift/apply, the info kinds untouched", async () => {

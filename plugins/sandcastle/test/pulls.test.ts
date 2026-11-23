@@ -1,6 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import type { Family, FamilyMember } from "../src/drift";
-import { checksState, closingPulls, type PullNode, pullCloses, pullKeys, pullsByTicket, pullState, reviewState, toPull } from "../src/pulls";
+import {
+  checksState,
+  closingPulls,
+  isReleasePull,
+  type PullNode,
+  pullCloses,
+  pullKeys,
+  pullState,
+  pullsByTicket,
+  releasesByKey,
+  reviewState,
+  toPull,
+  toRelease,
+} from "../src/pulls";
+import type { ReleasePull } from "../src/types";
 import { pull } from "./fixtures";
 
 const node = (over: Partial<PullNode> = {}): PullNode => ({
@@ -108,6 +122,7 @@ describe("pullsByTicket", () => {
       checks: null,
       review: null,
       branch: "feature/pr-32",
+      base: "main",
       mergedAt: null,
     });
   });
@@ -115,5 +130,42 @@ describe("pullsByTicket", () => {
   test("closingPulls: only PRs closing a board issue, with what they close", () => {
     const out = closingPulls([pull(40, { closes: [3] }), pull(41, { closes: [99] }), pull(42, { closes: [] })], new Set([3]));
     expect(out.map((p) => [p.n, p.closes])).toEqual([[40, [3]]]);
+  });
+});
+
+describe("releases", () => {
+  const rel = (n: number, over: Partial<ReleasePull> = {}): ReleasePull => ({
+    n,
+    title: `🔖 chore(release): v1.${n}.0`,
+    url: "",
+    base: "release",
+    branch: `release-prep/v1.${n}.0`,
+    mergedAt: `2026-0${n}-01T10:00:00Z`,
+    keys: [],
+    ...over,
+  });
+  test("toRelease: merged only, keys from title and the whole body (word boundaries)", () => {
+    const body = `${"x".repeat(5000)}\n- TENDR-730 Kalender\n- TENDR-216, XTENDR-9x`;
+    const r = toRelease(node({ state: "MERGED", isDraft: false, mergedAt: "2026-11-13T10:00:00Z", title: "🔖 chore(release): v2.0.0", body }));
+    expect(r?.keys).toEqual(["TENDR-730", "TENDR-216"]);
+    expect(toRelease(node())).toBeNull();
+  });
+  test("isReleasePull: not into the default branch; head release-prep/ or a release title; a configured branch wins", () => {
+    expect(isReleasePull(rel(1), "main", null)).toBe(true);
+    expect(isReleasePull(rel(1, { branch: "x", title: "Release 3" }), "main", null)).toBe(true);
+    expect(isReleasePull(rel(1, { branch: "x", title: "fix release notes" }), "main", null)).toBe(false);
+    expect(isReleasePull(rel(1, { base: "main" }), "main", null)).toBe(false);
+    expect(isReleasePull(rel(1, { base: "stable" }), "main", "release")).toBe(false);
+    expect(isReleasePull(rel(1, { base: "release", branch: "x", title: "x" }), "main", "release")).toBe(true);
+  });
+  test("releasesByKey: the earliest release naming the key; version from title, else head", () => {
+    const map = releasesByKey(
+      [rel(3, { keys: ["T-1"] }), rel(2, { keys: ["T-1", "T-2"], title: "Release" }), rel(4, { keys: ["T-3"], base: "main" })],
+      "main",
+      null,
+    );
+    expect(map.get("T-1")).toEqual({ version: "v1.2.0", at: "2026-02-01T10:00:00Z", pr: 2 });
+    expect(map.get("T-2")?.pr).toBe(2);
+    expect(map.has("T-3")).toBe(false);
   });
 });

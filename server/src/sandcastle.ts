@@ -45,6 +45,8 @@ export interface Project {
   root: string;
   gitCommonDir: string;
   defaultBranch: string;
+  /** branch release PRs merge into (`github.releaseBranch`); null = detect release PRs by head/title */
+  releaseBranch: string | null;
   engine: string;
   /** workflow labels; ready/ciFailed/nogo are null when the project doesn't configure them */
   labels: {
@@ -339,6 +341,7 @@ interface Config {
     ready?: unknown;
     ciFailed?: unknown;
     nogo?: unknown;
+    releaseBranch?: unknown;
   };
   engine?: {
     kind?: unknown;
@@ -365,6 +368,7 @@ export function projectFromConfig(
     name: str(cfg.project) ?? basename(root),
     root,
     gitCommonDir,
+    releaseBranch: str(gh.releaseBranch) ?? null,
     defaultBranch: str(cfg.repo?.defaultBranch) ?? "main",
     engine: str(cfg.engine?.kind) ?? "implement",
     labels: {

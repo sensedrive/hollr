@@ -169,6 +169,14 @@ function source(): (SuggestSource & { quick: string[]; typeCounts?: [string, num
       stories: [...f.epics].map(([key, summary]) => ({ number: key, title: summary })),
       types: [...f.types.keys()],
       statuses: j.statuses.map((s) => s.name.replace(/^[^\p{L}\p{N}]+/u, "").trim()),
+      versions: [
+        ...new Set(
+          j.tickets
+            .flatMap((t) => (t.released?.version ? [{ v: t.released.version, at: t.released.at }] : []))
+            .sort((a, b) => b.at.localeCompare(a.at))
+            .map((r) => r.v),
+        ),
+      ],
       typeCounts: [...f.types].sort((a, b) => typeRank(a[0]) - typeRank(b[0]) || a[0].localeCompare(b[0], "de")),
       quick: [
         ...drift,
@@ -390,9 +398,11 @@ const SYNTAX: [string, string][] = [
   ["t:Story", "Vorgangstyp, -t:Epic schließt aus"],
   ["z:Done", "Zustand (ohne Emoji) – z:offen, z:arbeit, z:fertig für die Gruppe"],
   ["sc:", "Sandcastle arbeitet gerade daran (sc:eingereiht: auch wartend)"],
-  ["pr:gemergt", "Pull Request: gemergt, offen, entwurf, rot (CI), keiner"],
+  ["pr:gemergt", "Pull Request: gemergt (nur Bau-PRs, Doku-PRs zählen nicht), offen, entwurf, rot (CI), keiner"],
+  ["live:", "In einem Release ausgeliefert (live:v2.0* nach Version, -live: noch nicht)"],
+  ["main:", "Arbeit ist in main, auch ausgeliefert (main:teilweise: nur teilweise, -main: nicht in main)"],
   ["#612", "Ticketnummer"],
-  ["drift:", "Nur Tickets mit Abweichung"],
+  ["drift:", "Nur Tickets mit Abweichung (drift:done: JIRA Done, aber nicht in main)"],
   ["( )", "Gruppieren"],
   ["ODER  |", "oder – Leerzeichen bedeutet UND"],
   ["NICHT  -", "verneint Begriff oder Gruppe"],

@@ -153,6 +153,8 @@ const PREFIX: Readonly<Record<TokenKind, string>> = {
   status: "z:",
   sandcastle: "sc:",
   pr: "pr:",
+  live: "live:",
+  main: "main:",
   assignee: "@",
   number: "#",
   drift: "drift:",
@@ -161,7 +163,7 @@ const PREFIX: Readonly<Record<TokenKind, string>> = {
 
 /** A value that would lex differently bare gets quotes: spaces, ( ) |, or a text that reads as a keyword or operator. */
 function atomText(t: Token): string {
-  if (t.kind === "number" || t.kind === "drift" || t.kind === "sandcastle" || t.kind === "pr") return tokenText(t);
+  if (t.kind === "number" || t.kind === "drift" || t.kind === "sandcastle" || t.kind === "pr" || t.kind === "live" || t.kind === "main") return tokenText(t);
   const special = /[\s()|]/.test(t.value) || (t.kind === "text" && (!!KEYWORDS[lc(t.value)] || /^[-!~]|^&$/.test(t.value)));
   return special ? `${PREFIX[t.kind]}"${t.value}"` : tokenText(t);
 }
