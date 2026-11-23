@@ -168,6 +168,7 @@ function source(): (SuggestSource & { quick: string[]; typeCounts?: [string, num
       assignees: [...f.assignees].map(([login, a]) => ({ login, name: a.name })),
       stories: [...f.epics].map(([key, summary]) => ({ number: key, title: summary })),
       types: [...f.types.keys()],
+      statuses: j.statuses.map((s) => s.name.replace(/^[^\p{L}\p{N}]+/u, "").trim()),
       typeCounts: [...f.types].sort((a, b) => typeRank(a[0]) - typeRank(b[0]) || a[0].localeCompare(b[0], "de")),
       quick: [
         ...drift,
@@ -387,13 +388,16 @@ const SYNTAX: [string, string][] = [
   ["@name", "Bearbeiter (@ich = du)"],
   ["s:600", "Story, per Nummer oder Titel"],
   ["t:Story", "Vorgangstyp, -t:Epic schließt aus"],
+  ["z:Done", "Zustand (ohne Emoji) – z:offen, z:arbeit, z:fertig für die Gruppe"],
+  ["sc:", "Sandcastle arbeitet gerade daran (sc:eingereiht: auch wartend)"],
+  ["pr:gemergt", "Pull Request: gemergt, offen, entwurf, rot (CI), keiner"],
   ["#612", "Ticketnummer"],
   ["drift:", "Nur Tickets mit Abweichung"],
   ["( )", "Gruppieren"],
   ["ODER  |", "oder – Leerzeichen bedeutet UND"],
   ["NICHT  -", "verneint Begriff oder Gruppe"],
 ];
-const EXAMPLES = ["-(l:patrick-*)", "(l:shop ODER l:kasse) -t:Epic", "@martin | @justus"];
+const EXAMPLES = ["-(l:patrick-*)", "(l:shop ODER l:kasse) -t:Epic", "z:Done -sc: -(l:patrick-*)"];
 
 const helpPop = h(
   "div",

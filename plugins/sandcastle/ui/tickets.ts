@@ -218,12 +218,42 @@ const members = (t: Pick<JiraTicket, "family">) => [
   ...t.family.children,
 ];
 
+/** A status name without its emoji: „✅ Done“ → „done“, „👀 Testing / Review“ → „testing / review“. */
+export const statusName = (status: string) => lc(status.replace(/^[^\p{L}\p{N}]+/u, "").trim());
+
+/** z:offen / z:arbeit / z:fertig address the JIRA status category, whatever the project calls its states. */
+const STATUS_CATEGORY: Readonly<Record<string, JiraTicket["category"]>> = {
+  offen: "new",
+  neu: "new",
+  arbeit: "indeterminate",
+  inarbeit: "indeterminate",
+  fertig: "done",
+  erledigt: "done",
+};
+
+/** Phases of a Sandcastle run that mean „being worked on now“; sc:eingereiht adds the waiting ones. */
+const WORKING = new Set(["planned", "building", "reviewing"]);
+
+/** pr:<state>: gemergt/offen/entwurf/geschlossen (or the English words), pr:keiner = no pull request, pr:rot = CI failing. */
+const PR_STATE: Readonly<Record<string, string>> = {
+  gemergt: "merged",
+  merged: "merged",
+  offen: "open",
+  open: "open",
+  entwurf: "draft",
+  draft: "draft",
+  geschlossen: "closed",
+  closed: "closed",
+};
+
 /**
  * The quick filter's tokens on tickets: l: JIRA labels, @ assignee (first name or any name word), s: epic (key or
- * summary) or story number, t: issue type (OR), #n any GitHub issue of the family, drift: tickets with drift to apply,
- * text in key, summary and epic. Same AND/OR rules as on GitHub issues.
+ * summary) or story number, t: issue type (OR), z: status (name or offen/arbeit/fertig, OR), sc: Sandcastle working on
+ * it now, pr: pull request state, #n any GitHub issue of the family, drift: tickets with drift to apply, text in key,
+ * summary and epic. Same AND/OR rules as on GitHub issues.
  */
-export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
+/** `livePhase`: a GitHub issue's phase in a live run on any machine (the view knows all machines; the server only its own). */
+export function compileTickets(tokens: Token[], livePhase?: (n: number) => string | undefined): (t: JiraTicket) => boolean {
   const matcher = valueMatcher;
   const labels = tokens.filter((t) => t.kind === "label").map((t) => matcher(t, lc(t.value)));
   const nolabels = tokens.filter((t) => t.kind === "nolabel" && !t.partial).map((t) => matcher(t, lc(t.value)));
@@ -237,6 +267,35 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
   // like -l: a half-typed exclusion would hide tickets while typing; it counts once committed
   const notypes = tokens.filter((t) => t.kind === "notype" && !t.partial).map((t) => matcher(t, lc(t.value)));
   const texts = tokens.filter((t) => t.kind === "text").map((t) => textMatcher(lc(t.value)));
+  const statuses = tokens
+    .filter((t) => t.kind === "status")
+    .map((tok) => {
+      const v = lc(tok.value);
+      const cat = STATUS_CATEGORY[v];
+      if (cat) return (t: JiraTicket) => t.category === cat;
+      const m = matcher(tok, statusName(v));
+      return (t: JiraTicket) => m(statusName(t.status));
+    });
+  const sandcastle = tokens
+    .filter((t) => t.kind === "sandcastle")
+    .map((tok) => {
+      const waiting = /^(eingereiht|wartet|queue)/i.test(tok.value);
+      const phaseOf = (m: { n: number; phase?: string }) => livePhase?.(m.n) ?? m.phase;
+      return (t: JiraTicket) =>
+        members(t).some((m) => {
+          const p = phaseOf(m);
+          return !!p && (WORKING.has(p) || (waiting && p === "queued"));
+        });
+    });
+  const prs = tokens
+    .filter((t) => t.kind === "pr")
+    .map((tok) => {
+      const v = lc(tok.value);
+      if (v === "keiner" || v === "none" || v === "") return (t: JiraTicket) => !t.prs.length;
+      if (v === "rot" || v === "ci-rot" || v === "failing") return (t: JiraTicket) => t.prs.some((p) => p.checks === "failure");
+      const state = PR_STATE[v];
+      return (t: JiraTicket) => !!state && t.prs.some((p) => p.state === state);
+    });
   return (t) => {
     const own = t.labels.map(lc);
     if (labels.some((m) => !own.some(m))) return false;
@@ -259,6 +318,10 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
     if (drift && !actionable(t).length) return false;
     if (types.length && !types.some((m) => m(lc(t.type)))) return false;
     if (notypes.some((m) => m(lc(t.type)))) return false;
+    // several z: / pr: widen (OR) like types; sc: tokens all ask the same question
+    if (statuses.length && !statuses.some((m) => m(t))) return false;
+    if (sandcastle.length && !sandcastle.some((m) => m(t))) return false;
+    if (prs.length && !prs.some((m) => m(t))) return false;
     if (texts.length) {
       const hay = lc(`${t.key} ${t.summary} ${t.epic?.key ?? ""} ${t.epic?.summary ?? ""}`);
       if (texts.some((m) => !m(hay))) return false;

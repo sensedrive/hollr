@@ -28,7 +28,7 @@ export interface Term {
 type Lexeme = { t: "(" | ")" | "or" | "and" | "not" | "off" } | { t: "word"; w: string; quoted: boolean; partial?: boolean };
 
 const KEYWORDS: Readonly<Record<string, "or" | "and" | "not">> = { oder: "or", or: "or", und: "and", and: "and", nicht: "not", not: "not" };
-const QUOTED = /^(-?l:|s:|-?t:|@)?"([^"]*)"?/;
+const QUOTED = /^(-?l:|s:|-?t:|z:|pr:|@)?"([^"]*)"?/;
 const WORD = /^[^\s()|]+/;
 // `-l:`/`-t:` are tokens of their own; any other leading `-` negates what follows
 const MINUS_TOKEN = /^-[lt]:/i;
@@ -144,11 +144,24 @@ export function parse(query: string, partialLast = false): Term[] {
 
 // ---- back to text
 
-const PREFIX: Readonly<Record<TokenKind, string>> = { label: "l:", nolabel: "-l:", story: "s:", type: "t:", notype: "-t:", assignee: "@", number: "#", drift: "drift:", text: "" };
+const PREFIX: Readonly<Record<TokenKind, string>> = {
+  label: "l:",
+  nolabel: "-l:",
+  story: "s:",
+  type: "t:",
+  notype: "-t:",
+  status: "z:",
+  sandcastle: "sc:",
+  pr: "pr:",
+  assignee: "@",
+  number: "#",
+  drift: "drift:",
+  text: "",
+};
 
 /** A value that would lex differently bare gets quotes: spaces, ( ) |, or a text that reads as a keyword or operator. */
 function atomText(t: Token): string {
-  if (t.kind === "number" || t.kind === "drift") return tokenText(t);
+  if (t.kind === "number" || t.kind === "drift" || t.kind === "sandcastle" || t.kind === "pr") return tokenText(t);
   const special = /[\s()|]/.test(t.value) || (t.kind === "text" && (!!KEYWORDS[lc(t.value)] || /^[-!~]|^&$/.test(t.value)));
   return special ? `${PREFIX[t.kind]}"${t.value}"` : tokenText(t);
 }

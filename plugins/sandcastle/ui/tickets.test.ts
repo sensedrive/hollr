@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { tokenize } from "./filter";
+import { compileTerms, parse } from "./query";
 import {
   assigneeLogin,
   buildLine,
@@ -217,6 +218,23 @@ describe("ticket filter", () => {
     expect(pick("l:*feedback")).toEqual(["W-3"]);
     expect(pick("rechnung*kalender")).toEqual(["W-2"]);
     expect(pick("l:patrick")).toEqual([]);
+  });
+  test("z: status (emoji ignored, categories), sc: live work, pr: state – combined like the user's question", () => {
+    const s = [
+      ticket("S-1", { status: "✅ Done", category: "done", labels: ["shop"] }),
+      ticket("S-2", { status: "✅ Done", category: "done", labels: ["patrick-2026-11-12"] }),
+      ticket("S-3", { status: "👀 Testing / Review", category: "indeterminate", family: { children: [member(7)] } }),
+      ticket("S-4", { status: "✅ Done", category: "done", family: { children: [member(9)] } }),
+    ];
+    const live = (n: number) => (n === 9 ? "building" : n === 7 ? "queued" : undefined);
+    const pick = (q: string) => s.filter(compileTerms(parse(q), (tok) => compileTickets(tok, live))).map((t) => t.key);
+    expect(pick("z:Done")).toEqual(["S-1", "S-2", "S-4"]);
+    expect(pick("z:testing*")).toEqual(["S-3"]);
+    expect(pick("z:arbeit")).toEqual(["S-3"]);
+    expect(pick("sc:")).toEqual(["S-4"]);
+    expect(pick("sc:eingereiht")).toEqual(["S-3", "S-4"]);
+    expect(pick("z:Done -sc: -(l:patrick-*)")).toEqual(["S-1"]);
+    expect(pick("pr:keiner")).toEqual(["S-1", "S-2", "S-3", "S-4"]);
   });
 });
 

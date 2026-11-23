@@ -250,7 +250,12 @@ export function renderTickets(): void {
 
   const selected = selectedState(d);
   columns = ticketColumns(jira.statuses, selected);
-  const test = compileTerms(filterTerms(), compileTickets);
+  // sc: asks every machine's live runs, not only the plugin's own machine
+  const livePhase = (n: number) => {
+    const tr = d.runs.get(n);
+    return tr && tr.run.status !== "ended" ? tr.issue.phase : undefined;
+  };
+  const test = compileTerms(filterTerms(), (tokens) => compileTickets(tokens, livePhase));
   const byCol = new Map<string, JiraTicket[]>(columns.map((c) => [c.key, []]));
   const byLane = new Map<string, { t: JiraTicket; pos: number }[]>(d.lanes.map((l) => [l.server.id, []]));
   const orderOf = (server: string) => d.lanes.find((l) => l.server.id === server)?.order ?? [];

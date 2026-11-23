@@ -5,7 +5,19 @@
  */
 import type { Issue } from "./types";
 
-export type TokenKind = "label" | "nolabel" | "assignee" | "story" | "type" | "notype" | "number" | "drift" | "text";
+export type TokenKind =
+  | "label"
+  | "nolabel"
+  | "assignee"
+  | "story"
+  | "type"
+  | "notype"
+  | "status"
+  | "sandcastle"
+  | "pr"
+  | "number"
+  | "drift"
+  | "text";
 
 export interface Token {
   kind: TokenKind;
@@ -29,6 +41,10 @@ export function parseToken(word: string): Token | null {
   const pick = (kind: TokenKind, value: string): Token =>
     value ? { kind, value } : { kind: "text", value: w };
   if (/^drift:$/i.test(w)) return { kind: "drift", value: "" };
+  // sc: = a ticket Sandcastle is working on right now; sc:eingereiht also counts tickets waiting in a run's queue
+  if (/^sc:/i.test(w)) return { kind: "sandcastle", value: w.slice(3) };
+  if (/^z:/i.test(w)) return pick("status", w.slice(2));
+  if (/^pr:/i.test(w)) return pick("pr", w.slice(3));
   if (/^-l:/i.test(w)) return pick("nolabel", w.slice(3));
   if (/^l:/i.test(w)) return pick("label", w.slice(2));
   if (/^s:/i.test(w)) return pick("story", w.slice(2));
@@ -44,7 +60,7 @@ export function parseToken(word: string): Token | null {
  */
 export function tokenize(query: string): Token[] {
   const out: Token[] = [];
-  const re = /(-?l:|s:|-?t:|@)?"([^"]*)"?|(\S+)/g;
+  const re = /(-?l:|s:|-?t:|z:|pr:|@)?"([^"]*)"?|(\S+)/g;
   for (const m of query.matchAll(re)) {
     const word = m[3] ?? `${m[1] ?? ""}${m[2] ?? ""}`;
     const t = parseToken(word);
@@ -73,6 +89,12 @@ export function tokenText(t: Token): string {
       return `#${t.value}`;
     case "drift":
       return "drift:";
+    case "sandcastle":
+      return `sc:${t.value}`;
+    case "status":
+      return `z:${quote(t.value)}`;
+    case "pr":
+      return `pr:${t.value}`;
     default:
       return quote(t.value);
   }
@@ -163,11 +185,13 @@ export interface SuggestSource {
   stories: { number: number | string; title: string }[];
   /** JIRA issue types (Tickets view); empty on the Werkbank */
   types?: string[];
+  /** JIRA status names without emoji (Tickets view) */
+  statuses?: string[];
 }
 
 /** Completions for the word being typed (the input's last word). */
 export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion[] {
-  const m = word.match(/^(-l:|l:|s:|-?t:|@)(.*)$/i);
+  const m = word.match(/^(-l:|l:|s:|-?t:|z:|pr:|sc:|@)(.*)$/i);
   if (!m) return [];
   const prefix = (m[1] ?? "").toLowerCase();
   const q = lc((m[2] ?? "").replace(/^"/, ""));
@@ -176,6 +200,27 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
     out = src.labels.filter((l) => lc(l).includes(q)).map((l) => ({ text: `${prefix}${quote(l)}` }));
   else if (prefix === "t:" || prefix === "-t:")
     out = (src.types ?? []).filter((x) => lc(x).includes(q)).map((x) => ({ text: `${prefix}${quote(x)}` }));
+  else if (prefix === "z:")
+    out = [
+      ...(src.statuses ?? []).map((s) => ({ text: `z:${quote(s)}` })),
+      { text: "z:offen", hint: "noch nicht begonnen" },
+      { text: "z:arbeit", hint: "in Arbeit (jede Spalte dazwischen)" },
+      { text: "z:fertig", hint: "erledigt" },
+    ].filter((s) => lc(s.text.slice(2)).includes(q));
+  else if (prefix === "pr:")
+    out = [
+      { text: "pr:gemergt", hint: "PR in main" },
+      { text: "pr:offen" },
+      { text: "pr:entwurf" },
+      { text: "pr:geschlossen", hint: "ohne Merge" },
+      { text: "pr:rot", hint: "CI schlägt fehl" },
+      { text: "pr:keiner", hint: "kein Pull Request" },
+    ].filter((s) => s.text.slice(3).includes(q));
+  else if (prefix === "sc:")
+    out = [
+      { text: "sc:", hint: "Sandcastle arbeitet gerade daran" },
+      { text: "sc:eingereiht", hint: "… oder es wartet in einem Lauf" },
+    ].filter((s) => s.text.slice(3).startsWith(q));
   else if (prefix === "@")
     out = [{ login: "ich", name: "ich (gh-Nutzer)" }, ...src.assignees]
       .filter((a) => lc(a.login).includes(q) || lc(a.name ?? "").includes(q))
@@ -185,7 +230,7 @@ export function suggest(word: string, src: SuggestSource, limit = 8): Suggestion
       .filter((s) => lc(String(s.number)).startsWith(q) || lc(s.title).includes(q))
       .map((s) => ({ text: `s:${s.number}`, hint: s.title }));
   // prefix matches first, then the rest in source order
-  const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|-?t:|@)"?/i, "")).startsWith(q);
+  const starts = (s: Suggestion) => lc(s.text.replace(/^(-l:|l:|s:|-?t:|z:|pr:|sc:|@)"?/i, "")).startsWith(q);
   return [...out.filter(starts), ...out.filter((s) => !starts(s))].slice(0, limit);
 }
 
