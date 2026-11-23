@@ -209,8 +209,8 @@ const members = (t: Pick<JiraTicket, "family">) => [
 
 /**
  * The quick filter's tokens on tickets: l: JIRA labels, @ assignee (first name or any name word), s: epic (key or
- * summary) or story number, #n any GitHub issue of the family, drift: tickets with drift to apply, text in key,
- * summary and epic. Same AND/OR rules as on GitHub issues.
+ * summary) or story number, t: issue type (OR), #n any GitHub issue of the family, drift: tickets with drift to apply,
+ * text in key, summary and epic. Same AND/OR rules as on GitHub issues.
  */
 export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
   const matcher = (t: Token, value: string) => (t.partial ? (s: string) => s.startsWith(value) : (s: string) => s === value);
@@ -221,6 +221,7 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
   const numbers = tokens.filter((t) => t.kind === "number").map((t) => Number(t.value));
   const stories = tokens.filter((t) => t.kind === "story").map((t) => lc(t.value.replace(/^#/, "")));
   const drift = tokens.some((t) => t.kind === "drift");
+  const types = tokens.filter((t) => t.kind === "type").map((t) => matcher(t, lc(t.value)));
   const texts = tokens.filter((t) => t.kind === "text").map((t) => lc(t.value));
   return (t) => {
     const own = t.labels.map(lc);
@@ -242,6 +243,7 @@ export function compileTickets(tokens: Token[]): (t: JiraTicket) => boolean {
       if (!ok) return false;
     }
     if (drift && !actionable(t).length) return false;
+    if (types.length && !types.some((m) => m(lc(t.type)))) return false;
     if (texts.length) {
       const hay = lc(`${t.key} ${t.summary} ${t.epic?.key ?? ""} ${t.epic?.summary ?? ""}`);
       if (texts.some((x) => !hay.includes(x))) return false;
@@ -255,11 +257,15 @@ export function ticketFacets(tickets: JiraTicket[]): {
   labels: Map<string, number>;
   assignees: Map<string, { name: string; count: number }>;
   epics: Map<string, string>;
+  /** issue types with their ticket count (all tickets, so a type filter never hides its own chip) */
+  types: Map<string, number>;
 } {
   const labels = new Map<string, number>();
   const assignees = new Map<string, { name: string; count: number }>();
   const epics = new Map<string, string>();
+  const types = new Map<string, number>();
   for (const t of tickets) {
+    if (t.type) types.set(t.type, (types.get(t.type) ?? 0) + 1);
     if (t.category === "done") continue;
     for (const l of t.labels) labels.set(l, (labels.get(l) ?? 0) + 1);
     if (t.assignee) {
@@ -270,7 +276,7 @@ export function ticketFacets(tickets: JiraTicket[]): {
     }
     if (t.epic) epics.set(t.epic.key, t.epic.summary);
   }
-  return { labels, assignees, epics };
+  return { labels, assignees, epics, types };
 }
 
 /** A label as JIRA takes it: no spaces. */

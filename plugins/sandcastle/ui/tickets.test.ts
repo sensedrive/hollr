@@ -182,6 +182,14 @@ describe("ticket filter", () => {
     expect(run("drift:")).toEqual(["HACCP-2"]);
     expect(tokenize("drift:")[0]?.kind).toBe("drift");
   });
+  test("t: types widen each other (OR) and narrow the rest (AND); Sub-Task with a dash stays one token", () => {
+    const typed = [ticket("A-1", { type: "Epic" }), ticket("A-2", { type: "Story", labels: ["shop"] }), ticket("A-3", { type: "Task" }), ticket("A-4", { type: "Sub-Task" })];
+    const pick = (q: string) => typed.filter(compileTickets(tokenize(q))).map((t) => t.key);
+    expect(pick("t:story t:task")).toEqual(["A-2", "A-3"]);
+    expect(pick("t:Story l:shop")).toEqual(["A-2"]);
+    expect(pick("t:sub-task")).toEqual(["A-4"]);
+    expect(pick('t:"Sub-Task" t:epic')).toEqual(["A-1", "A-4"]);
+  });
 });
 
 test("guard texts", () => {

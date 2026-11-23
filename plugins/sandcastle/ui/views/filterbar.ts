@@ -9,7 +9,7 @@ import { derive } from "../derive";
 import { type SuggestSource, type Suggestion, serialize, suggest, type Token, tokenize, tokenText, writeHash } from "../filter";
 import { githubOnly, jiraLink } from "../jira";
 import { hooks, prefSet, state, toast } from "../state";
-import { ticketFacets } from "../tickets";
+import { ticketFacets, typeIcon } from "../tickets";
 
 let committed: Token[] = [];
 let active = 0;
@@ -103,7 +103,7 @@ function lastWord(): string {
 }
 
 /** Suggestions and the one-tap row of the mode on show: Tickets → JIRA, Werkbank → GitHub. */
-function source(): (SuggestSource & { quick: string[] }) | null {
+function source(): (SuggestSource & { quick: string[]; typeCounts?: [string, number][] }) | null {
   const top = (m: Map<string, number>, n: number) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
   const drift = state.jira?.counts.drift ? ["drift:"] : [];
   if (state.mode === "tickets") {
@@ -114,6 +114,8 @@ function source(): (SuggestSource & { quick: string[] }) | null {
       labels: [...f.labels.keys()].sort((a, b) => a.localeCompare(b, "de")),
       assignees: [...f.assignees].map(([login, a]) => ({ login, name: a.name })),
       stories: [...f.epics].map(([key, summary]) => ({ number: key, title: summary })),
+      types: [...f.types.keys()],
+      typeCounts: [...f.types].sort((a, b) => typeRank(a[0]) - typeRank(b[0]) || a[0].localeCompare(b[0], "de")),
       quick: [
         ...drift,
         ...top(f.labels, 7).map((l) => tokenText({ kind: "label", value: l })),
@@ -230,11 +232,38 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-/** Frequent labels and assignees of the open tickets, for one-tap toggles on touch. */
+/** Epic → Story → Task → Bug → Sub-Task, other types after them. */
+const TYPE_ORDER = ["epic", "story", "task", "bug", "sub-task", "subtask", "unteraufgabe"];
+const typeRank = (type: string) => {
+  const i = TYPE_ORDER.indexOf(type.toLowerCase());
+  return i < 0 ? TYPE_ORDER.length : i;
+};
+
+/** Frequent labels and assignees of the open tickets, for one-tap toggles on touch; in Tickets the type group first. */
 function renderQuick(): void {
-  const opts = source()?.quick ?? [];
+  const src = source();
+  const opts = src?.quick ?? [];
   const on = new Set(committed.map(tokenText));
-  fill(quick, ...opts.map((o) => h("button", { class: `qchip${on.has(o) ? " on" : ""}`, title: o, onclick: () => toggle(o) }, o.replace(/^l:"?|"$/g, ""))));
+  const types = src?.typeCounts ?? [];
+  const anyType = committed.some((t) => t.kind === "type");
+  const typeGroup = types.length
+    ? [
+        h("span", { class: "qf-group" }, "Typ"),
+        h("button", { class: `qchip${anyType ? "" : " on"}`, title: "Alle Typen", onclick: () => clearTypes() }, "Alle"),
+        ...types.map(([type, n]) => {
+          const text = tokenText({ kind: "type", value: type });
+          return h("button", { class: `qchip${on.has(text) ? " on" : ""}`, title: text, onclick: () => toggle(text) }, `${typeIcon(type)} ${type} `, h("span", { class: "qf-count" }, String(n)));
+        }),
+        h("span", { class: "qf-sep", "aria-hidden": "true" }),
+      ]
+    : [];
+  fill(quick, ...typeGroup, ...opts.map((o) => h("button", { class: `qchip${on.has(o) ? " on" : ""}`, title: o, onclick: () => toggle(o) }, o.replace(/^l:"?|"$/g, ""))));
+}
+
+function clearTypes(): void {
+  committed = committed.filter((t) => t.kind !== "type");
+  renderChips();
+  apply();
 }
 
 async function copyJira(visibleKeys: (string | null)[], visibleCount: number): Promise<void> {
