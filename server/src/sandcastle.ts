@@ -33,6 +33,7 @@ import {
   recordGrill,
   validateGrillRequest,
 } from "./grills";
+import { type Flow, flowLive, flowPr, readBatchFlows } from "./flows";
 import { type Agent, execHerdr, Herdr, newChat, promptWhenReady } from "./herdr";
 import { which } from "./tools";
 
@@ -180,6 +181,8 @@ export interface Run {
   progress: RunProgress;
   pr: number | null;
   logs: LogFile[];
+  /** the batch flow of this run (skippr's „Ablauf-Log v1“); null: none, issues come from events.jsonl/logs */
+  flow: Flow | null;
 }
 
 export interface SandcastleRequest {
@@ -1075,24 +1078,28 @@ export const readLock = () => readJson<RunRecord>(lockFile());
 function evaluateLock(
   cache: ProjectCache,
   agents: Agent[] | null,
+  flowsOf: Map<string, Flow[]>,
 ): { lock: RunRecord | null; progress: Progress | null; active: boolean } {
   const lock = readLock();
   if (!lock) return { lock: null, progress: null, active: false };
   const project = cache.projects.find((p) => p.slug === lock.slug);
   const progress = project ? readProgress(project.gitCommonDir, Date.parse(lock.startedAt)) : null;
   if (lock.endedAt) return { lock, progress, active: false };
+  const flow = project ? lockFlow(lock, flowsOf.get(project.gitCommonDir) ?? []) : undefined;
   let changed = false;
-  if (progress?.loop?.cwd && lock.cwd !== progress.loop.cwd) {
-    lock.cwd = progress.loop.cwd;
+  const cwd = flow?.worktree ?? progress?.loop?.cwd;
+  if (cwd && lock.cwd !== cwd) {
+    lock.cwd = cwd;
     changed = true;
   }
-  const end = progress?.runEnd
-    ? progress.runEnd.result === "ok"
+  const end =
+    flow?.outcome === "ok" || progress?.runEnd?.result === "ok"
       ? "fertig"
-      : "abgebrochen"
-    : agents && !agents.some((a) => a.pane === lock.pane)
-      ? "Sitzung geschlossen"
-      : null;
+      : flow?.outcome === "aborted" || progress?.runEnd
+        ? "abgebrochen"
+        : agents && !agents.some((a) => a.pane === lock.pane)
+          ? "Sitzung geschlossen"
+          : null;
   if (end) {
     lock.endedAt = new Date().toISOString();
     lock.endReason = end;
@@ -1101,6 +1108,10 @@ function evaluateLock(
   if (changed) writeJson(lockFile(), lock);
   return { lock, progress, active: !lock.endedAt };
 }
+
+/** The board's run's flow: the newest one of its project started at or after the lock. */
+const lockFlow = (lock: RunRecord, flows: Flow[]) =>
+  flows.find((f) => Date.parse(f.startedAt) >= Date.parse(lock.startedAt));
 
 // ── status ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1131,6 +1142,23 @@ interface RunInput {
   since: number;
   now: number;
   prLookup: boolean;
+  /** the batch flow matched to this run */
+  flow: Flow | null;
+  /** the flow still goes on (flows.ts flowLive) */
+  flowLive: boolean;
+}
+
+/** An assignment of a batch flow as an issue phase (pure). */
+export function flowPhase(x: Flow["assignments"][number]): { phase: Phase; reason: string | null } {
+  if (x.result === "merged") return { phase: "merged", reason: null };
+  // the implementer rejects its own assignment when it brought no commits (ereignis-vertrag.md)
+  if (x.result === "rejected" && x.by === "implementer")
+    return { phase: "no-commits", reason: x.reason };
+  if (x.result !== "running") return { phase: "failed", reason: x.reason ?? "nicht gemergt" };
+  if (x.role === "implementer") return { phase: "building", reason: null };
+  if (x.role === "reviewer" || x.role === "merger" || x.reviewed)
+    return { phase: "reviewing", reason: null };
+  return { phase: "planned", reason: null };
 }
 
 /** One run: a working folder with a loop process, the board's lock, or logs from the last day. */
@@ -1142,7 +1170,7 @@ function buildRun(a: RunInput): Run {
   const p = a.project;
 
   const progress = p ? readProgress(p.gitCommonDir, a.since, a.cwd) : null;
-  const branch = facts?.branch ?? progress?.loop?.branch ?? "";
+  const branch = facts?.branch ?? a.flow?.branch ?? progress?.loop?.branch ?? "";
   const queueMode = env.SANDCASTLE_STORY_IDS === "queue" || !!progress?.loop || !!a.lock;
   const queue = p ? readQueue(p.gitCommonDir) : { order: [], tickets: {} };
 
@@ -1184,7 +1212,12 @@ function buildRun(a: RunInput): Run {
   const mergerText = text("merger");
 
   const issues = new Map<number, { title: string | null; phase: Phase; reason: string | null }>();
-  if (queueMode && progress) {
+  if (a.flow) {
+    for (const x of a.flow.assignments) issues.set(x.id, { title: x.title, ...flowPhase(x) });
+    if (queueMode && (alive || a.lockActive || a.flowLive))
+      for (const n of queue.order)
+        if (!issues.has(n)) issues.set(n, { title: null, phase: "queued", reason: null });
+  } else if (queueMode && progress) {
     for (const n of progress.picked) issues.set(n, { title: null, ...unfinished(n) });
     for (const [n, reason] of progress.failed)
       issues.set(n, { title: null, phase: "failed", reason });
@@ -1245,9 +1278,19 @@ function buildRun(a: RunInput): Run {
   const pane = agent?.pane ?? (a.lockActive ? (a.lock?.pane ?? null) : null);
   const blocked = agent?.status === "blocked";
   const busy = agent?.status === "working" || blocked;
+  // with a flow: running while the sandcastle stage runs, then the skill's checks/PR/deploy
+  const sandcastleStage = a.flow?.stages.find((s) => s.stage === "sandcastle")?.state;
+  const flowStatus: RunStatus | null =
+    a.flow && a.flowLive
+      ? sandcastleStage === "ok" || sandcastleStage === "failed" || sandcastleStage === "skipped"
+        ? "loop-ended"
+        : "running"
+      : null;
   let status: RunStatus;
   if (alive) status = blocked ? "waiting" : "running";
-  else if (a.lockActive) status = blocked ? "waiting" : progress?.loop ? "loop-ended" : "running";
+  else if (a.lockActive)
+    status = blocked ? "waiting" : (flowStatus ?? (progress?.loop ? "loop-ended" : "running"));
+  else if (flowStatus) status = blocked ? "waiting" : flowStatus;
   else if (busy && !progress?.runEnd) status = blocked ? "waiting" : "loop-ended";
   else status = "ended";
 
@@ -1260,13 +1303,21 @@ function buildRun(a: RunInput): Run {
     ? iso(proc.start)
     : a.lock
       ? a.lock.startedAt
-      : starts.length
-        ? iso(Math.min(...starts))
-        : a.logs.length
-          ? iso(Math.min(...a.logs.map((l) => l.mtime)))
-          : null;
+      : a.flow?.startedAt
+        ? a.flow.startedAt
+        : starts.length
+          ? iso(Math.min(...starts))
+          : a.logs.length
+            ? iso(Math.min(...a.logs.map((l) => l.mtime)))
+            : null;
   const lastWrite = a.logs.length ? Math.max(...a.logs.map((l) => l.mtime)) : null;
-  const endedAt = alive ? null : (a.lock?.endedAt ?? (lastWrite ? iso(lastWrite) : null));
+  // the loop's end: with a flow its sandcastle stage's end
+  const flowEnd = a.flow
+    ? (a.flow.stages.find((s) => s.stage === "sandcastle")?.endedAt ?? a.flow.endedAt)
+    : null;
+  const endedAt = alive
+    ? null
+    : (a.lock?.endedAt ?? flowEnd ?? (a.flowLive ? null : lastWrite ? iso(lastWrite) : null));
 
   const cfg = a.lock?.config;
   const loopEnv = Object.keys(env).length > 0;
@@ -1310,10 +1361,12 @@ function buildRun(a: RunInput): Run {
     progress: progressOf(list),
     pr:
       progress?.runEnd?.pr ??
+      (a.flow ? flowPr(a.flow) : null) ??
       (branch && branch !== p?.defaultBranch
         ? cachedPr(p?.slug ?? null, a.cwd, branch, a.now, a.prLookup)
         : null),
     logs: a.logs.filter((l) => l.issue === null),
+    flow: a.flow,
   };
 }
 
@@ -1374,7 +1427,9 @@ function grillsOf(a: {
   });
 }
 
-/** All runs on this machine: loop processes, the lock's run, folders with logs from the last 24 h. */
+const flowsCacheFile = () => join(stateDir(), "flows.json");
+
+/** All runs on this machine: loop processes, the lock's run, folders with logs from the last 24 h, batch flows. */
 async function scan(
   deps: Deps,
   opts: { agents: boolean },
@@ -1390,19 +1445,27 @@ async function scan(
         : herdrAgents(),
     !opts.agents ? Promise.resolve(null) : (deps.labels ?? herdrLabels()),
   ]);
+  const byCommon = projectsByCommon(cache);
+  const flowsOf = readBatchFlows(byCommon.keys(), flowsCacheFile(), now);
+  const host = hostname();
   const { lock, active } = opts.agents
-    ? evaluateLock(cache, agents)
+    ? evaluateLock(cache, agents, flowsOf)
     : { lock: readLock(), active: !readLock()?.endedAt };
   const lockActive = !!lock && active;
 
-  const byCommon = projectsByCommon(cache);
   // candidate folders: cheap to list, most have no recent logs
   const roots = candidateDirs(cache, byCommon);
   const dirs = new Set<string>();
   for (const p of procs) if (p.cwd) dirs.add(p.cwd);
   if (lockActive && lock) dirs.add(lock.cwd ?? lock.root);
   for (const d of roots) dirs.add(d);
-  const runs: Run[] = [];
+  // a flow's worktree is a run from its first event on, before any log exists
+  for (const flows of flowsOf.values())
+    for (const f of flows)
+      if (f.worktree && Date.parse(f.updatedAt) >= now - DAY && existsSync(f.worktree))
+        dirs.add(f.worktree);
+
+  const entries: (RunInput & { flows: Flow[] })[] = [];
   for (const cwd of dirs) {
     const own = procs.filter((p) => p.cwd === cwd);
     const isLockDir = lockActive && !!lock && (lock.cwd ?? lock.root) === cwd;
@@ -1414,25 +1477,43 @@ async function scan(
       : mine && (isLockDir || Date.parse(mine.startedAt) >= now - DAY)
         ? Date.parse(mine.startedAt)
         : now - DAY;
-    const logs = listLogs(cwd, since, now);
-    if (!own.length && !isLockDir && !logs.length) continue;
     const facts = gitFacts(cwd);
-    const project = (facts && byCommon.get(facts.commonDir)) ?? null;
-    runs.push(
-      buildRun({
-        cwd,
-        logs,
-        procs: own,
-        project,
-        lock: mine && Date.parse(mine.startedAt) >= since - 5000 ? mine : null,
-        lockActive: isLockDir,
-        agents,
-        since,
-        now,
-        prLookup: deps.prLookup ?? true,
-      }),
-    );
+    const flows = (facts && flowsOf.get(facts.commonDir)) ?? [];
+    const here = flows.find((f) => f.worktree === cwd && Date.parse(f.updatedAt) >= since);
+    const logs = listLogs(cwd, since, now);
+    if (!own.length && !isLockDir && !logs.length && !here) continue;
+    entries.push({
+      cwd,
+      logs,
+      procs: own,
+      project: (facts && byCommon.get(facts.commonDir)) ?? null,
+      lock: mine && Date.parse(mine.startedAt) >= since - 5000 ? mine : null,
+      lockActive: isLockDir,
+      agents,
+      since,
+      now,
+      prLookup: deps.prLookup ?? true,
+      flow: here ?? null,
+      flowLive: false,
+      flows,
+    });
   }
+  // flow → run: its worktree, else the board's run gets the flow started after its lock, else the newest
+  // unfinished one still going
+  const claimed = new Set(entries.map((e) => e.flow));
+  const claim = (e: (typeof entries)[number], pick: (f: Flow) => boolean) => {
+    if (e.flow) return;
+    e.flow = e.flows.find((f) => !claimed.has(f) && pick(f)) ?? null;
+    claimed.add(e.flow);
+  };
+  for (const e of entries) {
+    const l = e.lock;
+    if (l) claim(e, (f) => f === lockFlow(l, e.flows));
+  }
+  for (const e of entries) claim(e, (f) => !f.outcome && flowLive(f, now, host));
+  const runs = entries.map(({ flows: _, ...e }) =>
+    buildRun({ ...e, flowLive: !!e.flow && flowLive(e.flow, now, host) }),
+  );
   runs.sort(
     (a, b) =>
       Number(b.alive) - Number(a.alive) ||
@@ -1545,7 +1626,9 @@ export function skillPrompt(
 ): string {
   const agentArg = cfg.agent === "custom" ? `custom:${cfg.provider}:${cfg.model}` : cfg.agent;
   // one story (or one stand-alone issue) is one run anyway: --batch only when there is something to batch
-  const umfang = scope?.length ? `${scope.join(",")}${scope.length > 1 ? " --batch" : ""}` : "warteschlange";
+  const umfang = scope?.length
+    ? `${scope.join(",")}${scope.length > 1 ? " --batch" : ""}`
+    : "warteschlange";
   return [
     `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} ${umfang}`,
     cfg.screencast ? " --screencast" : "",
@@ -1656,7 +1739,8 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
   const release = takeStartLock();
   try {
     const agents = deps.agents !== undefined ? deps.agents : await herdrAgents();
-    const current = evaluateLock(cache, agents);
+    const flowsOf = readBatchFlows(projectsByCommon(cache).keys(), flowsCacheFile(), Date.now());
+    const current = evaluateLock(cache, agents, flowsOf);
     if (current.active && current.lock)
       throw new Error(`Auf diesem Rechner läuft schon ein Lauf (${current.lock.project}).`);
     if (project.engine !== "sandcastle")

@@ -584,6 +584,18 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .stage { border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; font-size: 12px; color: var(--muted); }
 .stage.done { color: var(--green); }
 .stage.current { color: var(--fg); font-weight: 700; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.flow-stages { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin: 10px 0 4px; font-size: 12px; color: var(--muted); }
+.flow-stages .sep { color: var(--grey); }
+.fstage { padding: 1px 7px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+.fstage.ok { color: var(--green); }
+.fstage.running { color: var(--accent); }
+.fstage.failed { color: var(--red); }
+.fstage.skipped { text-decoration: line-through; }
+.fstage.current { color: var(--fg); font-weight: 700; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.fstage.current.failed { border-color: var(--red); background: color-mix(in srgb, var(--red) 15%, transparent); }
+.dock-wait, .run-wait { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--orange); font-size: 12px; }
+.dock-wait { grid-column: 1 / -1; }
+.run-wait { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--orange) 14%, transparent); font-size: 13px; }
 .run-ticket-st, .run-ticket-actions { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .run-ticket-st .ph-merged { color: var(--green); }
 .run-ticket-st .ph-building, .run-ticket-st .ph-reviewing { color: var(--accent); }

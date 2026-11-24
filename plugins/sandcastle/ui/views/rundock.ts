@@ -6,14 +6,14 @@
  * when what they show changes, so polls never reset scroll positions.
  */
 import { setLaneOrder, takeOutOfLane } from "../actions";
-import { openExternal, sc } from "../api";
+import { hasHost, openExternal, openSession, sc } from "../api";
 import type { Derived, Lane } from "../derive";
-import { CHIP_TEXT, type DockChip, dependsOn, laneChips, moveChip, runProgress, STAGES, stageOf } from "../dock";
+import { chipText, type DockChip, dependsOn, flowStage, laneChips, moveChip, runProgress, STAGES, stageLine } from "../dock";
 import { fill, h, icon, reconcile } from "../dom";
 import { isBusy, since } from "../model";
 import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
 import { LANE_PREFIX } from "../tickets";
-import type { Phase, Run } from "../types";
+import type { Flow, Phase, Run } from "../types";
 import { newRunModal } from "./newrun";
 import { claimPanel, closeSidebar } from "./sidebar";
 
@@ -86,6 +86,7 @@ const liveRun = (lane: Lane): Run | undefined => lane.runs.find((r) => r.status 
 
 function chipsOf(d: Derived, lane: Lane, keys: Map<number, string>): DockChip[] {
   const run = liveRun(lane);
+  const flow = run?.flow;
   return laneChips(
     lane.order,
     (n) => keys.get(n),
@@ -94,6 +95,28 @@ function chipsOf(d: Derived, lane: Lane, keys: Map<number, string>): DockChip[] 
       if (tr && tr.server === lane.server.id && tr.run === run) return tr.issue.phase;
       return d.issues.get(n)?.state === "closed" ? "merged" : undefined;
     },
+    // with a flow the steps come from its roles and assignment results
+    flow ? (n) => flowStage(flow, n) : undefined,
+  );
+}
+
+/** „wartet auf deine Antwort“ with „Sitzung öffnen“ while herdr says the run's session is blocked. */
+function waitingNote(server: string, run: Run, cls: string): HTMLElement | null {
+  if (run.status !== "waiting") return null;
+  const pane = run.pane;
+  const open = (e: Event) => {
+    e.stopPropagation();
+    if (pane) openSession(server, pane);
+  };
+  return h("span", { class: cls }, h("b", {}, "wartet auf deine Antwort"), pane && hasHost() ? h("button", { class: "btn small primary", onclick: open }, "Sitzung öffnen") : null);
+}
+
+/** „Worktree ✓ · Sandcastle ● · Prüfungen · …“ with the current stage highlighted. */
+function stageLineEl(flow: Flow): HTMLElement {
+  return h(
+    "div",
+    { class: "flow-stages", "aria-label": "Etappen" },
+    ...stageLine(flow).flatMap((s, i) => [i ? h("span", { class: "sep" }, "·") : null, h("span", { class: `fstage ${s.state}${s.current ? " current" : ""}`, title: s.reason ?? "" }, s.text)]),
   );
 }
 
@@ -149,7 +172,7 @@ function chipEl(c: DockChip, i: number, chips: DockChip[]): HTMLElement {
       h("span", { class: "pos" }, i + 1),
       h("b", {}, c.key),
       h("span", { class: "grow" }),
-      h("span", { class: "dock-chip-st" }, isFresh ? `neu · Platz ${i + 1}` : CHIP_TEXT[c.phase]),
+      h("span", { class: "dock-chip-st" }, isFresh ? `neu · Platz ${i + 1}` : chipText(c)),
       waiting
         ? h(
             "span",
@@ -167,7 +190,7 @@ function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
   const run = liveRun(lane);
   const id = lane.server.id;
   const now = Date.now();
-  const sig = JSON.stringify([lane.server, run?.id, run?.branch, run?.config, run?.status, chips, [...fresh].filter(([, t]) => t > now).map(([k]) => k), chips.map((c) => summaryOf(c.key)), sideServer === id]);
+  const sig = JSON.stringify([lane.server, run?.id, run?.branch, run?.config, run?.status, run?.pane, chips, [...fresh].filter(([, t]) => t > now).map(([k]) => k), chips.map((c) => summaryOf(c.key)), sideServer === id]);
   let row = rowEls.get(id);
   if (row?.sig === sig) return row.el;
   const p = runProgress(chips);
@@ -181,6 +204,7 @@ function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
       h("b", { class: "dock-name" }, lane.server.label),
       h("span", { class: "dock-branch mono muted" }, run ? run.branch : ""),
       h("span", { class: "dock-agent muted" }, run ? agent : "kein Lauf"),
+      run ? waitingNote(id, run, "dock-wait") : null,
       h(
         "span",
         { class: "dock-of" },
@@ -288,8 +312,7 @@ function openLog(server: string, run: Run, n: number | null): void {
   hooks.show("runs");
 }
 
-function phaseChips(phase: Phase): HTMLElement {
-  const stage = stageOf(phase);
+function phaseChips(stage: number): HTMLElement {
   return h(
     "div",
     { class: "stage-chips" },
@@ -311,7 +334,7 @@ function ticketBlock(server: string, run: Run | undefined, c: DockChip, i: numbe
         ? "gemergt"
         : c.phase === "failed"
           ? `fehlgeschlagen${reason ? `: ${reason}` : ""}`
-          : CHIP_TEXT[c.phase].replace(/^\S+ /, "");
+          : chipText(c).replace(/^[🔒⏱✓✗] /u, "");
   const logIssue = run?.issues.find((x) => c.children.includes(x.n) && x.logs.length);
   const up = moveChip(chips, c.key, -1);
   const down = moveChip(chips, c.key, 1);
@@ -320,7 +343,7 @@ function ticketBlock(server: string, run: Run | undefined, c: DockChip, i: numbe
     { class: `run-ticket ph-${c.phase}${deps.length ? " dep" : ""}` },
     deps.length ? h("div", { class: "dep-note muted" }, `↳ baut auf ${deps.join(", ")}`) : null,
     h("div", { class: "run-ticket-top" }, h("span", { class: "pos" }, i + 1), " ", h("b", {}, c.key), " ", h("span", {}, summaryOf(c.key)), isBusy(c.phase) ? h("span", { class: "lock", title: "wird gerade gebaut" }, "🔒") : null),
-    phaseChips(c.phase),
+    phaseChips(c.stage),
     h(
       "div",
       { class: "run-ticket-st" },
@@ -369,12 +392,16 @@ function renderRunSide(d: Derived): void {
             h("dd", {}, run.config.agentLabel || run.config.agent || "–"),
             h("dt", {}, "Gestartet"),
             h("dd", {}, run.startedAt ? `vor ${since(run.startedAt)}` : "–"),
+            run.flow?.iteration ? h("dt", {}, "Runde") : null,
+            run.flow?.iteration ? h("dd", {}, `${run.flow.iteration.n}${run.flow.iteration.max ? ` von ${run.flow.iteration.max}` : ""}${run.flow.pass && run.flow.pass.n > 1 ? ` · Durchgang ${run.flow.pass.n}` : ""}`) : null,
             h("dt", {}, "Fortschritt"),
             h("dd", { class: "run-progress" }, h("b", {}, `${p.at} von ${p.total}`), dots(chips)),
             h("dt", {}, "Pull Request"),
             h("dd", {}, run.pr && run.slug ? h("button", { class: "link", onclick: () => openExternal(`https://github.com/${run.slug}/pull/${run.pr}`) }, `#${run.pr}`) : "noch keiner"),
           )
         : h("p", { class: "muted" }, chips.length ? "Diese Tickets warten auf den nächsten Lauf." : "Keine Tickets eingereiht."),
+      run?.flow ? stageLineEl(run.flow) : null,
+      run ? waitingNote(server, run, "run-wait") : null,
       run
         ? h("div", { class: "btn-row" }, h("button", { class: "btn", onclick: () => openLog(server, run, null) }, "Protokoll öffnen"), stopButton(server, run))
         : h("div", { class: "btn-row" }, h("button", { class: "btn primary", onclick: () => newRunModal(server) }, "Lauf starten")),

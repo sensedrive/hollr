@@ -13,5 +13,7 @@
 | --- | --- | --- |
 | board (Werkbank) | normal, ziehen, laden, fehler, details, details-601, details-logs, neues-issue, kein-lauf, eingereiht, filter, menue, mehrere-laeufe, lanes-zu, grill-start, grill-laeuft, hell, werkbank | gebaut |
 | board (Tickets) | tickets, tickets-typ, tickets-drift, tickets-live, tickets-live-details, tickets-teilweise-live-details, jira-fehlt, filter-logik | gebaut |
-| board (Tickets, Lauf-Leiste) | tickets-leiste, tickets-leiste-zu, tickets-leiste-ziehen, tickets-lauf, tickets-neuer-lauf | gebaut („+ Neues Ticket“ offen: kein JIRA-Anlegen) |
-| laeufe | laeuft, wartet, start, leer, grills | teilweise: Startformular immer offen statt hinter „Lauf starten“, Grill-Pane ohne STATUS-Protokoll-Liste, keine Vorauswahl |
+| board (Tickets, Lauf-Leiste) | tickets-leiste, tickets-leiste-zu, tickets-leiste-ziehen, tickets-lauf | gebaut („+ Neues Ticket“ offen: kein JIRA-Anlegen) |
+| board (Neuer Lauf, v23) | tickets-neuer-lauf – alle Parameter (Batch/einzeln, Agent/Modell, Parallelität 1–6, Ziel-Branch, Testserver-Karten, Befehlsvorschau) | offen |
+| board (Einreihen, v22) | tickets-einreihen, tickets-einreihen-ohne-story, tickets-einreihen-kein-lauf, tickets-einreihen-fertig; „▷ Lauf starten“ in der Leiste | offen („▷ Lauf starten“ in der Leiste gebaut) |
+| laeufe (v23) | default, laeuft, wartet, start, leer, grills, hell – Statusblock je Rechner, „Was passiert gerade“-Zeitleiste | offen |

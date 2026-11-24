@@ -87,6 +87,45 @@ export interface Run {
   progress: { total: number; merged: number; failed: number; active: number; queued: number; percent: number };
   pr: number | null;
   logs: LogFile[];
+  /** the run's batch flow (skippr's „Ablauf-Log v1“); absent on older hollr, null without a flow file */
+  flow?: Flow | null;
+}
+
+export type FlowRole = "planner" | "implementer" | "reviewer" | "merger";
+export type StageState = "pending" | "running" | "ok" | "failed" | "skipped";
+
+/** A batch flow folded from its event file (server/src/flows.ts Flow). */
+export interface Flow {
+  kind: string;
+  id: string;
+  project: string | null;
+  ticket: string | null;
+  branch: string | null;
+  worktree: string | null;
+  startedAt: string;
+  updatedAt: string;
+  endedAt: string | null;
+  outcome: "ok" | "failed" | "aborted" | null;
+  /** worktree, sandcastle, checks, pr, deploy, testplan in this order, then stages seen beyond them */
+  stages: { stage: string; state: StageState; startedAt: string | null; endedAt: string | null; reason: string | null; data: Record<string, unknown> }[];
+  /** running stage, else a failed one, else the next pending one while the flow goes on */
+  current: string | null;
+  pass: { n: number; state: "running" | "ended"; reason: string | null; pid: number | null; host: string | null } | null;
+  iteration: { n: number; max: number | null } | null;
+  /** roles running now */
+  active: { role: FlowRole; assignment: number | null }[];
+  assignments: {
+    id: number;
+    title: string | null;
+    branch: string | null;
+    role: FlowRole | null;
+    result: "running" | "merged" | "failed" | "rejected";
+    by: string | null;
+    reason: string | null;
+    reviewed: boolean;
+    commits: number;
+  }[];
+  paused: string | null;
 }
 
 /** The machine's lock (run.json); only `project` is relied on. */

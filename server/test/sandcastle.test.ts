@@ -11,12 +11,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BATCH_STAGES, type Flow, flowPr, foldFlow } from "../src/flows";
 import type { Grill } from "../src/grills";
 import type { Agent } from "../src/herdr";
 import {
   type Deps,
   effectiveOrder,
   type LoopProc,
+  flowPhase,
   lastErrorLine,
   mergedIssues,
   parseProgress,
@@ -489,6 +491,191 @@ describe("start / release (queue mode via events)", () => {
         deps,
       ),
     ).rejects.toThrow("tickets muss");
+  });
+});
+
+describe("batch flows (Ablauf-Log v1)", () => {
+  // examples of skippr's contract (protocol/examples), copied unchanged
+  const fixture = (name: string) =>
+    readFileSync(join(import.meta.dir, "fixtures", "flows", `${name}.ndjson`), "utf8")
+      .split("\n")
+      .filter(Boolean);
+  const ready = fixture("batch-ready-for-acceptance");
+  const waiting = fixture("batch-waiting-for-skipper");
+
+  test("a batch ready for acceptance: every stage ok, both assignments merged, PR from the pr stage", () => {
+    const f = foldFlow(ready.join("\n"));
+    expect(f).toMatchObject({
+      kind: "batch",
+      id: "skip-12-2026-11-03",
+      ticket: "SKIP-12",
+      branch: "skip-12",
+      worktree: "/Users/skipper/code/sportpark/.lul-workr/worktrees/skip-12",
+      startedAt: "2026-11-03T08:00:05.120Z",
+      outcome: "ok",
+      endedAt: "2026-11-03T08:35:04.250Z",
+      current: null,
+      pass: { n: 1, state: "ended", reason: "finished", pid: 47541 },
+      iteration: { n: 2, max: 10 },
+      active: [],
+    });
+    expect(f.stages.map((s) => [s.stage, s.state])).toEqual(BATCH_STAGES.map((s) => [s, "ok"]));
+    expect(f.stages.find((s) => s.stage === "worktree")?.data).toEqual({
+      path: "/Users/skipper/code/sportpark/.lul-workr/worktrees/skip-12",
+      branch: "skip-12",
+      base: "main",
+    });
+    expect(flowPr(f)).toBe(570);
+    expect(f.assignments.map((a) => [a.id, a.result, a.commits])).toEqual([
+      [571, "merged", 3],
+      [572, "merged", 2],
+    ]);
+  });
+
+  test("roles move through the assignments as events come in", () => {
+    const upTo = (seq: number) => foldFlow(waiting.slice(0, seq).join("\n"));
+    let f = upTo(7); // planner running
+    expect(f.active).toEqual([{ role: "planner", assignment: null }]);
+    expect(f.current).toBe("sandcastle");
+    expect(f.pass).toMatchObject({ state: "running" });
+    f = upTo(10); // plan ready, implementer on 581
+    expect(f.assignments.map((a) => [a.id, a.role, flowPhase(a).phase])).toEqual([
+      [581, "implementer", "building"],
+      [582, null, "planned"],
+    ]);
+    f = upTo(14); // reviewer on 581, implementer done on 582
+    expect(f.assignments.map((a) => [a.id, a.role, flowPhase(a).phase])).toEqual([
+      [581, "reviewer", "reviewing"],
+      [582, null, "planned"],
+    ]);
+    f = upTo(19); // 582 rejected, merger running: only the reviewed one is the merger's
+    expect(f.assignments.map((a) => [a.id, a.role, a.result])).toEqual([
+      [581, "merger", "running"],
+      [582, null, "rejected"],
+    ]);
+    expect(flowPhase(f.assignments[1] as Flow["assignments"][number])).toEqual({
+      phase: "failed",
+      reason:
+        "Spec verfehlt: Die Mail geht an alle auf der Warteliste statt nur an die erste Person.",
+    });
+    f = upTo(waiting.length);
+    expect(f).toMatchObject({
+      outcome: null,
+      current: "sandcastle",
+      pass: { state: "ended", reason: "waiting_for_skipper" },
+      iteration: { n: 2, max: 10 },
+    });
+    expect(f.assignments.map((a) => [a.id, a.result])).toEqual([
+      [581, "merged"],
+      [582, "rejected"],
+    ]);
+    expect(f.stages.map((s) => s.state)).toEqual([
+      "ok",
+      "running",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  test("broken lines, unknown types, other versions and repeated seq change nothing", () => {
+    const f = foldFlow(waiting.slice(0, 10).join("\n"));
+    const g = foldFlow(
+      [
+        ...waiting.slice(0, 10),
+        "{nope",
+        JSON.stringify({ ...JSON.parse(waiting[10] ?? "{}"), type: "something.new", seq: 11 }),
+        JSON.stringify({ ...JSON.parse(waiting[10] ?? "{}"), v: 2, seq: 12 }),
+        waiting[9],
+      ].join("\n"),
+    );
+    expect({ ...g, seq: 0, updatedAt: "" }).toEqual({ ...f, seq: 0, updatedAt: "" });
+    // implementer without commits: rejected by itself → no commits; a failed stage fails the flow
+    const h = foldFlow(
+      [
+        ...waiting.slice(0, 10),
+        JSON.stringify({
+          ...JSON.parse(waiting[17] ?? "{}"),
+          seq: 30,
+          data: { assignment: 581, by: "implementer", reason: "keine Commits" },
+        }),
+        JSON.stringify({
+          ...JSON.parse(waiting[3] ?? "{}"),
+          seq: 31,
+          type: "stage.ended",
+          data: { stage: "sandcastle", outcome: "failed", reason: "quota" },
+        }),
+      ].join("\n"),
+    );
+    expect(flowPhase(h.assignments[0] as Flow["assignments"][number]).phase).toBe("no-commits");
+    expect(h).toMatchObject({ outcome: "failed", current: "sandcastle" });
+  });
+
+  test("status: the flow's worktree is a run; phases, stages and waiting come from the flow", async () => {
+    const run2 = join(root, ".herdr", "worktrees", "shop", "run2");
+    git(shop, "worktree", "add", "-q", "-b", "skip-14", run2);
+    const dir = join(shop, ".git", "lul-workr", "flows");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, "batch-skip-14-2026-11-03.ndjson");
+    // the example, moved to this repo and to the last half hour
+    const t0 = Date.parse(JSON.parse(waiting[0] ?? "{}").ts);
+    const base = now - 30 * 60_000;
+    const moved = (line: string | undefined) => {
+      const e = JSON.parse(
+        (line ?? "").replaceAll("/Users/skipper/code/sportpark/.lul-workr/worktrees/skip-14", run2),
+      );
+      return `${JSON.stringify({ ...e, ts: new Date(base + Date.parse(e.ts) - t0).toISOString() })}\n`;
+    };
+    writeFileSync(file, waiting.slice(0, 10).map(moved).join(""));
+    let run = (await status()).runs.find((r) => r.cwd === run2) as Run;
+    expect(run).toMatchObject({ branch: "skip-14", status: "running", source: "manual" });
+    expect(run.flow?.current).toBe("sandcastle");
+    expect(run.issues.map((i) => [i.n, i.phase, i.title])).toEqual([
+      [581, "building", "Warteliste anzeigen"],
+      [582, "planned", "Nachrücken per Mail"],
+    ]);
+
+    // herdr says the session in the worktree waits for an answer
+    run = (await status({ agents: [agent("w4:p1", run2, "blocked")] })).runs.find(
+      (r) => r.cwd === run2,
+    ) as Run;
+    expect(run).toMatchObject({ status: "waiting", pane: "w4:p1" });
+
+    // the rest arrives (plus half a line still being written): read from the last offset on
+    appendFileSync(file, `${waiting.slice(10).map(moved).join("")}{"v":1,"id":"x`);
+    run = (await status()).runs.find((r) => r.cwd === run2) as Run;
+    expect(run.issues.map((i) => [i.n, i.phase])).toEqual([
+      [581, "merged"],
+      [582, "failed"],
+    ]);
+    expect(run.flow?.pass).toMatchObject({ state: "ended", reason: "waiting_for_skipper" });
+    const cache = JSON.parse(readFileSync(join(root, "state", "sandcastle", "flows.json"), "utf8"));
+    expect(cache.files[file].offset).toBe(readFileSync(file).length - '{"v":1,"id":"x'.length);
+
+    // the loop is done, the skill runs the checks
+    const last = JSON.parse(moved(waiting.at(-1)));
+    const next = (seq: number, type: string, data: Record<string, unknown>) =>
+      JSON.stringify({ ...last, seq, pass: undefined, source: "cmd:batch", type, data });
+    writeFileSync(
+      file,
+      `${readFileSync(file, "utf8").replace(/\{"v":1,"id":"x$/, "")}${next(27, "stage.ended", { stage: "sandcastle", outcome: "ok" })}\n${next(28, "stage.started", { stage: "checks" })}\n`,
+    );
+    run = (await status()).runs.find((r) => r.cwd === run2) as Run;
+    expect(run).toMatchObject({ status: "loop-ended" });
+    expect(run.flow?.current).toBe("checks");
+    expect(run.flow?.stages.map((s) => s.state)).toEqual([
+      "ok",
+      "ok",
+      "running",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+
+    rmSync(dir, { recursive: true, force: true });
+    git(shop, "worktree", "remove", "--force", run2);
+    expect((await status()).runs.some((r) => r.cwd === run2)).toBe(false);
   });
 });
 
