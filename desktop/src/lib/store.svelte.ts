@@ -37,8 +37,9 @@ export type Route =
   | { view: "tools"; server: string }
   | { view: "plugins" }
   /** `open`: a board ticket to show (`<KEY>:<n>` / `:<n>`, Sandcastle deep link), `repo` (`owner/name`) picks the
-   *  project of an issue number; never remembered as the last plugin */
-  | { view: "plugin"; server: string; id: string; open?: string; repo?: string };
+   *  project of an issue number, `ask` makes every request new (the same ticket again after its panel was closed);
+   *  never remembered as the last plugin */
+  | { view: "plugin"; server: string; id: string; open?: string; repo?: string; ask?: number };
 
 export type AgentOpen = "terminal" | "git" | "browser";
 

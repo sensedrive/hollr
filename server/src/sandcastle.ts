@@ -213,6 +213,8 @@ export interface Deps {
   startSession?: (cwd: string, label: string, prompt: string) => Promise<string>;
   /** the queue-labelled open issues for `start` (default: gh); null = unknown */
   queuedIssues?: (p: Project) => Promise<number[] | null>;
+  /** queued issue → its story (`## Parent`), for a loop without queue mode (default: gh) */
+  issueParents?: (p: Project, numbers: number[]) => Promise<Map<number, number | null>>;
   /** sends keys to a pane for `stop` (default: herdr) */
   sendKeys?: (pane: string, keys: string[]) => Promise<void>;
   /** pane → its herdr tab and workspace labels (default: herdr) */
@@ -1530,19 +1532,65 @@ export function validateConfig(raw: Record<string, unknown>, project: Project): 
 /** Git branch names the run accepts as target: no spaces, no leading dash. */
 const BRANCH_RE = /^[\w][\w./-]{0,119}$/;
 
-/** The line the omp session gets: the whole skill, scope = this machine's queue. */
+/**
+ * The line the omp session gets: the whole skill, scope = this machine's queue – or, for a project whose loop
+ * doesn't know the queue yet, the queued tickets as a fixed list (`scope`: stories and stand-alone issues, one
+ * batch run; what is queued later waits for the next run).
+ */
 export function skillPrompt(
   projectName: string,
   cfg: RunConfig,
   ticketWantsDeploy: boolean,
+  scope?: number[],
 ): string {
   const agentArg = cfg.agent === "custom" ? `custom:${cfg.provider}:${cfg.model}` : cfg.agent;
+  const umfang = scope?.length ? `${scope.join(",")} --batch` : "warteschlange";
   return [
-    `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} warteschlange`,
+    `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} ${umfang}`,
     cfg.screencast ? " --screencast" : "",
     !cfg.deploy && !ticketWantsDeploy ? " --kein-testserver" : "",
     cfg.branch ? ` --ziel-branch ${cfg.branch}` : "",
   ].join("");
+}
+
+/** `## Parent` of an issue body: the story a child belongs to. */
+export function parentOf(body: string): number | null {
+  const lines = body.split("\n");
+  const at = lines.findIndex((l) => /^##\s*Parent\s*$/i.test(l.trim()));
+  if (at < 0) return null;
+  for (const l of lines.slice(at + 1)) {
+    if (/^##\s/.test(l.trim())) break;
+    const n = l.match(/#(\d+)/);
+    if (n) return Number(n[1]);
+  }
+  return null;
+}
+
+/** Queued issues → what the skill takes as its scope: a child's story, a stand-alone issue itself; in queue order. */
+export function fixedScope(order: number[], parents: Map<number, number | null>): number[] {
+  const out: number[] = [];
+  for (const n of order) {
+    const s = parents.get(n) ?? n;
+    if (!out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+async function ghParents(p: Project, numbers: number[]): Promise<Map<number, number | null>> {
+  const parents = new Map<number, number | null>();
+  await Promise.all(
+    numbers.map(async (n) => {
+      const r = await run(["gh", "issue", "view", String(n), "--repo", p.slug, "--json", "body"], {
+        timeoutMs: 30_000,
+      });
+      let body = "";
+      try {
+        body = r.ok ? ((JSON.parse(r.out) as { body?: string }).body ?? "") : "";
+      } catch {}
+      parents.set(n, parentOf(body));
+    }),
+  );
+  return parents;
 }
 
 /** Held while a start runs: two clicks at once must not both pass the "nothing running yet" check. */
@@ -1614,10 +1662,8 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
       throw new Error(
         `Projekt ${project.name} nutzt den Motor ${project.engine}, nicht Sandcastle.`,
       );
-    if (!(await measureQueueSupport(project.root, project.defaultBranch)))
-      throw new Error(
-        "Die Schleife dieses Projekts kennt die Warteschlange noch nicht (lul-workr-setup → Sandcastle nachziehen).",
-      );
+    // a loop without queue mode (not yet „Sandcastle nachziehen“) still runs: with the queued tickets as a list
+    const queueMode = await measureQueueSupport(project.root, project.defaultBranch);
     // an explicit ticket list goes to the front of the queue, in the given order
     const first = positiveInts(req.tickets);
     if (Array.isArray(req.tickets) && first.length !== req.tickets.length)
@@ -1634,12 +1680,15 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
     const order = labelled ? effectiveOrder(queue.order, labelled) : queue.order;
     if (!order.length) throw new Error("Die Warteschlange ist leer.");
     const wantsDeploy = order.some((n) => queue.tickets[String(n)]?.deploy);
+    const scope = queueMode
+      ? undefined
+      : fixedScope(order, await (deps.issueParents ?? ghParents)(project, order));
     // before the session starts: its events must not predate the run
     const startedAt = new Date().toISOString();
     const pane = await (deps.startSession ?? heardSession)(
       project.root,
       `Sandcastle ${project.name}`,
-      skillPrompt(project.name, cfg, wantsDeploy),
+      skillPrompt(project.name, cfg, wantsDeploy, scope),
     );
     const lock: RunRecord = {
       id: String(Date.parse(startedAt)),

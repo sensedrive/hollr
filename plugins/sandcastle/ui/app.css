@@ -547,6 +547,8 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .dock-branch { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dock-agent { font-size: 12px; white-space: nowrap; }
 .dock-of { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; white-space: nowrap; }
+.dock-start { grid-column: 1 / -1; justify-self: start; margin-top: 4px; }
+.reason.note { color: var(--muted); }
 .dock-dots { display: inline-flex; gap: 3px; min-width: 0; overflow: hidden; }
 .dock-dots .seg { flex: none; width: 15px; height: 7px; border-radius: 4px; }
 .dock-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; }

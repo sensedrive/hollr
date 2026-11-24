@@ -61,6 +61,11 @@ function onClick(e: Event): void {
   const row = t.closest<HTMLElement>("[data-dock-server]");
   if (!row) return;
   const server = row.dataset.dockServer ?? "";
+  if (t.closest("[data-start]")) {
+    e.stopPropagation();
+    newRunModal(server);
+    return;
+  }
   if (move) {
     e.stopPropagation();
     moveTicket(server, move.dataset.key ?? "", Number(move.dataset.move) as -1 | 1);
@@ -182,6 +187,10 @@ function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
         chips.length ? (run ? `${p.at} von ${p.total}` : `${p.total} wartend`) : "",
         chips.length ? dots(chips) : null,
       ),
+      // a machine without a run but with tickets waiting: start right from its row
+      !run && chips.length
+        ? h("button", { class: "btn small primary dock-start", "data-start": true, title: "Lauf auf diesem Rechner starten" }, "▷ Lauf starten")
+        : null,
     ),
     h("div", { class: "dock-chips", "data-list": true }, ...(chips.length ? chips.map((c, i) => chipEl(c, i, chips)) : [h("p", { class: "empty" }, "Leer – Ticket hierher ziehen")])),
   );

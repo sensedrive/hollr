@@ -83,7 +83,7 @@
     const ticket = grill;
     if (!ticket) return;
     const at = await boardServer(server, app.servers.map((s) => s.id));
-    if (at) go({ view: "plugin", server: at, id: "sandcastle", open: ticket });
+    if (at) go({ view: "plugin", server: at, id: "sandcastle", open: ticket, ask: Date.now() });
     else {
       toast = t("Kein Server hat das Sandcastle-Plugin.");
       clearTimeout(toastTimer);
@@ -104,7 +104,7 @@
   /** a tapped ticket or issue: the Sandcastle board on it, else its GitHub/JIRA page in the side browser */
   async function openIssue(target: IssueTarget) {
     const at = await boardServer(server, app.servers.map((s) => s.id));
-    if (at) go({ view: "plugin", server: at, id: "sandcastle", open: target.open, ...(target.repo ? { repo: target.repo } : {}) });
+    if (at) go({ view: "plugin", server: at, id: "sandcastle", open: target.open, ask: Date.now(), ...(target.repo ? { repo: target.repo } : {}) });
     else linkInBrowser(new URL(target.web));
   }
   /** drafts / ↑ history of this session */

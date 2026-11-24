@@ -88,7 +88,7 @@
         label: `${h.kind === "jira" ? h.key : `#${h.n}`} · ${h.title}`,
         icon: h.kind === "jira" ? "tag" : "circle",
         sub: `${h.project} · ${t(h.status)}`,
-        run: () => go({ view: "plugin", server, id: "sandcastle", open: h.kind === "jira" ? `${h.key}:` : `:${h.n}`, repo: h.slug }),
+        run: () => go({ view: "plugin", server, id: "sandcastle", open: h.kind === "jira" ? `${h.key}:` : `:${h.n}`, repo: h.slug, ask: Date.now() }),
       }));
     }, 250);
     return () => clearTimeout(timer);

@@ -30,6 +30,9 @@ final class Dictator {
     /// the end of `text` that is only a preview of what is being said now (Parakeet/Whisper) – it may still change
     private(set) var pending = ""
     private(set) var level: Float = 0
+    /// the speech model being loaded into memory right now ("Whisper Large v3 Turbo"), nil when it's ready – the
+    /// first load after an app update compiles it for the Neural Engine and can take a minute or two
+    private(set) var loadingModel: String?
     /// short notice after a dictation ("Nichts verstanden", "Aufnahme unterbrochen" …)
     private(set) var notice: String?
     /// The chat (draft key) this dictation belongs to – one microphone, one dictation in the whole app.
@@ -37,6 +40,28 @@ final class Dictator {
     private(set) var owner: String?
     /// where the result goes (inserted into the draft, maybe sent) – set at start, not by a view
     private var deliver: ((String) -> Void)?
+
+    /// Loads the engine's model in the background while you already speak (the audio is kept); while it isn't in
+    /// memory yet, `loadingModel` says so – the overlay tells you why no text comes yet.
+    private func trackLoad(label: String, loaded: @escaping () async -> Bool, load: @escaping () async throws -> Void) {
+        let gen = generation
+        Task { [weak self] in
+            if await loaded() { return }
+            guard let self, gen == self.generation else { return }
+            self.loadingModel = label
+            let started = Date()
+            do {
+                try await load()
+                HollrLog.info("dictation: \(label) loaded in \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
+            } catch {
+                HollrLog.error("dictation: loading \(label) failed: \(error)")
+                if gen == self.generation, self.isBusy {
+                    self.notice = String(localized: "\(label) ließ sich nicht laden: \(error.localizedDescription)")
+                }
+            }
+            if self.loadingModel == label { self.loadingModel = nil }
+        }
+    }
     /// composers on screen per chat: when the last one goes away, the dictation ends and keeps its text
     private var visible: [String: Int] = [:]
 
@@ -113,13 +138,17 @@ final class Dictator {
                     throw DictationError.message(String(localized: "\(settings.engineLabel) ist auf diesem Gerät nicht geladen – Einstellungen › Sprache."))
                 }
                 let model = settings.parakeetModel, boost = settings.useVocabulary && settings.parakeetBoost
-                Task.detached { try? await ParakeetCache.shared.prepare(model: model, boost: boost, terms: terms) }
+                trackLoad(label: settings.engineLabel, loaded: { await ParakeetCache.shared.isLoaded(model) }) {
+                    try await ParakeetCache.shared.prepare(model: model, boost: boost, terms: terms)
+                }
             case .whisper:
                 guard let folder = DictationSettings.whisperFolder(settings.whisperModel)?.path else {
                     throw DictationError.message(String(localized: "\(settings.engineLabel) ist auf diesem Gerät nicht geladen – Einstellungen › Sprache."))
                 }
                 let model = settings.whisperModel
-                Task.detached { _ = try? await WhisperCache.shared.kit(model: model, folder: folder) }
+                trackLoad(label: settings.engineLabel, loaded: { await WhisperCache.shared.isLoaded(model) }) {
+                    _ = try await WhisperCache.shared.kit(model: model, folder: folder)
+                }
             case .apple:
                 let words = settings.useVocabulary ? terms.map(\.text) : []
                 if #available(iOS 26, *), let a = try? await AppleDictationEngine.make(
@@ -215,7 +244,10 @@ final class Dictator {
         guard state == .recording, let settings else { return }
         let deliver = self.deliver
         self.deliver = nil
+        let gen = generation
         let text = await stop(settings: settings)
+        // thrown away (✕) while the text was still being made: nobody gets it
+        guard gen == generation else { return }
         owner = nil
         deliver?(text)
     }
@@ -240,6 +272,7 @@ final class Dictator {
         guard state == .recording else { return "" }
         cleanupAudio()
         state = .transcribing
+        let gen = generation
         let started = Date()
         let seconds = Double(collector.count) / Double(AudioCollector.rate)
         var result = ""
@@ -267,16 +300,20 @@ final class Dictator {
             }
             HollrLog.info("dictation: \(active.rawValue) took \(String(format: "%.1f", Date().timeIntervalSince(started)))s after stop, \(Int(seconds))s audio")
         } catch {
+            guard gen == generation else { return "" }
             state = .failed(error.localizedDescription)
             HollrLog.error("dictation stop: \(error)")
             reset()
             return ""
         }
+        // cancelled meanwhile: cancel() already reset everything
+        guard gen == generation else { return "" }
         reset()
         var cleaned = settings.finish(result, extraTerms: context.terms)
         if settings.polish, !cleaned.isEmpty {
             state = .transcribing
             cleaned = await LocalPolish.polish(cleaned, terms: settings.allTerms(extra: context.terms).map(\.text), language: settings.language)
+            guard gen == generation else { return "" }
         }
         if cleaned.isEmpty {
             notice = seconds < 0.6 ? String(localized: "Zu kurz – etwas länger sprechen.") : String(localized: "Nichts verstanden.")
@@ -627,6 +664,8 @@ actor ParakeetCache {
         return result.text
     }
 
+    func isLoaded(_ model: String) -> Bool { loaded?.model == model }
+
     func unload() {
         loaded = nil
         loading = nil
@@ -681,6 +720,8 @@ actor WhisperCache {
         let results: [TranscriptionResult] = try await kit.transcribe(audioArray: samples, decodeOptions: options)
         return results.map(\.text).joined(separator: " ")
     }
+
+    func isLoaded(_ model: String) -> Bool { current?.model == model }
 
     func unload() {
         current = nil

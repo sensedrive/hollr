@@ -8021,6 +8021,21 @@
     "Diktat: der Text erscheint jetzt schon beim Sprechen, nicht erst nach einer Pause": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation: the text now appears while you speak, not only after a pause" } } }
     },
+    "%@ ließ sich nicht laden: %@": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "%1$@ couldn't be loaded: %2$@" } } }
+    },
+    "Sprich ruhig schon – %@ wird noch geladen. Nach einem App-Update dauert das einmalig ein, zwei Minuten, dann erscheint der Text.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Go ahead and talk – %@ is still loading. After an app update this takes a minute or two once, then the text appears." } } }
+    },
+    "%@ wird geladen …": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Loading %@ …" } } }
+    },
+    "Hört zu · %@ lädt": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Listening · %@ loading" } } }
+    },
+    "Diktat: zeigt, wenn das Sprachmodell noch lädt, lässt sich jederzeit verwerfen; das Modell wird beim Öffnen der App schon vorgeladen": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation: shows when the speech model is still loading, can be thrown away at any time; the model is warmed when the app opens" } } }
+    },
     "Wandle um …": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Converting …" } } }
     },

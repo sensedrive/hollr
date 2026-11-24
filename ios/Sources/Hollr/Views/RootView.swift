@@ -14,6 +14,8 @@ struct RootView: View {
     @Binding var pairing: PairingRequest?
     /// the network generation the last tree refresh ran under (NetworkWatch)
     @State private var lastNetwork = 0
+    /// the speech model is warmed when the app comes to the front: the first dictation needn't wait for it
+    @Environment(DictationSettings.self) private var dictationSettings
     @State private var tab: RootTab = .home
     @State private var sheetAgent: String?
     @State private var spacesPath = NavigationPath()
@@ -228,6 +230,7 @@ struct RootView: View {
             }
             NetworkWatch.shared.start()
             herdr.startFeeds(store.servers)
+            Dictator.prewarm(dictationSettings)
             // the breadcrumbs since the last upload go to a server once the connections are up
             Task {
                 try? await Task.sleep(for: .seconds(5))

@@ -30,6 +30,8 @@ import {
   sandcastleEnv,
   sectionsSince,
   skillPrompt,
+  fixedScope,
+  parentOf,
   validateConfig,
   type Project,
 } from "../src/sandcastle";
@@ -710,6 +712,24 @@ describe("pure parts", () => {
     );
     expect(skillPrompt("tendr", onBranch, true)).toBe(
       "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 warteschlange --ziel-branch feature/batch-1",
+    );
+  });
+
+  test("a loop without queue mode gets the queued tickets as stories and stand-alone issues", () => {
+    const parents = new Map<number, number | null>([
+      [3601, 3600],
+      [3602, 3600],
+      [2356, null],
+      [3701, 3700],
+    ]);
+    expect(fixedScope([3601, 2356, 3602, 3701], parents)).toEqual([3600, 2356, 3700]);
+    expect(parentOf("## Parent\n\n- #3600 Story\n\n## Was zu tun ist\n- #12")).toBe(3600);
+    expect(parentOf("## Was zu tun ist\n- #12")).toBeNull();
+    const cfg = validateConfig({ agent: "opus-5.5", parallel: 1, deploy: false }, {
+      agents: [],
+    } as unknown as Project);
+    expect(skillPrompt("tendr", cfg, false, [3600, 2356])).toBe(
+      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 3600,2356 --batch --kein-testserver",
     );
   });
 });

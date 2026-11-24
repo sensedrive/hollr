@@ -95,12 +95,15 @@ export function newRunModal(preselect: string | null): void {
       ? "Kein Rechner frei."
       : p.engine !== "sandcastle"
         ? `Projekt ${p.name} nutzt den Motor ${p.engine}, nicht Sandcastle.`
-        : !p.queueSupported
-          ? "Die Schleife dieses Projekts kennt die Warteschlange noch nicht (lul-workr-setup → Sandcastle nachziehen)."
-          : !picked.length && !queued
-            ? "Die Warteschlange auf diesem Rechner ist leer – Tickets auswählen."
-            : "";
-    reason.textContent = blocked;
+        : !picked.length && !queued
+          ? "Die Warteschlange auf diesem Rechner ist leer – Tickets auswählen."
+          : "";
+    // the loop of this project doesn't read the queue yet: the run gets the tickets as a fixed list
+    const note = !blocked && !p.queueSupported
+      ? "Diese Schleife kennt die Warteschlange noch nicht: der Lauf baut genau die eingereihten Tickets – was du danach einreihst, kommt in den nächsten Lauf."
+      : "";
+    reason.textContent = blocked || note;
+    reason.classList.toggle("note", !blocked && !!note);
     submit.disabled = !!blocked;
     submit.textContent = picked.length ? `Lauf mit ${picked.length} ${picked.length === 1 ? "Ticket" : "Tickets"} starten` : "Lauf starten";
   };

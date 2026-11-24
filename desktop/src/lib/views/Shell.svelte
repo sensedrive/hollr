@@ -284,7 +284,7 @@
         <Plugins />
       {:else if nav.route.view === "plugin"}
         {#key `${nav.route.server}|${nav.route.id}`}
-          <PluginView server={nav.route.server} id={nav.route.id} open={nav.route.open} repo={nav.route.repo} />
+          <PluginView server={nav.route.server} id={nav.route.id} open={nav.route.open} repo={nav.route.repo} ask={nav.route.ask} />
         {/key}
       {:else}
         <Dashboard />

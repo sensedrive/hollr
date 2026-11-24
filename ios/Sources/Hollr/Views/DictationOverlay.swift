@@ -149,6 +149,9 @@ struct DictationOverlay: View {
             if preparing, case .preparing(let message) = dictator.state, !message.isEmpty { hint = message }
             else if preparing { hint = String(localized: "Mikrofon startet …") }
             else if dictator.paused { hint = String(localized: "Pausiert – tippe auf den Knopf, um weiterzusprechen.") }
+            else if let model = dictator.loadingModel {
+                hint = String(localized: "Sprich ruhig schon – \(model) wird noch geladen. Nach einem App-Update dauert das einmalig ein, zwei Minuten, dann erscheint der Text.")
+            }
             else { hint = String(localized: "Sprich einfach los …") }
             return Text(join(head, tail).isEmpty ? "" : join(head, tail) + "\n\n").foregroundColor(quiet)
                 + Text(hint).foregroundColor(Theme.dim)
@@ -168,7 +171,6 @@ struct DictationOverlay: View {
         VStack(spacing: Gap.l) {
             HStack(alignment: .center) {
                 sideButton(icon: .trash, label: String(localized: "Verwerfen"), filled: false, action: discard)
-                    .disabled(converting)
                     .keyboardShortcut(.cancelAction)
                 Spacer(minLength: 0)
                 bigButton
@@ -187,7 +189,10 @@ struct DictationOverlay: View {
     }
 
     private var statusLine: String {
-        if converting { return String(localized: "Wandle um …") }
+        if converting {
+            return dictator.loadingModel.map { String(localized: "\($0) wird geladen …") } ?? String(localized: "Wandle um …")
+        }
+        if listening, !dictator.paused, let model = dictator.loadingModel { return String(localized: "Hört zu · \(model) lädt") }
         if preparing { return String(localized: "Einen Moment …") }
         if dictator.paused { return String(localized: "Pausiert") }
         return listening ? String(localized: "Hört zu") : ""

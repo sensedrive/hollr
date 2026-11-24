@@ -13,8 +13,8 @@
   import { isPinned, listPlugins, openPlugin, togglePin } from "$lib/plugins";
 
   /** `open`: board ticket (`<KEY>:<n>` / `:<n>`) – fragment `open=` on the first load, an `open` event once the page is up;
-   *  `repo` (`owner/name`) goes with it for an issue number */
-  let { server, id, open: ticket, repo }: { server: string; id: string; open?: string; repo?: string } = $props();
+   *  `repo` (`owner/name`) goes with it for an issue number; a new `ask` tells the page again (same ticket, panel closed) */
+  let { server, id, open: ticket, repo, ask }: { server: string; id: string; open?: string; repo?: string; ask?: number } = $props();
 
   let src = $state("");
   let error = $state("");
@@ -28,7 +28,7 @@
   let destroyed = false;
   /** the ticket (and repo) the page was last told about (fragment or event) */
   let told: string | undefined;
-  const asked = $derived(ticket ? `${ticket}|${repo ?? ""}` : undefined);
+  const asked = $derived(ticket ? `${ticket}|${repo ?? ""}|${ask ?? ""}` : undefined);
 
   const mayReopen = reopenGate();
 

@@ -185,6 +185,10 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Behoben: Ein Ticket aus der Suche oder einem Link öffnet sich im Board auch ein zweites Mal, nachdem du es geschlossen hast.":
+    "Fixed: a ticket from search or a link opens on the board again after you closed it.",
+  "Sandcastle: Läufe starten auch in Projekten, deren Schleife die Warteschlange noch nicht kennt – mit den eingereihten Tickets als feste Liste; „▷ Lauf starten“ direkt in der Rechnerzeile der Lauf-Leiste.":
+    "Sandcastle: runs also start in projects whose loop doesn't know the queue yet – with the queued tickets as a fixed list; “▷ Start run” right in the machine's row of the run dock.",
   "Hollrs Tastenkürzel (⌘K, ⌘1, ⌘N, ⌘, …) funktionieren auch, während ein Plugin wie das Sandcastle-Board den Fokus hat.":
     "Hollr's shortcuts (⌘K, ⌘1, ⌘N, ⌘, …) also work while a plugin like the Sandcastle board has the focus.",
   "Suche (⌘K) findet Tickets: JIRA-Schlüssel, #Issue-Nummern oder Wörter aus dem Titel – ↩ öffnet das Ticket im Sandcastle-Board.":

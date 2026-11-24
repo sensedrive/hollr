@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 70,
+    version: "0.56.2",
+    date: "24.11.2026",
+    items: [
+      { icon: "✓", text: "Behoben: Ein Ticket aus der Suche oder einem Link öffnet sich im Board auch ein zweites Mal, nachdem du es geschlossen hast." },
+      { icon: "▷", text: "Sandcastle: Läufe starten auch in Projekten, deren Schleife die Warteschlange noch nicht kennt – mit den eingereihten Tickets als feste Liste; „▷ Lauf starten“ direkt in der Rechnerzeile der Lauf-Leiste." },
+    ],
+  },
+  {
     build: 69,
     version: "0.56.1",
     date: "24.11.2026",
