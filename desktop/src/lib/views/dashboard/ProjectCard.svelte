@@ -61,7 +61,7 @@
             {#if w.project.branch}<span class="branch mono ellipsis"><Icon name="⑂" size={15} /> {w.project.branch}{#if w.project.worktree} <Icon name="⧉" size={15} />{/if}</span>{/if}
           </span>
           <span class="line ellipsis">
-            <span style:color={statusColor(r.pane.status)}>{r.pane.agent ? statusLabel(r.pane.status) : t("Terminal")}{#if running && r.pane.since} {elapsed(r.pane.since, now)}{/if}</span>
+            <span style:color={statusColor(r.pane.status)}>{r.pane.agent ? statusLabel(r.pane.status) : t("Terminal")}{running && r.pane.since ? ` ${elapsed(r.pane.since, now)}` : ""}</span>
             {#if line}<span class="muted"> · {running && w.ctx?.step ? "▸ " : ""}{line}</span>{/if}
           </span>
         </span>

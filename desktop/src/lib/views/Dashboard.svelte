@@ -409,8 +409,10 @@
 {/if}
 
 <style>
+  /* wide: "Läuft gerade" on the left (the wider column), "Braucht dich" on the right; stacked: what needs you first */
   .cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0 26px; align-items: start; }
-  @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .cols > .needs { order: 2; }
+  @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } .cols > .needs { order: 0; } }
   .stack { display: grid; gap: 12px; }
   .quiet { display: flex; align-items: flex-start; gap: 12px; padding: 16px; }
   .quiet > span:last-child { display: grid; gap: 2px; }
