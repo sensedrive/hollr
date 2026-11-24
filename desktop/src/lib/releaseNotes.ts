@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 75,
+    version: "0.57.4",
+    date: "24.11.2026",
+    items: [
+      { icon: "🔎", text: "Suche (⌘K) merkt sich die letzte Eingabe – markiert, sodass Tippen eine neue beginnt; × im Feld löscht sie." },
+    ],
+  },
+  {
     build: 74,
     version: "0.57.3",
     date: "24.11.2026",

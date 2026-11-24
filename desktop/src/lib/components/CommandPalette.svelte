@@ -60,10 +60,24 @@
     { id: "c:settings", label: t("Einstellungen"), icon: "sliders", kbd: `${mod},`, run: () => go({ view: "settings" }) },
   ]);
 
-  let query = $state("");
+  // the last search stays: opening the palette again shows it (selected, so typing starts a new one)
+  const LAST_QUERY = "hollr.palette.query";
+  let query = $state(localStorage.getItem(LAST_QUERY) ?? "");
   let sel = $state(0);
   let input = $state<HTMLInputElement>();
-  $effect(() => void tick().then(() => input?.focus()));
+  $effect(() => void tick().then(() => {
+    input?.focus();
+    input?.select();
+  }));
+  $effect(() => {
+    try {
+      localStorage.setItem(LAST_QUERY, query);
+    } catch {}
+  });
+  function clearQuery() {
+    query = "";
+    input?.focus();
+  }
 
   // ---- tickets: the board server's search, 250 ms after the last keystroke; a newer query drops older answers
   const board = boardServer(currentServer(), app.servers.map((s) => s.id));
@@ -146,6 +160,9 @@
       <Icon name="find" size={17} />
       <input bind:this={input} bind:value={query} placeholder={t("Sitzung, Space oder Befehl …")} aria-label={t("Suchen …")}
         role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={flat[sel]?.id} />
+      {#if query}
+        <button class="clear" title={t("Suche löschen")} aria-label={t("Suche löschen")} onclick={clearQuery}><Icon name="x" size={14} /></button>
+      {/if}
       <kbd>Esc</kbd>
     </div>
     <div class="list" id="palette-list" role="listbox" bind:this={list}>
@@ -176,6 +193,9 @@
   .head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--dim); }
   .head input { all: unset; flex: 1; min-width: 0; font-size: 15px; color: var(--fg); }
   .head input::placeholder { color: var(--dim); }
+  .clear { all: unset; cursor: pointer; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); flex: none; }
+  .clear:hover { background: var(--card); color: var(--fg); }
+  .clear:focus-visible { outline: 2px solid var(--accent); }
   kbd { font: 600 11px var(--mono); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--raised); color: var(--muted); white-space: nowrap; }
   .list { overflow-y: auto; padding: 6px; }
   .group { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); }

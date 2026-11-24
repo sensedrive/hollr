@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Suche (⌘K) merkt sich die letzte Eingabe – markiert, sodass Tippen eine neue beginnt; × im Feld löscht sie.":
+    "Search (⌘K) keeps your last query – selected, so typing starts a new one; × in the field clears it.",
   "Spaces: was Hollr für Sandcastle-Läufe und Grills öffnet, steht in einer eigenen Gruppe „Sandcastle & Grills“.":
     "Spaces: what Hollr opens for Sandcastle runs and grills sits in its own group “Sandcastle & grills”.",
   "Grillen holt vorher den neuesten Stand in den Hauptordner (nur Vorspulen, eigene Änderungen bleiben); klappt das nicht, sagt das Board warum.":

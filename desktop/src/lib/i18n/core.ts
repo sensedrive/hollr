@@ -21,6 +21,7 @@ export default {
   fertig: "done",
   "neues Ergebnis": "new result",
   "Suchen …": "Search …",
+  "Suche löschen": "Clear search",
   "Läuft gerade": "Running now",
   Alle: "All",
   Neu: "New",
