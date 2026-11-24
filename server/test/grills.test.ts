@@ -90,7 +90,8 @@ Erledigt:
     const s = parseStatusMd(md);
     expect(s.n).toBe(3313);
     expect(done(md)).toEqual([1, 2, 6]);
-    expect(s.step).toBe(3);
+    // how far it got: after step 6, even though 3–5 are still marked open
+    expect(s.step).toBe(7);
     expect(s.notes).toContain("- 5a. Entwurf veröffentlicht");
     expect(s.notes).toContain("- K01 #3345");
     expect(

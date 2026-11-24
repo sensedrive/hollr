@@ -39,7 +39,7 @@ export interface Grill {
   pane: string | null;
   status: GrillStatus;
   steps: GrillStep[];
-  /** first open step, 8 when all are done */
+  /** the step after the last done one (how far the grill got – a stale „open“ mark further up doesn't hold it back); 8 when step 7 is done */
   step: number;
   notes: string[];
   cwd: string | null;
@@ -194,8 +194,7 @@ export function parseStatusMd(text: string): {
   // open or started stays open
   const lastDone = Math.max(0, ...Object.entries(done).filter(([, v]) => v).map(([k]) => Number(k)));
   const steps = STEP_LABELS.map((label, i) => ({ n: i + 1, label, done: done[i + 1] ?? i + 1 <= lastDone }));
-  const first = steps.find((s) => !s.done);
-  return { steps, step: first ? first.n : 8, n, notes: notes.slice(-NOTES_MAX) };
+  return { steps, step: lastDone + 1, n, notes: notes.slice(-NOTES_MAX) };
 }
 
 // ── grills.json ────────────────────────────────────────────────────────────────────────────────────
