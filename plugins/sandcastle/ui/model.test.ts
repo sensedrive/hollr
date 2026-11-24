@@ -80,7 +80,7 @@ const mkRun = (over: Partial<Run>): Run => ({
   source: "hollr",
   pane: null,
   status: "running",
-  config: { agent: null, agentLabel: null, model: null, parallel: 1, scope: null, screencast: null },
+  config: { agent: null, agentLabel: null, model: null, parallel: 1, scope: null, test: null },
   issues: [],
   progress: { total: 0, merged: 0, failed: 0, active: 0, queued: 0, percent: 0 },
   pr: null,

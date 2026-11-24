@@ -62,6 +62,29 @@ export interface RunIssue {
   flags: TicketFlags | null;
 }
 
+/** What a run does after the PR (skill flags --kein-testserver / --no-testnote / --testnote / --screencast). */
+export type RunTest = "none" | "note" | "instructions" | "video";
+
+/** `start`/`preview` config of the gate. */
+export interface RunConfig {
+  agent: string;
+  provider?: string;
+  model?: string;
+  parallel: number;
+  test: RunTest;
+  /** several stories in a fixed scope: one batch or one run per story */
+  split: "batch" | "single";
+  branch?: string;
+}
+
+/** `preview`: the skill line a start would send; scope = stories/issues of a loop without queue mode, else null. */
+export interface RunPreview {
+  prompt: string;
+  queueMode: boolean;
+  order: number[];
+  scope: number[] | null;
+}
+
 export interface Run {
   id: string;
   slug: string | null;
@@ -81,7 +104,8 @@ export interface Run {
     model: string | null;
     parallel: number | null;
     scope: string | null;
-    screencast: boolean | null;
+    /** the board's test-server choice; null for runs not started from the board */
+    test: RunTest | null;
   };
   issues: RunIssue[];
   progress: { total: number; merged: number; failed: number; active: number; queued: number; percent: number };

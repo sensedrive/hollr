@@ -95,11 +95,14 @@ function onDrop(key: string, to: string): void {
   if (status) transitionTicket(key, status);
 }
 
-/** Queues the ticket's children on a machine and says above the board where it now stands. */
-async function enqueue(key: string, server: string): Promise<void> {
-  if (!(await queueChildren(key, server))) return;
+/**
+ * Queues the ticket's children on a machine, marks its dock chip as new and says above the board where it now
+ * stands; its place there, null when queueing failed. Also the details panel's „In Lauf einreihen“.
+ */
+export async function enqueue(key: string, server: string): Promise<number | null> {
+  if (!(await queueChildren(key, server))) return null;
   const place = placeOf(derive(), key, server);
-  if (place === null) return;
+  if (place === null) return null;
   queuedEl.textContent = `${key} steht jetzt auf Platz ${place} in Sandcastle auf ${serverLabel(server)}.`;
   queuedEl.hidden = false;
   clearTimeout(queuedTimer);
@@ -108,6 +111,7 @@ async function enqueue(key: string, server: string): Promise<void> {
     hooks.render();
   }, 20_000);
   hooks.render();
+  return place;
 }
 
 /** Long press / right click: move to a status, queue the children on a machine, details. */

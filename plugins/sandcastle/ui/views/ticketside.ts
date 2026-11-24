@@ -4,16 +4,21 @@
  * Werkbank – and the grill of the ticket) and „Abgleich“ (drift, „Angleichen“). Text and comments load once per
  * opening; the live blocks follow every poll and rebuild only when what they show changed.
  */
-import { applyTicketDrift, editTicketLabels, queueChildren, transitionTicket } from "../actions";
+import { applyTicketDrift, editTicketLabels, setLaneOrder, takeOutOfLane, transitionTicket } from "../actions";
 import { api } from "../api";
 import { derive, type Derived } from "../derive";
-import { fill, fmtDate, h, html } from "../dom";
-import { isBusy, PHASE_TEXT } from "../model";
-import { errorText, hooks, serverLabel, state, toast } from "../state";
-import { actionable, applyHint, buildLine, driftText, INFO_KINDS, jiraLabel, liveState, memberPhase, statusColumn, ticketFacets, typeIcon } from "../tickets";
+import { toFront } from "../dock";
+import { fill, fmtDate, h, html, icon } from "../dom";
+import { ICON } from "../icons";
+import { PHASE_TEXT } from "../model";
+import { errorText, hooks, laneServers, serverLabel, state, toast } from "../state";
+import { actionable, applyHint, buildLine, driftText, INFO_KINDS, jiraLabel, liveState, memberPhase, openChildren, statusColumn, ticketFacets, typeIcon } from "../tickets";
 import type { Comment, FamilyMember, JiraIssueDetail, JiraTicket } from "../types";
-import { grillBlock, grillBlockSig } from "./grilling";
+import { grillBlock, grillBlockSig, grillMenuItems } from "./grilling";
+import { newRunModal } from "./newrun";
+import { laneChipsOf, ticketPlaces } from "./rundock";
 import { claimPanel, closeSidebar, commentList, extLink, externalLinks, openIssue, prListEl } from "./sidebar";
+import { enqueue } from "./tickets";
 
 let shown: string | null = null;
 let detail: JiraIssueDetail | null = null;
@@ -22,12 +27,17 @@ let live: HTMLElement | null = null;
 let liveSig = "";
 let grillHost: HTMLElement | null = null;
 let grillSig = "";
+/** „In Lauf einreihen ▾“ open, and the section's last notice – kept across poll rebuilds of the live blocks */
+let sandMenu = false;
+let sandNotice = "";
 
 const release = () => {
   shown = null;
   detail = null;
   live = null;
   grillHost = null;
+  sandMenu = false;
+  sandNotice = "";
 };
 
 const ticketOf = (key: string): JiraTicket | undefined => state.jira?.tickets.find((t) => t.key === key) ?? (detail?.ticket.key === key ? detail.ticket : undefined);
@@ -35,6 +45,10 @@ const ticketOf = (key: string): JiraTicket | undefined => state.jira?.tickets.fi
 export async function openTicketSide(key: string): Promise<void> {
   if (!key) return;
   panel = claimPanel(release);
+  if (shown !== key) {
+    sandMenu = false;
+    sandNotice = "";
+  }
   shown = key;
   detail = null;
   render(key);
@@ -134,12 +148,139 @@ export function renderTicketLive(): void {
     fill(grillHost, g ? grillBlock(d, g.n, inGrill) : null);
   }
   const fam = [t.family.story, ...t.family.children].filter((m): m is FamilyMember => !!m).map((m) => [m.n, m.state, d.runs.get(m.n)?.issue.phase, d.laneOf.get(m.n)]);
-  const sig = JSON.stringify([t, detail?.transitions, fam, d.lanes.map((l) => l.server.id), state.jira?.fetchedAt, facetLabels().length]);
+  const sand = sandFacts(t, d);
+  const sig = JSON.stringify([t, detail?.transitions, fam, d.lanes.map((l) => l.server.id), state.jira?.fetchedAt, facetLabels().length, sand, sandMenu, sandNotice]);
   if (sig === liveSig) return;
   liveSig = sig;
   const title = panel.querySelector(".side-title");
   if (title) title.textContent = t.summary;
-  fill(live, metaBlock(t), statusBlock(t), labelsBlock(t), buildBlock(t, d), driftBlock(t));
+  fill(live, metaBlock(t), statusBlock(t), sandBlock(t, d, sand), labelsBlock(t), buildBlock(t, d), driftBlock(t));
+}
+
+interface SandFacts {
+  /** open children on GitHub: something to build */
+  grilled: boolean;
+  story: boolean;
+  /** the open grill ticket („Grillen“ starts it) */
+  grill: number | null;
+  machines: { id: string; name: string; status: string; offline: boolean }[];
+  queued: { server: string; label: string; pos: number; live: boolean; front: number[] | null; children: number[]; waiting: boolean } | null;
+}
+
+/** What the „Sandcastle“ section shows: where the ticket waits, or the machines it can be queued on. */
+function sandFacts(t: JiraTicket, d: Derived): SandFacts {
+  const places = ticketPlaces(d);
+  const counts = new Map<string, number>();
+  for (const p of places.values()) counts.set(p.server, (counts.get(p.server) ?? 0) + 1);
+  const lanes = laneServers();
+  const machines = [...lanes, ...state.servers.filter((s) => !s.online && !lanes.includes(s))].map((s) => {
+    if (!s.online) return { id: s.id, name: s.label, status: "offline", offline: true };
+    const running = d.lanes.find((l) => l.server.id === s.id)?.runs.some((r) => r.status !== "ended");
+    return { id: s.id, name: s.label, status: `${running ? "läuft" : "kein Lauf"} · ${counts.get(s.id) ?? 0} wartend`, offline: false };
+  });
+  const place = places.get(t.key);
+  let queued: SandFacts["queued"] = null;
+  if (place) {
+    const chips = laneChipsOf(d, place.server);
+    const chip = chips.find((c) => c.key === t.key);
+    queued = { server: place.server, label: place.label, pos: place.pos, live: place.live, front: toFront(chips, t.key), children: chip?.children ?? [], waiting: chip?.phase === "queued" };
+  }
+  const g = t.family.grill;
+  return { grilled: openChildren(t).length > 0, story: !!t.family.story, grill: g?.state === "open" ? g.n : null, machines, queued };
+}
+
+function sandBlock(t: JiraTicket, d: Derived, f: SandFacts): HTMLElement {
+  const say = (text: string) => {
+    sandNotice = text;
+    renderTicketLive();
+  };
+  const notice = h("p", { class: "muted small sand-notice", role: "status" }, sandNotice);
+  const q = f.queued;
+  if (q) {
+    return h(
+      "section",
+      { class: "side-sand" },
+      h("h3", {}, "Sandcastle"),
+      h("p", { class: "sand-where" }, "In Lauf auf ", h("b", {}, q.label), ` · Platz ${q.pos}`),
+      h(
+        "div",
+        { class: "btn-row" },
+        h("button", { class: "btn", disabled: !q.front, onclick: async () => q.front && (await setLaneOrder(q.server, q.front)) && say("Das Ticket steht jetzt vorn in der Warteschlange.") }, "↑ nach vorne"),
+        h("button", { class: "btn", disabled: !q.waiting, onclick: async () => (await takeOutOfLane(q.server, q.children)) && say("Das Ticket ist nicht mehr im Lauf.") }, "Aus dem Lauf nehmen"),
+      ),
+      q.live ? null : h("p", { class: "muted small" }, `Auf ${q.label} läuft noch kein Lauf – das Ticket wartet auf den Start.`),
+      q.live ? null : h("div", { class: "btn-row" }, h("button", { class: "btn", onclick: () => newRunModal(q.server) }, "▷ Lauf jetzt starten")),
+      notice,
+    );
+  }
+  const startGrill = f.grill === null ? undefined : grillMenuItems(d, f.grill)[0];
+  const reasonId = `sand-reason-${t.key}`;
+  const toggle = h(
+    "button",
+    {
+      class: "btn",
+      disabled: !f.grilled,
+      "aria-expanded": f.grilled ? String(sandMenu) : undefined,
+      "aria-describedby": f.grilled ? undefined : reasonId,
+      onclick: () => {
+        sandMenu = !sandMenu;
+        renderTicketLive();
+      },
+    },
+    sandMenu ? "In Lauf einreihen ▴" : "In Lauf einreihen ▾",
+  );
+  return h(
+    "section",
+    { class: "side-sand" },
+    h("h3", {}, "Sandcastle"),
+    h("div", { class: "btn-row" }, toggle),
+    f.grilled
+      ? null
+      : h(
+          "p",
+          { class: "muted small sand-reason", id: reasonId },
+          icon(ICON.lock, "sand-lock"),
+          f.story ? "Keine offenen Kinder – nichts mehr zu bauen" : "Erst grillen – ohne Story gibt es nichts zu bauen",
+          startGrill && !f.story ? h("button", { class: "link", onclick: startGrill.run }, "Grillen") : null,
+        ),
+    f.grilled && sandMenu
+      ? h(
+          "ul",
+          {
+            class: "sand-menu",
+            "aria-label": "Rechner wählen",
+            onkeydown: (e: Event) => {
+              if ((e as KeyboardEvent).key !== "Escape") return;
+              e.stopPropagation();
+              sandMenu = false;
+              renderTicketLive();
+            },
+          },
+          ...f.machines.map((m) =>
+            h(
+              "li",
+              {},
+              h(
+                "button",
+                {
+                  class: "sand-item",
+                  disabled: m.offline,
+                  onclick: async () => {
+                    sandMenu = false;
+                    renderTicketLive();
+                    if ((await enqueue(t.key, m.id)) !== null) say(`Eingereiht am Ende der Warteschlange von ${m.name}.`);
+                  },
+                },
+                h("span", { class: "sand-item-name" }, m.name),
+                h("span", { class: "sand-item-status" }, m.status),
+              ),
+            ),
+          ),
+          f.machines.length ? null : h("li", { class: "muted small" }, "Kein Rechner hat dieses Projekt ausgecheckt."),
+        )
+      : null,
+    notice,
+  );
 }
 
 function metaBlock(t: JiraTicket): HTMLElement {
@@ -242,8 +383,6 @@ function buildBlock(t: JiraTicket, d: Derived): HTMLElement {
     children,
     run: live ? { machine: serverLabel(live.server), percent: live.run.progress.percent } : null,
   });
-  const open = f.children.filter((c) => c.state === "open");
-  const busy = open.some((c) => isBusy(d.runs.get(c.n)?.issue.phase));
   const stand = liveState(t);
   return h(
     "section",
@@ -262,15 +401,6 @@ function buildBlock(t: JiraTicket, d: Derived): HTMLElement {
     ),
     t.prs.length ? h("h4", { class: "side-sub" }, "Pull Requests") : null,
     t.prs.length ? prListEl(t.prs) : null,
-    open.length && d.lanes.length
-      ? h(
-          "div",
-          { class: "btn-row" },
-          ...d.lanes.map((l) =>
-            h("button", { class: "btn small", disabled: busy && !open.every((c) => d.laneOf.get(c.n) === l.server.id), onclick: () => queueChildren(t.key, l.server.id) }, `Kinder in Sandcastle · ${l.server.label}`),
-          ),
-        )
-      : null,
   );
 }
 

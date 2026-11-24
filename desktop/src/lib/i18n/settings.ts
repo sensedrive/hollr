@@ -185,6 +185,14 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle: neue Läufe-Ansicht – je Rechner ein klarer Status, rechts „Was passiert gerade“ als Zeitleiste von Start bis Bericht, deutlicher Hinweis, wenn der Lauf auf deine Antwort wartet.":
+    "Sandcastle: new runs view – a clear status per machine, on the right “What's happening” as a timeline from start to report, a clear note when the run waits for your answer.",
+  "Sandcastle: „Neuer Lauf“ stellt alles ein – Agent und Modell, Parallelität, Ziel-Branch, Batch oder einzeln, Testserver und Testanweisung – mit Vorschau des genauen Befehls; der Agent fragt danach nichts mehr.":
+    "Sandcastle: “New run” sets everything – agent and model, parallelism, target branch, batch or one by one, test server and test instructions – with a preview of the exact command; the agent asks nothing afterwards.",
+  "Sandcastle: Tickets direkt aus ihrer Seitenleiste in einen Lauf einreihen, nach vorne holen oder herausnehmen.":
+    "Sandcastle: queue tickets into a run right from their side panel, move them to the front or take them out.",
+  "Sandcastle: echter Fortschritt aus dem Ablauf-Log von skippr – welche Rolle gerade an welchem Ticket arbeitet.":
+    "Sandcastle: real progress from skippr's flow log – which role is working on which ticket right now.",
   "Behoben: Ein Ticket aus der Suche oder einem Link öffnet sich im Board auch ein zweites Mal, nachdem du es geschlossen hast.":
     "Fixed: a ticket from search or a link opens on the board again after you closed it.",
   "Sandcastle: Läufe starten auch in Projekten, deren Schleife die Warteschlange noch nicht kennt – mit den eingereihten Tickets als feste Liste; „▷ Lauf starten“ direkt in der Rechnerzeile der Lauf-Leiste.":

@@ -134,6 +134,20 @@ export function moveChip(chips: readonly DockChip[], key: string, dir: -1 | 1): 
   return next.flatMap((c) => c.children);
 }
 
+/**
+ * „↑ nach vorne“: a waiting ticket moves before the first waiting ticket (what a run works on stays ahead); the new
+ * lane order, null when it is not waiting or already first among the waiting ones.
+ */
+export function toFront(chips: readonly DockChip[], key: string): number[] | null {
+  const i = chips.findIndex((c) => c.key === key);
+  const first = chips.findIndex((c) => c.phase === "queued");
+  const a = chips[i];
+  if (!a || a.phase !== "queued" || i <= first) return null;
+  const next = chips.filter((c) => c !== a);
+  next.splice(first, 0, a);
+  return next.flatMap((c) => c.children);
+}
+
 /** Tickets of the lane this one waits for: one of its issues is blocked by an issue of theirs. */
 export function dependsOn(chips: readonly DockChip[], chip: DockChip, blockedBy: (n: number) => readonly number[]): string[] {
   const blockers = new Set(chip.children.flatMap((n) => blockedBy(n)));

@@ -4,7 +4,7 @@
  * the relay falls back to /api/host/* of this plugin's own machine.
  */
 import { reconnectPolicy } from "./reconnect";
-import type { Grill, GrillMode, LogChunk, Project, QueueState, Server, Status, TicketFlags } from "./types";
+import type { Grill, GrillMode, LogChunk, Project, QueueState, RunConfig, RunPreview, Server, Status, TicketFlags } from "./types";
 
 const KEY = "sc.token";
 let token = "";
@@ -245,13 +245,12 @@ export const sc = {
   queue: (server: string, slug: string) => gate<QueueState>(server, { op: "queue", slug }),
   queueSet: (server: string, slug: string, patch: { order?: number[]; tickets?: Record<string, TicketFlags> }) =>
     gate<QueueState>(server, { op: "queue-set", slug, ...patch }),
-  /** `tickets`: issue numbers put at the front of the queue before the run starts; `branch`: target branch */
-  start: (
-    server: string,
-    slug: string,
-    config: { agent: string; parallel: number; screencast: boolean; deploy: boolean; branch?: string },
-    tickets: number[] = [],
-  ) => gate<{ pane: string | null }>(server, tickets.length ? { op: "start", slug, config, tickets } : { op: "start", slug, config }, 60_000),
+  /** `tickets`: issue numbers put at the front of the queue before the run starts */
+  start: (server: string, slug: string, config: RunConfig, tickets: number[] = []) =>
+    gate<{ pane: string | null }>(server, tickets.length ? { op: "start", slug, config, tickets } : { op: "start", slug, config }, 60_000),
+  /** the exact skill line `start` would send with the same arguments – starts and writes nothing */
+  preview: (server: string, slug: string, config: RunConfig, tickets: number[] = []) =>
+    gate<RunPreview>(server, tickets.length ? { op: "preview", slug, config, tickets } : { op: "preview", slug, config }, 60_000),
   release: (server: string) => gate(server, { op: "release" }),
   /** Ctrl-C into the run's session, then frees the lock */
   stop: (server: string) => gate(server, { op: "stop" }),

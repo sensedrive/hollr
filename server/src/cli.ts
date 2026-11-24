@@ -123,7 +123,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.56.2";
+export const VERSION = "0.57.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -609,7 +609,7 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "sandcastle": {
-      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|start|release|stop|grill-start}
+      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|preview|start|release|stop|grill-start}
       try {
         const req = JSON.parse((await readStdinLine(256 * 1024)) || "{}") as SandcastleRequest;
         if (["start", "release", "stop", "queue-set", "grill-start"].includes(req.op ?? ""))

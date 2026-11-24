@@ -298,7 +298,7 @@ describe("status from logs", () => {
       model: "claude-opus-5",
       parallel: 2,
       scope: "7",
-      screencast: null,
+      test: null,
     });
     const phase = Object.fromEntries(run.issues.map((i) => [i.n, i.phase]));
     expect(phase).toEqual({ 11: "merged", 12: "merged", 13: "reviewing", 14: "building" });
@@ -396,9 +396,29 @@ describe("start / release (queue mode via events)", () => {
     await expect(
       sandcastle({ op: "start", slug: SLUG, config: { agent: "opus-5.5", parallel: 1 } }, deps),
     ).rejects.toThrow("Unbekannter Agent");
+    // the preview answers with exactly the line the start sends, without starting or writing anything
+    const queueBefore = await sandcastle({ op: "queue", slug: SLUG }, deps);
+    const preview = (await sandcastle(
+      { op: "preview", slug: SLUG, config: { agent: "opus-5", parallel: 2, test: "none" } },
+      { ...deps, startSession: async () => Promise.reject(new Error("must not start")) },
+    )) as { prompt: string; queueMode: boolean; order: number[]; scope: number[] | null };
+    expect(preview).toEqual({
+      // ticket 5 asks for the test stack: no --kein-testserver in queue mode
+      prompt: "/skill:lul-workr-run-sandcastle shop opus-5 2 warteschlange",
+      queueMode: true,
+      order: [5, 3, 8],
+      scope: null,
+    });
+    const front = (await sandcastle(
+      { op: "preview", slug: SLUG, config: { agent: "opus-5", parallel: 1 }, tickets: [8] },
+      deps,
+    )) as { order: number[] };
+    expect(front.order).toEqual([8, 5, 3]);
+    expect(await sandcastle({ op: "queue", slug: SLUG }, deps)).toEqual(queueBefore);
+    expect((await status({ agents: deps.agents })).lock).toBeNull();
     let prompt = "";
     const started = (await sandcastle(
-      { op: "start", slug: SLUG, config: { agent: "opus-5", parallel: 2, deploy: false } },
+      { op: "start", slug: SLUG, config: { agent: "opus-5", parallel: 2, test: "none" } },
       {
         ...deps,
         startSession: async (cwd, label, text) => {
@@ -407,11 +427,10 @@ describe("start / release (queue mode via events)", () => {
           return pane;
         },
       },
-    )) as { lock: { slug: string; config: { deploy: boolean } }; pane: string };
+    )) as { lock: { slug: string; config: { test: string; split: string } }; pane: string };
     expect(started.pane).toBe(pane);
-    expect(started.lock.config.deploy).toBe(false);
-    // ticket 5 asks for the test stack: no --kein-testserver
-    expect(prompt).toBe("/skill:lul-workr-run-sandcastle shop opus-5 2 warteschlange");
+    expect(started.lock.config).toMatchObject({ test: "none", split: "batch" });
+    expect(prompt).toBe(preview.prompt);
     await expect(
       sandcastle({ op: "start", slug: SLUG, config: { agent: "opus-5", parallel: 1 } }, deps),
     ).rejects.toThrow("läuft schon ein Lauf (shop)");
@@ -463,6 +482,42 @@ describe("start / release (queue mode via events)", () => {
         { ...deps, queuedIssues: async () => [] },
       ),
     ).rejects.toThrow("Warteschlange ist leer");
+  });
+
+  test("preview for a loop without queue mode: the queued tickets as stories, batch or single", async () => {
+    // origin/main without .sandcastle/queue.mts: the loop doesn't know the queue
+    const empty = Bun.spawnSync(
+      ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit-tree", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "-m", "old"],
+      { cwd: shop },
+    );
+    git(shop, "update-ref", "refs/remotes/origin/main", empty.stdout.toString().trim());
+    try {
+      const parents = new Map<number, number | null>([
+        [3, 30],
+        [5, null],
+        [8, 30],
+      ]);
+      const fixed: Deps = { ...deps, issueParents: async () => parents };
+      const preview = async (config: Record<string, unknown>, tickets?: number[]) =>
+        (await sandcastle({ op: "preview", slug: SLUG, config, tickets }, fixed)) as {
+          prompt: string;
+          queueMode: boolean;
+          order: number[];
+          scope: number[] | null;
+        };
+      // never the issue number where the story goes: #3 and #8 are children of story 30
+      expect(await preview({ agent: "opus-5", parallel: 1, test: "note" }, [8])).toEqual({
+        prompt: "/skill:lul-workr-run-sandcastle shop opus-5 1 30,5 --batch --no-testnote",
+        queueMode: false,
+        order: [8, 5, 3],
+        scope: [30, 5],
+      });
+      expect((await preview({ agent: "opus-5", parallel: 1, split: "single" })).prompt).toBe(
+        "/skill:lul-workr-run-sandcastle shop opus-5 1 5,30 --einzeln --kein-testserver",
+      );
+    } finally {
+      git(shop, "update-ref", "refs/remotes/origin/main", "HEAD");
+    }
   });
 
   test("explicit tickets go to the front of the queue; stop sends Ctrl-C and frees the lock", async () => {
@@ -873,15 +928,30 @@ describe("pure parts", () => {
       validateConfig({ agent: "custom", provider: "omp", model: "a b", parallel: 1 }, p),
     ).toThrow("Modell");
     const custom = validateConfig(
-      { agent: "custom", provider: "cursor", model: "composer-2", parallel: 3, screencast: true },
+      { agent: "custom", provider: "cursor", model: "composer-2", parallel: 3, test: "video" },
       p,
     );
     expect(skillPrompt("tendr", custom, false)).toBe(
       "/skill:lul-workr-run-sandcastle tendr custom:cursor:composer-2 3 warteschlange --screencast",
     );
-    const noDeploy = validateConfig({ agent: "opus-5.5", parallel: 1, deploy: false }, p);
-    expect(skillPrompt("tendr", noDeploy, false)).toBe(
-      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 warteschlange --kein-testserver",
+    // every test-server choice maps to the skill's flag; none is the default
+    const flag = (test?: string) =>
+      skillPrompt("tendr", validateConfig({ agent: "opus-5.5", parallel: 1, test }, p), false);
+    expect([flag(), flag("none"), flag("note"), flag("instructions"), flag("video")]).toEqual(
+      ["--kein-testserver", "--kein-testserver", "--no-testnote", "--testnote", "--screencast"].map(
+        (f) => `/skill:lul-workr-run-sandcastle tendr opus-5.5 1 warteschlange ${f}`,
+      ),
+    );
+    expect(() => validateConfig({ agent: "opus-5.5", parallel: 1, test: "yes" }, p)).toThrow(
+      "Testserver-Wahl",
+    );
+    expect(() => validateConfig({ agent: "opus-5.5", parallel: 1, split: "two" }, p)).toThrow(
+      "Aufteilung",
+    );
+    // in queue mode a ticket's own test-stack flag wins over „no test server“; other choices still pass
+    const note = validateConfig({ agent: "opus-5.5", parallel: 1, test: "note" }, p);
+    expect(skillPrompt("tendr", note, true)).toBe(
+      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 warteschlange --no-testnote",
     );
     const p2 = { agents: [], defaultBranch: "main" } as unknown as Project;
     expect(() => validateConfig({ agent: "opus-5.5", parallel: 1, branch: "-x" }, p2)).toThrow(
@@ -912,14 +982,23 @@ describe("pure parts", () => {
     expect(fixedScope([3601, 2356, 3602, 3701], parents)).toEqual([3600, 2356, 3700]);
     expect(parentOf("## Parent\n\n- #3600 Story\n\n## Was zu tun ist\n- #12")).toBe(3600);
     expect(parentOf("## Was zu tun ist\n- #12")).toBeNull();
-    const cfg = validateConfig({ agent: "opus-5.5", parallel: 1, deploy: false }, {
+    const cfg = validateConfig({ agent: "opus-5.5", parallel: 1, test: "none" }, {
       agents: [],
     } as unknown as Project);
-    expect(skillPrompt("tendr", cfg, false, [3600, 2356])).toBe(
+    // a fixed list: ticket flags in queue.json don't apply, the test choice is passed as is
+    expect(skillPrompt("tendr", cfg, true, [3600, 2356])).toBe(
       "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 3600,2356 --batch --kein-testserver",
     );
-    expect(skillPrompt("tendr", cfg, false, [2347])).toBe(
-      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 2347 --kein-testserver",
+    const single = validateConfig(
+      { agent: "opus-5.5", parallel: 1, test: "instructions", split: "single" },
+      { agents: [] } as unknown as Project,
+    );
+    expect(skillPrompt("tendr", single, false, [3600, 2356])).toBe(
+      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 3600,2356 --einzeln --testnote",
+    );
+    // one story is one run: no batch or single
+    expect(skillPrompt("tendr", single, false, [2347])).toBe(
+      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 2347 --testnote",
     );
   });
 });

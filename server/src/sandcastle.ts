@@ -85,14 +85,19 @@ export interface TicketFlags {
   video: boolean;
 }
 
+/** What the run does after the PR, for tickets without their own flags: the skill's test-server choice. */
+export type RunTest = "none" | "note" | "instructions" | "video";
+export const RUN_TESTS: readonly RunTest[] = ["none", "note", "instructions", "video"];
+
 export interface RunConfig {
   agent: string;
   provider: string | null;
   model: string | null;
   parallel: number;
-  screencast: boolean;
-  /** test server on workr for tickets without their own flags */
-  deploy: boolean;
+  /** none: no test server; note: test server, only a note; instructions: + test note with test data; video: + video */
+  test: RunTest;
+  /** several stories in a fixed scope: one batch (one PR) or one run per story */
+  split: "batch" | "single";
   /** branch the run builds on and targets with its PR; null = the project's default branch */
   branch: string | null;
 }
@@ -175,7 +180,8 @@ export interface Run {
     model: string | null;
     parallel: number | null;
     scope: string | null;
-    screencast: boolean | null;
+    /** the board's test-server choice; null for runs not started from the board */
+    test: RunTest | null;
   };
   issues: RunIssue[];
   progress: RunProgress;
@@ -1355,7 +1361,8 @@ function buildRun(a: RunInput): Run {
         : a.lock
           ? "queue"
           : null,
-      screencast: cfg ? cfg.screencast : null,
+      // locks written before the test choice existed have none
+      test: cfg?.test ?? null,
     },
     issues: list,
     progress: progressOf(list),
@@ -1599,13 +1606,19 @@ export function validateConfig(raw: Record<string, unknown>, project: Project): 
   const rawBranch = typeof raw.branch === "string" ? raw.branch.trim() : "";
   if (rawBranch && (!BRANCH_RE.test(rawBranch) || rawBranch.includes("..")))
     throw new Error(`Ungültiger Ziel-Branch „${rawBranch}“.`);
+  const test = raw.test === undefined ? "none" : raw.test;
+  if (!RUN_TESTS.includes(test as RunTest))
+    throw new Error(`Unbekannte Testserver-Wahl „${String(test)}“ (${RUN_TESTS.join(", ")}).`);
+  const split = raw.split === undefined ? "batch" : raw.split;
+  if (split !== "batch" && split !== "single")
+    throw new Error(`Unbekannte Aufteilung „${String(split)}“ (batch, single).`);
   return {
     agent,
     provider,
     model,
     parallel,
-    screencast: raw.screencast === true,
-    deploy: raw.deploy !== false,
+    test: test as RunTest,
+    split,
     branch: rawBranch && rawBranch !== project.defaultBranch ? rawBranch : null,
   };
 }
@@ -1613,10 +1626,20 @@ export function validateConfig(raw: Record<string, unknown>, project: Project): 
 /** Git branch names the run accepts as target: no spaces, no leading dash. */
 const BRANCH_RE = /^[\w][\w./-]{0,119}$/;
 
+/** The skill's flag for each test-server choice. */
+const TEST_FLAG: Record<RunTest, string> = {
+  none: "--kein-testserver",
+  note: "--no-testnote",
+  instructions: "--testnote",
+  video: "--screencast",
+};
+
 /**
  * The line the omp session gets: the whole skill, scope = this machine's queue – or, for a project whose loop
- * doesn't know the queue yet, the queued tickets as a fixed list (`scope`: stories and stand-alone issues, one
- * batch run; what is queued later waits for the next run).
+ * doesn't know the queue yet, the queued tickets as a fixed list (`scope`: stories and stand-alone issues; with
+ * more than one, `cfg.split` decides batch or one run each; what is queued later waits for the next run).
+ * In queue mode the skill reads each ticket's own flags from queue.json: a ticket that asks for the test stack
+ * keeps it, so „no test server“ is not passed then.
  */
 export function skillPrompt(
   projectName: string,
@@ -1625,14 +1648,15 @@ export function skillPrompt(
   scope?: number[],
 ): string {
   const agentArg = cfg.agent === "custom" ? `custom:${cfg.provider}:${cfg.model}` : cfg.agent;
-  // one story (or one stand-alone issue) is one run anyway: --batch only when there is something to batch
+  const fixed = !!scope?.length;
+  // one story (or one stand-alone issue) is one run anyway: batch or single only when there are several
   const umfang = scope?.length
-    ? `${scope.join(",")}${scope.length > 1 ? " --batch" : ""}`
+    ? `${scope.join(",")}${scope.length > 1 ? (cfg.split === "single" ? " --einzeln" : " --batch") : ""}`
     : "warteschlange";
+  const test = cfg.test === "none" && !fixed && ticketWantsDeploy ? "" : ` ${TEST_FLAG[cfg.test]}`;
   return [
     `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} ${umfang}`,
-    cfg.screencast ? " --screencast" : "",
-    !cfg.deploy && !ticketWantsDeploy ? " --kein-testserver" : "",
+    test,
     cfg.branch ? ` --ziel-branch ${cfg.branch}` : "",
   ].join("");
 }
@@ -1732,10 +1756,54 @@ async function heardSession(cwd: string, label: string, prompt: string): Promise
   return pane;
 }
 
+/**
+ * What a start would send, computed exactly as the start does: scope (queue mode, else the queued tickets as
+ * stories and stand-alone issues) and the skill line. `write`: put the explicit tickets at the front of the
+ * queue file (the start); without it the file stays untouched (the preview).
+ */
+async function planRun(project: Project, req: SandcastleRequest, deps: Deps, write: boolean) {
+  const cfg = validateConfig(req.config ?? {}, project);
+  if (project.engine !== "sandcastle")
+    throw new Error(`Projekt ${project.name} nutzt den Motor ${project.engine}, nicht Sandcastle.`);
+  // a loop without queue mode (not yet „Sandcastle nachziehen“) still runs: with the queued tickets as a list
+  const queueMode = await measureQueueSupport(project.root, project.defaultBranch);
+  // an explicit ticket list goes to the front of the queue, in the given order
+  const first = positiveInts(req.tickets);
+  if (Array.isArray(req.tickets) && first.length !== req.tickets.length)
+    throw new Error("tickets muss eine Liste von Issue-Nummern sein.");
+  const current = readQueue(project.gitCommonDir);
+  const ordered = first.length
+    ? [...first, ...current.order.filter((n) => !first.includes(n))]
+    : current.order;
+  const queue = write && first.length ? writeQueue(project.gitCommonDir, { order: ordered }) : current;
+  const labelled = await (deps.queuedIssues ?? ghQueued)(project);
+  // the explicit tickets get their queue label right before the start: they count as queued
+  const order = labelled ? effectiveOrder(ordered, [...labelled, ...first]) : ordered;
+  if (!order.length) throw new Error("Die Warteschlange ist leer.");
+  const wantsDeploy = order.some((n) => queue.tickets[String(n)]?.deploy);
+  const scope = queueMode
+    ? undefined
+    : fixedScope(order, await (deps.issueParents ?? ghParents)(project, order));
+  return {
+    cfg,
+    queueMode,
+    order,
+    scope: scope ?? null,
+    prompt: skillPrompt(project.name, cfg, wantsDeploy, scope),
+  };
+}
+
+/** The exact skill line a start with this config and these tickets would send – nothing is started or written. */
+async function previewRun(req: SandcastleRequest, deps: Deps) {
+  const project = projectBySlug(await projectCache(deps), req.slug);
+  const { prompt, queueMode, order, scope } = await planRun(project, req, deps, false);
+  return { prompt, queueMode, order, scope };
+}
+
 async function startRun(req: SandcastleRequest, deps: Deps) {
   const cache = await projectCache(deps);
   const project = projectBySlug(cache, req.slug);
-  const cfg = validateConfig(req.config ?? {}, project);
+  validateConfig(req.config ?? {}, project);
   const release = takeStartLock();
   try {
     const agents = deps.agents !== undefined ? deps.agents : await herdrAgents();
@@ -1743,37 +1811,13 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
     const current = evaluateLock(cache, agents, flowsOf);
     if (current.active && current.lock)
       throw new Error(`Auf diesem Rechner läuft schon ein Lauf (${current.lock.project}).`);
-    if (project.engine !== "sandcastle")
-      throw new Error(
-        `Projekt ${project.name} nutzt den Motor ${project.engine}, nicht Sandcastle.`,
-      );
-    // a loop without queue mode (not yet „Sandcastle nachziehen“) still runs: with the queued tickets as a list
-    const queueMode = await measureQueueSupport(project.root, project.defaultBranch);
-    // an explicit ticket list goes to the front of the queue, in the given order
-    const first = positiveInts(req.tickets);
-    if (Array.isArray(req.tickets) && first.length !== req.tickets.length)
-      throw new Error("tickets muss eine Liste von Issue-Nummern sein.");
-    const queue = first.length
-      ? writeQueue(project.gitCommonDir, {
-          order: [
-            ...first,
-            ...readQueue(project.gitCommonDir).order.filter((n) => !first.includes(n)),
-          ],
-        })
-      : readQueue(project.gitCommonDir);
-    const labelled = await (deps.queuedIssues ?? ghQueued)(project);
-    const order = labelled ? effectiveOrder(queue.order, labelled) : queue.order;
-    if (!order.length) throw new Error("Die Warteschlange ist leer.");
-    const wantsDeploy = order.some((n) => queue.tickets[String(n)]?.deploy);
-    const scope = queueMode
-      ? undefined
-      : fixedScope(order, await (deps.issueParents ?? ghParents)(project, order));
+    const { cfg, prompt } = await planRun(project, req, deps, true);
     // before the session starts: its events must not predate the run
     const startedAt = new Date().toISOString();
     const pane = await (deps.startSession ?? heardSession)(
       project.root,
       `Sandcastle ${project.name}`,
-      skillPrompt(project.name, cfg, wantsDeploy, scope),
+      prompt,
     );
     const lock: RunRecord = {
       id: String(Date.parse(startedAt)),
@@ -1901,6 +1945,8 @@ export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promi
         order: req.order,
         tickets: req.tickets,
       });
+    case "preview":
+      return previewRun(req, deps);
     case "start":
       return startRun(req, deps);
     case "grill-start":

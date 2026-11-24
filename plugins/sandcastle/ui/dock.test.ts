@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chipText, dependsOn, flowStage, laneChips, moveChip, runProgress, stageLine, stageOf, ticketPhase } from "./dock";
+import { chipText, dependsOn, flowStage, laneChips, moveChip, runProgress, stageLine, stageOf, ticketPhase, toFront } from "./dock";
 import type { Flow, Phase } from "./types";
 
 const tickets: Record<number, string> = { 11: "T-1", 12: "T-2", 13: "T-2", 14: "T-3", 15: "T-4" };
@@ -35,6 +35,13 @@ describe("dock", () => {
     expect(moveChip(chips, "T-3", -1)).toBeNull();
     expect(moveChip(chips, "#99", 1)).toBeNull();
     expect(moveChip(chips, "T-2", 1)).toBeNull();
+  });
+
+  test("to the front: before the first waiting ticket, behind what the run works on", () => {
+    expect(toFront(chips, "#99")).toEqual([11, 12, 13, 99, 14, 15]);
+    expect(toFront(chips, "T-3")).toBeNull();
+    expect(toFront(chips, "T-2")).toBeNull();
+    expect(toFront(chips, "T-9")).toBeNull();
   });
 
   test("dependencies inside the lane", () => {

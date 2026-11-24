@@ -12,6 +12,17 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 71,
+    version: "0.57.0",
+    date: "24.11.2026",
+    items: [
+      { icon: "🏰", text: "Sandcastle: neue Läufe-Ansicht – je Rechner ein klarer Status, rechts „Was passiert gerade“ als Zeitleiste von Start bis Bericht, deutlicher Hinweis, wenn der Lauf auf deine Antwort wartet." },
+      { icon: "⚙️", text: "Sandcastle: „Neuer Lauf“ stellt alles ein – Agent und Modell, Parallelität, Ziel-Branch, Batch oder einzeln, Testserver und Testanweisung – mit Vorschau des genauen Befehls; der Agent fragt danach nichts mehr." },
+      { icon: "➕", text: "Sandcastle: Tickets direkt aus ihrer Seitenleiste in einen Lauf einreihen, nach vorne holen oder herausnehmen." },
+      { icon: "📈", text: "Sandcastle: echter Fortschritt aus dem Ablauf-Log von skippr – welche Rolle gerade an welchem Ticket arbeitet." },
+    ],
+  },
+  {
     build: 70,
     version: "0.56.2",
     date: "24.11.2026",

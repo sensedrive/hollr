@@ -144,6 +144,12 @@ export function ticketPlaces(d: Derived): Map<string, TicketPlace> {
   return out;
 }
 
+/** The tickets (chips) of one machine's lane in lane order, as the dock shows them; [] without a lane. */
+export function laneChipsOf(d: Derived, server: string): DockChip[] {
+  const lane = d.lanes.find((l) => l.server.id === server);
+  return lane ? chipsOf(d, lane, ticketKeys()) : [];
+}
+
 /** Marks a ticket as just queued (dashed chip) and says where it stands; null when it isn't in that lane. */
 export function placeOf(d: Derived, key: string, server: string): number | null {
   const lane = d.lanes.find((l) => l.server.id === server);
