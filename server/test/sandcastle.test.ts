@@ -601,7 +601,8 @@ describe("batch flows (Ablauf-Log v1)", () => {
   test("roles move through the assignments as events come in", () => {
     const upTo = (seq: number) => foldFlow(waiting.slice(0, seq).join("\n"));
     let f = upTo(7); // planner running
-    expect(f.active).toEqual([{ role: "planner", assignment: null }]);
+    // each running role carries when it started (the board's „seit 12 Min.“)
+    expect(f.active).toEqual([{ role: "planner", assignment: null, since: "2026-11-03T09:30:11.841Z" }]);
     expect(f.current).toBe("sandcastle");
     expect(f.pass).toMatchObject({ state: "running" });
     f = upTo(10); // plan ready, implementer on 581
@@ -614,6 +615,7 @@ describe("batch flows (Ablauf-Log v1)", () => {
       [581, "reviewer", "reviewing"],
       [582, null, "planned"],
     ]);
+    expect(f.active).toEqual([{ role: "reviewer", assignment: 581, since: "2026-11-03T09:48:52.166Z" }]);
     f = upTo(19); // 582 rejected, merger running: only the reviewed one is the merger's
     expect(f.assignments.map((a) => [a.id, a.role, a.result])).toEqual([
       [581, "merger", "running"],

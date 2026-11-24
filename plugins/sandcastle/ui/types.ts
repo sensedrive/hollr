@@ -138,8 +138,8 @@ export interface Flow {
   current: string | null;
   pass: { n: number; state: "running" | "ended"; reason: string | null; pid: number | null; host: string | null } | null;
   iteration: { n: number; max: number | null } | null;
-  /** roles running now */
-  active: { role: FlowRole; assignment: number | null }[];
+  /** roles running now; `since` = when the role started (absent on older hollr) */
+  active: { role: FlowRole; assignment: number | null; since?: string }[];
   assignments: {
     id: number;
     title: string | null;

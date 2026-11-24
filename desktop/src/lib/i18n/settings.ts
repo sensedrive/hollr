@@ -185,6 +185,12 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle: Lauf-Panel und Lauf-Leiste zeigen den Lauf je Kind-Issue – Runde mit Planer, Kinder bauen und Merge, „3/9 gemergt“ je Story und jedes Kind mit seinem Stand.":
+    "Sandcastle: run panel and run dock show the run per child issue – the round with planner, building children and merge, “3/9 merged” per story and every child with its state.",
+  "Sandcastle: sichtbar, was gerade läuft – „Implementer an #3605 · Code-Review an #3604“, mit „seit …“ an den laufenden Kindern.":
+    "Sandcastle: see what runs right now – “Implementer on #3605 · Code review on #3604”, with “since …” on running children.",
+  "Sandcastle auf dem iPhone: Lauf-Leiste als Blatt mit wischbaren Story-Chips, Lauf-Panel im Vollbild.":
+    "Sandcastle on the iPhone: the run dock as a sheet with swipeable story chips, the run panel full screen.",
   "Suche (⌘K) merkt sich die letzte Eingabe – markiert, sodass Tippen eine neue beginnt; × im Feld löscht sie.":
     "Search (⌘K) keeps your last query – selected, so typing starts a new one; × in the field clears it.",
   "Spaces: was Hollr für Sandcastle-Läufe und Grills öffnet, steht in einer eigenen Gruppe „Sandcastle & Grills“.":

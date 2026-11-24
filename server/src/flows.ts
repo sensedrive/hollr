@@ -87,8 +87,8 @@ export interface Flow {
     host: string | null;
   } | null;
   iteration: { n: number; max: number | null } | null;
-  /** roles running now */
-  active: { role: FlowRole; assignment: number | null }[];
+  /** roles running now; `since` = the `role.started` timestamp */
+  active: { role: FlowRole; assignment: number | null; since: string }[];
   assignments: FlowAssignment[];
   /** `flow.paused` reason (offline | sleep) until `flow.resumed` */
   paused: string | null;
@@ -270,7 +270,7 @@ export function applyEvent(f: Flow, e: unknown): void {
       const role = roleOf(d.role);
       if (!role) return;
       const id = int(d.assignment);
-      f.active.push({ role, assignment: id });
+      f.active.push({ role, assignment: id, since: ts });
       if (id !== null) assignmentOf(f, id).role = role;
       else if (role === "merger")
         for (const a of f.assignments) if (a.result === "running" && a.reviewed) a.role = "merger";

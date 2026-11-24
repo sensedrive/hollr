@@ -10,6 +10,8 @@ import { setLaneOrder, takeOutOfLane } from "../actions";
 import { hasHost, openExternal, openSession, sc } from "../api";
 import type { Derived, Lane } from "../derive";
 import {
+  type RoleGroup,
+  ROLE_LABEL,
   type ChildInfo,
   childLabel,
   childProgress,
@@ -154,7 +156,7 @@ function laneView(d: Derived, lane: Lane, keys: Map<number, string>): LaneView {
     ]),
   );
   const all = [...kids.values()].flat();
-  const r = roundLine(run?.flow, blind, all.filter(isWorking).length);
+  const r = roundLine(run?.flow, blind, all);
   return { run, blind, chips, kids, all, step: r.step, round: r.text, steps: r.steps };
 }
 
@@ -172,6 +174,24 @@ const ACTIVITY_ICON: Record<StoryActivity, string> = {
   done: ICON.check,
   unknown: ICON.circleHelp,
 };
+
+/** „🔨 #3605 · 🔍 #3604“; a single role names itself: „🔨 Implementer #3605“ (hammer implementer, magnifier review). */
+function rolesEl(roles: readonly RoleGroup[]): HTMLElement {
+  return h(
+    "span",
+    { class: "roles" },
+    ...roles.map((g, i) =>
+      h(
+        "span",
+        { class: "role", "data-role": g.role },
+        i ? h("span", { class: "role-sep", "aria-hidden": "true" }, "·") : null,
+        icon(g.role === "implementer" ? ICON.hammer : ICON.search, "role-ico"),
+        h("span", { class: roles.length === 1 ? "" : "sr" }, `${ROLE_LABEL[g.role]} `),
+        g.numbers.map((n) => `#${n}`).join(", "),
+      ),
+    ),
+  );
+}
 
 /** „wartet auf deine Antwort“ with „Sitzung öffnen“ while herdr says the run's session is blocked. */
 function waitingNote(server: string, run: Run, cls: string): HTMLElement | null {
@@ -246,8 +266,8 @@ function chipEl(c: DockChip, i: number, v: LaneView): HTMLElement {
         h(
           "span",
           { class: "dock-chip-st", "data-activity": isFresh ? "fresh" : s.activity },
-          isFresh ? null : icon(ACTIVITY_ICON[s.activity], "dock-chip-ico"),
-          isFresh ? `neu · Platz ${i + 1}` : s.label,
+          isFresh || s.roles.length ? null : icon(ACTIVITY_ICON[s.activity], "dock-chip-ico"),
+          isFresh ? `neu · Platz ${i + 1}` : s.roles.length ? rolesEl(s.roles) : s.label,
         ),
         waiting
           ? h(
@@ -284,6 +304,8 @@ function rowEl(lane: Lane, v: LaneView): HTMLElement {
       h("span", { class: "dock-agent muted" }, run ? agent : "kein Lauf"),
       h("span", { class: "dock-of" }, chips.length ? (run ? p.short : `${chips.length} wartend`) : "", chips.length ? kidBar(v.all, p.text) : null),
       run ? h("span", { class: "dock-round muted" }, v.blind ? "Stand unbekannt" : v.round) : null,
+      // narrow screens: the row opens the run panel (chevron, design v25)
+      icon(ICON.chevRight, "dock-open"),
       run ? waitingNote(id, run, "dock-wait") : null,
       // a machine without a run but with tickets waiting: start right from its row
       !run && chips.length
@@ -395,7 +417,7 @@ function childRow(server: string, run: Run | undefined, k: ChildInfo): HTMLEleme
       "div",
       { class: "run-kid-row" },
       h("span", { class: "run-kid-n" }, `#${k.n}`),
-      h("span", { class: "run-kid-title", title }, title),
+      h("span", { class: "run-kid-title", title }, title, isWorking(k) && k.since ? h("span", { class: "run-kid-since" }, `seit ${since(k.since)}`) : null),
       h("span", { class: "run-kid-st", "data-status": k.status }, childLabel(k)),
       run && isWorking(k) ? h("button", { class: "link", "aria-label": `Log von #${k.n}`, onclick: () => openLog(server, run, k.n) }, "Log") : null,
     ),
@@ -435,7 +457,7 @@ function ticketBlock(server: string, v: LaneView, c: DockChip, i: number): HTMLE
       { class: "run-ticket-st" },
       h("b", { class: "run-ticket-n" }, v.blind ? s.count : `${s.count} gemergt`),
       kids.length ? kidBar(kids, `${c.key}: ${s.count}${v.blind ? "" : " gemergt"}, ${s.label}`) : null,
-      h("span", { class: "run-ticket-act", "data-activity": s.activity }, s.label),
+      h("span", { class: "run-ticket-act", "data-activity": s.activity }, s.roles.length ? rolesEl(s.roles) : s.label),
     ),
     kids.length
       ? h(

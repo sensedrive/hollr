@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 76,
+    version: "0.57.5",
+    date: "24.11.2026",
+    items: [
+      { icon: "🏰", text: "Sandcastle: Lauf-Panel und Lauf-Leiste zeigen den Lauf je Kind-Issue – Runde mit Planer, Kinder bauen und Merge, „3/9 gemergt“ je Story und jedes Kind mit seinem Stand." },
+      { icon: "🔨", text: "Sandcastle: sichtbar, was gerade läuft – „Implementer an #3605 · Code-Review an #3604“, mit „seit …“ an den laufenden Kindern." },
+      { icon: "📱", text: "Sandcastle auf dem iPhone: Lauf-Leiste als Blatt mit wischbaren Story-Chips, Lauf-Panel im Vollbild." },
+    ],
+  },
+  {
     build: 75,
     version: "0.57.4",
     date: "24.11.2026",

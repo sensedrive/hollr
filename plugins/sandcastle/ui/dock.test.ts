@@ -77,13 +77,13 @@ const flow = (more: Partial<Flow>): Flow => ({
   paused: null,
   ...more,
 });
-const kid = (n: number, status: ChildInfo["status"], more: Partial<ChildInfo> = {}): ChildInfo => ({ n, status, blockedBy: null, reason: null, ...more });
+const kid = (n: number, status: ChildInfo["status"], more: Partial<ChildInfo> = {}): ChildInfo => ({ n, status, blockedBy: null, reason: null, since: null, ...more });
 
 describe("child pill", () => {
   const f = flow({
     active: [
-      { role: "implementer", assignment: 1 },
-      { role: "reviewer", assignment: 2 },
+      { role: "implementer", assignment: 1, since: "2026-11-24T20:00:00Z" },
+      { role: "reviewer", assignment: 2, since: "2026-11-24T19:52:00Z" },
     ],
     assignments: [
       assignment(1, { role: "implementer" }),
@@ -100,6 +100,8 @@ describe("child pill", () => {
   test("from the flow: role at work, built and reviewed waits for the round's merge", () => {
     expect([1, 2, 3, 4, 5, 6].map((n) => pill(n, "building"))).toEqual(["Implementer", "Code-Review", "wartet auf Merge", "gemergt", "fehlgeschlagen", "Code-Review"]);
     expect(childStatus(5, { phase: "building", flow: f, blind: false }).reason).toBe("Tests fehlen");
+    // a role at work says since when; nothing else does
+    expect([1, 2, 3, 6].map((n) => childStatus(n, { phase: "building", flow: f, blind: false }).since)).toEqual(["2026-11-24T20:00:00Z", "2026-11-24T19:52:00Z", null, null]);
     // the merger at work: its children wait for (are in) the merge
     const merging = flow({ active: [{ role: "merger", assignment: null }], assignments: [assignment(7, { role: "merger", reviewed: true })] });
     expect(childLabel(childStatus(7, { phase: "reviewing", flow: merging, blind: false }))).toBe("wartet auf Merge");
@@ -125,7 +127,18 @@ describe("child pill", () => {
 describe("story summary", () => {
   test("x/y merged and the most active status: in work before merge before waiting before done", () => {
     const story = [kid(1, "merged"), kid(2, "merged"), kid(3, "merged"), kid(4, "review"), kid(5, "implementer"), kid(6, "failed"), kid(7, "blocked"), kid(8, "waiting"), kid(9, "waiting")];
-    expect(storySummary(story, "building")).toEqual({ merged: 3, total: 9, count: "3/9", activity: "working", label: "2 in Arbeit" });
+    expect(storySummary(story, "building")).toEqual({
+      merged: 3,
+      total: 9,
+      count: "3/9",
+      activity: "working",
+      label: "Implementer #5 · Code-Review #4",
+      roles: [
+        { role: "implementer", numbers: [5] },
+        { role: "review", numbers: [4] },
+      ],
+    });
+    expect(storySummary([kid(7, "implementer"), kid(3, "implementer")], "building")).toMatchObject({ label: "Implementer #3, #7", roles: [{ role: "implementer", numbers: [3, 7] }] });
     const ready = story.map((k) => (k.status === "review" || k.status === "implementer" ? { ...k, status: "ready" as const } : k));
     expect(storySummary(ready, "merge")).toMatchObject({ activity: "merging", label: "im Merge" });
     expect(storySummary(ready, "building")).toMatchObject({ activity: "ready", label: "wartet auf Merge" });
@@ -148,22 +161,43 @@ describe("story summary", () => {
 });
 
 describe("round line", () => {
-  test("planner, children at work, merge – with the round and its maximum", () => {
-    expect(roundLine(flow({ active: [{ role: "planner", assignment: null }] }), false, 0)).toEqual({ text: "Runde 3 von max. 60 · jetzt: Planer wählt", step: "planner", steps: true });
-    expect(roundLine(flow({ active: [{ role: "implementer", assignment: 1 }] }), false, 2)).toEqual({ text: "Runde 3 von max. 60 · jetzt: 2 Kinder in Arbeit", step: "building", steps: true });
-    expect(roundLine(flow({ active: [{ role: "reviewer", assignment: 1 }] }), false, 1).text).toBe("Runde 3 von max. 60 · jetzt: 1 Kind in Arbeit");
-    expect(roundLine(flow({ active: [{ role: "merger", assignment: null }] }), false, 0)).toEqual({ text: "Runde 3 von max. 60 · jetzt: Merge", step: "merge", steps: true });
-    expect(roundLine(flow({ iteration: { n: 1, max: null } }), false, 0).text).toBe("Runde 1");
+  const at = (pairs: [number, ChildInfo["status"]][]) => pairs.map(([n, s]) => kid(n, s));
+  test("planner, the roles at work, merge with its children – with the round and its maximum", () => {
+    expect(roundLine(flow({ active: [{ role: "planner", assignment: null }] }), false, [])).toEqual({ text: "Runde 3 von max. 60 · jetzt: Planer wählt", step: "planner", steps: true });
+    const working = at([
+      [3605, "implementer"],
+      [3604, "review"],
+      [3601, "merged"],
+    ]);
+    expect(roundLine(flow({ active: [{ role: "implementer", assignment: 3605 }] }), false, working)).toEqual({
+      text: "Runde 3 von max. 60 · jetzt: Implementer an #3605 · Code-Review an #3604",
+      step: "building",
+      steps: true,
+    });
+    const several = at([
+      [3607, "implementer"],
+      [3605, "implementer"],
+      [3604, "review"],
+    ]);
+    expect(roundLine(flow({}), false, several).text).toBe("Runde 3 von max. 60 · jetzt: Implementer an #3605, #3607 · Code-Review an #3604");
+    const merging = at([
+      [3605, "ready"],
+      [3603, "ready"],
+      [3602, "waiting"],
+    ]);
+    expect(roundLine(flow({ active: [{ role: "merger", assignment: null }] }), false, merging)).toEqual({ text: "Runde 3 von max. 60 · jetzt: Merge (#3603, #3605)", step: "merge", steps: true });
+    expect(roundLine(flow({ active: [{ role: "merger", assignment: null }] }), false, []).text).toBe("Runde 3 von max. 60 · jetzt: Merge");
+    expect(roundLine(flow({ iteration: { n: 1, max: null } }), false, []).text).toBe("Runde 1");
   });
 
   test("after the loop: the stage the run is at, no round strip", () => {
     const done = flow({ stages: [stage("worktree", "ok"), stage("sandcastle", "ok"), stage("checks", "running")], current: "checks" });
-    expect(roundLine(done, false, 0)).toEqual({ text: "Schleife fertig · jetzt: Prüfungen", step: null, steps: false });
+    expect(roundLine(done, false, [])).toEqual({ text: "Schleife fertig · jetzt: Prüfungen", step: null, steps: false });
   });
 
   test("blind and without a flow", () => {
-    expect(roundLine(null, true, 0)).toEqual({ text: "Stand unbekannt – dieser Lauf schreibt kein Ablauf-Log", step: null, steps: false });
-    expect(roundLine(null, false, 2)).toEqual({ text: "jetzt: 2 Kinder in Arbeit", step: "building", steps: false });
-    expect(roundLine(null, false, 0).text).toBe("Runde unbekannt");
+    expect(roundLine(null, true, [])).toEqual({ text: "Stand unbekannt – dieser Lauf schreibt kein Ablauf-Log", step: null, steps: false });
+    expect(roundLine(null, false, at([[12, "implementer"]]))).toEqual({ text: "jetzt: Implementer an #12", step: "building", steps: false });
+    expect(roundLine(null, false, []).text).toBe("Runde unbekannt");
   });
 });
