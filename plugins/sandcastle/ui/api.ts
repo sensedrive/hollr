@@ -270,3 +270,21 @@ export function openExternal(url: string): void {
   if (window.parent !== window) window.parent.postMessage({ type: "hollr-open-url", url }, "*");
   else window.open(url, "_blank");
 }
+
+/** text editing keeps its own ⌘/Ctrl keys (copy, paste, undo, select all, find) */
+const EDITING_KEYS = new Set(["a", "c", "v", "x", "z", "y", "f"]);
+
+// Hollr's shortcuts (⌘K search, ⌘1 overview, ⌘, settings, ⌘N, zoom …) also work while the board has the focus:
+// a ⌘/Ctrl key the page didn't use goes to Hollr Desktop, which handles it as if typed there (desktop only –
+// iOS has no such shortcuts in a web view)
+window.addEventListener("keydown", (e) => {
+  if (window.parent === window || e.defaultPrevented || !(e.metaKey || e.ctrlKey)) return;
+  // ⌘←, ⌘⌫ … move and delete in text fields: only character keys can be Hollr's shortcuts
+  if (e.key.length !== 1) return;
+  if (EDITING_KEYS.has(e.key.toLowerCase()) && !e.altKey) return;
+  window.parent.postMessage(
+    { type: "hollr-key", key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey },
+    "*",
+  );
+  e.preventDefault();
+});

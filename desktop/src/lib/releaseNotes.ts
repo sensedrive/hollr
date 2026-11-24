@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 69,
+    version: "0.56.1",
+    date: "24.11.2026",
+    items: [
+      { icon: "⌨️", text: "Hollrs Tastenkürzel (⌘K, ⌘1, ⌘N, ⌘, …) funktionieren auch, während ein Plugin wie das Sandcastle-Board den Fokus hat." },
+    ],
+  },
+  {
     build: 68,
     version: "0.56.0",
     date: "24.11.2026",

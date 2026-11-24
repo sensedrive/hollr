@@ -76,8 +76,22 @@
       return;
     }
     const data = e.data as { type?: unknown; url?: unknown } | null;
+    if (data?.type === "hollr-key") {
+      replayKey(e.data as Record<string, unknown>);
+      return;
+    }
     if (data?.type !== "hollr-open-url" || typeof data.url !== "string" || !/^https?:\/\//i.test(data.url)) return;
     openUrl(data.url).catch((err) => (error = errText(err)));
+  }
+
+  /** a ⌘/Ctrl shortcut typed while the plugin page had the focus: Hollr's own handlers (⌘K, ⌘1 …) get it as a
+   *  keydown on the window, like any key typed outside the frame */
+  function replayKey(k: Record<string, unknown>) {
+    if (typeof k.key !== "string" || !(k.metaKey || k.ctrlKey)) return;
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: k.key, code: typeof k.code === "string" ? k.code : "", metaKey: !!k.metaKey, ctrlKey: !!k.ctrlKey,
+      shiftKey: !!k.shiftKey, altKey: !!k.altKey, bubbles: true, cancelable: true,
+    }));
   }
 
   function reply(r: HostReply) {
