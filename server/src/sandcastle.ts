@@ -63,7 +63,12 @@ export interface Project {
     boardId: string | null;
     cloudId: string | null;
     /** JIRA status names of the lul-workr workflow steps */
-    states: { selected: string | null; inProgress: string | null; testing: string | null; done: string | null };
+    states: {
+      selected: string | null;
+      inProgress: string | null;
+      testing: string | null;
+      done: string | null;
+    };
   };
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
@@ -87,6 +92,8 @@ export interface RunConfig {
   screencast: boolean;
   /** test server on workr for tickets without their own flags */
   deploy: boolean;
+  /** branch the run builds on and targets with its PR; null = the project's default branch */
+  branch: string | null;
 }
 
 /** `<state>/sandcastle/run.json`: the run started from the board – at most one per machine. */
@@ -206,6 +213,8 @@ export interface Deps {
   startSession?: (cwd: string, label: string, prompt: string) => Promise<string>;
   /** the queue-labelled open issues for `start` (default: gh); null = unknown */
   queuedIssues?: (p: Project) => Promise<number[] | null>;
+  /** sends keys to a pane for `stop` (default: herdr) */
+  sendKeys?: (pane: string, keys: string[]) => Promise<void>;
   /** pane → its herdr tab and workspace labels (default: herdr) */
   labels?: Map<string, string[]>;
 }
@@ -1504,6 +1513,9 @@ export function validateConfig(raw: Record<string, unknown>, project: Project): 
   const parallel = Number(raw.parallel);
   if (!Number.isInteger(parallel) || parallel < 1)
     throw new Error("Parallelität muss eine ganze Zahl ab 1 sein.");
+  const rawBranch = typeof raw.branch === "string" ? raw.branch.trim() : "";
+  if (rawBranch && (!BRANCH_RE.test(rawBranch) || rawBranch.includes("..")))
+    throw new Error(`Ungültiger Ziel-Branch „${rawBranch}“.`);
   return {
     agent,
     provider,
@@ -1511,8 +1523,12 @@ export function validateConfig(raw: Record<string, unknown>, project: Project): 
     parallel,
     screencast: raw.screencast === true,
     deploy: raw.deploy !== false,
+    branch: rawBranch && rawBranch !== project.defaultBranch ? rawBranch : null,
   };
 }
+
+/** Git branch names the run accepts as target: no spaces, no leading dash. */
+const BRANCH_RE = /^[\w][\w./-]{0,119}$/;
 
 /** The line the omp session gets: the whole skill, scope = this machine's queue. */
 export function skillPrompt(
@@ -1525,6 +1541,7 @@ export function skillPrompt(
     `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} warteschlange`,
     cfg.screencast ? " --screencast" : "",
     !cfg.deploy && !ticketWantsDeploy ? " --kein-testserver" : "",
+    cfg.branch ? ` --ziel-branch ${cfg.branch}` : "",
   ].join("");
 }
 
@@ -1601,7 +1618,18 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
       throw new Error(
         "Die Schleife dieses Projekts kennt die Warteschlange noch nicht (lul-workr-setup → Sandcastle nachziehen).",
       );
-    const queue = readQueue(project.gitCommonDir);
+    // an explicit ticket list goes to the front of the queue, in the given order
+    const first = positiveInts(req.tickets);
+    if (Array.isArray(req.tickets) && first.length !== req.tickets.length)
+      throw new Error("tickets muss eine Liste von Issue-Nummern sein.");
+    const queue = first.length
+      ? writeQueue(project.gitCommonDir, {
+          order: [
+            ...first,
+            ...readQueue(project.gitCommonDir).order.filter((n) => !first.includes(n)),
+          ],
+        })
+      : readQueue(project.gitCommonDir);
     const labelled = await (deps.queuedIssues ?? ghQueued)(project);
     const order = labelled ? effectiveOrder(queue.order, labelled) : queue.order;
     if (!order.length) throw new Error("Die Warteschlange ist leer.");
@@ -1640,6 +1668,19 @@ function releaseRun() {
     lock.endReason = "manuell freigegeben";
     writeJson(lockFile(), lock);
   }
+  return { lock: null };
+}
+
+/** Stops the board's run: Ctrl-C into its omp session (aborts the running loop), then frees the lock. */
+async function stopRun(deps: Deps) {
+  const lock = readLock();
+  if (!lock || lock.endedAt) throw new Error("Auf diesem Rechner läuft kein Lauf aus dem Board.");
+  const send =
+    deps.sendKeys ?? ((pane: string, keys: string[]) => new Herdr().sendKeys(pane, keys));
+  await send(lock.pane, ["ctrl+c"]);
+  lock.endedAt = new Date().toISOString();
+  lock.endReason = "gestoppt";
+  writeJson(lockFile(), lock);
   return { lock: null };
 }
 
@@ -1732,6 +1773,8 @@ export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promi
       return startGrill(req, deps);
     case "release":
       return releaseRun();
+    case "stop":
+      return stopRun(deps);
     default:
       throw new Error(`Unbekannte Operation „${String(req.op ?? "")}“.`);
   }

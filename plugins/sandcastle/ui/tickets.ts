@@ -1,17 +1,14 @@
 /**
  * Pure logic of the „Tickets“ view (JIRA is the source of truth): columns from the JIRA workflow plus the derived
- * „Zu grillen“ and the Sandcastle lanes, the quick filter over tickets, the build line of a ticket's GitHub family
- * and the drift texts. No DOM, no state – tested in tickets.test.ts.
+ * „Zu grillen“ (the Sandcastle runs live in the dock below the board), the quick filter over tickets, the build line
+ * of a ticket's GitHub family and the drift texts. No DOM, no state – tested in tickets.test.ts.
  */
 import { textMatcher, type Token, valueMatcher } from "./filter";
 import type { DriftItem, DriftKind, FamilyMember, GuardApplied, GuardStatus, JiraBoardData, JiraStatus, JiraTicket, PullRequest, PullState } from "./types";
 
 // ---- columns
 
-export type TicketColumn =
-  | { key: string; kind: "status"; name: string; status: JiraStatus }
-  | { key: "grill"; kind: "grill"; name: string }
-  | { key: "lanes"; kind: "lanes"; name: string };
+export type TicketColumn = { key: string; kind: "status"; name: string; status: JiraStatus } | { key: "grill"; kind: "grill"; name: string };
 
 export const statusKey = (name: string) => `s:${name}`;
 export const LANE_PREFIX = "lane@";
@@ -27,19 +24,12 @@ export const INFO_KINDS: Readonly<Record<DriftKind, boolean>> = {
 
 export const actionable = (t: Pick<JiraTicket, "drift">) => t.drift.filter((d) => !INFO_KINDS[d.kind]);
 
-/**
- * JIRA statuses in workflow order; „Zu grillen“ right before Selected and the Sandcastle lanes right after it.
- * Without a (known) Selected status: „Zu grillen“ is left out and the lanes come before the first started status.
- */
+/** JIRA statuses in workflow order with „Zu grillen“ right before Selected (left out without a known Selected status). */
 export function ticketColumns(statuses: JiraStatus[], selected: string | null): TicketColumn[] {
   const cols: TicketColumn[] = statuses.map((s) => ({ key: statusKey(s.name), kind: "status", name: s.name, status: s }));
   const grill: TicketColumn = { key: "grill", kind: "grill", name: "Zu grillen" };
-  const lanes: TicketColumn = { key: "lanes", kind: "lanes", name: "Sandcastle" };
   const at = selected ? statuses.findIndex((s) => s.name === selected) : -1;
-  if (at >= 0) return [...cols.slice(0, at), grill, cols[at] as TicketColumn, lanes, ...cols.slice(at + 1)];
-  const started = statuses.findIndex((s) => s.category !== "new");
-  const cut = started < 0 ? cols.length : started;
-  return [...cols.slice(0, cut), lanes, ...cols.slice(cut)];
+  return at >= 0 ? [...cols.slice(0, at), grill, ...cols.slice(at)] : cols;
 }
 
 /** The status column of a ticket: Selected without a story on GitHub is still „Zu grillen“. */

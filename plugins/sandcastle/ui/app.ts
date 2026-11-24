@@ -62,7 +62,9 @@ const chips = h("div", { class: "mchips" });
 const driftChip = h("button", { class: "drift-chip", hidden: true, title: "Nur Tickets mit Abweichungen zeigen", onclick: () => toggleDrift() });
 const reload = h("button", { class: "btn icon", title: "Neu laden", "aria-label": "Neu laden", onclick: () => refreshAll(true) }, "↻");
 const newIssueBtn = h("button", { class: "btn primary", "aria-label": "Neues Issue", onclick: () => newIssue() }, "+", h("span", { class: "wide-only" }, " Neues Issue"));
-const bar = filterBar(() => (state.mode === "tickets" ? ticketsVisible() : boardVisible()), [newIssueBtn]);
+// JIRA has no create API here yet: the design's button, disabled
+const newTicketBtn = h("button", { class: "btn primary", "aria-label": "Neues Ticket", disabled: true, title: "kommt noch" }, "+", h("span", { class: "wide-only" }, " Neues Ticket"));
+const bar = filterBar(() => (state.mode === "tickets" ? ticketsVisible() : boardVisible()), [newIssueBtn, newTicketBtn]);
 const werkbankHost = h("div", { class: "view" });
 const ticketsHost = h("div", { class: "view" });
 const boardHost = h("div", { class: "view" }, bar.el, ticketsHost, werkbankHost);
@@ -203,6 +205,7 @@ function showModeHosts(): void {
   ticketsHost.hidden = mode !== "tickets";
   werkbankHost.hidden = mode !== "werkbank";
   newIssueBtn.hidden = mode !== "werkbank";
+  newTicketBtn.hidden = mode !== "tickets";
 }
 
 function showMode(mode: Mode): void {

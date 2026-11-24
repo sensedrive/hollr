@@ -55,19 +55,11 @@ const ticket = (key: string, extra: Partial<JiraTicket> = {}): JiraTicket => ({
 const member = (n: number, state: "open" | "closed" = "open", labels: string[] = []) => ({ n, title: `#${n}`, state, labels });
 
 describe("columns", () => {
-  test("Zu grillen before Selected, lanes after it", () => {
-    expect(ticketColumns(statuses, "Selected").map((c) => c.key)).toEqual([
-      "s:Backlog",
-      "grill",
-      "s:Selected",
-      "lanes",
-      "s:In Progress",
-      "s:Testing",
-      "s:Done",
-    ]);
+  test("Zu grillen before Selected, no Sandcastle column (the dock has the runs)", () => {
+    expect(ticketColumns(statuses, "Selected").map((c) => c.key)).toEqual(["s:Backlog", "grill", "s:Selected", "s:In Progress", "s:Testing", "s:Done"]);
   });
-  test("without Selected: no grill column, lanes before the first started status", () => {
-    expect(ticketColumns(statuses, null).map((c) => c.key)).toEqual(["s:Backlog", "s:Selected", "lanes", "s:In Progress", "s:Testing", "s:Done"]);
+  test("without Selected: no grill column", () => {
+    expect(ticketColumns(statuses, null).map((c) => c.key)).toEqual(["s:Backlog", "s:Selected", "s:In Progress", "s:Testing", "s:Done"]);
     expect(ticketColumns(statuses, "Gibt es nicht").map((c) => c.kind)).not.toContain("grill");
   });
   test("Selected without a story is still to grill", () => {

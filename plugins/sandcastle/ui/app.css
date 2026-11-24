@@ -525,8 +525,86 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 }
 
 /* ---- Tickets (JIRA) and drift */
-.tcolumns .column.tcol-lanes { min-width: 280px; }
-.tcolumns .column.tcol-lanes > .list { padding: 0 6px 8px; gap: 8px; }
+/* the Sandcastle dock below the Tickets board (magicfink sandcastle-board: tickets-leiste*) */
+.tcard .where { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; color: var(--blue); }
+.queued-note { margin: 0 12px 4px; color: var(--muted); }
+.dock { flex: none; border-top: 1px solid var(--border); background: var(--side); display: flex; flex-direction: column; max-height: 42vh; }
+.dock-head { display: flex; align-items: center; gap: 14px; padding: 8px 16px; }
+.dock-toggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+.dock-toggle:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.dock-chev { display: inline-flex; width: 14px; height: 14px; color: var(--muted); transition: transform .15s; }
+.dock-chev svg { width: 100%; height: 100%; }
+.dock.closed .dock-chev { transform: rotate(180deg); }
+.dock-summary { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dock-body { overflow-y: auto; min-height: 0; padding-bottom: 6px; }
+.dock-row { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: center; padding: 8px 16px;
+  cursor: pointer; border-left: 3px solid transparent; }
+.dock-row:hover { background: color-mix(in srgb, var(--card) 60%, transparent); }
+.dock-row.selected { background: var(--card); border-left-color: var(--accent); }
+.dock-row.drop-target { box-shadow: 0 0 0 2px var(--accent) inset; }
+.dock-row.idle .dock-name { color: var(--muted); }
+.dock-machine { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; align-items: center; min-width: 0; font-size: 13px; }
+.dock-branch { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-agent { font-size: 12px; white-space: nowrap; }
+.dock-of { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; white-space: nowrap; }
+.dock-dots { display: inline-flex; gap: 3px; min-width: 0; overflow: hidden; }
+.dock-dots .seg { flex: none; width: 15px; height: 7px; border-radius: 4px; }
+.dock-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; }
+.dock-chips .empty { margin: 6px 0; text-align: left; }
+.dock-chip { flex: none; width: 264px; box-sizing: border-box; background: var(--card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; font-size: 12px; display: grid; gap: 2px; cursor: pointer; }
+.dock-chip.ph-merged { border-style: dashed; background: none; }
+.dock-chip.ph-building, .dock-chip.ph-reviewing { border-color: var(--accent); }
+.dock-chip.ph-failed, .dock-chip.ph-no-commits { border-color: var(--red); }
+.dock-chip.fresh { border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+.dock-chip-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.dock-chip .pos, .run-ticket .pos { color: var(--purple); font-weight: 700; }
+.run-ticket .pos { margin-right: 4px; }
+.dock-chip-st { color: var(--muted); white-space: nowrap; }
+.dock-chip.ph-merged .dock-chip-st { color: var(--green); }
+.dock-chip.ph-building .dock-chip-st, .dock-chip.ph-reviewing .dock-chip-st { color: var(--accent); }
+.dock-chip.ph-failed .dock-chip-st { color: var(--red); }
+.dock-chip-title { color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
+.dock-arrows { display: inline-flex; gap: 2px; }
+.arrow { all: unset; cursor: pointer; padding: 0 4px; border-radius: 4px; color: var(--fg); }
+.arrow:hover:not(:disabled) { background: var(--border); }
+.arrow:disabled { opacity: .35; cursor: default; }
+/* run details in the side panel */
+.run-side .btn-row { margin: 12px 0 16px; }
+.run-progress { display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; }
+.run-side .run-side-h { font-size: 14px; margin: 4px 0 8px; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.run-ticket { display: grid; gap: 6px; padding: 6px 8px; margin: 0 0 8px; background: color-mix(in srgb, var(--card) 60%, transparent); font-size: 13px; }
+.run-ticket.dep { margin-left: 18px; border-left: 2px solid var(--blue); }
+.dep-note { font-size: 12px; }
+.run-ticket-top b { white-space: nowrap; }
+.run-ticket-top .lock { float: right; }
+.stage-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.stage { border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; font-size: 12px; color: var(--muted); }
+.stage.done { color: var(--green); }
+.stage.current { color: var(--fg); font-weight: 700; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.run-ticket-st, .run-ticket-actions { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.run-ticket-st .ph-merged { color: var(--green); }
+.run-ticket-st .ph-building, .run-ticket-st .ph-reviewing { color: var(--accent); }
+.run-ticket-st .ph-failed { color: var(--red); }
+.run-ticket-st .link { text-decoration: underline; }
+/* „Neuer Lauf“ */
+.modal-head { display: flex; align-items: center; justify-content: space-between; }
+.modal-head h2 { margin: 0; font-size: 18px; }
+.modal .field { display: grid; gap: 6px; }
+.field-label { font-size: 13px; color: var(--fg); }
+.modal label.radio { display: grid; gap: 2px; color: var(--fg); font-size: 14px; }
+.radio-top { display: flex; align-items: center; gap: 10px; }
+.radio.disabled { color: var(--muted); }
+.radio-note { font-size: 12px; color: var(--muted); padding-left: 26px; }
+.modal label.ticket-pick { display: flex; align-items: center; gap: 10px; color: var(--fg); font-size: 14px; }
+.ticket-pick .place { color: var(--purple); font-weight: 700; font-size: 12px; white-space: nowrap; }
+@media (max-width: 699px) {
+  .dock { max-height: 50vh; }
+  .dock-head { padding: 8px 12px; }
+  .dock-summary { display: none; }
+  .dock-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 12px; }
+  .dock-chip { width: 78vw; }
+}
 .column.tcol-grill > header { color: var(--orange); }
 .column.cat-done > header { color: var(--green); }
 .tcard .ticon { font-size: 12px; }

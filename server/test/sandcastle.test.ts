@@ -99,7 +99,12 @@ beforeAll(async () => {
         projectKey: "SHOP",
         boardId: 7,
         cloudId: "c-1",
-        states: { selected: "Selected", inProgress: "In Arbeit", testing: "Testing", done: "Fertig" },
+        states: {
+          selected: "Selected",
+          inProgress: "In Arbeit",
+          testing: "Testing",
+          done: "Fertig",
+        },
       },
       github: { queue: "Warteschlange", story: "epic", grillTicket: "grill", nogo: "nogo" },
       engine: {
@@ -197,7 +202,12 @@ describe("projects", () => {
         projectKey: "SHOP",
         boardId: "7",
         cloudId: "c-1",
-        states: { selected: "Selected", inProgress: "In Arbeit", testing: "Testing", done: "Fertig" },
+        states: {
+          selected: "Selected",
+          inProgress: "In Arbeit",
+          testing: "Testing",
+          done: "Fertig",
+        },
       },
       agents: [
         { key: "opus-5", label: "Claude · Opus 5", harness: "claudeCode", model: "claude-opus-5" },
@@ -215,7 +225,10 @@ describe("projects", () => {
         nogo: null,
         workflow: ["release"],
       },
-      jira: { cloudId: null, states: { selected: null, inProgress: null, testing: null, done: null } },
+      jira: {
+        cloudId: null,
+        states: { selected: null, inProgress: null, testing: null, done: null },
+      },
     });
     expect(projects.find((x) => x.root.endsWith("broken"))?.error).toContain("kein gültiges JSON");
     // the worktree is no project of its own
@@ -447,6 +460,34 @@ describe("start / release (queue mode via events)", () => {
       ),
     ).rejects.toThrow("Warteschlange ist leer");
   });
+
+  test("explicit tickets go to the front of the queue; stop sends Ctrl-C and frees the lock", async () => {
+    const sent: [string, string[]][] = [];
+    await sandcastle(
+      { op: "start", slug: SLUG, config: { agent: "opus-5", parallel: 1 }, tickets: [8, 3] },
+      deps,
+    );
+    expect(
+      (await sandcastle({ op: "queue", slug: SLUG }, deps)) as { order: number[] },
+    ).toMatchObject({
+      order: [8, 3, 5],
+    });
+    expect(
+      await sandcastle(
+        { op: "stop" },
+        { ...deps, sendKeys: async (p, k) => void sent.push([p, k]) },
+      ),
+    ).toEqual({ lock: null });
+    expect(sent).toEqual([[pane, ["ctrl+c"]]]);
+    expect((await status({ agents: deps.agents })).lock).toBeNull();
+    await expect(sandcastle({ op: "stop" }, deps)).rejects.toThrow("kein Lauf");
+    await expect(
+      sandcastle(
+        { op: "start", slug: SLUG, config: { agent: "opus-5", parallel: 1 }, tickets: [1, "x"] },
+        deps,
+      ),
+    ).rejects.toThrow("tickets muss");
+  });
 });
 
 describe("grills", () => {
@@ -652,6 +693,23 @@ describe("pure parts", () => {
     const noDeploy = validateConfig({ agent: "opus-5.5", parallel: 1, deploy: false }, p);
     expect(skillPrompt("tendr", noDeploy, false)).toBe(
       "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 warteschlange --kein-testserver",
+    );
+    const p2 = { agents: [], defaultBranch: "main" } as unknown as Project;
+    expect(() => validateConfig({ agent: "opus-5.5", parallel: 1, branch: "-x" }, p2)).toThrow(
+      "Ziel-Branch",
+    );
+    expect(() => validateConfig({ agent: "opus-5.5", parallel: 1, branch: "a..b" }, p2)).toThrow(
+      "Ziel-Branch",
+    );
+    expect(
+      validateConfig({ agent: "opus-5.5", parallel: 1, branch: "main" }, p2).branch,
+    ).toBeNull();
+    const onBranch = validateConfig(
+      { agent: "opus-5.5", parallel: 1, branch: " feature/batch-1 " },
+      p2,
+    );
+    expect(skillPrompt("tendr", onBranch, true)).toBe(
+      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 warteschlange --ziel-branch feature/batch-1",
     );
   });
 });

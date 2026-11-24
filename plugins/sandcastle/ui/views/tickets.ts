@@ -1,34 +1,26 @@
 /**
  * „Tickets“: the JIRA tickets of the project as cards, one column per JIRA status in workflow order, plus the
- * derived „Zu grillen“ (Selected without a story on GitHub) before Selected and the Sandcastle machine lanes after it
- * (a ticket sits in a lane while one of its children is queued or built there). Dragging onto a status column moves
- * the ticket in JIRA, onto a lane queues its open children on that machine. Built once, updated in place per poll.
+ * derived „Zu grillen“ (Selected without a story on GitHub) before Selected. The Sandcastle runs sit in the dock
+ * below the columns (views/rundock.ts); a card says where Sandcastle has it. Dragging onto a status column moves
+ * the ticket in JIRA, onto a machine row of the dock queues its open children there. Built once, updated in place
+ * per poll.
  */
 import { queueChildren, transitionTicket } from "../actions";
 import { openExternal } from "../api";
-import { derive, type Derived, type Lane } from "../derive";
+import { derive, type Derived } from "../derive";
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
 import { currentStep, GRILL_STEP_COUNT, isLiveGrill } from "../grill";
-import { branchColour, isBusy, shortBranch } from "../model";
+import { isBusy } from "../model";
 import { compileTerms } from "../query";
 import { hooks, prefGet, prefSet, serverLabel, state } from "../state";
-import {
-  buildLine,
-  compileTickets,
-  dropStatus,
-  LANE_PREFIX,
-  memberPhase,
-  statusColumn,
-  type TicketColumn,
-  ticketColumns,
-  ticketLane,
-} from "../tickets";
+import { buildLine, compileTickets, dropStatus, LANE_PREFIX, memberPhase, statusColumn, type TicketColumn, ticketColumns } from "../tickets";
 import type { JiraTicket, Phase } from "../types";
-import { closedLanes, isNarrow, type LaneEl, laneClick, laneEl, longPress } from "./board";
+import { isNarrow, longPress } from "./board";
 import { filterTerms } from "./filterbar";
 import { cardGrill } from "./grilling";
 import { showMenu } from "./menu";
+import { placeOf, renderDock, runDockEl, type TicketPlace, ticketPlaces } from "./rundock";
 import { type TicketCardInfo, ticketCardEl } from "./ticketcard";
 import { openTicketSide } from "./ticketside";
 
@@ -39,14 +31,14 @@ interface ColumnEls {
 }
 
 const colEls = new Map<string, ColumnEls>();
-const laneEls = new Map<string, LaneEl>();
-const groupEls = new Map<string, HTMLElement>();
 let root: HTMLElement | null = null;
 let columnsEl: HTMLElement;
 let segsEl: HTMLElement;
 let noticeEl: HTMLElement;
 let staleEl: HTMLElement;
 let infoEl: HTMLElement;
+let queuedEl: HTMLElement;
+let queuedTimer: ReturnType<typeof setTimeout> | undefined;
 let seg = "";
 let visible = { keys: [] as (string | null)[], count: 0 };
 /** keys and count of the visible cards (the JIRA link button) */
@@ -63,8 +55,9 @@ export function ticketsView(): HTMLElement {
   noticeEl = h("div", { class: "notice-host", hidden: true });
   staleEl = h("div", { class: "stale", hidden: true });
   infoEl = h("div", { class: "qf-info small muted", hidden: true });
-  root = h("div", { class: "board" }, infoEl, staleEl, noticeEl, segsEl, columnsEl);
-  root.addEventListener("click", (e) => {
+  queuedEl = h("div", { class: "queued-note small", role: "status", hidden: true });
+  root = h("div", { class: "board tboard" }, infoEl, staleEl, noticeEl, queuedEl, segsEl, columnsEl, runDockEl());
+  columnsEl.addEventListener("click", (e) => {
     const t = e.target as Element;
     const link = t.closest<HTMLElement>("[data-url]");
     if (link) {
@@ -74,15 +67,15 @@ export function ticketsView(): HTMLElement {
     }
     const card = t.closest<HTMLElement>("[data-card]");
     if (card) openTicketSide(card.dataset.card ?? "");
-    laneClick(t);
   });
-  root.addEventListener("keydown", (e) => {
+  columnsEl.addEventListener("keydown", (e) => {
     const target = e.target as Element;
     const card = target.closest<HTMLElement>("[data-card]");
     // Enter on a PR link is its click
     if (card && e.key === "Enter" && !target.closest("[data-url]")) openTicketSide(card.dataset.card ?? "");
   });
-  enableDrag(columnsEl, { canDrag: () => !isNarrow(), ordered: () => false, onDrop: (key, to) => onDrop(key, to) });
+  // the whole view: cards start in the columns, the dock's machine rows are drop targets too
+  enableDrag(root, { canDrag: () => !isNarrow(), ordered: () => false, onDrop: (key, to) => onDrop(key, to), scroller: columnsEl });
   longPress(columnsEl, cardMenu);
   matchMedia("(max-width: 699px)").addEventListener("change", () => renderTickets());
   return root;
@@ -95,11 +88,26 @@ function onDrop(key: string, to: string): void {
   const t = ticketOf(key);
   if (!t) return;
   if (to.startsWith(LANE_PREFIX)) {
-    queueChildren(key, to.slice(LANE_PREFIX.length));
+    enqueue(key, to.slice(LANE_PREFIX.length));
     return;
   }
   const status = dropStatus(to, t, selectedState(derive()));
   if (status) transitionTicket(key, status);
+}
+
+/** Queues the ticket's children on a machine and says above the board where it now stands. */
+async function enqueue(key: string, server: string): Promise<void> {
+  if (!(await queueChildren(key, server))) return;
+  const place = placeOf(derive(), key, server);
+  if (place === null) return;
+  queuedEl.textContent = `${key} steht jetzt auf Platz ${place} in Sandcastle auf ${serverLabel(server)}.`;
+  queuedEl.hidden = false;
+  clearTimeout(queuedTimer);
+  queuedTimer = setTimeout(() => {
+    queuedEl.hidden = true;
+    hooks.render();
+  }, 20_000);
+  hooks.render();
 }
 
 /** Long press / right click: move to a status, queue the children on a machine, details. */
@@ -111,12 +119,12 @@ function cardMenu(key: string): void {
   const here = statusColumn(t, selected);
   const items = [
     ...columns
-      .filter((c) => c.kind !== "lanes" && c.key !== here)
+      .filter((c) => c.key !== here)
       .flatMap((c) => {
         const status = dropStatus(c.key, t, selected);
         return status ? [{ label: `→ ${c.name}`, disabled: false, run: () => transitionTicket(key, status) }] : [];
       }),
-    ...d.lanes.map((l) => ({ label: `→ Sandcastle auf ${l.server.label} (Kinder einreihen)`, disabled: !t.family.children.length, run: () => queueChildren(key, l.server.id) })),
+    ...d.lanes.map((l) => ({ label: `→ Sandcastle auf ${l.server.label} (Kinder einreihen)`, disabled: !t.family.children.length, run: () => enqueue(key, l.server.id) })),
     { label: "Details", disabled: false, run: () => openTicketSide(key) },
   ];
   showMenu(`${t.key} ${t.summary}`, items);
@@ -139,10 +147,7 @@ function columnEl(c: TicketColumn): ColumnEls {
     const list = h("div", { class: "list", "data-list": true });
     const fold = h("button", { class: "col-fold", title: "Spalte einklappen", "aria-label": `${c.name} einklappen`, onclick: (e: Event) => { e.stopPropagation(); toggleColumn(c.key); } }, "‹›");
     const header = h("header", { title: "", onclick: () => { if (hiddenCols().includes(c.key)) toggleColumn(c.key); } }, h("span", { class: "col-name" }, c.name), count, fold);
-    const section = h("section", { class: `column tcol-${c.kind}${c.kind === "status" ? ` cat-${c.status.category}` : ""}` }, header);
-    if (c.kind === "lanes") section.classList.add("col-queue");
-    else section.dataset.column = c.key;
-    section.append(list);
+    const section = h("section", { class: `column tcol-${c.kind}${c.kind === "status" ? ` cat-${c.status.category}` : ""}`, "data-column": c.key }, header, list);
     el = { el: section, count, list };
     colEls.set(c.key, el);
   }
@@ -151,70 +156,29 @@ function columnEl(c: TicketColumn): ColumnEls {
 
 const PHASE_RANK: Phase[] = ["reviewing", "building", "failed", "no-commits", "planned", "merged", "queued"];
 
-/** What a card shows of the ticket's GitHub family: build line, run phase, grill. */
-function cardInfo(d: Derived, t: JiraTicket, pos?: number): TicketCardInfo {
+/** What a card shows of the ticket's GitHub family: build line, run phase, grill, place in Sandcastle. */
+function cardInfo(d: Derived, t: JiraTicket, places: Map<string, TicketPlace>): TicketCardInfo {
   const f = t.family;
-  let run: { machine: string; percent: number } | null = null;
   const pr = t.prs[0] ?? null;
   const phases: Phase[] = [];
   const children = f.children.map((c) => {
     const tr = d.runs.get(c.n);
-    if (tr && tr.run.status !== "ended") {
-      run ??= { machine: serverLabel(tr.server), percent: tr.run.progress.percent };
-      phases.push(tr.issue.phase);
-    }
+    if (tr && tr.run.status !== "ended") phases.push(tr.issue.phase);
     return { n: c.n, seg: memberPhase(c, tr?.issue.phase) };
   });
   const tg = f.grill ? d.grills.get(f.grill.n) : undefined;
   const grill = tg && isLiveGrill(tg.grill) ? `Grill ${currentStep(tg.grill)}/${GRILL_STEP_COUNT}` : null;
+  const busy = phases.some((p) => isBusy(p));
+  const place = t.category === "done" ? undefined : places.get(t.key);
   return {
     t,
-    pos,
-    build: buildLine({ story: f.story?.n ?? null, children, run, grill, pr }),
+    build: buildLine({ story: f.story?.n ?? null, children, run: null, grill, pr }),
     phase: PHASE_RANK.find((p) => phases.includes(p)),
     grill: f.grill ? cardGrill(d, f.grill.n) : undefined,
-    busy: phases.some((p) => isBusy(p)),
+    busy,
+    where: busy ? "wird gebaut" : place ? `${place.live ? "in Lauf" : "wartet"} auf ${place.label} · Platz ${place.pos}` : undefined,
   };
 }
-
-function groupEl(key: string, dot: string | null, text: string): HTMLElement {
-  let el = groupEls.get(key);
-  if (!el) {
-    el = h("div", { class: "lane-group" });
-    groupEls.set(key, el);
-  }
-  const sig = `${dot}|${text}`;
-  if (el.dataset.sig !== sig) {
-    el.dataset.sig = sig;
-    fill(el, dot ? h("span", { class: "dot", style: `background:${dot}` }) : null, text);
-  }
-  return el;
-}
-
-/** Lane body: tickets with children in a live run here (per run), then the ones whose children wait here. */
-function laneCards(d: Derived, lane: Lane, tickets: { t: JiraTicket; pos: number }[]): HTMLElement[] {
-  const out: HTMLElement[] = [];
-  const sorted = [...tickets].sort((a, b) => a.pos - b.pos);
-  const runOf = (t: JiraTicket) =>
-    t.family.children.map((c) => d.runs.get(c.n)).find((tr) => tr && tr.server === lane.server.id && tr.run.status !== "ended")?.run;
-  const placed = new Set<string>();
-  let n = 0;
-  for (const r of lane.runs.filter((x) => x.status !== "ended")) {
-    const mine = sorted.filter((x) => runOf(x.t) === r);
-    if (!mine.length) continue;
-    out.push(groupEl(`${lane.server.id}|${r.id}`, branchColour(r.branch), `Im Lauf ${shortBranch(r.branch)}`));
-    for (const x of mine) {
-      placed.add(x.t.key);
-      out.push(ticketCardEl(cardInfo(d, x.t, ++n)));
-    }
-  }
-  const next = sorted.filter((x) => !placed.has(x.t.key));
-  if (next.length && out.length) out.push(groupEl(lane.server.id, null, "Als Nächstes"));
-  for (const x of next) out.push(ticketCardEl(cardInfo(d, x.t, ++n)));
-  return out;
-}
-
-const empty = (text: string) => h("p", { class: "empty" }, text);
 
 function notice(title: string, text: string, actions: HTMLElement[]): HTMLElement {
   return h("div", { class: "notice" }, h("b", {}, title), h("p", { class: "notice-text" }, text), actions.length ? h("div", { class: "btn-row" }, ...actions) : null);
@@ -246,6 +210,7 @@ export function renderTickets(): void {
     fill(noticeEl, note);
   }
   noticeEl.hidden = !note;
+  renderDock(d);
   if (note || !jira) {
     columnsEl.hidden = true;
     segsEl.hidden = true;
@@ -269,17 +234,10 @@ export function renderTickets(): void {
   };
   const test = compileTerms(filterTerms(), (tokens) => compileTickets(tokens, livePhase));
   const byCol = new Map<string, JiraTicket[]>(columns.map((c) => [c.key, []]));
-  const byLane = new Map<string, { t: JiraTicket; pos: number }[]>(d.lanes.map((l) => [l.server.id, []]));
-  const orderOf = (server: string) => d.lanes.find((l) => l.server.id === server)?.order ?? [];
   let shown = 0;
   for (const t of jira.tickets) {
     if (!test(t)) continue;
     shown++;
-    const lane = ticketLane(t, d.laneOf, orderOf);
-    if (lane && byLane.has(lane.server)) {
-      byLane.get(lane.server)?.push({ t, pos: lane.pos });
-      continue;
-    }
     const key = statusColumn(t, selected);
     let list = byCol.get(key);
     if (!list) {
@@ -291,6 +249,7 @@ export function renderTickets(): void {
     }
     list.push(t);
   }
+  const places = ticketPlaces(d);
   const counts = new Map<string, number>();
   const folded = new Set(isNarrow() ? [] : hiddenCols());
   for (const c of columns) {
@@ -298,39 +257,21 @@ export function renderTickets(): void {
     const isFolded = folded.has(c.key);
     els.el.classList.toggle("col-folded", isFolded);
     els.el.querySelector("header")?.setAttribute("title", isFolded ? `${c.name} – klicken zum Aufklappen` : "");
+    let list = byCol.get(c.key) ?? [];
+    counts.set(c.key, list.length);
     if (isFolded) {
       // folded: count only, no cards (a dropped card still lands here via the header's data-column)
-      const n = c.kind === "lanes" ? [...byLane.values()].reduce((s, l) => s + l.length, 0) : (byCol.get(c.key)?.length ?? 0);
-      counts.set(c.key, n);
       reconcile(els.list, []);
       continue;
     }
-    if (c.kind === "lanes") {
-      const lanes = d.lanes.map((lane) => {
-        const el = laneEl(laneEls, d, lane, `${LANE_PREFIX}${lane.server.id}`);
-        const items = byLane.get(lane.server.id) ?? [];
-        const closed = closedLanes().includes(lane.server.id);
-        el.list.hidden = closed;
-        if (closed) reconcile(el.list, []);
-        else reconcile(el.list, items.length ? laneCards(d, lane, items) : [empty("Leer – Ticket hierher ziehen, um seine Kinder einzureihen")]);
-        for (const x of items) visible.keys.push(x.t.key);
-        return el.el;
-      });
-      const n = [...byLane.values()].reduce((s, l) => s + l.length, 0);
-      counts.set(c.key, n);
-      reconcile(els.list, lanes.length ? lanes : [empty(state.servers.length ? "Kein Rechner hat dieses Projekt ausgecheckt" : "Rechner werden gesucht …")]);
-      continue;
-    }
-    let list = byCol.get(c.key) ?? [];
     if (c.kind === "status" && c.status.category === "done") list = [...list].sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated));
-    counts.set(c.key, list.length);
     for (const t of list) visible.keys.push(t.key);
-    reconcile(els.list, list.length ? list.map((t) => ticketCardEl(cardInfo(d, t))) : [empty("Keine Tickets")]);
+    reconcile(els.list, list.length ? list.map((t) => ticketCardEl(cardInfo(d, t, places))) : [h("p", { class: "empty" }, "Keine Tickets")]);
   }
   visible.count = visible.keys.length;
   for (const c of columns) columnEl(c).count.textContent = String(counts.get(c.key) ?? 0);
   const narrow = isNarrow();
-  if (!columns.some((c) => c.key === seg)) seg = columns.find((c) => c.kind === "lanes")?.key ?? columns[0]?.key ?? "";
+  if (!columns.some((c) => c.key === seg)) seg = columns[0]?.key ?? "";
   reconcile(columnsEl, columns.map((c) => columnEl(c).el));
   for (const c of columns) columnEl(c).el.classList.toggle("seg-hidden", narrow && c.key !== seg);
   segsEl.hidden = !narrow;

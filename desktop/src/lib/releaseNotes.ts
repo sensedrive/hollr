@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 63,
+    version: "0.53.0",
+    date: "24.11.2026",
+    items: [
+      { icon: "🏰", text: "Sandcastle: Läufe als Leiste unter dem Ticket-Board – je Rechner die Tickets in Lauf-Reihenfolge, Karten hineinziehen, umsortieren, „Neuer Lauf“ mit Rechner, Ziel-Branch und Tickets, „Lauf stoppen“." },
+    ],
+  },
+  {
     build: 62,
     version: "0.52.3",
     date: "24.11.2026",

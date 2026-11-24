@@ -267,6 +267,40 @@ export function queueChildren(key: string, server: string): Promise<boolean> {
   );
 }
 
+/** Writes one machine's queue order as the dock shows it (whole tickets moved up or down). */
+export function setLaneOrder(server: string, order: number[]): Promise<boolean> {
+  const slug = state.slug;
+  return optimistic(
+    () => setOrder(server, order),
+    async () => {
+      const q = await sc.queueSet(server, slug, { order });
+      if (slug === state.slug) state.queues.set(server, q);
+    },
+  );
+}
+
+/** „Aus dem Lauf nehmen“: the ticket's waiting issues lose the queue label and leave the machine's queue. */
+export function takeOutOfLane(server: string, ns: number[]): Promise<boolean> {
+  const d = derive();
+  const issues = ns.map((n) => d.issues.get(n)).filter((i): i is Issue => !!i);
+  const slug = state.slug;
+  const order = (state.queues.get(server)?.order ?? []).filter((n) => !ns.includes(n));
+  return optimistic(
+    () => {
+      for (const i of issues) applyMove(i, "backlog");
+      setOrder(server, order);
+    },
+    async () => {
+      for (const i of issues) {
+        const { issue: fresh } = await api<{ issue: Issue }>("/api/move", { slug, n: i.number, to: "backlog" });
+        putIssue(fresh);
+      }
+      const q = await sc.queueSet(server, slug, { order });
+      if (slug === state.slug) state.queues.set(server, q);
+    },
+  );
+}
+
 /** Labels on the JIRA ticket; the server takes a label written here off the ticket's GitHub issues. */
 export function editTicketLabels(key: string, add: string[], remove: string[]): Promise<boolean> {
   const t = ticketOf(key);

@@ -12,6 +12,8 @@ export interface DragOptions {
   onDrop(id: string, to: string, before: string | null): void;
   /** targets whose order matters (a drop shows a position line there) */
   ordered(key: string): boolean;
+  /** what scrolls sideways near the screen edges (default: root) */
+  scroller?: HTMLElement;
 }
 
 interface Active {
@@ -93,8 +95,9 @@ export function enableDrag(root: HTMLElement, opts: DragOptions): () => void {
       if (y < r.top + EDGE) list.scrollTop -= 10;
       else if (y > r.bottom - EDGE) list.scrollTop += 10;
     }
-    if (x < EDGE) root.scrollLeft -= 12;
-    else if (x > window.innerWidth - EDGE) root.scrollLeft += 12;
+    const side = opts.scroller ?? root;
+    if (x < EDGE) side.scrollLeft -= 12;
+    else if (x > window.innerWidth - EDGE) side.scrollLeft += 12;
     if (y < EDGE) window.scrollBy(0, -10);
     else if (y > window.innerHeight - EDGE) window.scrollBy(0, 10);
     active.frame = requestAnimationFrame(autoscroll);
