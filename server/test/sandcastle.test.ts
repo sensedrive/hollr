@@ -731,5 +731,8 @@ describe("pure parts", () => {
     expect(skillPrompt("tendr", cfg, false, [3600, 2356])).toBe(
       "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 3600,2356 --batch --kein-testserver",
     );
+    expect(skillPrompt("tendr", cfg, false, [2347])).toBe(
+      "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 2347 --kein-testserver",
+    );
   });
 });

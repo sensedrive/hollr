@@ -1544,7 +1544,8 @@ export function skillPrompt(
   scope?: number[],
 ): string {
   const agentArg = cfg.agent === "custom" ? `custom:${cfg.provider}:${cfg.model}` : cfg.agent;
-  const umfang = scope?.length ? `${scope.join(",")} --batch` : "warteschlange";
+  // one story (or one stand-alone issue) is one run anyway: --batch only when there is something to batch
+  const umfang = scope?.length ? `${scope.join(",")}${scope.length > 1 ? " --batch" : ""}` : "warteschlange";
   return [
     `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} ${umfang}`,
     cfg.screencast ? " --screencast" : "",
