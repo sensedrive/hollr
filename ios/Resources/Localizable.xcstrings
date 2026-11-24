@@ -4569,6 +4569,9 @@
         }
       }
     },
+    "Übersicht: „Läuft gerade“ startet mit „Arbeitet“": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Overview: “Running now” starts with “Working”" } } }
+    },
     "Diktat als eigener Bildschirm: einmal antippen, live mitlesen, großer Knopf zum Pausieren, ✓ beendet – danach Text bearbeiten und senden": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation on its own screen: tap once, read along live, big button to pause, ✓ ends – then edit the text and send" } } }
     },

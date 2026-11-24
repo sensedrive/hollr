@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 72, date: "24.11.2026", items: [
+            ("bolt", String(localized: "Übersicht: „Läuft gerade“ startet mit „Arbeitet“")),
+        ]),
         ReleaseNote(build: 71, date: "24.11.2026", items: [
             ("mic", String(localized: "Diktat als eigener Bildschirm: einmal antippen, live mitlesen, großer Knopf zum Pausieren, ✓ beendet – danach Text bearbeiten und senden")),
             ("checkmark.seal", String(localized: "Whisper-Modelle bleiben nach App-Updates geladen – kein „noch nicht geladen“ mehr")),

@@ -10,7 +10,7 @@ struct DashboardView: View {
     @Environment(\.openInBrowser) private var openInBrowser
     let onNew: () -> Void
     @Binding var sheetAgent: String?
-    @State private var workFilter: WorkFilter = .recent
+    @State private var workFilter: WorkFilter = .busy
     @State private var reloading = false
     @State private var showLimits = false
     /// herdr refused to end a session – shown, the session stays

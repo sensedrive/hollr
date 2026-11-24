@@ -94,8 +94,8 @@
       .map((rows) => rows.sort((a, b) => order(a) - order(b) || (b.changed ?? 0) - (a.changed ?? 0)))
       .sort((a, b) => order(a[0]!) - order(b[0]!) || (b[0]!.changed ?? 0) - (a[0]!.changed ?? 0));
   });
-  // "Läuft gerade": Zuletzt (every agent, the one that reported last first) or the busy ones or the fresh results
-  let filter = $state<"recent" | "busy" | "new">("recent");
+  // "Läuft gerade": the busy ones (default), Zuletzt (every agent, the one that reported last first) or the fresh results
+  let filter = $state<"recent" | "busy" | "new">("busy");
   const FILTERS: [typeof filter, string][] = [["recent", "Zuletzt"], ["busy", "Arbeitet"], ["new", "Neu"]];
   /** every agent (and every session you opened) not from a hidden space, by when it entered its current state –
    *  finished, asked, started – newest first */
