@@ -438,7 +438,7 @@ body.is-resizing #sidebar { transition: none; }
 .tl-agent { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-left: 2px solid var(--border); }
 .tl-agent-head { color: var(--muted); font-size: 12px; }
 .tl-agent-say { margin: 0; white-space: pre-line; }
-.tl-agent-doing { color: var(--muted); font-size: 12px; }
+.tl-agent-doing { color: var(--fg); font-weight: 600; }
 .tl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .tl-stage { position: relative; display: flex; gap: 12px; padding: 8px 12px 8px 0; }
 /* line between the markers */

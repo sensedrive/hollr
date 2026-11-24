@@ -14,7 +14,7 @@ import { isLiveGrill, modeText, stepText as grillStepText } from "../grill";
 import { ICON } from "../icons";
 import { since } from "../model";
 import { errorText, hooks, projectOn, serverLabel, state, toast } from "../state";
-import { clearText, currentStation, finishedCount, loopPosition, PHASE_PILL, type Station, stepText, timeline } from "../timeline";
+import { blindRun, clearText, currentStation, finishedCount, loopPosition, PHASE_PILL, type Station, stepText, timeline } from "../timeline";
 import type { Grill, LogFile, Run, RunStatus, Server } from "../types";
 import { grillBar, grillLog, grillPill } from "./grilling";
 import { newRunModal } from "./newrun";
@@ -231,8 +231,8 @@ function statusBlock(s: Server, r: Run, holdsLock: boolean): HTMLElement {
       ? h(
           "div",
           { class: "rt-progress" },
-          h("span", { class: "segbar" }, ...r.issues.map((i) => h("span", { class: `seg ${i.phase}` }))),
-          h("span", { class: "rt-stats" }, `${finishedCount(r)}/${r.issues.length} Tickets`),
+          blindRun(stations) ? null : h("span", { class: "segbar" }, ...r.issues.map((i) => h("span", { class: `seg ${i.phase}` }))),
+          h("span", { class: "rt-stats" }, blindRun(stations) ? `${r.issues.length} Tickets · Stand unbekannt` : `${finishedCount(r)}/${r.issues.length} Tickets`),
         )
       : null,
     r.source === "manual" ? h("span", { class: "muted small" }, "von Hand gestartet") : null,
@@ -290,6 +290,7 @@ function releaseControl(server: string): HTMLElement {
 function ticketList(s: Server, r: Run): HTMLElement {
   const sel = state.selection;
   const blockers = blockersOf();
+  const blind = blindRun(timeline(r));
   return h(
     "ul",
     { class: "rt-tickets", "aria-label": `Tickets von ${r.project}` },
@@ -303,7 +304,9 @@ function ticketList(s: Server, r: Run): HTMLElement {
           { class: "rt-ticket", "aria-pressed": String(sel?.server === s.id && sel.run === r.id && sel.n === i.n), onclick: () => select(s.id, r.id, i.n, null) },
           h("span", { class: "rt-nr" }, `#${i.n}`),
           h("span", { class: "rt-title" }, titleOf(i.n, r)),
-          h("span", { class: "rt-phase", "data-phase": i.phase }, waitsFor.length ? `wartet auf #${waitsFor[0]}` : PHASE_PILL[i.phase]),
+          blind
+            ? h("span", { class: "rt-phase", "data-phase": "unknown" }, "ohne Angabe")
+            : h("span", { class: "rt-phase", "data-phase": i.phase }, waitsFor.length ? `wartet auf #${waitsFor[0]}` : PHASE_PILL[i.phase]),
         ),
         i.reason && i.phase !== "merged" ? h("p", { class: "error small rt-reason" }, i.reason) : null,
       );
@@ -493,9 +496,15 @@ function timelineEl(r: Run, stations: Station[]): HTMLElement {
       ? h(
           "div",
           { class: "tl-agent" },
-          h("span", { class: "tl-agent-head" }, `Zuletzt vom Agenten${r.agent.at ? ` · ${since(r.agent.at) === "0 Min." ? "gerade eben" : `vor ${since(r.agent.at)}`}` : ""}`),
-          r.agent.say ? h("p", { class: "tl-agent-say" }, r.agent.say.replace(/\*\*|`/g, "")) : null,
           r.agent.doing ? h("span", { class: "tl-agent-doing" }, `Gerade: ${r.agent.doing}`) : null,
+          r.agent.say
+            ? h(
+                "span",
+                { class: "tl-agent-head" },
+                `Zuletzt geschrieben${r.agent.at ? ` · ${since(r.agent.at) === "0 Min." ? "gerade eben" : `vor ${since(r.agent.at)}`}` : ""}`,
+              )
+            : null,
+          r.agent.say ? h("p", { class: "tl-agent-say" }, r.agent.say.replace(/\*\*|`/g, "")) : null,
         )
       : null,
     h(

@@ -13,6 +13,7 @@ import { fill, h, icon, reconcile } from "../dom";
 import { isBusy, since } from "../model";
 import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
 import { LANE_PREFIX } from "../tickets";
+import { blindRun, timeline } from "../timeline";
 import type { Flow, Phase, Run } from "../types";
 import { newRunModal } from "./newrun";
 import { claimPanel, closeSidebar } from "./sidebar";
@@ -164,7 +165,7 @@ function dots(chips: DockChip[]): HTMLElement {
   return h("span", { class: "dock-dots" }, ...chips.map((c) => h("span", { class: `seg ${c.phase}` })));
 }
 
-function chipEl(c: DockChip, i: number, chips: DockChip[]): HTMLElement {
+function chipEl(c: DockChip, i: number, chips: DockChip[], blind = false): HTMLElement {
   const isFresh = (fresh.get(c.key) ?? 0) > Date.now();
   const waiting = c.phase === "queued";
   const up = waiting && !!moveChip(chips, c.key, -1);
@@ -178,7 +179,7 @@ function chipEl(c: DockChip, i: number, chips: DockChip[]): HTMLElement {
       h("span", { class: "pos" }, i + 1),
       h("b", {}, c.key),
       h("span", { class: "grow" }),
-      h("span", { class: "dock-chip-st" }, isFresh ? `neu · Platz ${i + 1}` : chipText(c)),
+      h("span", { class: "dock-chip-st" }, isFresh ? `neu · Platz ${i + 1}` : blind && c.phase === "queued" ? "ohne Angabe" : chipText(c)),
       waiting
         ? h(
             "span",
@@ -194,9 +195,11 @@ function chipEl(c: DockChip, i: number, chips: DockChip[]): HTMLElement {
 
 function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
   const run = liveRun(lane);
+  // nothing reports where this run stands: its chips' „wartet“ would be a guess
+  const blind = !!run && blindRun(timeline(run));
   const id = lane.server.id;
   const now = Date.now();
-  const sig = JSON.stringify([lane.server, run?.id, run?.branch, run?.config, run?.status, run?.pane, chips, [...fresh].filter(([, t]) => t > now).map(([k]) => k), chips.map((c) => summaryOf(c.key)), sideServer === id]);
+  const sig = JSON.stringify([lane.server, run?.id, run?.branch, run?.config, run?.status, run?.pane, blind, chips, [...fresh].filter(([, t]) => t > now).map(([k]) => k), chips.map((c) => summaryOf(c.key)), sideServer === id]);
   let row = rowEls.get(id);
   if (row?.sig === sig) return row.el;
   const p = runProgress(chips);
@@ -214,7 +217,7 @@ function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
       h(
         "span",
         { class: "dock-of" },
-        chips.length ? (run ? `${p.at} von ${p.total}` : `${p.total} wartend`) : "",
+        chips.length ? (run ? (blind ? `${p.total} · Stand unbekannt` : `${p.at} von ${p.total}`) : `${p.total} wartend`) : "",
         chips.length ? dots(chips) : null,
       ),
       // a machine without a run but with tickets waiting: start right from its row
@@ -222,7 +225,7 @@ function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
         ? h("button", { class: "btn small primary dock-start", "data-start": true, title: "Lauf auf diesem Rechner starten" }, "▷ Lauf starten")
         : null,
     ),
-    h("div", { class: "dock-chips", "data-list": true }, ...(chips.length ? chips.map((c, i) => chipEl(c, i, chips)) : [h("p", { class: "empty" }, "Leer – Ticket hierher ziehen")])),
+    h("div", { class: "dock-chips", "data-list": true }, ...(chips.length ? chips.map((c, i) => chipEl(c, i, chips, blind)) : [h("p", { class: "empty" }, "Leer – Ticket hierher ziehen")])),
   );
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target === el) openRunSide(id);
@@ -333,9 +336,11 @@ function ticketBlock(server: string, run: Run | undefined, c: DockChip, i: numbe
   const reason = run?.issues.find((x) => c.children.includes(x.n) && x.reason)?.reason;
   const status =
     c.phase === "queued"
-      ? waitingOn
-        ? `wartet auf ${waitingOn}`
-        : "wartet"
+      ? run && blindRun(timeline(run))
+        ? "ohne Angabe"
+        : waitingOn
+          ? `wartet auf ${waitingOn}`
+          : "wartet"
       : c.phase === "merged"
         ? "gemergt"
         : c.phase === "failed"

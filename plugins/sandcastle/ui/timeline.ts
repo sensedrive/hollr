@@ -111,6 +111,9 @@ export function timeline(run: Run): Station[] {
 /** The station the run stands at (current or waiting), null when none is known. */
 export const currentStation = (stations: Station[]) => stations.find((s) => s.state === "current" || s.state === "waiting") ?? null;
 
+/** Nothing reports where the run stands (no flow, no loop event): its tickets' states would be guesses. */
+export const blindRun = (stations: Station[]) => stations[2]?.state === "unknown";
+
 const nums = (ns: number[]) => ns.map((n) => `#${n}`).join(", ").replace(/, ([^,]*)$/, " und $1");
 
 /** „Implementer an #603“, „Planer“, „Merge“ … – what the machine's status block names as the step. */
