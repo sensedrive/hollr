@@ -8036,6 +8036,9 @@
     "Diktat: zeigt, wenn das Sprachmodell noch lädt, lässt sich jederzeit verwerfen; das Modell wird beim Öffnen der App schon vorgeladen": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation: shows when the speech model is still loading, can be thrown away at any time; the model is warmed when the app opens" } } }
     },
+    "Behoben: Whisper Large v3 Turbo lieferte gar keinen Text – mit Fachwörtern im Prompt blieb es stumm; jetzt läuft es ohne": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Fixed: Whisper Large v3 Turbo gave no text at all – with vocabulary in its prompt it stayed silent; now it runs without" } } }
+    },
     "Wandle um …": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Converting …" } } }
     },

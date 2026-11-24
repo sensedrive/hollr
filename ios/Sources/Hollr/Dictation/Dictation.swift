@@ -679,6 +679,9 @@ actor WhisperCache {
     static let shared = WhisperCache()
     private var current: (model: String, kit: WhisperKit)?
     private var loading: (model: String, task: Task<WhisperKit, Error>)?
+    /// models that answer a prompt (vocabulary, previous chunk) with nothing at all – Large v3 Turbo does: its
+    /// distilled decoder ends right after the prompt. They get no prompt from then on.
+    private var silentWithPrompt: Set<String> = []
 
     func kit(model: String, folder: String) async throws -> WhisperKit {
         if let current, current.model == model { return current.kit }
@@ -710,9 +713,23 @@ actor WhisperCache {
         }
         let auto = language == "auto"
         if samples.count > 30 * 16_000 { prompt = nil } // long audio: VAD chunks without prompt
+        if silentWithPrompt.contains(model) { prompt = nil }
+        let text = try await decode(kit, samples, language: auto ? nil : language, prompt: prompt, fallbacks: fallbacks, vad: vad)
+        guard text.trimmingCharacters(in: .whitespaces).isEmpty, prompt != nil else { return text }
+        // nothing with a prompt: try once without – if that hears something, this model can't take prompts
+        let plain = try await decode(kit, samples, language: auto ? nil : language, prompt: nil, fallbacks: fallbacks, vad: vad)
+        if !plain.trimmingCharacters(in: .whitespaces).isEmpty {
+            silentWithPrompt.insert(model)
+            HollrLog.info("whisper: \(model) is silent with a prompt – transcribing without")
+        }
+        return plain
+    }
+
+    private func decode(_ kit: WhisperKit, _ samples: [Float], language: String?, prompt: [Int]?, fallbacks: Int,
+                        vad: Bool) async throws -> String {
         let options = DecodingOptions(
-            task: .transcribe, language: auto ? nil : language,
-            temperatureFallbackCount: fallbacks, usePrefillPrompt: !auto, detectLanguage: auto,
+            task: .transcribe, language: language,
+            temperatureFallbackCount: fallbacks, usePrefillPrompt: language != nil, detectLanguage: language == nil,
             promptTokens: prompt, compressionRatioThreshold: 2.4,
             // VAD chunking together with a prompt can stall WhisperKit – only split long recordings
             chunkingStrategy: vad && (prompt == nil || samples.count > 30 * 16_000) ? .vad : ChunkingStrategy.none

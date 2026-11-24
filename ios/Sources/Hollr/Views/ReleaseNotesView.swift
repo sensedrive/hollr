@@ -11,6 +11,7 @@ struct ReleaseNote: Identifiable {
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(build: 74, date: "24.11.2026", items: [
+            ("checkmark.seal", String(localized: "Behoben: Whisper Large v3 Turbo lieferte gar keinen Text – mit Fachwörtern im Prompt blieb es stumm; jetzt läuft es ohne")),
             ("hourglass", String(localized: "Diktat: zeigt, wenn das Sprachmodell noch lädt, lässt sich jederzeit verwerfen; das Modell wird beim Öffnen der App schon vorgeladen")),
         ]),
         ReleaseNote(build: 73, date: "24.11.2026", items: [
