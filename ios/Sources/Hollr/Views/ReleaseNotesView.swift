@@ -10,6 +10,11 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 71, date: "24.11.2026", items: [
+            ("mic", String(localized: "Diktat als eigener Bildschirm: einmal antippen, live mitlesen, großer Knopf zum Pausieren, ✓ beendet – danach Text bearbeiten und senden")),
+            ("checkmark.seal", String(localized: "Whisper-Modelle bleiben nach App-Updates geladen – kein „noch nicht geladen“ mehr")),
+            ("internaldrive", String(localized: "Einstellungen › Sprache zeigt, welche Modelle auf dem iPhone sind, wie groß sie sind und welches gerade diktiert")),
+        ]),
         ReleaseNote(build: 70, date: "24.11.2026", items: [
             ("link", String(localized: "Tickets (z. B. TENDR-1037) und Issues/PRs (#3575) in Chat und Terminal antippen – öffnet das Sandcastle-Board direkt auf dem Ticket")),
         ]),

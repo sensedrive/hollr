@@ -4559,26 +4559,6 @@
         }
       }
     },
-    "Mikrofon antippen startet und beendet – oder gedrückt halten und sprechen. „… senden“ am Ende schickt ab.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap the microphone to start and stop – or hold and speak. “… send” at the end sends."
-          }
-        }
-      }
-    },
-    "Mikrofon antippen startet und beendet, gedrückt halten diktiert bis zum Loslassen.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap the microphone to start and stop, or hold it to dictate until you let go."
-          }
-        }
-      }
-    },
     "Mikrofon aus (wie Leertaste) – du hörst weiter zu": {
       "localizations": {
         "en": {
@@ -4588,6 +4568,15 @@
           }
         }
       }
+    },
+    "Diktat als eigener Bildschirm: einmal antippen, live mitlesen, großer Knopf zum Pausieren, ✓ beendet – danach Text bearbeiten und senden": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation on its own screen: tap once, read along live, big button to pause, ✓ ends – then edit the text and send" } } }
+    },
+    "Whisper-Modelle bleiben nach App-Updates geladen – kein „noch nicht geladen“ mehr": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Whisper models stay loaded after app updates – no more “not loaded yet”" } } }
+    },
+    "Einstellungen › Sprache zeigt, welche Modelle auf dem iPhone sind, wie groß sie sind und welches gerade diktiert": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Settings › Speech shows which models are on the iPhone, how big they are and which one dictates" } } }
     },
     "Mikrofon gedrückt halten zum Diktieren, ✕ verwirft die Aufnahme, Diktat landet an der Cursor-Position": {
       "localizations": {
@@ -7981,62 +7970,12 @@
         }
       }
     },
-    "Bearbeiten": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit"
-          }
-        }
-      }
-    },
-    "Beendet das Diktat, der Text kommt ins Eingabefeld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ends the dictation, the text goes into the input field"
-          }
-        }
-      }
-    },
     "Mikrofon startet …": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Starting microphone …"
-          }
-        }
-      }
-    },
-    "Transkribiere …": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transcribing …"
-          }
-        }
-      }
-    },
-    "Pausiert – tippen zum Weitersprechen": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paused – tap to keep talking"
-          }
-        }
-      }
-    },
-    "Hört zu – tippen zum Pausieren": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Listening – tap to pause"
           }
         }
       }
@@ -8061,15 +8000,83 @@
         }
       }
     },
-    "Diktat senden": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send dictation"
-          }
-        }
-      }
+    "%@ ist auf diesem Gerät nicht geladen – Einstellungen › Sprache.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "%@ isn't on this device – Settings › Speech." } } }
+    },
+    "Download unvollständig – bitte noch einmal laden.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Download incomplete – please load it again." } } }
+    },
+    "Diktat": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation" } } }
+    },
+    "Text prüfen": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Check the text" } } }
+    },
+    "Pausiert – tippe auf den Knopf, um weiterzusprechen.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Paused – tap the button to keep talking." } } }
+    },
+    "Sprich einfach los – der Text erscheint nach jeder kurzen Pause.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Just start talking – the text appears after every short pause." } } }
+    },
+    "Wandle um …": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Converting …" } } }
+    },
+    "Einen Moment …": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "One moment …" } } }
+    },
+    "Pausiert": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Paused" } } }
+    },
+    "Hört zu": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Listening" } } }
+    },
+    "Nichts verstanden – sprich weiter oder tippe selbst.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Nothing understood – keep talking or type it yourself." } } }
+    },
+    "Weiter diktieren": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Keep dictating" } } }
+    },
+    "Ins Eingabefeld": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "To input field" } } }
+    },
+    "Diktat ausprobieren": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Try dictation" } } }
+    },
+    "Sprich ein paar Sätze – so klingt es im Chat.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Say a few sentences – this is how it comes out in the chat." } } }
+    },
+    "Bereit: %@": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Ready: %@" } } }
+    },
+    "%@ ist noch nicht auf diesem iPhone": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "%@ isn't on this iPhone yet" } } }
+    },
+    "Der Bildschirm bleibt an, bis der Download fertig ist.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "The screen stays on until the download is done." } } }
+    },
+    "Jetzt laden (%@)": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Load now (%@)" } } }
+    },
+    "In Verwendung": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "In use" } } }
+    },
+    "%@ löschen": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Delete %@" } } }
+    },
+    "Auf diesem iPhone": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "On this iPhone" } } }
+    },
+    "Geladen": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Loaded" } } }
+    },
+    "Verwenden": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Use" } } }
+    },
+    "Mikrofon antippen öffnet das Diktat: der große Knopf pausiert, ✓ beendet – danach kannst du den Text noch bearbeiten und senden.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Tapping the microphone opens dictation: the big button pauses, ✓ ends – then you can still edit the text and send it." } } }
+    },
+    "Mikrofon antippen öffnet das Diktat – der große Knopf pausiert, ✓ beendet, danach bearbeiten und senden. „… senden“ am Ende schickt sofort ab.": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Tapping the microphone opens dictation – the big button pauses, ✓ ends, then edit and send. “… send” at the end sends right away." } } }
     },
     "gerade eben": {
       "localizations": {

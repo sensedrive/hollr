@@ -134,8 +134,6 @@ final class DictationSettings {
     var replacements: [Replacement] {
         didSet { defaults.set(try? JSONEncoder().encode(replacements), forKey: "dictation.replacements") }
     }
-    /// Whisper variant → local folder
-    var downloaded: [String: String] { didSet { defaults.set(downloaded, forKey: "dictation.downloaded") } }
 
     init() {
         engine = Engine(rawValue: defaults.string(forKey: "dictation.engine") ?? "") ?? .apple
@@ -161,8 +159,9 @@ final class DictationSettings {
         voiceSend = Self.flag("dictation.voiceSend", default: true)
         replacements = defaults.data(forKey: "dictation.replacements")
             .flatMap { try? JSONDecoder().decode([Replacement].self, from: $0) } ?? []
-        downloaded = (defaults.dictionary(forKey: "dictation.downloaded") as? [String: String] ?? [:])
-            .filter { FileManager.default.fileExists(atPath: $0.value) }
+        // the old record of absolute model paths broke on every app update (the container path changes);
+        // models are found on disk now (whisperFolder)
+        defaults.removeObject(forKey: "dictation.downloaded")
     }
 
     /// A newer vocabulary from another of the user's apps: taken as is, keeping its time.
@@ -182,7 +181,43 @@ final class DictationSettings {
         UserDefaults.standard.object(forKey: key) != nil ? UserDefaults.standard.bool(forKey: key) : value
     }
 
-    var whisperReady: Bool { downloaded[whisperModel] != nil }
+    /// Where WhisperKit's downloads live (Application Support/whisper – survives app updates).
+    nonisolated static var whisperBase: URL {
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("whisper", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// The folder of a fully downloaded Whisper variant, nil when it is missing or incomplete. WhisperKit (HubApi)
+    /// puts it at `<base>/models/argmaxinc/whisperkit-coreml/<variant>`; it is looked up every time instead of
+    /// remembered, because iOS moves the app's container on every update.
+    nonisolated static func whisperFolder(_ variant: String) -> URL? {
+        let folder = whisperBase.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(variant)", isDirectory: true)
+        let parts = ["MelSpectrogram.mlmodelc", "AudioEncoder.mlmodelc", "TextDecoder.mlmodelc"]
+        let complete = parts.allSatisfy { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        return complete ? folder : nil
+    }
+
+    var whisperReady: Bool { Self.whisperFolder(whisperModel) != nil }
+
+    /// The selected engine can dictate right now (its model is on the device; Apple loads its own).
+    var engineReady: Bool {
+        switch engine {
+        case .parakeet: return ParakeetCache.isDownloaded(parakeetModel)
+        case .whisper: return whisperReady
+        case .apple: return true
+        }
+    }
+
+    /// "Parakeet Ultra", "Whisper Large v3 Turbo", "Apple" – what dictates
+    var engineLabel: String {
+        switch engine {
+        case .parakeet: return Self.parakeetModels.first { $0.id == parakeetModel }?.name ?? "Parakeet"
+        case .whisper: return "Whisper " + (Self.whisperModels.first { $0.id == whisperModel }?.name ?? "")
+        case .apple: return "Apple"
+        }
+    }
 
     var locale: Locale {
         language == "auto" ? Locale.current : Locale(identifier: language)

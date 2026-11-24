@@ -177,49 +177,40 @@ struct SettingsView: View {
 /// Local speech-to-text: engines, models, vocabulary, fine tuning – everything on-device.
 struct SpeechSettingsView: View {
     @Environment(DictationSettings.self) private var settings
-    @State private var dictator = Dictator()
-    @State private var models = ModelManager()
+    /// the app's one microphone – the test uses the same dictation as the chats
+    @Environment(Dictator.self) private var dictator
+    private var models: ModelManager { .shared }
     @State private var testText = ""
+    @State private var testing: DictationRequest?
 
     var body: some View {
         @Bindable var settings = settings
         List {
             Group {
             Section {
-                HStack(spacing: Gap.m) {
-                    Text(testDisplay)
-                        .font(Typo.md)
-                        .foregroundStyle(testText.isEmpty && !dictator.isRecording ? Theme.muted : Theme.fg)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                    Button {
-                        Task {
-                            if dictator.isRecording {
-                                testText = await dictator.stop(settings: settings)
-                            } else {
-                                testText = ""
-                                await dictator.start(settings: settings)
-                            }
+                readiness
+                Button {
+                    testing = DictationRequest(before: "", after: "")
+                } label: {
+                    HStack(spacing: 14) {
+                        IconView(.mic, size: 16).foregroundStyle(Theme.onAccent)
+                            .frame(width: 36, height: 36)
+                            .background(Theme.accent, in: Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Diktat ausprobieren").foregroundStyle(Theme.fg)
+                            Text(testText.isEmpty ? String(localized: "Sprich ein paar Sätze – so klingt es im Chat.") : testText)
+                                .font(Typo.sm).foregroundStyle(testText.isEmpty ? Theme.muted : Theme.fg)
+                                .lineLimit(4)
                         }
-                    } label: {
-                        Group {
-                            if dictator.state == .transcribing { Spinner(color: Theme.onAccent, size: 16) }
-                            else { IconView(dictator.isRecording ? .stop : .mic, size: 16) }
-                        }
-                        .foregroundStyle(Theme.onAccent)
-                        .frame(width: Metric.touch, height: Metric.touch)
-                        .background(dictator.isRecording ? Theme.red : Theme.accent, in: Circle())
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(dictator.state == .transcribing)
-                    .accessibilityLabel(dictator.isRecording ? "Aufnahme beenden" : "Testtranskription aufnehmen")
                 }
-                if case .failed(let message) = dictator.state {
-                    Label(message, icon: .alert).font(Typo.sm).foregroundStyle(Theme.warn)
-                }
+                .disabled(!settings.engineReady || dictator.isBusy)
             } header: {
-                SectionHeader(title: String(localized: "Transkription testen"))
+                SectionHeader(title: String(localized: "Diktat"))
             }
+
+            if !downloadedKeys.isEmpty { onDeviceSection }
 
             Section {
                 engineRow(.parakeet, note: String(localized: "NVIDIA, 25 Sprachen, Deutsch + Englisch im selben Satz"), icon: "bird")
@@ -253,7 +244,7 @@ struct SpeechSettingsView: View {
                 (Text(settings.engine == .parakeet
                      ? String(localized: "Parakeet erkennt die Sprache selbst – auch gemischt Deutsch/Englisch.")
                      : String(localized: "Für Deutsch mit englischen Fachbegriffen „Deutsch“ wählen – das ist genauer als „Automatisch“."))
-                + Text(" ") + Text("Mikrofon antippen startet und beendet, gedrückt halten diktiert bis zum Loslassen."))
+                + Text(" ") + Text("Mikrofon antippen öffnet das Diktat: der große Knopf pausiert, ✓ beendet – danach kannst du den Text noch bearbeiten und senden."))
                     .font(Typo.sm).foregroundStyle(Theme.dim)
             }
 
@@ -339,6 +330,113 @@ struct SpeechSettingsView: View {
         .navigationTitle("Sprache")
         .navigationBarTitleDisplayMode(.inline)
         .id(models.revision)
+        .onAppear { models.measure(downloadedKeys) }
+        .fullScreenCover(item: $testing) { _ in
+            DictationOverlay(before: "", after: "", context: DictationContext(), owner: "settings-test",
+                             mode: .test(done: { testText = $0 }))
+        }
+    }
+
+    // MARK: Status and models on this device
+
+    /// every model key that is completely on the device (Parakeet: `parakeet-<id>`, Whisper: the variant)
+    private var downloadedKeys: [String] {
+        DictationSettings.parakeetModels.map { "parakeet-\($0.id)" }.filter { models.isDownloaded($0) }
+            + DictationSettings.whisperModels.map(\.id).filter { models.isDownloaded($0) }
+    }
+
+    /// what dictates now – or what's missing before it can, with the download right here
+    @ViewBuilder private var readiness: some View {
+        if settings.engineReady {
+            Label {
+                Text("Bereit: \(settings.engineLabel)").foregroundStyle(Theme.fg)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.green)
+            }
+        } else if let missing = missingModel {
+            let progress = models.progress[missing.key]
+            VStack(alignment: .leading, spacing: Gap.s) {
+                Label {
+                    Text("\(settings.engineLabel) ist noch nicht auf diesem iPhone").foregroundStyle(Theme.fg)
+                } icon: {
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.warn)
+                }
+                if let progress {
+                    HStack(spacing: Gap.s) {
+                        ProgressView(value: progress).tint(Theme.accent)
+                        Text(verbatim: "\(Int(progress * 100)) %").font(Typo.monoSmall).foregroundStyle(Theme.muted)
+                    }
+                    Text("Der Bildschirm bleibt an, bis der Download fertig ist.").font(Typo.sm).foregroundStyle(Theme.muted)
+                } else {
+                    if let error = models.errors[missing.key] {
+                        Text(error).font(Typo.sm).foregroundStyle(Theme.warn)
+                    }
+                    Button("Jetzt laden (\(missing.model.size))", action: missing.download)
+                        .buttonStyle(.hollr(.primary, small: true))
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var missingModel: (key: String, model: DictationSettings.Model, download: () -> Void)? {
+        let settings = settings
+        switch settings.engine {
+        case .parakeet:
+            guard let m = DictationSettings.parakeetModels.first(where: { $0.id == settings.parakeetModel }) else { return nil }
+            return ("parakeet-\(m.id)", m, { models.downloadParakeet(m.id, settings: settings) })
+        case .whisper:
+            guard let m = DictationSettings.whisperModels.first(where: { $0.id == settings.whisperModel }) else { return nil }
+            return (m.id, m, { models.downloadWhisper(m.id, settings: settings) })
+        case .apple:
+            return nil
+        }
+    }
+
+    /// everything downloaded, with its real size; the one in use is marked, the rest can go
+    private var onDeviceSection: some View {
+        let keys = downloadedKeys
+        let total = keys.compactMap { models.sizes[$0] }.reduce(0, +)
+        return Section {
+            ForEach(keys, id: \.self) { key in
+                HStack(spacing: 14) {
+                    Image(systemName: key.hasPrefix("parakeet-") ? "bird" : "waveform.badge.magnifyingglass")
+                        .frame(width: 28).foregroundStyle(Theme.muted)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(displayName(key))
+                        Text(models.sizes[key].map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "…")
+                            .font(Typo.sm).foregroundStyle(Theme.muted)
+                    }
+                    Spacer()
+                    if isActive(key) {
+                        Text("In Verwendung").font(Typo.sm.weight(.semibold)).foregroundStyle(Theme.green)
+                    } else {
+                        Button(role: .destructive) { models.delete(key) } label: { IconView(.trash, size: 15) }
+                            .buttonStyle(.icon())
+                            .accessibilityLabel("\(displayName(key)) löschen")
+                    }
+                }
+            }
+        } header: {
+            SectionHeader(title: String(localized: "Auf diesem iPhone"),
+                          trailing: total > 0 ? ByteCountFormatter.string(fromByteCount: total, countStyle: .file) : nil)
+        }
+    }
+
+    private func displayName(_ key: String) -> String {
+        if key.hasPrefix("parakeet-") {
+            let id = String(key.dropFirst("parakeet-".count))
+            return DictationSettings.parakeetModels.first { $0.id == id }?.name ?? key
+        }
+        return "Whisper " + (DictationSettings.whisperModels.first { $0.id == key }?.name ?? key)
+    }
+
+    private func isActive(_ key: String) -> Bool {
+        switch settings.engine {
+        case .parakeet: return key == "parakeet-\(settings.parakeetModel)"
+        case .whisper: return key == settings.whisperModel
+        case .apple: return false
+        }
     }
 
     private var engineFooter: String {
@@ -355,11 +453,10 @@ struct SpeechSettingsView: View {
         @Bindable var settings = settings
         return Section {
             ForEach(DictationSettings.parakeetModels) { model in
-                modelRow(model, key: "parakeet-\(model.id)", downloaded: ParakeetCache.isDownloaded(model.id),
-                         selected: settings.parakeetModel == model.id,
+                let key = "parakeet-\(model.id)"
+                modelRow(model, key: key, selected: settings.parakeetModel == model.id,
                          select: { settings.parakeetModel = model.id },
-                         download: { models.downloadParakeet(model.id, boost: settings.parakeetBoost) },
-                         delete: { models.deleteParakeet(model.id) })
+                         download: { models.downloadParakeet(model.id, settings: settings) })
             }
             Toggle(isOn: $settings.parakeetBoost) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -378,11 +475,9 @@ struct SpeechSettingsView: View {
         return Group {
             Section {
                 ForEach(DictationSettings.whisperModels) { model in
-                    modelRow(model, key: model.id, downloaded: settings.downloaded[model.id] != nil,
-                             selected: settings.whisperModel == model.id,
+                    modelRow(model, key: model.id, selected: settings.whisperModel == model.id,
                              select: { settings.whisperModel = model.id },
-                             download: { models.downloadWhisper(model.id, settings: settings) },
-                             delete: { models.deleteWhisper(model.id, settings: settings) })
+                             download: { models.downloadWhisper(model.id, settings: settings) })
                 }
             } header: {
                 SectionHeader(title: String(localized: "Whisper-Modelle (mehrsprachig)"))
@@ -414,13 +509,6 @@ struct SpeechSettingsView: View {
         }
     }
 
-    private var testDisplay: String {
-        if dictator.isRecording { return dictator.text.isEmpty ? String(localized: "Ich höre zu … (zum Beenden tippen)") : dictator.text }
-        if dictator.state == .transcribing { return "Transkribiere …" }
-        if case .preparing(let m) = dictator.state { return m }
-        return testText.isEmpty ? String(localized: "Tippen, um eine Testtranskription aufzunehmen") : testText
-    }
-
     private func engineRow(_ engine: DictationSettings.Engine, note: String, icon: String) -> some View {
         Button { settings.engine = engine } label: {
             HStack(spacing: 14) {
@@ -439,34 +527,49 @@ struct SpeechSettingsView: View {
         .accessibilityAddTraits(settings.engine == engine ? .isSelected : [])
     }
 
-    private func modelRow(_ model: DictationSettings.Model, key: String, downloaded: Bool, selected: Bool,
-                          select: @escaping () -> Void, download: @escaping () -> Void,
-                          delete: @escaping () -> Void) -> some View {
+    /// One model: loaded (tap = use it), loading (bar and percent), or not here (download with its size).
+    private func modelRow(_ model: DictationSettings.Model, key: String, selected: Bool,
+                          select: @escaping () -> Void, download: @escaping () -> Void) -> some View {
         let progress = models.progress[key]
-        return HStack(spacing: 14) {
-            Image(.cpu).frame(width: 28).foregroundStyle(Theme.muted)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.name)
-                Text("\(model.size) · \(model.note)").font(Typo.sm).foregroundStyle(Theme.muted)
-                if let error = models.errors[key] { Text(error).font(Typo.xs).foregroundStyle(Theme.warn) }
-            }
-            Spacer()
-            if let progress {
-                ProgressMeter(value: progress, width: 60, color: Theme.accent)
-            } else if downloaded {
-                if selected {
-                    Image(.check).foregroundStyle(Theme.accent)
-                } else {
-                    Button("Wählen", action: select).buttonStyle(.hollr(small: true))
+        let downloaded = models.isDownloaded(key)
+        return Button {
+            if downloaded { select() } else if progress == nil { download() }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: selected && downloaded ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(selected && downloaded ? Theme.accent : Theme.dim)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.name).foregroundStyle(Theme.fg)
+                    Text(model.note).font(Typo.sm).foregroundStyle(Theme.muted)
+                    if let progress {
+                        HStack(spacing: Gap.s) {
+                            ProgressView(value: progress).tint(Theme.accent)
+                            Text(verbatim: "\(Int(progress * 100)) %").font(Typo.monoSmall).foregroundStyle(Theme.muted)
+                        }
+                    } else if let error = models.errors[key] {
+                        Text(error).font(Typo.xs).foregroundStyle(Theme.warn)
+                    }
                 }
-            } else {
-                Button(action: download) { Image(systemName: "arrow.down.circle") }
-                    .buttonStyle(.icon())
-                    .accessibilityLabel("Laden")
+                Spacer(minLength: Gap.s)
+                if progress != nil {
+                    EmptyView()
+                } else if downloaded {
+                    Text("Geladen").font(Typo.sm.weight(.semibold)).foregroundStyle(Theme.green)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle")
+                        Text(model.size)
+                    }
+                    .font(Typo.sm).foregroundStyle(Theme.accent)
+                }
             }
         }
+        .disabled(progress != nil)
+        .accessibilityHint(downloaded ? String(localized: "Verwenden") : String(localized: "Laden"))
         .swipeActions {
-            if downloaded { Button("Löschen", role: .destructive, action: delete) }
+            if downloaded && !selected { Button("Löschen", role: .destructive) { models.delete(key) } }
         }
     }
 }

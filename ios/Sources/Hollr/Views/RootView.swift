@@ -25,6 +25,9 @@ struct RootView: View {
     @State private var shared: SharedItem?
     @State private var tour: [Tip]?
     @State private var sheetDetent: PresentationDetent = .fraction(0.82)
+    #if DEBUG
+    @State private var debugDictation: DictationRequest?
+    #endif
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var wide: Bool { sizeClass == .regular }
 
@@ -205,6 +208,12 @@ struct RootView: View {
             PairView(initialLink: request.link) { pairing = nil }
                 .environment(store)
         }
+        #if DEBUG
+        // screenshots of the dictation screen (`-hollrSheet dictation`)
+        .fullScreenCover(item: $debugDictation) { _ in
+            DictationOverlay(before: "", after: "", context: DictationContext(), owner: "debug", mode: .test(done: { _ in }))
+        }
+        #endif
         .task(id: scenePhase) {
             // keep herdr state fresh while the app is in the foreground: the live feed pushes
             // changes; polling stays as a slow safety net (fast only while a feed is down)
@@ -287,6 +296,7 @@ struct RootView: View {
             }
             #endif
             if d.string(forKey: "hollrSheet") == "pair" { pairing = PairingRequest() }
+            if d.string(forKey: "hollrSheet") == "dictation" { debugDictation = DictationRequest(before: "", after: "") }
             if let clip = d.string(forKey: "hollrDictate") {
                 let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(clip)
                 let settings = DictationSettings()
@@ -304,9 +314,8 @@ struct RootView: View {
                 if settings.engine == .whisper, !settings.whisperReady {
                     HollrLog.info("dictate-test: downloading \(settings.whisperModel)")
                     do {
-                        let folder = try await WhisperKit.download(variant: settings.whisperModel, downloadBase: ModelManager.whisperBase)
-                        settings.downloaded[settings.whisperModel] = folder.path
-                        HollrLog.info("dictate-test: model at \(folder.path)")
+                        let folder = try await WhisperKit.download(variant: settings.whisperModel, downloadBase: DictationSettings.whisperBase)
+                        HollrLog.info("dictate-test: model at \(folder.path), complete: \(settings.whisperReady)")
                     } catch {
                         HollrLog.error("dictate-test: download failed \(error)")
                     }

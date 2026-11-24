@@ -39,9 +39,11 @@ final class Dictator {
     private var visible: [String: Int] = [:]
 
     var isRecording: Bool { state == .recording }
-    /// recording, but the microphone is paused (the big button in the composer); what was said so far is
+    /// recording, but the microphone is paused (the overlay's big button); what was said so far is
     /// transcribed meanwhile
     private(set) var paused = false
+    /// seconds of audio taken so far (pauses don't count) – the overlay's clock, read on its own timer
+    var recordedSeconds: Double { Double(collector.count) / Double(AudioCollector.rate) }
     var isBusy: Bool {
         switch state {
         case .preparing, .recording, .transcribing: return true
@@ -98,13 +100,13 @@ final class Dictator {
             switch active {
             case .parakeet:
                 guard ParakeetCache.isDownloaded(settings.parakeetModel) else {
-                    throw DictationError.message(String(localized: "Parakeet-Modell noch nicht geladen (Einstellungen › Sprache)."))
+                    throw DictationError.message(String(localized: "\(settings.engineLabel) ist auf diesem Gerät nicht geladen – Einstellungen › Sprache."))
                 }
                 let model = settings.parakeetModel, boost = settings.useVocabulary && settings.parakeetBoost
                 Task.detached { try? await ParakeetCache.shared.prepare(model: model, boost: boost, terms: terms) }
             case .whisper:
-                guard let folder = settings.downloaded[settings.whisperModel] else {
-                    throw DictationError.message(String(localized: "Whisper-Modell noch nicht geladen (Einstellungen › Sprache)."))
+                guard let folder = DictationSettings.whisperFolder(settings.whisperModel)?.path else {
+                    throw DictationError.message(String(localized: "\(settings.engineLabel) ist auf diesem Gerät nicht geladen – Einstellungen › Sprache."))
                 }
                 let model = settings.whisperModel
                 Task.detached { _ = try? await WhisperCache.shared.kit(model: model, folder: folder) }
@@ -411,7 +413,9 @@ final class Dictator {
                 speech, model: settings.parakeetModel, boost: settings.useVocabulary && settings.parakeetBoost, terms: terms
             )
         case .whisper:
-            guard let folder = settings.downloaded[settings.whisperModel] else { throw DictationError.message(String(localized: "Kein Whisper-Modell")) }
+            guard let folder = DictationSettings.whisperFolder(settings.whisperModel)?.path else {
+                throw DictationError.message(String(localized: "\(settings.engineLabel) ist auf diesem Gerät nicht geladen – Einstellungen › Sprache."))
+            }
             text = try await WhisperCache.shared.transcribe(
                 speech, model: settings.whisperModel, folder: folder, language: settings.language,
                 vocabulary: settings.useVocabulary ? terms.map(\.text) : [], context: committed,
@@ -464,7 +468,7 @@ final class Dictator {
                 try? await ParakeetCache.shared.prepare(model: model, boost: false, terms: [])
             }
         case .whisper:
-            if let folder = settings.downloaded[settings.whisperModel] {
+            if let folder = DictationSettings.whisperFolder(settings.whisperModel)?.path {
                 let model = settings.whisperModel
                 Task.detached(priority: .utility) {
                     await ParakeetCache.shared.unload()
@@ -788,61 +792,117 @@ final class LegacyAppleEngine: @unchecked Sendable {
 
 // MARK: - Model downloads
 
+/// Downloads and deletes the speech models. One for the whole app: a download keeps running (and showing its
+/// progress) when you leave the settings and come back – before, every visit started from zero and a second tap
+/// started a second download into the same folder.
 @MainActor
 @Observable
 final class ModelManager {
+    static let shared = ModelManager()
+
     private(set) var progress: [String: Double] = [:]
     private(set) var errors: [String: String] = [:]
-    /// bumps when something was downloaded/deleted so views re-check `isDownloaded`
+    /// bumps when something was downloaded/deleted so views re-check what's on disk
     private(set) var revision = 0
+    /// bytes on disk per model key (`parakeet-<id>`, Whisper variant), measured off the main thread
+    private(set) var sizes: [String: Int64] = [:]
 
-    static var whisperBase: URL {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("whisper", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
+    private init() {}
+
+    func isDownloaded(_ key: String) -> Bool { folder(key) != nil }
+
+    /// the model's folder when it is completely on the device
+    nonisolated func folder(_ key: String) -> URL? {
+        if key.hasPrefix("parakeet-") {
+            let model = String(key.dropFirst("parakeet-".count))
+            guard ParakeetCache.isDownloaded(model) else { return nil }
+            return AsrModels.defaultCacheDirectory(for: ParakeetCache.version(model))
+        }
+        return DictationSettings.whisperFolder(key)
     }
 
     func downloadWhisper(_ variant: String, settings: DictationSettings) {
         run(variant) { report in
-            let folder = try await WhisperKit.download(variant: variant, downloadBase: Self.whisperBase) { p in
+            _ = try await WhisperKit.download(variant: variant, downloadBase: DictationSettings.whisperBase) { p in
                 report(p.fractionCompleted)
             }
-            await MainActor.run { settings.downloaded[variant] = folder.path }
+            guard DictationSettings.whisperFolder(variant) != nil else {
+                throw DictationError.message(String(localized: "Download unvollständig – bitte noch einmal laden."))
+            }
+        } done: {
+            // the first model you load is the one you want: no extra „Wählen“
+            if !settings.whisperReady { settings.whisperModel = variant }
         }
     }
 
-    func downloadParakeet(_ model: String, boost: Bool) {
+    func downloadParakeet(_ model: String, settings: DictationSettings) {
+        let boost = settings.parakeetBoost
         run("parakeet-\(model)") { report in
             try await ParakeetCache.shared.download(model: model, boost: boost, progress: report)
+            guard ParakeetCache.isDownloaded(model) else {
+                throw DictationError.message(String(localized: "Download unvollständig – bitte noch einmal laden."))
+            }
+        } done: {
+            if !ParakeetCache.isDownloaded(settings.parakeetModel) { settings.parakeetModel = model }
         }
     }
 
-    func deleteWhisper(_ variant: String, settings: DictationSettings) {
-        if let path = settings.downloaded[variant] { try? FileManager.default.removeItem(atPath: path) }
-        settings.downloaded[variant] = nil
-        Task { await WhisperCache.shared.unload() }
+    func delete(_ key: String) {
+        if let url = folder(key) { try? FileManager.default.removeItem(at: url) }
+        Task {
+            await WhisperCache.shared.unload()
+            await ParakeetCache.shared.unload()
+        }
+        sizes[key] = nil
         revision += 1
     }
 
-    func deleteParakeet(_ model: String) {
-        try? FileManager.default.removeItem(at: AsrModels.defaultCacheDirectory(for: ParakeetCache.version(model)))
-        Task { await ParakeetCache.shared.unload() }
-        revision += 1
+    /// Measures the downloaded models' sizes (folder walk, off the main thread).
+    func measure(_ keys: [String]) {
+        Task.detached(priority: .utility) {
+            var found: [String: Int64] = [:]
+            for key in keys {
+                guard let url = self.folder(key) else { continue }
+                found[key] = Self.bytes(in: url)
+            }
+            await MainActor.run { self.sizes.merge(found) { _, new in new } }
+        }
     }
 
-    private func run(_ key: String, _ work: @escaping (@escaping @Sendable (Double) -> Void) async throws -> Void) {
+    nonisolated private static func bytes(in url: URL) -> Int64 {
+        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+        guard let walk = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys) else { return 0 }
+        var total: Int64 = 0
+        for case let file as URL in walk {
+            let v = try? file.resourceValues(forKeys: Set(keys))
+            total += Int64(v?.totalFileAllocatedSize ?? v?.fileAllocatedSize ?? 0)
+        }
+        return total
+    }
+
+    private func run(_ key: String, _ work: @escaping (@escaping @Sendable (Double) -> Void) async throws -> Void,
+                     done: @escaping () -> Void) {
         guard progress[key] == nil else { return }
         progress[key] = 0
         errors[key] = nil
+        // auto-lock would suspend the app and break the download: the screen stays on while one runs
+        UIApplication.shared.isIdleTimerDisabled = true
         Task {
             do {
-                try await work { value in Task { @MainActor in self.progress[key] = value } }
+                try await work { value in
+                    Task { @MainActor in
+                        // a late update after the end must not bring the bar back
+                        if let now = self.progress[key] { self.progress[key] = max(now, value) }
+                    }
+                }
+                done()
+                measure([key])
             } catch {
                 errors[key] = error.localizedDescription
                 HollrLog.error("download \(key): \(error)")
             }
             progress[key] = nil
+            if progress.isEmpty { UIApplication.shared.isIdleTimerDisabled = false }
             revision += 1
         }
     }

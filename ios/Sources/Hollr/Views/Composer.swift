@@ -16,6 +16,8 @@ struct Composer: View {
     @Environment(DraftStore.self) private var drafts
     /// app-wide: one microphone; survives zen mode and layout changes
     @Environment(Dictator.self) private var dictator
+    /// the open dictation screen: the typed text around the cursor when the mic was tapped
+    @State private var dictation: DictationRequest?
     @FocusState private var focused: Bool
 
     private var ref: AgentRef { session.ref }
@@ -44,15 +46,6 @@ struct Composer: View {
                     .padding(.horizontal, -2)
             }
             if session.isLive { liveStrip }
-            if mine, case .failed(let message) = dictator.state {
-                Text(message).font(Typo.sm).foregroundStyle(Theme.warn)
-            }
-            if mine, case .preparing(let message) = dictator.state, !message.isEmpty {
-                Label(message, systemImage: "arrow.down.circle").font(Typo.sm).foregroundStyle(Theme.muted)
-            }
-            if mine, let notice = dictator.notice, !dictating {
-                Text(notice).font(Typo.sm).foregroundStyle(Theme.muted)
-            }
             if focused, !dictating, let mention = Mention.find(in: draft.text, cursor: draft.cursor) {
                 MentionSuggestions(ref: ref, query: mention.query) { path in
                     if let r = Mention.insert(path, into: draft.text, cursor: draft.cursor) {
@@ -64,21 +57,17 @@ struct Composer: View {
             if focused, !dictating, !isShell, Mention.find(in: draft.text, cursor: draft.cursor) == nil {
                 SnippetChips { insertSnippet($0) }
             }
-            if dictationOpen {
-                dictationPanel
-            } else {
-                ComposerField(placeholder: placeholder, text: textBinding, cursor: cursorBinding)
-                    // proportional: easier to read and type than terminal type (code stays mono in the chat)
-                    .font(.body)
-                    .lineLimit(1...6)
-                    .focused($focused)
-                    .disabled(!hasAgent)
-                    .foregroundStyle(Theme.fg)
-                    .submitLabel(.send)
-                    .onSubmit(send)
-                    .padding(.horizontal, 2)
-                actions
-            }
+            ComposerField(placeholder: placeholder, text: textBinding, cursor: cursorBinding)
+                // proportional: easier to read and type than terminal type (code stays mono in the chat)
+                .font(.body)
+                .lineLimit(1...6)
+                .focused($focused)
+                .disabled(!hasAgent)
+                .foregroundStyle(Theme.fg)
+                .submitLabel(.send)
+                .onSubmit(send)
+                .padding(.horizontal, 2)
+            actions
             if let modelHint { modelLine(modelHint) }
         }
         .composerStyle(focused: focused)
@@ -103,6 +92,24 @@ struct Composer: View {
             // leaving the chat ends it and keeps the text (Dictator.composerDisappeared)
             dictator.composerDisappeared(draft.key)
         }
+        .fullScreenCover(item: $dictation) { request in
+            let draft = draft
+            let session = session
+            DictationOverlay(
+                before: request.before, after: request.after,
+                context: DictationContext(session: session), owner: draft.key,
+                mode: .chat(
+                    send: { text in
+                        session.sendText(text)
+                        draft.clear()
+                    },
+                    keep: { text in
+                        draft.text = text
+                        draft.cursor = text.count
+                    }
+                )
+            )
+        }
     }
 
     private var placeholder: String {
@@ -110,107 +117,11 @@ struct Composer: View {
         return session.isLive ? String(localized: "Oder tippen …") : String(localized: "Nachricht an \(ref.pane.agentName) …")
     }
 
-    /// the running dictation belongs to this chat
-    private var mine: Bool { dictator.owner == draft.key || (dictator.owner == nil && !dictator.isBusy) }
     private var dictating: Bool { dictator.owner == draft.key && (dictator.isRecording || dictator.state == .transcribing) }
-    private var recordingHere: Bool { dictator.owner == draft.key && dictator.isRecording }
-    /// this chat's dictation is starting, running or being transcribed: the panel replaces field and buttons
-    private var dictationOpen: Bool { dictator.owner == draft.key && dictator.isBusy }
 
     private func syncDictating() {
         session.dictating = dictating
         if !dictating { session.nudge() } // catch up right after dictation
-    }
-    private var dictationPreview: String {
-        [draft.beforeDictation, dictator.text, draft.afterDictation].filter { !$0.isEmpty }.joined(separator: " ")
-    }
-
-    // MARK: Dictation panel – tap the mic once, then: big button pauses/resumes, ↑ sends, ✕ throws away
-
-    private var dictationPanel: some View {
-        VStack(spacing: Gap.m) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(dictationPreview.isEmpty ? String(localized: "Sprich einfach los …") : dictationPreview)
-                        .font(.body)
-                        .foregroundStyle(dictator.text.isEmpty ? Theme.muted : Theme.fg)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 2)
-                    Color.clear.frame(height: 1).id("end")
-                }
-                .frame(minHeight: 44, maxHeight: 170)
-                .fixedSize(horizontal: false, vertical: true)
-                .onChange(of: dictator.text) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
-            }
-            // the big button sits in the middle, the rest at the edges
-            ZStack {
-                bigDictationButton
-                HStack(spacing: Gap.xs) {
-                    Button {
-                        Haptics.tap(.light)
-                        draft.beforeDictation = ""
-                        draft.afterDictation = ""
-                        dictator.cancel()
-                    } label: { IconView(.x, size: 16) }
-                        .buttonStyle(.icon())
-                        .accessibilityLabel("Diktat verwerfen")
-                    Button {
-                        Haptics.tap(.light)
-                        Task { await dictator.finish() }
-                    } label: { Text("Bearbeiten").font(Typo.sm) }
-                        .buttonStyle(.hollr(.ghost, small: true))
-                        .disabled(!recordingHere)
-                        .accessibilityHint("Beendet das Diktat, der Text kommt ins Eingabefeld")
-                    Spacer(minLength: 0)
-                    // the whole recording is transcribed on send – even before any text shows
-                    Button {
-                        Haptics.tap(.medium)
-                        draft.sendAfterDictation = true
-                        Task { await dictator.finish() }
-                    } label: {
-                        SendButtonLabel(ready: recordingHere)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!recordingHere)
-                    .accessibilityLabel("Diktat senden")
-                }
-            }
-            Text(dictationHint).font(Typo.sm).foregroundStyle(Theme.muted)
-        }
-        .padding(.top, 2)
-    }
-
-    private var dictationHint: String {
-        if case .preparing(let message) = dictator.state { return message.isEmpty ? String(localized: "Mikrofon startet …") : message }
-        if dictator.state == .transcribing { return String(localized: "Transkribiere …") }
-        return dictator.paused ? String(localized: "Pausiert – tippen zum Weitersprechen") : String(localized: "Hört zu – tippen zum Pausieren")
-    }
-
-    /// big round button in the middle: pause while listening, resume while paused, spinner while busy
-    private var bigDictationButton: some View {
-        Button {
-            Haptics.tap(.medium)
-            dictator.paused ? dictator.resume() : dictator.pause()
-        } label: {
-            ZStack {
-                if recordingHere {
-                    Circle().fill(dictator.paused ? Theme.accent : Theme.red)
-                        .scaleEffect(dictator.paused ? 1 : 1 + CGFloat(min(dictator.level * 6, 0.18)))
-                    Image(systemName: dictator.paused ? "mic.fill" : "pause.fill")
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(Theme.onAccent)
-                } else {
-                    Circle().fill(Theme.wash(0.1))
-                    Spinner(color: Theme.muted, size: 22)
-                }
-            }
-            .frame(width: 76, height: 76)
-            .animation(.easeOut(duration: 0.1), value: dictator.level)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!recordingHere)
-        .accessibilityLabel(dictator.paused ? "Weitersprechen" : "Pausieren")
     }
 
     // MARK: Model line (composer__hint)
@@ -308,51 +219,16 @@ struct Composer: View {
         hasAgent && !session.isLive && !dictator.isBusy
     }
 
+    /// Opens the dictation screen; what is typed around the cursor stays around what you say.
     private func startDictation() {
-        guard micEnabled, !dictator.isBusy else { return }
-        // split the text at the cursor: dictation goes in between
-        let draft = draft
+        guard micEnabled else { return }
         let chars = Array(draft.text)
         let at = min(max(draft.cursor ?? chars.count, 0), chars.count)
-        draft.beforeDictation = String(chars[..<at]).trimmingCharacters(in: .whitespaces)
-        draft.afterDictation = String(chars[at...]).trimmingCharacters(in: .whitespaces)
         focused = false
-        Haptics.tap(.medium)
-        let context = DictationContext(session: session)
-        let settings = settings
-        let session = session
-        Task {
-            await dictator.start(settings: settings, context: context, owner: draft.key) { result in
-                Composer.insert(result, into: draft, settings: settings, session: session)
-            }
-        }
-    }
-
-    /// Puts the dictated text at the cursor of the chat's draft; "… senden" (or auto-send) sends it.
-    /// Static: the composer that started the dictation may be gone (zen mode, other chat).
-    static func insert(_ result: String, into draft: Draft, settings: DictationSettings, session: AgentSession) {
-        var spoken = result
-        var sendNow = settings.autoSend || draft.sendAfterDictation
-        draft.sendAfterDictation = false
-        if settings.voiceSend {
-            let (rest, said) = DictationText.voiceSend(spoken)
-            if said { spoken = rest; sendNow = true }
-        }
-        let head = [draft.beforeDictation, spoken].filter { !$0.isEmpty }.joined(separator: " ")
-        draft.text = [head, draft.afterDictation].filter { !$0.isEmpty }.joined(separator: " ")
-        draft.cursor = head.count
-        draft.beforeDictation = ""
-        draft.afterDictation = ""
-        if spoken.isEmpty {
-            Haptics.notify(.warning)
-        } else {
-            Haptics.notify(.success)
-            let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if sendNow, !text.isEmpty {
-                session.sendText(text)
-                draft.clear()
-            }
-        }
+        dictation = DictationRequest(
+            before: String(chars[..<at]).trimmingCharacters(in: .whitespaces),
+            after: String(chars[at...]).trimmingCharacters(in: .whitespaces)
+        )
     }
 
     private var liveButton: some View {

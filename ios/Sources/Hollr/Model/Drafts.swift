@@ -10,11 +10,6 @@ final class Draft {
     var text: String { didSet { if text != oldValue { store?.changed(self) } } }
     /// cursor position in `text` (characters, nil = end)
     var cursor: Int?
-    /// dictation running for this chat: the text around the cursor when it started
-    var beforeDictation = ""
-    var afterDictation = ""
-    /// the dictation was ended with „Senden“: its text goes out right away
-    var sendAfterDictation = false
     var updatedAt: Date
     fileprivate weak var store: DraftStore?
 
@@ -28,9 +23,6 @@ final class Draft {
     func clear() {
         text = ""
         cursor = nil
-        beforeDictation = ""
-        afterDictation = ""
-        sendAfterDictation = false
     }
 }
 

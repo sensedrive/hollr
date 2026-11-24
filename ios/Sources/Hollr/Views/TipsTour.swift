@@ -35,7 +35,7 @@ enum Tips {
         Tip(id: "setup", icon: "checklist", title: String(localized: "Einrichtung prüfen"),
             text: String(localized: "Einstellungen › Server & Geräte › Server: was noch fehlt, mit „Installieren“, „Neu starten“ oder „Push einrichten“."), since: 40),
         Tip(id: "dictate", icon: "mic", title: String(localized: "Diktieren"),
-            text: String(localized: "Mikrofon antippen startet und beendet – oder gedrückt halten und sprechen. „… senden“ am Ende schickt ab."), since: 35),
+            text: String(localized: "Mikrofon antippen öffnet das Diktat – der große Knopf pausiert, ✓ beendet, danach bearbeiten und senden. „… senden“ am Ende schickt sofort ab."), since: 71),
         Tip(id: "zen", icon: "arrow.up.left.and.arrow.down.right", title: String(localized: "Zen-Modus"),
             text: String(localized: "Nur Verlauf und Eingabe – dein Entwurf bleibt beim Umschalten erhalten."), since: 36),
         Tip(id: "mac", icon: "rectangle.split.2x1", title: String(localized: "Auf dem Mac"),
