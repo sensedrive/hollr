@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 65,
+    version: "0.53.2",
+    date: "24.11.2026",
+    items: [
+      { icon: "✓", text: "Behoben: Auch omp-Sitzungen, die schon vor der herdr-Anbindung liefen, zeigen jetzt, dass sie arbeiten – Hollr liest es aus ihrem Fenstertitel." },
+    ],
+  },
+  {
     build: 64,
     version: "0.53.1",
     date: "24.11.2026",

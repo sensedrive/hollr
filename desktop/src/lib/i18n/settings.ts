@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Behoben: Auch omp-Sitzungen, die schon vor der herdr-Anbindung liefen, zeigen jetzt, dass sie arbeiten – Hollr liest es aus ihrem Fenstertitel.":
+    "Fixed: omp sessions that were already running before herdr's hookup now show that they're working too – Hollr reads it from their window title.",
   "Behoben: Sitzungen auf Servern standen immer auf „bereit“, auch während sie arbeiteten – Hollr richtet beim Aktualisieren jetzt die herdr-Anbindung für omp, Claude Code und Codex ein.":
     "Fixed: sessions on servers always showed “ready”, even while working – updating Hollr now sets up herdr's hookup for omp, Claude Code and Codex.",
   "Sandcastle: Läufe als Leiste unter dem Ticket-Board – je Rechner die Tickets in Lauf-Reihenfolge, Karten hineinziehen, umsortieren, „Neuer Lauf“ mit Rechner, Ziel-Branch und Tickets, „Lauf stoppen“.":

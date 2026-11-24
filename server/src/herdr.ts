@@ -126,12 +126,23 @@ function terminalTitle(raw: RawAgent): string {
     .trim();
 }
 
+/**
+ * omp puts a braille spinner after its „π“ in the terminal title while it works („π ⠸ title“; „π > title“ when
+ * idle). herdr knows the state only through its omp integration; a session started before it was installed
+ * (or on a machine without it) reads as idle all the time – the title tells the truth then.
+ */
+function statusOf(raw: RawAgent): string {
+  const status = raw.agent_status ?? "unknown";
+  if (status !== "idle" && status !== "unknown") return status;
+  return raw.agent === "omp" && /^π\s*[\u2801-\u28ff]/u.test(raw.terminal_title_stripped ?? "") ? "working" : status;
+}
+
 export function toAgent(raw: RawAgent): Agent {
   const title = terminalTitle(raw);
   return {
     pane: raw.pane_id,
     kind: raw.agent ?? "unknown",
-    status: raw.agent_status ?? "unknown",
+    status: statusOf(raw),
     title: title || raw.cwd?.split("/").pop() || raw.pane_id,
     cwd: raw.cwd ?? "",
     workspace: raw.workspace_id ?? "",
@@ -171,10 +182,11 @@ export class Herdr {
       const raw = toAgent(p as unknown as RawAgent);
       return {
         tab: str(p.tab_id),
+        workspace: str(p.workspace_id),
         pane: {
           pane: str(p.pane_id),
           agent,
-          status: str(p.agent_status, "unknown"),
+          status: agent ? raw.status : str(p.agent_status, "unknown"),
           title: agent ? raw.title : str(p.cwd).split("/").pop() || str(p.pane_id),
           cwd: str(p.cwd),
           focused: p.focused === true,
@@ -189,7 +201,12 @@ export class Herdr {
         label: str(w.label) || `Workspace ${num(w.number)}`,
         number: num(w.number),
         focused: w.focused === true,
-        status: str(w.agent_status, "unknown"),
+        // herdr's workspace state is idle when its omp integration is missing – a working pane wins
+        status:
+          str(w.agent_status, "unknown") === "idle" &&
+          treePanes.some((p) => p.workspace === w.workspace_id && p.pane.status === "working")
+            ? "working"
+            : str(w.agent_status, "unknown"),
         tabs: (tabs.tabs ?? [])
           // the Mac's live call records omp's voice in its own tab – plumbing, not a session
           .filter((t) => t.workspace_id === w.workspace_id && t.label !== LIVE_AUDIO_TAB)

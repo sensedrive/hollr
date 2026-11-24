@@ -226,6 +226,14 @@ test("agent title strips omp prefix and icon glyphs", () => {
   ).toBe("TICKET: Structure the backlog");
 });
 
+test("omp without herdr's integration: the spinner in its title means working, a set state wins", () => {
+  const omp = (title: string, status = "idle") =>
+    toAgent({ pane_id: "wH:p1", agent: "omp", agent_status: status, terminal_title_stripped: title }).status;
+  expect(omp("π ⠧ \u{F0339} URL: Improve URL formatting")).toBe("working");
+  expect(omp("π > \u{F011A} SAND: Run sandcastle batch")).toBe("idle");
+  expect(omp("π ⠧ URL", "blocked")).toBe("blocked");
+});
+
 test("session tail only reports entries since the call started", async () => {
   const { SessionTail } = await import("../src/sessionlog");
   const file = join(tmpdir(), `hollr-tail-${Date.now()}.jsonl`);
