@@ -56,16 +56,39 @@ function version(name: ToolName, current: string): string | undefined {
   return text.match(/\d+\.\d+[\w.+-]*/)?.[0] ?? (text || "installiert");
 }
 
+/**
+ * herdr learns an agent's state (working, waiting, idle) only from its integration (omp extension,
+ * Claude/Codex hooks); without it every session reads as idle. After installing or updating herdr or an
+ * agent, (re)install the integrations – idempotent, also upgrades outdated ones.
+ */
+function integrations(agents: string[]): string {
+  return agents
+    .map((a) => `command -v herdr >/dev/null && command -v ${a} >/dev/null && herdr integration install ${a} || true`)
+    .join("\n");
+}
+
 /** The shell command for install (missing) or update (present). */
 export function toolCommand(name: ToolName, installed: boolean, repo = "sensedrive/hollr"): string {
   switch (name) {
     case "herdr":
       // --handoff keeps running sessions alive across the update
-      return installed ? "herdr update --handoff" : "curl -fsSL https://herdr.dev/install.sh | sh";
+      return [
+        "set -e",
+        installed ? "herdr update --handoff" : "curl -fsSL https://herdr.dev/install.sh | sh",
+        integrations(["omp", "claude", "codex"]),
+      ].join("\n");
     case "omp":
-      return installed ? "omp update" : "curl -fsSL https://omp.sh/install | sh -s -- --binary";
+      return [
+        "set -e",
+        installed ? "omp update" : "curl -fsSL https://omp.sh/install | sh -s -- --binary",
+        integrations(["omp"]),
+      ].join("\n");
     case "claude":
-      return installed ? "claude update" : "curl -fsSL https://claude.ai/install.sh | bash";
+      return [
+        "set -e",
+        installed ? "claude update" : "curl -fsSL https://claude.ai/install.sh | bash",
+        integrations(["claude"]),
+      ].join("\n");
     case "codex":
       return [
         "set -e",
@@ -78,6 +101,7 @@ export function toolCommand(name: ToolName, installed: boolean, repo = "sensedri
         'mv -f "$HOME/.local/bin/.codex.new" "$HOME/.local/bin/codex"',
         'rm -rf "$TMP"',
         "codex --version",
+        integrations(["codex"]),
       ].join("\n");
     case "hollr":
       return [

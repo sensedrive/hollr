@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 64,
+    version: "0.53.1",
+    date: "24.11.2026",
+    items: [
+      { icon: "✓", text: "Behoben: Sitzungen auf Servern standen immer auf „bereit“, auch während sie arbeiteten – Hollr richtet beim Aktualisieren jetzt die herdr-Anbindung für omp, Claude Code und Codex ein." },
+    ],
+  },
+  {
     build: 63,
     version: "0.53.0",
     date: "24.11.2026",

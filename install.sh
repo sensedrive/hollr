@@ -153,6 +153,15 @@ if has herdr; then
   herdr plugin link "$PLUGIN_DIR" >/dev/null 2>&1 && ok "Plugin verknüpft (herdr-Menü: 'Hollr: iPhone koppeln')" \
     || info "herdr-Server läuft nicht – Plugin später: herdr plugin link $PLUGIN_DIR"
 fi
+# herdr knows what an agent is doing only through its integration (omp extension, Claude/Codex hooks);
+# without it every session reads as "bereit", even while it works
+if has herdr; then
+  for a in omp claude codex; do
+    if has "$a"; then
+      herdr integration install "$a" >/dev/null 2>&1 && ok "herdr-Integration $a" || info "herdr-Integration $a fehlgeschlagen"
+    fi
+  done
+fi
 
 # ---------------------------------------------------------------- watcher (push)
 if [ "$OS" = "Linux" ] && command -v systemctl >/dev/null 2>&1; then
