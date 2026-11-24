@@ -7941,6 +7941,146 @@
         }
       }
     },
+    "Diktieren neu: einmal aufs Mikrofon tippen, nicht mehr halten – großer Knopf in der Mitte zum Pausieren, Senden daneben, der Text erscheint live": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictation reworked: tap the mic once, no more holding – big button in the middle to pause, send next to it, the text appears live"
+          }
+        }
+      }
+    },
+    "„Zuletzt“ zeigt, wann sich jeder Agent zuletzt gemeldet hat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Recent” shows when each agent last reported"
+          }
+        }
+      }
+    },
+    "Sprich einfach los …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just start talking …"
+          }
+        }
+      }
+    },
+    "Bearbeiten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      }
+    },
+    "Beendet das Diktat, der Text kommt ins Eingabefeld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ends the dictation, the text goes into the input field"
+          }
+        }
+      }
+    },
+    "Mikrofon startet …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting microphone …"
+          }
+        }
+      }
+    },
+    "Transkribiere …": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing …"
+          }
+        }
+      }
+    },
+    "Pausiert – tippen zum Weitersprechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paused – tap to keep talking"
+          }
+        }
+      }
+    },
+    "Hört zu – tippen zum Pausieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening – tap to pause"
+          }
+        }
+      }
+    },
+    "Weitersprechen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep talking"
+          }
+        }
+      }
+    },
+    "Pausieren": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause"
+          }
+        }
+      }
+    },
+    "Diktat senden": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send dictation"
+          }
+        }
+      }
+    },
+    "gerade eben": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "just now"
+          }
+        }
+      }
+    },
+    "Mikrofon ließ sich nicht wieder einschalten.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The microphone couldn't be turned back on."
+          }
+        }
+      }
+    },
     "„Braucht dich“: neue Ergebnisse als schmale Karte in zwei Zeilen – Antworten, Terminal und Gesehen direkt in der Zeile": {
       "localizations": {
         "en": {

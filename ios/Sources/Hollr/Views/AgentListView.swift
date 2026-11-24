@@ -158,6 +158,8 @@ struct AgentRow: View {
     /// the space's git branch, when known (else the folder)
     var branch: String? = nil
     var live = false
+    /// „vor 12 Min.“ after the status: when the agent last reported (entered its state) – the „Zuletzt“ list
+    var showAge = false
     @Environment(HerdrStore.self) private var herdr
 
     private var isShell: Bool { ref.pane.agent == nil }
@@ -176,6 +178,16 @@ struct AgentRow: View {
         return h > 0
             ? String(localized: "seit \(h) Std. \(m) Min.")
             : String(localized: "seit \(m) Min.")
+    }
+
+    /// when it entered its current state, relative: "vor 12 Min." (working agents say how long instead)
+    private func age(_ now: Date) -> String? {
+        guard showAge, status != "working", let since = ref.pane.since else { return nil }
+        let date = Date(timeIntervalSince1970: since / 1000)
+        if now.timeIntervalSince(date) < 60 { return String(localized: "gerade eben") }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: date, relativeTo: now)
     }
 
     /// server, workspace (like herdr's sidebar group) and what the agent works on (omp session title)
@@ -207,7 +219,9 @@ struct AgentRow: View {
                 }
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     let elapsed = workingFor(context.date).map { " \($0)" } ?? ""
+                    let ago = age(context.date).map { " · \($0)" } ?? ""
                     (Text(verbatim: state + elapsed).foregroundStyle(isShell ? Theme.muted : Theme.statusColor(status))
+                        + Text(verbatim: ago).foregroundStyle(Theme.fg.opacity(0.75))
                         + Text(verbatim: detail.isEmpty ? "" : " · \(detail)").foregroundStyle(Theme.muted))
                         .font(Typo.sm)
                         .lineLimit(1)

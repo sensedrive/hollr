@@ -223,7 +223,7 @@ struct DashboardView: View {
     private func workRow(_ ref: AgentRef, live: Bool, showWorkspace: Bool = false) -> some View {
         Button { sheetAgent = ref.id } label: {
             AgentRow(ref: ref, showServer: showWorkspace && store.servers.count > 1, showWorkspace: showWorkspace,
-                     branch: herdr.branch(of: ref), live: live)
+                     branch: herdr.branch(of: ref), live: live, showAge: showWorkspace)
                 .padding(Gap.s)
                 .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
         }

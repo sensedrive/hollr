@@ -39,6 +39,9 @@ final class Dictator {
     private var visible: [String: Int] = [:]
 
     var isRecording: Bool { state == .recording }
+    /// recording, but the microphone is paused (the big button in the composer); what was said so far is
+    /// transcribed meanwhile
+    private(set) var paused = false
     var isBusy: Bool {
         switch state {
         case .preparing, .recording, .transcribing: return true
@@ -283,7 +286,37 @@ final class Dictator {
         state = .idle
     }
 
+    // MARK: Pause / resume (the composer's big button)
+
+    /// Stops listening without ending the dictation: the microphone goes off, what was said up to now is
+    /// transcribed right away (Parakeet/Whisper), so the text is complete while paused.
+    func pause() {
+        guard state == .recording, !paused else { return }
+        engine.pause()
+        paused = true
+        level = 0
+        guard active != .apple else { return }
+        let total = collector.count
+        guard total > cut else { return }
+        let piece = collector.slice(cut..<total)
+        cut = total
+        enqueueChunk(piece)
+    }
+
+    func resume() {
+        guard state == .recording, paused else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            try engine.start()
+            paused = false
+        } catch {
+            HollrLog.error("dictation resume: \(error)")
+            notice = String(localized: "Mikrofon ließ sich nicht wieder einschalten.")
+        }
+    }
+
     private func reset() {
+        paused = false
         chunkTimer?.cancel()
         chunkTimer = nil
         chunks?.cancel()
@@ -339,24 +372,30 @@ final class Dictator {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.state == .recording else { return }
+                if self.paused { continue }
                 let total = self.collector.count
                 guard let point = Silence.cutPoint(energies: self.collector.energies(), from: self.cut, total: total),
                       point > self.cut else { continue }
                 let piece = self.collector.slice(self.cut..<point)
                 self.cut = point
-                let previous = self.chunks
-                let gen = self.generation
-                self.chunks = Task { [weak self] in
-                    await previous?.value
-                    guard let self, !Task.isCancelled, gen == self.generation else { return }
-                    do {
-                        guard let text = try await self.transcribeChunk(piece), gen == self.generation else { return }
-                        self.committed = self.join(self.committed, text)
-                        if self.state == .recording { self.text = self.committed }
-                    } catch {
-                        HollrLog.error("dictation chunk: \(error)")
-                    }
-                }
+                self.enqueueChunk(piece)
+            }
+        }
+    }
+
+    /// Transcribes one piece after the ones before it and adds it to the text.
+    private func enqueueChunk(_ piece: [Float]) {
+        let previous = chunks
+        let gen = generation
+        chunks = Task { [weak self] in
+            await previous?.value
+            guard let self, !Task.isCancelled, gen == self.generation else { return }
+            do {
+                guard let text = try await self.transcribeChunk(piece), gen == self.generation else { return }
+                self.committed = self.join(self.committed, text)
+                if self.state == .recording { self.text = self.committed }
+            } catch {
+                HollrLog.error("dictation chunk: \(error)")
             }
         }
     }
