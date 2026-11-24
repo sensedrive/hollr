@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Übersicht: „Zuletzt“ statt „Alle“ – alle Agenten in einer Liste, wer zuletzt etwas gemeldet hat, steht oben; arbeitende zeigen, seit wann sie arbeiten.":
+    "Overview: “Recent” instead of “All” – every agent in one list, the one that reported last on top; working ones show for how long they've been at it.",
   "Behoben: Auch omp-Sitzungen, die schon vor der herdr-Anbindung liefen, zeigen jetzt, dass sie arbeiten – Hollr liest es aus ihrem Fenstertitel.":
     "Fixed: omp sessions that were already running before herdr's hookup now show that they're working too – Hollr reads it from their window title.",
   "Behoben: Sitzungen auf Servern standen immer auf „bereit“, auch während sie arbeiteten – Hollr richtet beim Aktualisieren jetzt die herdr-Anbindung für omp, Claude Code und Codex ein.":

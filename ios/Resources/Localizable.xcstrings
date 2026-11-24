@@ -7941,6 +7941,56 @@
         }
       }
     },
+    "Übersicht: „Zuletzt“ statt „Alle“ – alle Agenten in einer Liste, wer zuletzt etwas gemeldet hat, steht oben; arbeitende zeigen, seit wann": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview: “Recent” instead of “All” – every agent in one list, the one that reported last on top; working ones show for how long"
+          }
+        }
+      }
+    },
+    "Sitzungen auf Servern zeigen wieder, dass sie arbeiten": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessions on servers show again that they're working"
+          }
+        }
+      }
+    },
+    "seit eben": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "just now"
+          }
+        }
+      }
+    },
+    "seit %lld Min.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "for %lld min"
+          }
+        }
+      }
+    },
+    "seit %lld Std. %lld Min.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "for %lld h %lld min"
+          }
+        }
+      }
+    },
     "Zum Ende springen": {
       "localizations": {
         "en": {

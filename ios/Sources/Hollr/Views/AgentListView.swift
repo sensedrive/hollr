@@ -167,6 +167,17 @@ struct AgentRow: View {
 
     private var state: String { isShell ? String(localized: "Terminal") : Theme.statusLabel(status) }
 
+    /// how long it has been working, from when it entered the state (server time, ms): "seit 12 Min."
+    private func workingFor(_ now: Date) -> String? {
+        guard status == "working", let since = ref.pane.since else { return nil }
+        let s = Int(max(0, now.timeIntervalSince1970 - since / 1000))
+        let h = s / 3600, m = (s % 3600) / 60
+        if h == 0 && m == 0 { return String(localized: "seit eben") }
+        return h > 0
+            ? String(localized: "seit \(h) Std. \(m) Min.")
+            : String(localized: "seit \(m) Min.")
+    }
+
     /// server, workspace (like herdr's sidebar group) and what the agent works on (omp session title)
     private var detail: String {
         var parts: [String] = []
@@ -194,10 +205,13 @@ struct AgentRow: View {
                         .font(Typo.monoXS).foregroundStyle(Theme.dim)
                         .lineLimit(1).truncationMode(.middle)
                 }
-                (Text(verbatim: state).foregroundStyle(isShell ? Theme.muted : Theme.statusColor(status))
-                    + Text(verbatim: detail.isEmpty ? "" : " · \(detail)").foregroundStyle(Theme.muted))
-                    .font(Typo.sm)
-                    .lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    let elapsed = workingFor(context.date).map { " \($0)" } ?? ""
+                    (Text(verbatim: state + elapsed).foregroundStyle(isShell ? Theme.muted : Theme.statusColor(status))
+                        + Text(verbatim: detail.isEmpty ? "" : " · \(detail)").foregroundStyle(Theme.muted))
+                        .font(Typo.sm)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.vertical, 2)

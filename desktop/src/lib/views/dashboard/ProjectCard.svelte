@@ -6,13 +6,18 @@
   import { statusLabel, t } from "$lib/i18n";
   import type { AgentOpen, PaneRef } from "$lib/store.svelte";
   import type { WorkRow } from "./context.svelte";
-  import { badge, refTitle, relTime, statusColor } from "./util";
+  import { badge, elapsed, refTitle, relTime, statusColor } from "./util";
 
-  let { name, server, rows, selectedId, onOpen, onSelect, onMenu }: {
-    name: string;
+  let { name = "", server, rows, flat = false, several = false, now = Date.now(), selectedId, onOpen, onSelect, onMenu }: {
+    name?: string;
     /** server label, when several servers are paired */
     server?: string;
     rows: WorkRow[];
+    /** one list across projects („Zuletzt“): no head, each row names its project (and machine when several) */
+    flat?: boolean;
+    several?: boolean;
+    /** the dashboard's clock, so „seit 12 Min.“ moves on */
+    now?: number;
     selectedId?: string;
     onOpen: (r: PaneRef, open?: AgentOpen, url?: string) => void;
     onSelect: (r: PaneRef) => void;
@@ -30,12 +35,14 @@
 </script>
 
 <div class="project">
-  <div class="phead" style:--p={identityColor(name)}>
-    <span class="pname ellipsis">{name}</span>
-    {#if server}<span class="dim small">{server}</span>{/if}
-    <span class="grow"></span>
-    {#each counts as [, label, color]}<span class="small" style:color>{label}</span>{/each}
-  </div>
+  {#if !flat}
+    <div class="phead" style:--p={identityColor(name)}>
+      <span class="pname ellipsis">{name}</span>
+      {#if server}<span class="dim small">{server}</span>{/if}
+      <span class="grow"></span>
+      {#each counts as [, label, color]}<span class="small" style:color>{label}</span>{/each}
+    </div>
+  {/if}
   {#each rows as w (w.ref.id)}
     {@const r = w.ref}
     {@const b = badge(r.pane.agent)}
@@ -48,12 +55,13 @@
         <span class="body">
           <span class="top">
             <span class="dot" class:pulse={running} style:background={statusColor(r.pane.status)}></span>
+            {#if flat}<span class="proj ellipsis" style:--p={identityColor(w.project.name)}>{w.project.name}{#if several} · {r.server.label}{/if}</span>{/if}
             <span class="name ellipsis">{refTitle(r)}</span>
             {#if w.ctx?.title && w.ctx.title !== refTitle(r)}<span class="sub ellipsis">{w.ctx.title}</span>{/if}
             {#if w.project.branch}<span class="branch mono ellipsis"><Icon name="⑂" size={15} /> {w.project.branch}{#if w.project.worktree} <Icon name="⧉" size={15} />{/if}</span>{/if}
           </span>
           <span class="line ellipsis">
-            <span style:color={statusColor(r.pane.status)}>{r.pane.agent ? statusLabel(r.pane.status) : t("Terminal")}</span>
+            <span style:color={statusColor(r.pane.status)}>{r.pane.agent ? statusLabel(r.pane.status) : t("Terminal")}{#if running && r.pane.since} {elapsed(r.pane.since, now)}{/if}</span>
             {#if line}<span class="muted"> · {running && w.ctx?.step ? "▸ " : ""}{line}</span>{/if}
           </span>
         </span>
@@ -111,4 +119,6 @@
     border-radius: 7px; font-size: 11px; background: var(--side); border: 1px solid var(--border); color: var(--muted); }
   .acts button:hover { color: var(--fg); border-color: var(--accent); }
   .grow { flex: 1; }
+  .proj { display: inline-flex; align-items: center; gap: 5px; flex: none; max-width: 30%; font-size: 12px; color: var(--muted); }
+  .proj::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--p); flex: none; }
 </style>

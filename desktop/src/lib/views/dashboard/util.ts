@@ -94,6 +94,17 @@ export function relTime(ms: number): string {
   return f.format(Math.round(diff / (86400 * 365)), "year");
 }
 
+/** How long since `since` (ms), to the minute: "seit 12 Min.", "seit 1 Std. 20 Min." ("for 12 min" in English). */
+export function elapsed(since: number, now = Date.now()): string {
+  const s = Math.max(0, (now - since) / 1000);
+  const en = lang() === "en";
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (!h && !m) return en ? "just now" : "seit eben";
+  const text = h ? (en ? `${h} h ${m} min` : `${h} Std. ${m} Min.`) : en ? `${m} min` : `${m} Min.`;
+  return en ? `for ${text}` : `seit ${text}`;
+}
+
 /** Time until a reset, precise to the minute: "in 4 Std. 23 Min.", "in 1 Tag 6 Std.". */
 export function countdown(ms: number): string {
   const s = (ms - Date.now()) / 1000;

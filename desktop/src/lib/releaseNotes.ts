@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 66,
+    version: "0.54.0",
+    date: "24.11.2026",
+    items: [
+      { icon: "🕒", text: "Übersicht: „Zuletzt“ statt „Alle“ – alle Agenten in einer Liste, wer zuletzt etwas gemeldet hat, steht oben; arbeitende zeigen, seit wann sie arbeiten." },
+    ],
+  },
+  {
     build: 65,
     version: "0.53.2",
     date: "24.11.2026",

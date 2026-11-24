@@ -2,7 +2,7 @@
   import { alertAsk } from "$lib/ask.svelte";
   import Icon from "$lib/components/git/Icon.svelte";
   // Übersicht (DashboardView.swift, laid out for a wide window): usage limits, "Braucht dich" ordered by urgency
-  // with everything answerable in place, "Läuft gerade" grouped by project (Alle / Arbeitet / Neu), the sessions you
+  // with everything answerable in place, "Läuft gerade" (Zuletzt: one list, newest report first / Arbeitet / Neu by project), the sessions you
   // opened in Hollr (grouped by machine, live previews). j/k + ↩ and single keys switch fast.
   import { onMount } from "svelte";
   import * as api from "$lib/api";
@@ -34,7 +34,7 @@
     const tick = () => {
       now = Date.now();
       fetchInbox();
-      fetchContexts([...new Set([...focus.map((f) => f.ref), ...workRefs])]);
+      fetchContexts([...new Set([...focus.map((f) => f.ref), ...workRefs, ...(filter === "recent" ? recentRows.map((w) => w.ref) : [])])]);
       fetchPorts(app.servers.map((s) => s.id));
     };
     tick();
@@ -94,14 +94,24 @@
       .map((rows) => rows.sort((a, b) => order(a) - order(b) || (b.changed ?? 0) - (a.changed ?? 0)))
       .sort((a, b) => order(a[0]!) - order(b[0]!) || (b[0]!.changed ?? 0) - (a[0]!.changed ?? 0));
   });
-  const workCount = $derived(projects.reduce((n, p) => n + p.length, 0));
-  // "Läuft gerade" can be narrowed to the busy ones or the fresh results – this list replaces the old "Agents" page
-  let filter = $state<"all" | "busy" | "new">("all");
-  const FILTERS: [typeof filter, string][] = [["all", "Alle"], ["busy", "Arbeitet"], ["new", "Neu"]];
-  const shownProjects = $derived(
-    projects.map((rows) => rows.filter((w) => filter === "all" || (filter === "new" ? w.ref.pane.status === "done"
-      : w.ref.pane.status === "working" || w.ref.pane.status === "blocked"))).filter((rows) => rows.length > 0),
+  // "Läuft gerade": Zuletzt (every agent, the one that reported last first) or the busy ones or the fresh results
+  let filter = $state<"recent" | "busy" | "new">("recent");
+  const FILTERS: [typeof filter, string][] = [["recent", "Zuletzt"], ["busy", "Arbeitet"], ["new", "Neu"]];
+  /** every agent (and every session you opened) not from a hidden space, by when it entered its current state –
+   *  finished, asked, started – newest first */
+  const recentRows = $derived(
+    allPanes()
+      .filter((r) => !isHidden(r) && (!!r.pane.agent || mineSet.has(r.id)))
+      .map(rowOf)
+      .sort((a, b) => (b.ref.pane.since ?? 0) - (a.ref.pane.since ?? 0)),
   );
+  const shownProjects = $derived(
+    filter === "recent"
+      ? []
+      : projects.map((rows) => rows.filter((w) => (filter === "new" ? w.ref.pane.status === "done"
+        : w.ref.pane.status === "working" || w.ref.pane.status === "blocked"))).filter((rows) => rows.length > 0),
+  );
+  const workCount = $derived(filter === "recent" ? recentRows.length : projects.reduce((n, p) => n + p.length, 0));
 
   // ------------------------------------------------------------ my sessions by machine (live previews)
 
@@ -182,11 +192,11 @@
   /** "f:<id>" (Braucht dich) or "w:<id>" (Woran ich arbeite) */
   let sel = $state<string | null>(null);
   const cards: Record<string, FocusCard | undefined> = $state({});
-  const navKeys = $derived([...focus.map((f) => `f:${f.ref.id}`), ...shownProjects.flat().map((w) => `w:${w.ref.id}`)]);
+  const navKeys = $derived([...focus.map((f) => `f:${f.ref.id}`), ...(filter === "recent" ? recentRows : shownProjects.flat()).map((w) => `w:${w.ref.id}`)]);
   const selRef = $derived.by(() => {
     if (!sel) return undefined;
     const id = sel.slice(2);
-    return sel.startsWith("f:") ? focus.find((f) => f.ref.id === id)?.ref : workRefs.find((r) => r.id === id);
+    return sel.startsWith("f:") ? focus.find((f) => f.ref.id === id)?.ref : allPanes().find((r) => r.id === id);
   });
   const selFocus = $derived(sel?.startsWith("f:") ? focus.find((f) => `f:${f.ref.id}` === sel) : undefined);
 
@@ -313,19 +323,25 @@
       <div class="section head">
         <span class="grow">{t("Läuft gerade")}</span>{#if workCount}<span class="dim">{workCount}</span>{/if}
       </div>
-      {#if projects.length}
+      {#if projects.length || recentRows.length}
         <div class="seg" role="radiogroup" aria-label={t("Filter")}>
           {#each FILTERS as [v, label] (v)}
             <button role="radio" aria-checked={filter === v} class:on={filter === v} onclick={() => (filter = v)}>{t(label)}</button>
           {/each}
         </div>
         <div class="stack" use:arrowNav>
-          {#if !shownProjects.length}<div class="card muted small">{t("Nichts mit diesem Filter.")}</div>{/if}
-          {#each shownProjects as rows (rows[0]!.project.key)}
-            <ProjectCard name={rows[0]!.project.name} server={several ? rows[0]!.ref.server.label : undefined} {rows}
+          {#if filter === "recent"}
+            <ProjectCard flat rows={recentRows} {several} {now}
               selectedId={sel?.startsWith("w:") ? sel.slice(2) : undefined}
               onOpen={open} onSelect={(r) => select(`w:${r.id}`, false)} onMenu={cardMenu} />
-          {/each}
+          {:else}
+            {#if !shownProjects.length}<div class="card muted small">{t("Nichts mit diesem Filter.")}</div>{/if}
+            {#each shownProjects as rows (rows[0]!.project.key)}
+              <ProjectCard name={rows[0]!.project.name} server={several ? rows[0]!.ref.server.label : undefined} {rows} {now}
+                selectedId={sel?.startsWith("w:") ? sel.slice(2) : undefined}
+                onOpen={open} onSelect={(r) => select(`w:${r.id}`, false)} onMenu={cardMenu} />
+            {/each}
+          {/if}
         </div>
       {:else if !anyLoaded && app.servers.length}
         <div class="skeleton" style="height:120px; border-radius:16px"></div>

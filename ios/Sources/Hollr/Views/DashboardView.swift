@@ -10,7 +10,7 @@ struct DashboardView: View {
     @Environment(\.openInBrowser) private var openInBrowser
     let onNew: () -> Void
     @Binding var sheetAgent: String?
-    @State private var workFilter: WorkFilter = .all
+    @State private var workFilter: WorkFilter = .recent
     @State private var reloading = false
     @State private var showLimits = false
     /// herdr refused to end a session – shown, the session stays
@@ -80,13 +80,14 @@ struct DashboardView: View {
 
     // MARK: Läuft gerade
 
-    /// Alle / Arbeitet (working or waiting) / Neu (new result) – by the status the rows show (HerdrStore.shownStatus)
+    /// Zuletzt (every agent, newest report first) / Arbeitet (working or waiting) / Neu (new result) – by the status
+    /// the rows show (HerdrStore.shownStatus)
     enum WorkFilter: Hashable {
-        case all, busy, new
+        case recent, busy, new
 
         func includes(_ status: String) -> Bool {
             switch self {
-            case .all: return true
+            case .recent: return true
             case .busy: return status == "working" || status == "blocked"
             case .new: return status == "done"
             }
@@ -112,6 +113,14 @@ struct DashboardView: View {
             let busy = status == "working" || status == "blocked" || status == "done"
             return herdr.isMine(ref) || (ref.pane.agent != nil && busy)
         }
+    }
+
+    /// „Zuletzt“: every agent (and every session you opened) not from a hidden space, the one that reported last –
+    /// entered its current state, e.g. finished, asked, started – first
+    private var recentRefs: [AgentRef] {
+        herdr.allAgents(store.servers, includeShells: true)
+            .filter { !herdr.hides($0) && ($0.pane.agent != nil || herdr.isMine($0)) }
+            .sorted { ($0.pane.since ?? 0) > ($1.pane.since ?? 0) }
     }
 
     /// what the inbox is built from: the agents, which spaces are hidden, what was seen / dismissed / marked unread
@@ -141,32 +150,44 @@ struct DashboardView: View {
     }
 
     private var filterOptions: [(value: WorkFilter, title: String)] {
-        [(value: .all, title: String(localized: "Alle")),
+        [(value: .recent, title: String(localized: "Zuletzt")),
          (value: .busy, title: String(localized: "Arbeitet")),
          (value: .new, title: String(localized: "Neu"))]
     }
 
     @ViewBuilder private var workingSection: some View {
-        let refs = workRefs
+        let refs = workFilter == .recent ? recentRefs : workRefs
         VStack(alignment: .leading, spacing: Gap.m) {
             SectionHeader(title: String(localized: "Läuft gerade"), trailing: refs.isEmpty ? nil : "\(refs.count)")
-            if !refs.isEmpty {
+            if !refs.isEmpty || workFilter != .recent && !recentRefs.isEmpty {
                 Segmented(label: String(localized: "Filter"), options: filterOptions, selection: $workFilter, boxed: true)
-                let shown = projects(refs.filter { workFilter.includes(herdr.shownStatus($0)) })
-                if shown.isEmpty {
-                    Text("Nichts mit diesem Filter.")
-                        .font(Typo.sm).foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .cardStyle()
-                }
                 let live = liveIds
-                ForEach(shown) { project in projectCard(project, live: live) }
+                if workFilter == .recent {
+                    recentCard(refs, live: live)
+                } else {
+                    let shown = projects(refs.filter { workFilter.includes(herdr.shownStatus($0)) })
+                    if shown.isEmpty {
+                        Text("Nichts mit diesem Filter.")
+                            .font(Typo.sm).foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .cardStyle()
+                    }
+                    ForEach(shown) { project in projectCard(project, live: live) }
+                }
             } else if !herdr.loaded {
                 skeleton
             } else {
                 emptyCard
             }
         }
+    }
+
+    /// one flat list, newest report first; each row names its space (and machine when several are paired)
+    private func recentCard(_ refs: [AgentRef], live: Set<String>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(refs) { ref in workRow(ref, live: live.contains(ref.id), showWorkspace: true) }
+        }
+        .cardStyle(padding: EdgeInsets(top: Gap.s, leading: Gap.s, bottom: Gap.s, trailing: Gap.s), radius: Radius.xl)
     }
 
     private func projectCard(_ project: WorkProject, live: Set<String>) -> some View {
@@ -199,9 +220,10 @@ struct DashboardView: View {
         .padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 6)
     }
 
-    private func workRow(_ ref: AgentRef, live: Bool) -> some View {
+    private func workRow(_ ref: AgentRef, live: Bool, showWorkspace: Bool = false) -> some View {
         Button { sheetAgent = ref.id } label: {
-            AgentRow(ref: ref, showWorkspace: false, branch: herdr.branch(of: ref), live: live)
+            AgentRow(ref: ref, showServer: showWorkspace && store.servers.count > 1, showWorkspace: showWorkspace,
+                     branch: herdr.branch(of: ref), live: live)
                 .padding(Gap.s)
                 .contentShape(RoundedRectangle(cornerRadius: Radius.row, style: .continuous))
         }
