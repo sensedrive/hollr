@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type ChildInfo, childLabel, childProgress, childStatus, dependsOn, laneChips, moveChip, roundLine, storySummary, ticketPhase, toFront } from "./dock";
+import { type ChildInfo, childLabel, childProgress, childStatus, childTitle, dependsOn, laneChips, moveChip, roundLine, storySummary, ticketPhase, toFront } from "./dock";
 import type { Flow, Phase } from "./types";
 
 const tickets: Record<number, string> = { 11: "T-1", 12: "T-2", 13: "T-2", 14: "T-3", 15: "T-4" };
@@ -78,6 +78,20 @@ const flow = (more: Partial<Flow>): Flow => ({
   ...more,
 });
 const kid = (n: number, status: ChildInfo["status"], more: Partial<ChildInfo> = {}): ChildInfo => ({ n, status, blockedBy: null, reason: null, since: null, ...more });
+
+describe("child title", () => {
+  test("drops the story's key, keeps everything else", () => {
+    expect(childTitle("Tabelle invoice_sequences anlegen (TENDR-1091)", "TENDR-1091")).toBe("Tabelle invoice_sequences anlegen");
+    expect(childTitle("shop_id wird NOT NULL (Folgerelease) (TENDR-817)", "TENDR-817")).toBe("shop_id wird NOT NULL (Folgerelease)");
+    expect(childTitle("TENDR-1091: Nummernkreis je Mandant", "TENDR-1091")).toBe("Nummernkreis je Mandant");
+    expect(childTitle("Export [TENDR-1091] als CSV", "TENDR-1091")).toBe("Export als CSV");
+    // another ticket's key, a longer key with the same prefix and issues without ticket stay
+    expect(childTitle("Folgt auf (TENDR-1075)", "TENDR-1091")).toBe("Folgt auf (TENDR-1075)");
+    expect(childTitle("Rest (TENDR-10910)", "TENDR-1091")).toBe("Rest (TENDR-10910)");
+    expect(childTitle("Nur (#12)", "#12")).toBe("Nur (#12)");
+    expect(childTitle("(TENDR-1091)", "TENDR-1091")).toBe("(TENDR-1091)");
+  });
+});
 
 describe("child pill", () => {
   const f = flow({

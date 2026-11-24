@@ -10,19 +10,21 @@ import { setLaneOrder, takeOutOfLane } from "../actions";
 import { hasHost, openExternal, openSession, sc } from "../api";
 import type { Derived, Lane } from "../derive";
 import {
-  type RoleGroup,
-  ROLE_LABEL,
   type ChildInfo,
+  type ChildStatus,
   childLabel,
   childProgress,
   childSegment,
   childStatus,
+  childTitle,
   type DockChip,
   dependsOn,
   isWorking,
   laneChips,
   moveChip,
+  ROLE_LABEL,
   ROUND_STEPS,
+  type RoleGroup,
   type RoundStep,
   roundLine,
   type StoryActivity,
@@ -407,9 +409,56 @@ function openLog(server: string, run: Run, n: number | null): void {
 /** Stories whose children the user folded in or out (`<server>|<key>`); the rest follow their activity. */
 const folds = new Map<string, boolean>();
 
-function childRow(server: string, run: Run | undefined, k: ChildInfo): HTMLElement {
+type Tone = "blue" | "purple" | "cyan" | "green" | "red" | "neutral";
+
+const nums = (list: readonly number[]) => list.map((n) => `#${n}`).join(", ");
+
+/** One pill system for children, roles and story status (design v27): same shape, meaning by colour + icon. */
+function pill(tone: Tone, ico: string, content: Node | string, title?: string): HTMLElement {
+  return h("span", { class: "pill", "data-tone": tone, title }, icon(ico, "pill-ico"), h("span", { class: "pill-text" }, content));
+}
+
+const CHILD_PILL: Readonly<Record<ChildStatus, [Tone, string]>> = {
+  implementer: ["blue", ICON.hammer],
+  review: ["purple", ICON.search],
+  ready: ["cyan", ICON.gitMerge],
+  merged: ["green", ICON.check],
+  failed: ["red", ICON.circleX],
+  waiting: ["neutral", ICON.clock],
+  blocked: ["neutral", ICON.link2],
+  empty: ["neutral", ICON.minus],
+  unknown: ["neutral", ICON.circleHelp],
+};
+
+const ACTIVITY_PILL: Readonly<Record<Exclude<StoryActivity, "working">, [Tone, string]>> = {
+  merging: ["green", ICON.gitMerge],
+  ready: ["cyan", ICON.gitMerge],
+  waiting: ["neutral", ICON.clock],
+  failed: ["red", ICON.circleX],
+  done: ["green", ICON.check],
+  unknown: ["neutral", ICON.circleHelp],
+};
+
+/** A child's pill; a blocked one shows the chain and „#3592“ (screen readers hear „wartet auf #3592“). */
+function childPill(k: ChildInfo): HTMLElement {
+  const [tone, ico] = CHILD_PILL[k.status];
+  if (k.status !== "blocked") return pill(tone, ico, childLabel(k));
+  const label = childLabel(k);
+  return pill(tone, ico, h("span", {}, h("span", { class: "sr" }, "wartet auf "), `#${k.blockedBy ?? "?"}`), label);
+}
+
+/** Roles as pills: „🔨 Implementer #3605“, or „🔨 #3605“ + „🔍 #3604“ when several roles run. */
+function rolePills(roles: readonly RoleGroup[]): HTMLElement[] {
+  return roles.map((g) => {
+    const [tone, ico] = CHILD_PILL[g.role];
+    return pill(tone, ico, h("span", {}, h("span", { class: roles.length === 1 ? "" : "sr" }, `${ROLE_LABEL[g.role]} `), nums(g.numbers)));
+  });
+}
+
+function childRow(server: string, run: Run | undefined, storyKey: string, k: ChildInfo): HTMLElement {
   const d = lastDerived;
-  const title = run?.issues.find((i) => i.n === k.n)?.title ?? d?.issues.get(k.n)?.title ?? "";
+  const title = childTitle(run?.issues.find((i) => i.n === k.n)?.title ?? d?.issues.get(k.n)?.title ?? "", storyKey);
+  const working = isWorking(k);
   return h(
     "li",
     { class: "run-kid", "data-status": k.status },
@@ -417,11 +466,17 @@ function childRow(server: string, run: Run | undefined, k: ChildInfo): HTMLEleme
       "div",
       { class: "run-kid-row" },
       h("span", { class: "run-kid-n" }, `#${k.n}`),
-      h("span", { class: "run-kid-title", title }, title, isWorking(k) && k.since ? h("span", { class: "run-kid-since" }, `seit ${since(k.since)}`) : null),
-      h("span", { class: "run-kid-st", "data-status": k.status }, childLabel(k)),
-      run && isWorking(k) ? h("button", { class: "link", "aria-label": `Log von #${k.n}`, onclick: () => openLog(server, run, k.n) }, "Log") : null,
+      h("span", { class: "run-kid-title", title }, title, working && k.since ? h("span", { class: "run-kid-since" }, `seit ${since(k.since)}`) : null),
+      h(
+        "span",
+        { class: "run-kid-st" },
+        childPill(k),
+        run && working
+          ? h("button", { class: "run-kid-log", title: "Log öffnen", "aria-label": `Log von #${k.n} öffnen`, onclick: () => openLog(server, run, k.n) }, icon(ICON.scrollText, "log-ico"))
+          : null,
+      ),
+      k.status === "failed" && k.reason ? h("p", { class: "run-kid-reason", title: k.reason }, k.reason) : null,
     ),
-    k.status === "failed" && k.reason ? h("p", { class: "run-kid-reason", title: k.reason }, k.reason) : null,
   );
 }
 
@@ -450,14 +505,18 @@ function ticketBlock(server: string, v: LaneView, c: DockChip, i: number): HTMLE
       { class: "run-ticket-top" },
       h("span", { class: "pos" }, i + 1),
       h("span", { class: "run-ticket-name" }, h("b", {}, c.key), " ", summaryOf(c.key)),
-      !waiting && s.activity !== "done" ? icon(ICON.lock, "lock") : null,
+      !waiting && s.activity !== "done" ? h("span", { class: "run-lock", title: "Wird gebaut – nicht verschiebbar" }, icon(ICON.lock, "lock"), "nicht verschiebbar") : null,
     ),
     h(
       "div",
       { class: "run-ticket-st" },
       h("b", { class: "run-ticket-n" }, v.blind ? s.count : `${s.count} gemergt`),
       kids.length ? kidBar(kids, `${c.key}: ${s.count}${v.blind ? "" : " gemergt"}, ${s.label}`) : null,
-      h("span", { class: "run-ticket-act", "data-activity": s.activity }, s.roles.length ? rolesEl(s.roles) : s.label),
+      h(
+        "span",
+        { class: "run-ticket-act" },
+        ...(s.activity === "working" ? rolePills(s.roles) : [pill(ACTIVITY_PILL[s.activity][0], ACTIVITY_PILL[s.activity][1], s.label)]),
+      ),
     ),
     kids.length
       ? h(
@@ -467,7 +526,7 @@ function ticketBlock(server: string, v: LaneView, c: DockChip, i: number): HTMLE
           open ? "Kinder ausblenden" : `${kids.length} ${kids.length === 1 ? "Kind" : "Kinder"} anzeigen`,
         )
       : null,
-    open ? h("ul", { class: "run-kids" }, ...kids.map((k) => childRow(server, run, k))) : null,
+    open ? h("ul", { class: "run-kids" }, ...kids.map((k) => childRow(server, run, c.key, k))) : null,
     waiting
       ? h(
           "div",

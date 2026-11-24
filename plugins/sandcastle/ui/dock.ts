@@ -68,6 +68,23 @@ const CHILD_LABEL: Readonly<Record<Exclude<ChildStatus, "blocked">, string>> = {
 /** The child's pill: „Implementer“, „wartet auf #3605“, „ohne Angabe“ … */
 export const childLabel = (c: ChildInfo): string => (c.status === "blocked" ? `wartet auf #${c.blockedBy ?? "?"}` : CHILD_LABEL[c.status]);
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * A child's title under its story without the story's key – „… (TENDR-1091)“, „… [TENDR-1091]“ or
+ * „TENDR-1091: …“ is noise there. Other text stays; a title that is only the key stays as it is.
+ */
+export function childTitle(title: string, storyKey: string): string {
+  if (storyKey.startsWith("#")) return title;
+  const key = escapeRe(storyKey);
+  const cleaned = title
+    .replace(new RegExp(`\\s*[([]${key}[)\\]]`, "g"), "")
+    .replace(new RegExp(`^${key}\\s*[:–-]\\s*`), "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return cleaned || title;
+}
+
 /** An implementer or reviewer works on it now (row highlighted, „Log“ link). */
 export const isWorking = (c: ChildInfo): boolean => c.status === "implementer" || c.status === "review";
 

@@ -648,11 +648,10 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .dock-chip-end { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; white-space: nowrap; }
 .dock-chip-st { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); white-space: nowrap; }
 .dock-chip-ico { display: inline-flex; width: 13px; height: 13px; }
-.dock-chip-ico svg, .dep-ico svg, .fold-ico svg, .run-ticket-top .lock svg { width: 100%; height: 100%; }
-.dock-chip-st[data-activity="done"], .dock-chip-st[data-activity="merging"], .dock-chip-st[data-activity="ready"],
-.run-ticket-act[data-activity="done"], .run-ticket-act[data-activity="merging"], .run-ticket-act[data-activity="ready"] { color: var(--green); }
-.dock-chip-st[data-activity="working"], .run-ticket-act[data-activity="working"] { color: var(--blue); font-weight: 700; }
-.dock-chip-st[data-activity="failed"], .run-ticket-act[data-activity="failed"] { color: var(--red); }
+.dock-chip-ico svg, .dep-ico svg, .fold-ico svg, .run-lock .lock svg { width: 100%; height: 100%; }
+.dock-chip-st[data-activity="done"], .dock-chip-st[data-activity="merging"], .dock-chip-st[data-activity="ready"] { color: var(--green); }
+.dock-chip-st[data-activity="working"] { color: var(--blue); font-weight: 700; }
+.dock-chip-st[data-activity="failed"] { color: var(--red); }
 .dock-chip-st[data-activity="fresh"] { color: var(--accent); }
 .dock-chip-title { color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
 .dock-arrows { display: inline-flex; gap: 2px; }
@@ -678,31 +677,44 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .dep-ico, .fold-ico { display: inline-flex; width: 13px; height: 13px; flex: none; }
 .run-ticket-top { display: flex; align-items: flex-start; gap: 8px; }
 .run-ticket-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.run-ticket-top .lock { display: inline-flex; flex: none; width: 13px; height: 13px; margin-top: 3px; color: var(--muted); }
+.run-lock { display: inline-flex; flex: none; align-items: center; gap: 4px; margin-top: 2px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.run-lock .lock { display: inline-flex; width: 11px; height: 11px; }
 .run-ticket-st, .run-ticket-actions { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .run-ticket-st { font-variant-numeric: tabular-nums; }
-.run-ticket-n, .run-ticket-act { flex: none; }
-.run-ticket-act { color: var(--muted); }
+.run-ticket-n { flex: none; }
+.run-ticket-act { display: inline-flex; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+/* one pill system (design v27): same shape for children, roles and story status; meaning by colour + icon */
+.pill { --tone: var(--grey); --tone-text: var(--dim); display: inline-flex; flex: none; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px;
+  border-radius: 999px; background: color-mix(in srgb, var(--tone) 12%, var(--card)); color: var(--tone-text); font-size: 11px; font-weight: 500;
+  line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pill[data-tone="blue"] { --tone: var(--blue); }
+.pill[data-tone="purple"] { --tone: var(--purple); }
+.pill[data-tone="cyan"] { --tone: var(--cyan); }
+.pill[data-tone="green"] { --tone: var(--green); }
+.pill[data-tone="red"] { --tone: var(--red); }
+.pill:not([data-tone="neutral"]) { --tone-text: color-mix(in srgb, var(--tone) 60%, var(--fg)); }
+.pill-ico { display: inline-flex; flex: none; width: 11px; height: 11px; }
+.pill-ico svg, .log-ico svg { width: 100%; height: 100%; }
 .run-fold { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; justify-self: start; min-height: 24px; font-size: 12px; color: var(--muted); }
 .run-fold:hover { color: var(--fg); }
 .run-fold:focus-visible { outline: 2px solid var(--accent); border-radius: 4px; }
-.run-kids { display: grid; margin: 0; padding: 0; list-style: none; font-size: 12px; }
-.run-kid[data-status="implementer"], .run-kid[data-status="review"] { box-shadow: -2px 0 0 0 var(--blue); background: color-mix(in srgb, var(--blue) 14%, var(--card)); }
-.run-kid-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
-.run-kid-n { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
-.run-kid-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.run-kid[data-status="merged"] .run-kid-title, .run-kid[data-status="empty"] .run-kid-title { color: var(--muted); }
+/* children on a grid: number | title (+ „seit …“) | status column of fixed width, right-aligned */
+.run-kids { display: flex; flex-direction: column; gap: 4px; margin: 0 -8px; padding: 0; list-style: none; font-size: 12px; }
+.run-kid { padding: 4px 8px; border-radius: 6px; }
+.run-kid[data-status="implementer"] { background: color-mix(in srgb, var(--blue) 10%, var(--card)); }
+.run-kid[data-status="review"] { background: color-mix(in srgb, var(--purple) 10%, var(--card)); }
+.run-kid-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 120px; align-items: start; gap: 0 8px; min-height: 24px; }
+.run-kid-n { padding-top: 4px; color: var(--muted); font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.run-kid-title { min-width: 0; padding-top: 3px; line-height: 1.4; overflow-wrap: anywhere; }
+.run-kid[data-status="merged"] .run-kid-title, .run-kid[data-status="empty"] .run-kid-title, .run-kid[data-status="blocked"] .run-kid-title,
+.run-kid[data-status="unknown"] .run-kid-title { color: var(--muted); }
 .run-kid[data-status="implementer"] .run-kid-title, .run-kid[data-status="review"] .run-kid-title { font-weight: 500; }
-.run-kid-st { --st: var(--muted); flex: none; padding: 0 8px; border-radius: 999px; line-height: 1.6; white-space: nowrap; font-weight: 500;
-  background: color-mix(in srgb, var(--st) 14%, var(--card)); color: color-mix(in srgb, var(--st) 75%, var(--fg)); }
-.run-kid-st[data-status="implementer"] { --st: var(--blue); font-weight: 700; }
-.run-kid-st[data-status="review"] { --st: var(--purple); font-weight: 700; }
-.run-kid-st[data-status="ready"], .run-kid-st[data-status="merged"] { --st: var(--green); }
-.run-kid-st[data-status="failed"] { --st: var(--red); }
-.run-kid-st[data-status="blocked"] { background: transparent; box-shadow: inset 0 0 0 1px var(--grey); }
-.run-kid-st[data-status="empty"], .run-kid-st[data-status="unknown"] { background: transparent; font-style: italic; }
-.run-kid-row .link { flex: none; color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
-.run-kid-reason { margin: 0 0 4px; padding-left: 40px; color: var(--red); overflow-wrap: anywhere; }
+.run-kid-st { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-height: 24px; }
+.run-kid-log { all: unset; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--muted); cursor: pointer; }
+.run-kid-log:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.run-kid-log:focus-visible { outline: 2px solid var(--accent); }
+.log-ico { display: inline-flex; width: 13px; height: 13px; }
+.run-kid-reason { grid-column: 2 / -1; margin: 4px 0 0; color: var(--red); overflow-wrap: anywhere; }
 .dock-wait, .run-wait { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--orange); font-size: 12px; }
 .dock-wait { grid-column: 1 / -1; }
 .run-wait { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--orange) 14%, transparent); font-size: 13px; }
@@ -844,23 +856,14 @@ select.new-run__input { height: 34px; }
   .run-ticket:not(:has(.run-ticket-actions)) { padding-bottom: 12px; }
   .run-ticket-name { font-size: 15px; }
   .run-fold { min-height: 44px; }
-  .run-kids { margin: 0 -12px; border-top: 1px solid var(--border); }
-  .run-kid { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .run-kid:last-child { border-bottom: 0; }
-  .run-kid[data-status="implementer"], .run-kid[data-status="review"] { box-shadow: inset 3px 0 0 var(--blue); }
-  /* two lines per child: number, pill and Log on top, the title below */
-  .run-kid-row {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0 8px;
-    grid-template-areas:
-      "num st log"
-      "title title title";
-  }
-  .run-kid-n { grid-area: num; font-size: 12px; }
-  .run-kid-st { grid-area: st; font-size: 12px; }
-  .run-kid-title { grid-area: title; }
+  /* children: number | title | pill and Log (44 px target) */
+  .run-kid { padding: 8px; font-size: 13px; }
+  .run-kid-row { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; }
+  .run-kid-n, .run-kid-title { align-self: start; padding-top: 8px; }
   .run-kid-since { font-size: 12px; }
-  .run-kid-row .link { grid-area: log; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: -8px -8px -8px 0; }
-  .run-kid-reason { padding: 4px 0 0; font-size: 12px; }
+  .run-kid .pill { height: 24px; font-size: 12px; }
+  .run-kid-log { width: 44px; height: 44px; margin: -8px -8px -8px 0; }
+  .run-kid-reason { font-size: 12px; }
   /* ↑↓ and „Aus dem Lauf nehmen“ as a bar at the bottom of the card */
   .run-ticket-actions { margin: 0 -12px; padding: 0 4px; border-top: 1px solid var(--border); }
   .run-ticket-actions .arrow, .run-ticket-actions .link { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
