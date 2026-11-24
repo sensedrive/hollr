@@ -125,7 +125,7 @@ export interface HostTheme {
 }
 
 /** set by app.ts: Hollr pushes the palette when the user switches it, and `open` („Im Board zeigen“) while the page is open */
-export const hostEvents = { onTheme: (_t: HostTheme) => {}, onOpen: (_ticket: string) => {} };
+export const hostEvents = { onTheme: (_t: HostTheme) => {}, onOpen: (_ticket: string, _repo?: string) => {} };
 
 function onReply(msg: unknown): void {
   if (!msg || typeof msg !== "object" || !("hollr" in msg)) return;
@@ -135,7 +135,8 @@ function onReply(msg: unknown): void {
     return;
   }
   if (e.hollr === 1 && e.event === "open" && e.data && typeof e.data === "object" && "ticket" in e.data) {
-    hostEvents.onOpen(String(e.data.ticket));
+    const d = e.data as { ticket: unknown; repo?: unknown };
+    hostEvents.onOpen(String(d.ticket), typeof d.repo === "string" ? d.repo : undefined);
     return;
   }
   if (!("id" in msg)) return;

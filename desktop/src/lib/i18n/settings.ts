@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Tickets (z. B. TENDR-1037) und Issues/PRs (#3575) in Chat und Terminal sind klickbar – öffnet das Sandcastle-Board direkt auf dem Ticket, ohne Board die GitHub- bzw. JIRA-Seite.":
+    "Tickets (e.g. TENDR-1037) and issues/PRs (#3575) in chat and terminal are clickable – opens the Sandcastle board right on the ticket, without a board the GitHub or JIRA page.",
   "Übersicht: „Zuletzt“ statt „Alle“ – alle Agenten in einer Liste, wer zuletzt etwas gemeldet hat, steht oben; arbeitende zeigen, seit wann sie arbeiten.":
     "Overview: “Recent” instead of “All” – every agent in one list, the one that reported last on top; working ones show for how long they've been at it.",
   "Behoben: Auch omp-Sitzungen, die schon vor der herdr-Anbindung liefen, zeigen jetzt, dass sie arbeiten – Hollr liest es aus ihrem Fenstertitel.":

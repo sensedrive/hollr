@@ -232,8 +232,14 @@ struct TerminalScreen: View {
                 }
         }
         .preferredColorScheme(.dark)
+        // ticket keys and #issues in the terminal open the board (inside the cover's own link chooser)
+        .paneLinks(ref)
         // a cover of its own: links tapped in the terminal ask here, not behind it
         .linkChooser()
+        // a ticket tapped here opens the board in the Plugins tab: the cover must go
+        .onChange(of: BoardLink.shared.request) { _, request in
+            if request != nil { dismiss() }
+        }
     }
 }
 
@@ -284,6 +290,7 @@ private struct TerminalBody: View {
     /// long press: the terminal's text to select and copy natively
     @State private var selection: TerminalText?
     @Environment(\.openURL) private var openURL
+    @Environment(\.paneLinks) private var links
     @Environment(\.scenePhase) private var scenePhase
 
     /// inside the chat: display only (the composer below types, keys come from its menu)
@@ -315,6 +322,7 @@ private struct TerminalBody: View {
                 TerminalWebView(web: web, onInput: { session.type($0) }, onCtrlUsed: { ctrl = false },
                                 onSize: { session.resize(cols: $0, rows: $1) },
                                 onLink: { openURL($0) },
+                                onRef: { openURL($0.url) },
                                 onTap: {
                                     // a tap brings up the keyboard – in the chat a tap is for scrolling and
                                     // links, the keyboard button types into the TUI
@@ -402,6 +410,7 @@ private struct TerminalBody: View {
         }
         .onChange(of: ctrl) { _, on in web.armCtrl(on) }
         .onChange(of: readable, initial: true) { _, on in web.setReadable(on ? 100 : 0) }
+        .onChange(of: links, initial: true) { _, links in web.setLinks(links) }
         .sheet(item: $selection) { TerminalTextSheet(content: $0) }
     }
 
@@ -478,14 +487,17 @@ final class TerminalWeb {
     fileprivate var onCtrlUsed: () -> Void = {}
     fileprivate var onSize: (Int, Int) -> Void = { _, _ in }
     fileprivate var onLink: (URL) -> Void = { _ in }
+    fileprivate var onRef: (LinkRef) -> Void = { _ in }
     fileprivate var onTap: () -> Void = {}
     fileprivate var onSelect: (TerminalText) -> Void = { _ in }
     private var wantsShell = false
+    /// the pane's link patterns (`setLinks`), handed to the page once it is ready
+    private var links = LinkContext.none
     private let bridge = Bridge()
 
     init() {
         let config = WKWebViewConfiguration()
-        for name in ["input", "ready", "ctrlUsed", "size", "link", "tap", "select"] {
+        for name in ["input", "ready", "ctrlUsed", "size", "link", "ref", "tap", "select"] {
             config.userContentController.add(bridge, name: name)
         }
         view = WKWebView(frame: .zero, configuration: config)
@@ -526,12 +538,23 @@ final class TerminalWeb {
     }
     func focus() { view.evaluateJavaScript("focusTerm()") }
 
+    /// Ticket keys and #issues become tappable – only the pane's own JIRA keys, issues only with a known repo.
+    func setLinks(_ context: LinkContext) {
+        links = context
+        guard ready else { return }
+        let arg: [String: Any] = ["keys": LinkMatcher.validKeys(context.jira?.keys ?? []), "repo": context.repo != nil]
+        guard let json = try? JSONSerialization.data(withJSONObject: arg),
+              let text = String(data: json, encoding: .utf8) else { return }
+        view.evaluateJavaScript("setLinks(\(text))")
+    }
+
     fileprivate func received(_ name: String, _ body: Any) {
         switch name {
         case "ready":
             ready = true
             view.evaluateJavaScript(wantsShell ? "shellMode()" : "setReadable(\(readCols))")
             if let p = pending { render(p.0, rows: p.1, cols: p.2); pending = nil }
+            setLinks(links)
         case "input":
             if let text = body as? String {
                 #if DEBUG
@@ -545,6 +568,11 @@ final class TerminalWeb {
             if let d = body as? [String: Any], let c = d["cols"] as? Int, let r = d["rows"] as? Int { onSize(c, r) }
         case "link":
             if let raw = body as? String, let url = URL(string: raw) { onLink(url) }
+        case "ref":
+            if let d = body as? [String: Any], let kind = d["kind"] as? String, let value = d["value"] as? String,
+               let url = URL(string: "\(LinkRef.scheme)://\(kind)/\(value)"), let ref = LinkRef(url: url) {
+                onRef(ref)
+            }
         case "tap":
             onTap()
         case "select":
@@ -571,6 +599,7 @@ private struct TerminalWebView: UIViewRepresentable {
     let onCtrlUsed: () -> Void
     var onSize: (Int, Int) -> Void = { _, _ in }
     var onLink: (URL) -> Void = { _ in }
+    var onRef: (LinkRef) -> Void = { _ in }
     var onTap: () -> Void = {}
     var onSelect: (TerminalText) -> Void = { _ in }
 
@@ -584,6 +613,7 @@ private struct TerminalWebView: UIViewRepresentable {
         web.onCtrlUsed = onCtrlUsed
         web.onSize = onSize
         web.onLink = onLink
+        web.onRef = onRef
         web.onTap = onTap
         web.onSelect = onSelect
     }

@@ -72,7 +72,7 @@ struct RootView: View {
     private var pluginsTab: some View {
         NavigationStack(path: $pluginPath) {
             PluginsView()
-                .navigationDestination(for: PluginRoute.self) { PluginView(server: $0.server, plugin: $0.plugin, ticket: $0.open) }
+                .navigationDestination(for: PluginRoute.self) { PluginView(server: $0.server, plugin: $0.plugin, ticket: $0.open, repo: $0.repo) }
         }
     }
 
@@ -82,9 +82,9 @@ struct RootView: View {
         tab = .plugins
         if let shown = pluginPath.last, shown.server.id == request.server.id, shown.plugin.id == request.plugin.id {
             boardSerial += 1
-            BoardLink.shared.event = (request.server.id, request.ticket, boardSerial)
+            BoardLink.shared.event = (request.server.id, request.ticket, request.repo, boardSerial)
         } else {
-            pluginPath = [PluginRoute(server: request.server, plugin: request.plugin, open: request.ticket)]
+            pluginPath = [PluginRoute(server: request.server, plugin: request.plugin, open: request.ticket, repo: request.repo)]
         }
     }
 

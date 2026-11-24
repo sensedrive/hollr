@@ -111,6 +111,8 @@ struct PluginRoute: Hashable {
     let plugin: PluginInfo
     /// board ticket to show (`<KEY>:<n>` / `:<n>`, „Im Board zeigen“): fragment `open=` on the first load
     var open: String? = nil
+    /// `owner/name` with an issue `open` (`:<n>`): fragment `repo=`
+    var repo: String? = nil
 }
 
 /// The plugins of every paired server; a plugin opens its own web UI (PluginView).
@@ -216,6 +218,7 @@ struct PluginView: View {
     let server: Server
     let plugin: PluginInfo
     var ticket: String? = nil
+    var repo: String? = nil
     /// whether the fragment already carried `open` (a reload doesn't repeat it)
     @State private var opened = false
     @Environment(ServerStore.self) private var store
@@ -259,7 +262,9 @@ struct PluginView: View {
         .onChange(of: BoardLink.shared.event?.serial) { _, _ in
             guard let event = BoardLink.shared.event, event.server == server.id else { return }
             BoardLink.shared.event = nil
-            model.replyToHost(["hollr": 1, "event": "open", "data": ["ticket": event.ticket]])
+            var data: [String: Any] = ["ticket": event.ticket]
+            if let repo = event.repo { data["repo"] = repo }
+            model.replyToHost(["hollr": 1, "event": "open", "data": data])
         }
     }
 
@@ -310,7 +315,7 @@ struct PluginView: View {
         openError = nil
         do {
             let url = try await HollrClient.openPlugin(server, id: plugin.id)
-            model.open(GrillLabel.url(url, opening: opened ? nil : ticket))
+            model.open(GrillLabel.url(url, opening: opened ? nil : ticket, repo: repo))
             opened = true
         } catch {
             openError = error.localizedDescription

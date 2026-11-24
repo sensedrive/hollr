@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 67,
+    version: "0.55.0",
+    date: "24.11.2026",
+    items: [
+      { icon: "🔗", text: "Tickets (z. B. TENDR-1037) und Issues/PRs (#3575) in Chat und Terminal sind klickbar – öffnet das Sandcastle-Board direkt auf dem Ticket, ohne Board die GitHub- bzw. JIRA-Seite." },
+    ],
+  },
+  {
     build: 66,
     version: "0.54.0",
     date: "24.11.2026",

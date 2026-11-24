@@ -42,6 +42,7 @@ import {
 } from "./herdr";
 import { toLang } from "./i18n";
 import { runLive } from "./live";
+import { linksForCwd, paneCwd } from "./links";
 import { LOG_FILE, log } from "./log";
 import { listModels, switchCommand } from "./models";
 import {
@@ -121,7 +122,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.54.0";
+export const VERSION = "0.55.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -275,6 +276,8 @@ async function gate(): Promise<number> {
       "job",
       "skills",
       "plugins",
+      // polled per open session (terminal and chat)
+      "links",
       // polled by every open Sandcastle board; start/release/queue-set are logged below
       "sandcastle",
       "shared",
@@ -552,6 +555,21 @@ async function gate(): Promise<number> {
         }
         const latest = await latestVersions(req.op === "check");
         json({ tools: toolStates(VERSION, latest, toLang(req.lang)) });
+      } catch (err) {
+        json({ error: err instanceof Error ? err.message : String(err) });
+      }
+      return 0;
+    }
+    case "links": {
+      // which repo / JIRA site the pane's ticket keys and #n point at (read-only, cached per folder)
+      const req = JSON.parse((await readStdinLine()) || "{}") as { pane?: string };
+      const target = typeof req.pane === "string" ? req.pane : "";
+      if (!PANE_RE.test(target)) {
+        json({ error: "bad_pane" });
+        return 2;
+      }
+      try {
+        json(linksForCwd(await paneCwd(execHerdr, target)));
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }
@@ -884,7 +902,7 @@ async function gate(): Promise<number> {
     default:
       json({
         error: "not_allowed",
-        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | secrets | sandcastle | shared | machines | pairlink",
+        hint: "hello | events | tree | kinds | new | close <pane> | fork <pane> | rename <tab> | ports | history <pane> | live <pane> | prompt <pane> | answer <pane> | keys <pane> <key>... | summarize | plugins | links | secrets | sandcastle | shared | machines | pairlink",
       });
       return 2;
   }

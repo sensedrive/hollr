@@ -7941,6 +7941,16 @@
         }
       }
     },
+    "Tickets (z. B. TENDR-1037) und Issues/PRs (#3575) in Chat und Terminal antippen – öffnet das Sandcastle-Board direkt auf dem Ticket": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap tickets (e.g. TENDR-1037) and issues/PRs (#3575) in chat and terminal – opens the Sandcastle board right on the ticket"
+          }
+        }
+      }
+    },
     "Diktieren neu: einmal aufs Mikrofon tippen, nicht mehr halten – großer Knopf in der Mitte zum Pausieren, Senden daneben, der Text erscheint live": {
       "localizations": {
         "en": {

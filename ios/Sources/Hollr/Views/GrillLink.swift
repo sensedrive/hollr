@@ -19,15 +19,17 @@ enum GrillLabel {
         return nil
     }
 
-    /// The plugin URL with `&open=<ticket>` appended to its fragment (next to `token=`), percent-encoded like JS
-    /// encodeURIComponent.
-    static func url(_ url: URL, opening ticket: String?) -> URL {
+    /// The plugin URL with `&open=<ticket>` (and `&repo=<owner/name>` for an issue) appended to its fragment (next
+    /// to `token=`), percent-encoded like JS encodeURIComponent.
+    static func url(_ url: URL, opening ticket: String?, repo: String? = nil) -> URL {
         guard let ticket, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-_.!~*'()")
-        let value = ticket.addingPercentEncoding(withAllowedCharacters: allowed) ?? ticket
+        func encoded(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s }
+        var add = "open=\(encoded(ticket))"
+        if let repo, !repo.isEmpty { add += "&repo=\(encoded(repo))" }
         let fragment = parts.percentEncodedFragment ?? ""
-        parts.percentEncodedFragment = fragment.isEmpty ? "open=\(value)" : "\(fragment)&open=\(value)"
+        parts.percentEncodedFragment = fragment.isEmpty ? add : "\(fragment)&\(add)"
         return parts.url ?? url
     }
 }
@@ -42,12 +44,14 @@ final class BoardLink {
         let server: Server
         let plugin: PluginInfo
         let ticket: String
+        /// `owner/name` for an issue (`:<n>`): the board picks the project with that slug
+        var repo: String? = nil
     }
 
     /// set by the chat, consumed by RootView
     var request: Request?
     /// a ticket for the board page already on screen; PluginView posts it as an `open` event
-    var event: (server: Server.ID, ticket: String, serial: Int)?
+    var event: (server: Server.ID, ticket: String, repo: String?, serial: Int)?
 
     /// per server for this app session: its Sandcastle plugin, nil = none (failed lists are asked again)
     private var cache: [Server.ID: PluginInfo?] = [:]

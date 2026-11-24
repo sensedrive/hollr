@@ -2,7 +2,7 @@
  * Pure grill logic: which grill belongs to a ticket, how its 7 steps read, the deep link `open=` and the queue
  * behind „Alle auto-grillen“ (at most two running grills per machine).
  */
-import type { Grill, GrillMode, GrillStatus, Status } from "./types";
+import type { Grill, GrillMode, GrillStatus, JiraTicket, Status } from "./types";
 
 export const GRILL_STEP_COUNT = 7;
 /** step names as the server reports them; used when a grill has no steps (never seen) */
@@ -89,27 +89,47 @@ export function ticketGrills(statuses: Map<string, Pick<Status, "grills">>, slug
 export interface OpenTarget {
   key: string | null;
   n: number | null;
+  /** `owner/name` from `repo=`: selects the project with that slug */
+  repo?: string;
 }
 
-/** `TENDR-1:3551`, `:3551` or `TENDR-1:` (key only); anything else → null. */
-export function parseOpen(value: string | null | undefined): OpenTarget | null {
+/** GitHub `owner/name`: the owner is letters, digits and dashes, the name never starts with a dot */
+const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9-]*\/(?!\.)[\w.-]+$/;
+
+/** `TENDR-1:3551`, `:3551` or `TENDR-1:` (key only); anything else → null. A valid `repo` slug is kept, a bad one dropped. */
+export function parseOpen(value: string | null | undefined, repo?: string | null): OpenTarget | null {
   const m = (value ?? "").trim().match(/^([A-Z][A-Z0-9]+-\d+)?:(\d+)?$/);
   if (!m) return null;
   const key = m[1] ?? null;
   const n = m[2] ? Number(m[2]) : null;
   if (n !== null && n < 1) return null;
   if (!key && n === null) return null;
-  return { key, n };
+  const slug = (repo ?? "").trim();
+  return REPO_RE.test(slug) ? { key, n, repo: slug } : { key, n };
 }
 
-/** `open=` from a URL fragment like `#token=…&f=…&open=TENDR-1%3A3551`. */
+/** `open=` (and `repo=`) from a URL fragment like `#token=…&f=…&open=%3A3551&repo=owner%2Fname`. */
 export function readOpen(hash: string): OpenTarget | null {
-  return parseOpen(new URLSearchParams(hash.replace(/^#/, "")).get("open"));
+  const q = new URLSearchParams(hash.replace(/^#/, ""));
+  return parseOpen(q.get("open"), q.get("repo"));
 }
 
-/** The fragment without `open=` (the link is handled once, a reload must not reopen it). */
+/** The JIRA ticket whose GitHub family (grill ticket, story, children) contains issue `n`; null if none. */
+export function ticketOfIssue(tickets: readonly Pick<JiraTicket, "key" | "family">[], n: number): string | null {
+  for (const t of tickets) {
+    const f = t.family;
+    if (f.grill?.n === n || f.story?.n === n || f.children.some((c) => c.n === n)) return t.key;
+  }
+  return null;
+}
+
+/** The fragment without `open=` and `repo=` (the link is handled once, a reload must not reopen it). */
 export function dropOpen(hash: string): string {
-  const rest = hash.replace(/^#/, "").split("&").filter((p) => p && !p.startsWith("open=")).join("&");
+  const rest = hash
+    .replace(/^#/, "")
+    .split("&")
+    .filter((p) => p && !p.startsWith("open=") && !p.startsWith("repo="))
+    .join("&");
   return rest ? `#${rest}` : "";
 }
 

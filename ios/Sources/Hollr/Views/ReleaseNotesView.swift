@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 70, date: "24.11.2026", items: [
+            ("link", String(localized: "Tickets (z. B. TENDR-1037) und Issues/PRs (#3575) in Chat und Terminal antippen – öffnet das Sandcastle-Board direkt auf dem Ticket")),
+        ]),
         ReleaseNote(build: 69, date: "24.11.2026", items: [
             ("mic", String(localized: "Diktieren neu: einmal aufs Mikrofon tippen, nicht mehr halten – großer Knopf in der Mitte zum Pausieren, Senden daneben, der Text erscheint live")),
             ("clock", String(localized: "„Zuletzt“ zeigt, wann sich jeder Agent zuletzt gemeldet hat")),

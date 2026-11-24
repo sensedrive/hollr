@@ -9,7 +9,7 @@ import { api, type HostTheme, hostTheme, initToken, sc, servers, hostEvents } fr
 import { dragging } from "./drag";
 import { fill, h, reconcile } from "./dom";
 import { readHash } from "./filter";
-import { dropOpen, keyProject, type OpenTarget, parseOpen, readOpen } from "./grill";
+import { dropOpen, keyProject, type OpenTarget, parseOpen, readOpen, ticketOfIssue } from "./grill";
 import { pumpGrills } from "./grillqueue";
 import { clearTicketCards } from "./views/ticketcard";
 import { openTicketSide, renderTicketLive } from "./views/ticketside";
@@ -47,8 +47,8 @@ const useTheme = (t: HostTheme | null) => {
   if (applyTheme(t)) prefSet("theme", t);
 };
 hostEvents.onTheme = useTheme;
-hostEvents.onOpen = (ticket) => {
-  const t = parseOpen(ticket);
+hostEvents.onOpen = (ticket, repo) => {
+  const t = parseOpen(ticket, repo);
   if (t) openTicket(t);
 };
 hostTheme().then(useTheme);
@@ -355,6 +355,7 @@ async function loadJira(full = false): Promise<void> {
         state.jiraMissing = false;
         if (slug !== state.slug) return;
         state.jiraError = null;
+        freshJira = slug;
         if ("same" in res || writing() || dragging()) {
           hooks.render();
           return;
@@ -368,6 +369,7 @@ async function loadJira(full = false): Promise<void> {
           state.jiraMissing = true;
           state.jira = null;
         } else if (slug === state.slug) state.jiraError = text;
+        if (slug === state.slug) freshJira = slug;
       }
       hooks.render();
     },
@@ -452,13 +454,16 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshAll();
 });
 
-// ---- deep link `open=KEY:n` / `:n` / `KEY:` and Hollr's `open` event („Im Board zeigen“)
+// ---- deep link `open=KEY:n` / `:n` / `KEY:` (+ `repo=owner/name`) and Hollr's `open` event („Im Board zeigen“,
+// tapped ticket keys and #n in a session)
 
 let pendingOpen: OpenTarget | null = null;
 /** the project switch is decided once per link, as soon as projects are known */
 let openSwitched = false;
 /** slug whose board answered from the network since the page opened (a key-only link may then give up) */
 let freshBoard = "";
+/** slug whose JIRA board was asked over the network since the page opened (a `:n` link then stops waiting) */
+let freshJira = "";
 
 function openTicket(t: OpenTarget): void {
   pendingOpen = t;
@@ -466,7 +471,10 @@ function openTicket(t: OpenTarget): void {
   tryOpen();
 }
 
-/** Switches to the ticket's project (by JIRA project key, else stays) and opens its details once it can. */
+/**
+ * Switches to the link's project (`repo=` slug, else by JIRA project key, else stays) and opens its details once it
+ * can. `:n` opens the JIRA ticket whose GitHub family holds n (Tickets view), any other issue in the Werkbank.
+ */
 function tryOpen(): void {
   const t = pendingOpen;
   if (!t) return;
@@ -475,7 +483,17 @@ function tryOpen(): void {
     if (!list.length) return;
     openSwitched = true;
     const key = t.key;
-    const target = key ? list.find((p) => p.jira.projectKey === keyProject(key)) : undefined;
+    const repo = t.repo?.toLowerCase();
+    const target = repo
+      ? list.find((p) => p.slug.toLowerCase() === repo)
+      : key
+        ? list.find((p) => p.jira.projectKey === keyProject(key))
+        : undefined;
+    if (repo && !target) {
+      pendingOpen = null;
+      toast(`Projekt ${t.repo} gibt es auf diesem Rechner nicht.`);
+      return;
+    }
     if (target && target.slug !== state.slug) {
       closeSidebar();
       useSlug(target.slug);
@@ -483,10 +501,26 @@ function tryOpen(): void {
       last.jira = 0;
       last.queues = 0;
     }
-    // a link to a GitHub issue opens the Werkbank, a key-only link the ticket
-    if (t.n !== null) showMode("werkbank");
+    // KEY:n opens the Werkbank issue; `:n` decides below (ticket family or Werkbank); KEY: the ticket
+    if (t.n !== null && t.key) showMode("werkbank");
     else if (state.view !== "board") show("board");
     else tick(true);
+  }
+  if (t.n !== null && !t.key) {
+    const n = t.n;
+    const key = state.jira ? ticketOfIssue(state.jira.tickets, n) : null;
+    if (key) {
+      pendingOpen = null;
+      hooks.openTicket(key);
+      return;
+    }
+    // not in the cached families: wait for this page's own JIRA answer before falling back to the issue
+    const p = projects().find((x) => x.slug === state.slug);
+    if (p?.jira.projectKey && freshJira !== state.slug) return;
+    pendingOpen = null;
+    showMode("werkbank");
+    openIssue(n);
+    return;
   }
   if (t.n !== null) {
     pendingOpen = null;

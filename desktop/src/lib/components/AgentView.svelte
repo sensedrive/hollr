@@ -18,6 +18,8 @@
   import { allPanes, app, drafts, findPane, go, refresh, serverById, tabName } from "../store.svelte";
   import { grillTicket } from "../grillLabel";
   import { boardServer } from "../plugins";
+  import { parseIssueHref, type IssueTarget, type LinkInfo } from "../issueLinks";
+  import { paneLinks, provideIssueLinks } from "../paneLinks";
   import {
     live, liveAbout, liveActive, startLive as startLiveOn, stopLiveOn,
   } from "../live.svelte";
@@ -87,6 +89,23 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => (toast = ""), 2500);
     }
+  }
+  /** the pane's repo / JIRA project (`links` gate): ticket keys and `#123` in the chat become links */
+  let issueLinks = $state<LinkInfo>();
+  provideIssueLinks(() => issueLinks);
+  $effect(() => {
+    const s = server;
+    const p = pane.pane;
+    issueLinks = undefined;
+    paneLinks(s, p).then((info) => {
+      if (s === server && p === pane.pane) issueLinks = info;
+    });
+  });
+  /** a tapped ticket or issue: the Sandcastle board on it, else its GitHub/JIRA page in the side browser */
+  async function openIssue(target: IssueTarget) {
+    const at = await boardServer(server, app.servers.map((s) => s.id));
+    if (at) go({ view: "plugin", server: at, id: "sandcastle", open: target.open, ...(target.repo ? { repo: target.repo } : {}) });
+    else linkInBrowser(new URL(target.web));
   }
   /** drafts / ↑ history of this session */
   const key = $derived(draftKey(server, pane.pane));
@@ -570,6 +589,11 @@
 
   // ---- links: ask like iOS (Hollr browser / system browser / copy); file paths open the preview
   function onLink(href: string) {
+    const issue = parseIssueHref(href);
+    if (issue) {
+      void openIssue(issue);
+      return;
+    }
     const file = parsePathHref(href);
     if (file) {
       filePreview = { ...file, n: ++opens };

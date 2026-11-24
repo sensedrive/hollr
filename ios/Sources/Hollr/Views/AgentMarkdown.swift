@@ -1,13 +1,15 @@
 import MarkdownUI
 import SwiftUI
 
-/// Markdown in Hollr's theme; follows the app text scale.
+/// Markdown in Hollr's theme; follows the app text scale. Inside a session (`.paneLinks`) its ticket keys and
+/// issue numbers become links.
 struct ScaledMarkdown: View {
     let text: String
     @ScaledMetric(relativeTo: .body) private var size: CGFloat = 16
+    @Environment(\.paneLinks) private var links
 
     var body: some View {
-        Markdown(text).markdownTheme(.hollr(size: size)).textSelection(.enabled)
+        Markdown(LinkMatcher.linkify(markdown: text, context: links)).markdownTheme(.hollr(size: size)).textSelection(.enabled)
     }
 }
 

@@ -15,6 +15,8 @@
   import TermMinimap from "./TermMinimap.svelte";
   import { findLinks, keySequence, linksAt, TermSession, type TermEnd, type TermPhase } from "../terminal";
   import { findPaths, pathHref } from "../paths";
+  import { findIssues, type LinkInfo } from "../issueLinks";
+  import { paneLinks } from "../paneLinks";
   import { cleanSelection, ScrollSelection } from "../scrollSelection";
   import { offerSelection, withdrawSelection } from "../speech.svelte";
 
@@ -32,6 +34,8 @@
   let focused = $state(false);
   let term: Terminal | undefined;
   let session: TermSession | undefined;
+  /** the pane's repo / JIRA project: which `#123` and `TENDR-1` are links */
+  let issues: LinkInfo | undefined;
 
   /** Cmd+click (Ctrl+click elsewhere) opens a link – a plain click belongs to the TUI. The terminal lets
    *  go of the keyboard so Esc closes the link dialog instead of going to the TUI. */
@@ -77,6 +81,7 @@
     const found = linksAt((row) => buf.getLine(row), buf.length, y, (text) => [
       ...findLinks(text),
       ...findPaths(text).map((p) => ({ start: p.start, end: p.end, url: pathHref(p.path, p.line) })),
+      ...(issues ? findIssues(text, issues) : []),
     ]);
     return found.map((l) => ({
       range: { start: l.start, end: l.end },
@@ -91,6 +96,15 @@
   // is new on every poll, which would otherwise restart the terminal each time
   const srv = $derived(server);
   const paneId = $derived(pane);
+
+  $effect(() => {
+    const s = srv;
+    const p = paneId;
+    issues = undefined;
+    paneLinks(s, p).then((info) => {
+      if (s === srv && p === paneId) issues = info;
+    });
+  });
 
   $effect(() => {
     const el = host;

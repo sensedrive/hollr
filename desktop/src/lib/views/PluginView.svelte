@@ -12,8 +12,9 @@
   import { errText } from "$lib/serverapi";
   import { isPinned, listPlugins, openPlugin, togglePin } from "$lib/plugins";
 
-  /** `open`: board ticket (`<KEY>:<n>` / `:<n>`) – fragment `open=` on the first load, an `open` event once the page is up */
-  let { server, id, open: ticket }: { server: string; id: string; open?: string } = $props();
+  /** `open`: board ticket (`<KEY>:<n>` / `:<n>`) – fragment `open=` on the first load, an `open` event once the page is up;
+   *  `repo` (`owner/name`) goes with it for an issue number */
+  let { server, id, open: ticket, repo }: { server: string; id: string; open?: string; repo?: string } = $props();
 
   let src = $state("");
   let error = $state("");
@@ -25,8 +26,9 @@
   let frame = $state<HTMLIFrameElement>();
   let tunnel: number | undefined;
   let destroyed = false;
-  /** the ticket the page was last told about (fragment or event) */
+  /** the ticket (and repo) the page was last told about (fragment or event) */
   let told: string | undefined;
+  const asked = $derived(ticket ? `${ticket}|${repo ?? ""}` : undefined);
 
   const mayReopen = reopenGate();
 
@@ -39,7 +41,8 @@
       const target = new URL(url);
       if (ticket && told === undefined) {
         target.hash += `&open=${encodeURIComponent(ticket)}`;
-        told = ticket;
+        if (repo) target.hash += `&repo=${encodeURIComponent(repo)}`;
+        told = asked;
       }
       if (destroyed) {
         api.tunnelClose(local).catch(() => {});
@@ -58,10 +61,10 @@
 
   // a new ticket while the page is already shown: tell it instead of reloading
   $effect(() => {
-    const next = ticket;
-    if (!next || !src || next === told) return;
+    const next = asked;
+    if (!next || !ticket || !src || next === told) return;
     told = next;
-    frame?.contentWindow?.postMessage({ hollr: 1, event: "open", data: { ticket: next } }, "*");
+    frame?.contentWindow?.postMessage({ hollr: 1, event: "open", data: repo ? { ticket, repo } : { ticket } }, "*");
   });
 
   /** links to public pages, asked for by the plugin page (it can't open windows from the sandboxed frame) */

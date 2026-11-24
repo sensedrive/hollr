@@ -12,6 +12,7 @@ import {
   stepStates,
   stepText,
   ticketGrills,
+  ticketOfIssue,
 } from "./grill";
 import type { Grill } from "./types";
 
@@ -56,9 +57,39 @@ describe("deep link", () => {
     expect(readOpen("#f=x")).toBeNull();
   });
 
-  test("drops only open=", () => {
+  test("reads repo= next to open=", () => {
+    expect(readOpen("#token=abc&open=%3A3575&repo=leicht-luftig%2Ftendr")).toEqual({ key: null, n: 3575, repo: "leicht-luftig/tendr" });
+    expect(readOpen("#open=TENDR-1037%3A&repo=o%2Fr.js")).toEqual({ key: "TENDR-1037", n: null, repo: "o/r.js" });
+    expect(parseOpen(":7", "owner/name")).toEqual({ key: null, n: 7, repo: "owner/name" });
+  });
+
+  test("drops a malformed repo, never the link", () => {
+    for (const repo of ["", "noslash", "a/b/c", "../x", "a b/c"]) {
+      const t = parseOpen(":7", repo);
+      expect(t).toEqual({ key: null, n: 7 });
+      expect(t && "repo" in t).toBe(false);
+    }
+    expect(readOpen("#repo=o%2Fr")).toBeNull();
+  });
+
+  test("drops only open= and repo=", () => {
     expect(dropOpen("#f=l%3Abug&open=%3A12")).toBe("#f=l%3Abug");
     expect(dropOpen("#open=%3A12")).toBe("");
+    expect(dropOpen("#token=t&open=%3A12&repo=o%2Fr&f=x")).toBe("#token=t&f=x");
+  });
+
+  test("ticket of an issue: grill ticket, story or child", () => {
+    const m = (n: number) => ({ n, title: "", state: "open" as const, labels: [] });
+    const tickets = [
+      { key: "TENDR-1", family: { grill: m(10), story: m(11), children: [m(12), m(13)] } },
+      { key: "TENDR-2", family: { children: [m(20)] } },
+    ];
+    expect(ticketOfIssue(tickets, 10)).toBe("TENDR-1");
+    expect(ticketOfIssue(tickets, 11)).toBe("TENDR-1");
+    expect(ticketOfIssue(tickets, 13)).toBe("TENDR-1");
+    expect(ticketOfIssue(tickets, 20)).toBe("TENDR-2");
+    expect(ticketOfIssue(tickets, 99)).toBeNull();
+    expect(ticketOfIssue([], 10)).toBeNull();
   });
 
   test("key project", () => {

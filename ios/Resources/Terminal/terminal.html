@@ -174,6 +174,69 @@
     }
     return null;
   }
+  // ticket keys (TENDR-1037) and #issues of the pane's repo – the same patterns as the app (LinkMatcher); Swift
+  // sets them per pane: JIRA keys only from the pane's repo config, issues only when its GitHub repo is known
+  let jiraRe = null, issueRe = null;
+  window.setLinks = ({ keys, repo }) => {
+    const ok = (keys || []).filter((k) => /^[A-Z][A-Z0-9]+$/.test(k));
+    jiraRe = ok.length ? new RegExp(`\\b(?:${ok.join('|')})-\\d+\\b`, 'g') : null;
+    issueRe = repo ? /(?<![\w/&#])#(\d{1,6})\b/g : null;
+    term.refresh(0, term.rows - 1);
+  };
+  const ANY_URL_RE = /(?:\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/|\bwww\.)[^\s<>"'`]+/g;
+  // matches in a string, never inside a URL: [{ start, end, kind, value }]
+  function refsIn(text) {
+    if (!jiraRe && !issueRe) return [];
+    const urls = [...text.matchAll(ANY_URL_RE)].map((m) => [m.index, m.index + m[0].length]);
+    const free = (a, b) => !urls.some(([s, e]) => a < e && b > s);
+    const out = [];
+    for (const m of jiraRe ? text.matchAll(jiraRe) : []) {
+      if (free(m.index, m.index + m[0].length)) out.push({ start: m.index, end: m.index + m[0].length, kind: 'ticket', value: m[0] });
+    }
+    for (const m of issueRe ? text.matchAll(issueRe) : []) {
+      if (free(m.index, m.index + m[0].length)) out.push({ start: m.index, end: m.index + m[0].length, kind: 'issue', value: m[1] });
+    }
+    return out;
+  }
+  function refAt(x, y) {
+    const cell = cellAt(x, y);
+    if (!cell) return null;
+    const { text, at } = logicalLine(cell.row, cell.col);
+    return refsIn(text).find((r) => at >= r.start && at < r.end) || null;
+  }
+  // one tap, one board: the pointer path and xterm's link (mouse click) may both see the same press
+  let lastRef = { key: '', at: 0 };
+  function postRef(r) {
+    const key = `${r.kind}:${r.value}`, now = Date.now();
+    if (key === lastRef.key && now - lastRef.at < 400) return;
+    lastRef = { key, at: now };
+    post('ref', { kind: r.kind, value: r.value });
+  }
+  // xterm link provider: underlines the matches under the mouse and opens them on click (Mac); taps resolve
+  // in pointerup below, from the drawn (scaled) screen
+  term.registerLinkProvider({
+    provideLinks(y, callback) {
+      const line = term.buffer.active.getLine(y - 1);
+      if (!line || (!jiraRe && !issueRe)) return callback(undefined);
+      // string index → cell column (wide chars take two cells)
+      let text = '';
+      const colOf = [];
+      for (let x = 0; x < line.length; x++) {
+        const c = line.getCell(x);
+        if (!c || c.getWidth() === 0) continue;
+        const chars = c.getChars() || ' ';
+        for (let i = 0; i < chars.length; i++) colOf.push(x);
+        text += chars;
+      }
+      const links = refsIn(text).map((r) => ({
+        range: { start: { x: colOf[r.start] + 1, y }, end: { x: colOf[r.end - 1] + 1, y } },
+        text: text.slice(r.start, r.end),
+        decorations: { underline: true, pointerCursor: true },
+        activate: () => postRef(r),
+      }));
+      callback(links.length ? links : undefined);
+    },
+  });
   // everything in the buffer (scrollback + screen) as plain text, and where the finger was in it
   function allText(x, y) {
     const buf = term.buffer.active;
@@ -216,7 +279,9 @@
     clearTimeout(p.timer);
     if (p.done || p.moved) { consumed = p.done; return; }
     const url = urlAt(e.clientX, e.clientY);
-    if (url) { consumed = true; post('link', url); } else post('tap', true);
+    if (url) { consumed = true; post('link', url); return; }
+    const ref = refAt(e.clientX, e.clientY);
+    if (ref) { consumed = true; postRef(ref); } else post('tap', true);
   });
   el.addEventListener('touchend', (e) => { if (consumed) e.preventDefault(); consumed = false; }, { passive: false });
   // mouse (Mac): right click selects text

@@ -3,6 +3,7 @@
   import { t } from "../i18n";
   import { highlight, langOf } from "../highlight.svelte";
   import { findPaths, looksLikePath, pathHref, splitLine } from "../paths";
+  import { findIssues, type LinkInfo } from "../issueLinks";
 
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const plainRenderer = new Renderer();
@@ -30,8 +31,9 @@
     },
   });
 
-  /** File paths in text and inline code become clickable spans (not inside code blocks or links). */
-  function linkPaths(html: string): string {
+  /** File paths and ticket/issue references (when the pane's project is known) in text and inline code become
+   *  clickable spans – not inside code blocks or links. */
+  function linkText(html: string, issues: LinkInfo | undefined): string {
     const tpl = document.createElement("template");
     tpl.innerHTML = html;
     const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT, {
@@ -41,19 +43,29 @@
     while (walker.nextNode()) nodes.push(walker.currentNode as Text);
     for (const node of nodes) {
       const text = node.data;
-      const found = findPaths(text);
+      const found = [
+        ...findPaths(text).map((p) => ({ start: p.start, end: p.end, path: p })),
+        ...(issues ? findIssues(text, issues) : []).map((f) => ({ start: f.start, end: f.end, issue: f.url })),
+      ].sort((a, b) => a.start - b.start);
       if (!found.length) continue;
       const frag = document.createDocumentFragment();
       let at = 0;
-      for (const p of found) {
-        frag.append(text.slice(at, p.start));
+      for (const f of found) {
+        if (f.start < at) continue; // overlaps the one before
+        frag.append(text.slice(at, f.start));
         const span = document.createElement("span");
-        span.className = "fpath";
-        span.dataset.path = p.path;
-        if (p.line) span.dataset.line = String(p.line);
-        span.textContent = text.slice(p.start, p.end);
+        if ("path" in f) {
+          span.className = "fpath";
+          span.dataset.path = f.path.path;
+          if (f.path.line) span.dataset.line = String(f.path.line);
+        } else {
+          span.className = "issue";
+          span.dataset.href = f.issue;
+          span.title = t("Im Board zeigen");
+        }
+        span.textContent = text.slice(f.start, f.end);
         frag.append(span);
-        at = p.end;
+        at = f.end;
       }
       frag.append(text.slice(at));
       node.replaceWith(frag);
@@ -72,6 +84,7 @@
   import { highlighter } from "../highlight.svelte";
   import { copy } from "../serverapi";
   import MsgActions from "./MsgActions.svelte";
+  import { issueLinksContext } from "../paneLinks";
 
   let { text, plain = false, dimmed = false, onLink }: {
     text: string; plain?: boolean; dimmed?: boolean; onLink?: (url: string) => void;
@@ -79,6 +92,8 @@
 
   const COLLAPSE_AT = 900;
   let expanded = $state(false);
+  /** the session's ticket links (AgentView); none elsewhere */
+  const issueLinks = issueLinksContext();
 
   /** First paragraphs up to the limit, never cutting inside a code block or table. */
   function preview(s: string): string {
@@ -103,7 +118,7 @@
       // omp's "local://…" artifacts stay links (the preview opens them); DOMPurify's default list drops them
       ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|local|file):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
     });
-    return onLink ? linkPaths(clean) : clean;
+    return onLink ? linkText(clean, issueLinks?.()) : clean;
   });
 
   async function click(e: MouseEvent) {
@@ -119,6 +134,12 @@
           button.classList.remove("done");
         }, 1200);
       }
+      return;
+    }
+    const issue = el?.closest<HTMLElement>(".issue");
+    if (issue?.dataset.href) {
+      if (window.getSelection()?.toString()) return;
+      onLink?.(issue.dataset.href);
       return;
     }
     const path = el?.closest<HTMLElement>(".fpath");
@@ -157,8 +178,9 @@
   .md.dimmed { opacity: 0.75; }
   .md > :global(:first-child) { margin-top: 0; }
   .md :global(p) { margin: 0 0 10px; }
-  .md :global(.fpath) { cursor: pointer; }
-  .md :global(.fpath:hover) { text-decoration: underline; text-underline-offset: 2px; color: var(--accent); }
+  .md :global(:is(.fpath, .issue)) { cursor: pointer; }
+  .md :global(.issue) { color: var(--accent); }
+  .md :global(:is(.fpath, .issue):hover) { text-decoration: underline; text-underline-offset: 2px; color: var(--accent); }
   .md :global(:is(p, ul, ol, pre, blockquote, .codeblock, .tablewrap):last-child) { margin-bottom: 0; }
   .md :global(h1), .md :global(h2), .md :global(h3), .md :global(h4), .md :global(h5), .md :global(h6) { line-height: 1.3; font-weight: 650; }
   .md :global(h1) { font-size: 1.3em; margin: 18px 0 8px; }

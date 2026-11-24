@@ -127,6 +127,8 @@ private struct AgentConversation: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: reading)
+        // ticket keys and #issues in the chat and its terminal open the board
+        .paneLinks(ref)
         .fullScreenCover(isPresented: $showTerminal, onDismiss: { terminalGeneration += 1 }) { TerminalScreen(ref: ref) }
         // the zen composer goes away with the keyboard up: its focus change never arrives
         .onChange(of: reading) { _, zen in
