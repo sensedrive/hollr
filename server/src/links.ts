@@ -87,6 +87,8 @@ function loadCache(): Cache {
 
 /** Links of a folder, from the cache when younger than 10 min. */
 export function linksForCwd(cwd: string, now = Date.now()): Links {
+  // a pane herdr doesn't know (closed) has no folder: nothing to link, nothing to remember
+  if (!cwd) return { repo: null, jira: null };
   const cache = loadCache();
   const hit = cache[cwd];
   if (hit && now - hit.at < TTL_MS && now >= hit.at) return hit.links;
