@@ -1,20 +1,38 @@
 /**
  * The Sandcastle dock below the Tickets board: one row per machine with a live run (or a waiting queue) – machine,
- * model, branch, progress, then the run's tickets as chips in run order. Folds to one summary bar. A row is a drop
- * target (`data-column="lane@<server>"`): a ticket card dropped on it queues its children there. Clicking a row
- * opens the run in the side panel (details, phases per ticket, reorder, stop). Rows are cached and rebuilt only
- * when what they show changes, so polls never reset scroll positions.
+ * model, branch, progress in children and the loop's round, then the run's tickets as chips in run order (x/y
+ * children merged, most active status). Folds to one summary bar. A row is a drop target
+ * (`data-column="lane@<server>"`): a ticket card dropped on it queues its children there. Clicking a row opens the
+ * run in the side panel (round, stories with their child issues, reorder, stop; magicfink sandcastle-board v24).
+ * Rows are cached and rebuilt only when what they show changes, so polls never reset scroll positions.
  */
 import { setLaneOrder, takeOutOfLane } from "../actions";
 import { hasHost, openExternal, openSession, sc } from "../api";
 import type { Derived, Lane } from "../derive";
-import { chipText, type DockChip, dependsOn, flowStage, laneChips, moveChip, runProgress, STAGES, stageLine } from "../dock";
+import {
+  type ChildInfo,
+  childLabel,
+  childProgress,
+  childSegment,
+  childStatus,
+  type DockChip,
+  dependsOn,
+  isWorking,
+  laneChips,
+  moveChip,
+  ROUND_STEPS,
+  type RoundStep,
+  roundLine,
+  type StoryActivity,
+  storySummary,
+} from "../dock";
 import { fill, h, icon, reconcile } from "../dom";
+import { ICON } from "../icons";
 import { isBusy, since } from "../model";
 import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
 import { LANE_PREFIX } from "../tickets";
 import { blindRun, timeline } from "../timeline";
-import type { Flow, Phase, Run } from "../types";
+import type { Phase, Run } from "../types";
 import { newRunModal } from "./newrun";
 import { claimPanel, closeSidebar } from "./sidebar";
 
@@ -85,21 +103,75 @@ function ticketKeys(): Map<number, string> {
 /** Live runs of the lane (the dock shows the first; a machine runs at most one from the board). */
 const liveRun = (lane: Lane): Run | undefined => lane.runs.find((r) => r.status !== "ended");
 
+function phaseIn(d: Derived, lane: Lane, run: Run | undefined, n: number): Phase | undefined {
+  const tr = d.runs.get(n);
+  if (tr && tr.server === lane.server.id && tr.run === run) return tr.issue.phase;
+  return d.issues.get(n)?.state === "closed" ? "merged" : undefined;
+}
+
 function chipsOf(d: Derived, lane: Lane, keys: Map<number, string>): DockChip[] {
   const run = liveRun(lane);
-  const flow = run?.flow;
   return laneChips(
     lane.order,
     (n) => keys.get(n),
-    (n): Phase | undefined => {
-      const tr = d.runs.get(n);
-      if (tr && tr.server === lane.server.id && tr.run === run) return tr.issue.phase;
-      return d.issues.get(n)?.state === "closed" ? "merged" : undefined;
-    },
-    // with a flow the steps come from its roles and assignment results
-    flow ? (n) => flowStage(flow, n) : undefined,
+    (n) => phaseIn(d, lane, run, n),
   );
 }
+
+/** What a lane's row and panel show: the run, its chips, each chip's children and the round. */
+interface LaneView {
+  run: Run | undefined;
+  /** nothing reports where this run stands: children are „ohne Angabe“, never a guess */
+  blind: boolean;
+  chips: DockChip[];
+  /** chip key → its children's states, in lane order */
+  kids: Map<string, ChildInfo[]>;
+  all: ChildInfo[];
+  step: RoundStep | null;
+  round: string;
+  /** the round strip applies (a flow reports the loop running) */
+  steps: boolean;
+}
+
+function laneView(d: Derived, lane: Lane, keys: Map<number, string>): LaneView {
+  const run = liveRun(lane);
+  const blind = !!run && blindRun(timeline(run));
+  const chips = chipsOf(d, lane, keys);
+  const phase = (n: number) => phaseIn(d, lane, run, n);
+  const kids = new Map(
+    chips.map((c) => [
+      c.key,
+      c.children.map((n) =>
+        childStatus(n, {
+          phase: phase(n),
+          flow: run?.flow,
+          blind,
+          // an open blocker the run hasn't merged yet
+          blocker: d.issues.get(n)?.blockedBy.find((b) => b !== n && d.open.has(b) && phase(b) !== "merged") ?? null,
+          reason: run?.issues.find((i) => i.n === n)?.reason ?? null,
+        }),
+      ),
+    ]),
+  );
+  const all = [...kids.values()].flat();
+  const r = roundLine(run?.flow, blind, all.filter(isWorking).length);
+  return { run, blind, chips, kids, all, step: r.step, round: r.text, steps: r.steps };
+}
+
+/** One segment per child: grey waits, blue implementer, purple review, outlined green waits for merge, green merged. */
+function kidBar(kids: readonly ChildInfo[], label: string): HTMLElement {
+  return h("span", { class: "kid-bar", role: "img", "aria-label": label }, ...kids.map((k) => h("span", { class: `seg ${childSegment(k)}` })));
+}
+
+const ACTIVITY_ICON: Record<StoryActivity, string> = {
+  working: ICON.hammer,
+  merging: ICON.gitMerge,
+  ready: ICON.gitMerge,
+  waiting: ICON.clock,
+  failed: ICON.alert,
+  done: ICON.check,
+  unknown: ICON.circleHelp,
+};
 
 /** „wartet auf deine Antwort“ with „Sitzung öffnen“ while herdr says the run's session is blocked. */
 function waitingNote(server: string, run: Run, cls: string): HTMLElement | null {
@@ -110,15 +182,6 @@ function waitingNote(server: string, run: Run, cls: string): HTMLElement | null 
     if (pane) openSession(server, pane);
   };
   return h("span", { class: cls }, h("b", {}, "wartet auf deine Antwort"), pane && hasHost() ? h("button", { class: "btn small primary", onclick: open }, "Sitzung öffnen") : null);
-}
-
-/** „Worktree ✓ · Sandcastle ● · Prüfungen · …“ with the current stage highlighted. */
-function stageLineEl(flow: Flow): HTMLElement {
-  return h(
-    "div",
-    { class: "flow-stages", "aria-label": "Etappen" },
-    ...stageLine(flow).flatMap((s, i) => [i ? h("span", { class: "sep" }, "·") : null, h("span", { class: `fstage ${s.state}${s.current ? " current" : ""}`, title: s.reason ?? "" }, s.text)]),
-  );
 }
 
 const summaryOf = (key: string) =>
@@ -161,48 +224,54 @@ export function placeOf(d: Derived, key: string, server: string): number | null 
   return i + 1;
 }
 
-function dots(chips: DockChip[]): HTMLElement {
-  return h("span", { class: "dock-dots" }, ...chips.map((c) => h("span", { class: `seg ${c.phase}` })));
-}
-
-function chipEl(c: DockChip, i: number, chips: DockChip[], blind = false): HTMLElement {
+function chipEl(c: DockChip, i: number, v: LaneView): HTMLElement {
   const isFresh = (fresh.get(c.key) ?? 0) > Date.now();
   const waiting = c.phase === "queued";
-  const up = waiting && !!moveChip(chips, c.key, -1);
-  const down = waiting && !!moveChip(chips, c.key, 1);
+  const up = waiting && !!moveChip(v.chips, c.key, -1);
+  const down = waiting && !!moveChip(v.chips, c.key, 1);
+  const kids = v.kids.get(c.key) ?? [];
+  const s = storySummary(kids, v.step);
   return h(
     "div",
-    { class: `dock-chip ph-${c.phase}${isFresh ? " fresh" : ""}`, title: `${c.key} ${summaryOf(c.key)}` },
+    { class: `dock-chip${waiting ? "" : " fixed"}${isFresh ? " fresh" : ""}`, "data-activity": s.activity, title: `${c.key} ${summaryOf(c.key)}` },
     h(
       "div",
       { class: "dock-chip-top" },
       h("span", { class: "pos" }, i + 1),
-      h("b", {}, c.key),
-      h("span", { class: "grow" }),
-      h("span", { class: "dock-chip-st" }, isFresh ? `neu · Platz ${i + 1}` : blind && c.phase === "queued" ? "ohne Angabe" : chipText(c)),
-      waiting
-        ? h(
-            "span",
-            { class: "dock-arrows" },
-            h("button", { class: "arrow", "data-move": "-1", "data-key": c.key, disabled: !up, "aria-label": `${c.key} nach vorne` }, "←"),
-            h("button", { class: "arrow", "data-move": "1", "data-key": c.key, disabled: !down, "aria-label": `${c.key} nach hinten` }, "→"),
-          )
-        : null,
+      h("b", {}, c.key, h("span", { class: "dock-chip-n" }, ` · ${s.count}`)),
+      // status and arrows stay together; on a narrow chip they wrap to a second line as one
+      h(
+        "span",
+        { class: "dock-chip-end" },
+        h(
+          "span",
+          { class: "dock-chip-st", "data-activity": isFresh ? "fresh" : s.activity },
+          isFresh ? null : icon(ACTIVITY_ICON[s.activity], "dock-chip-ico"),
+          isFresh ? `neu · Platz ${i + 1}` : s.label,
+        ),
+        waiting
+          ? h(
+              "span",
+              { class: "dock-arrows" },
+              h("button", { class: "arrow", "data-move": "-1", "data-key": c.key, disabled: !up, "aria-label": `${c.key} nach vorne` }, "←"),
+              h("button", { class: "arrow", "data-move": "1", "data-key": c.key, disabled: !down, "aria-label": `${c.key} nach hinten` }, "→"),
+            )
+          : null,
+      ),
     ),
     h("div", { class: "dock-chip-title" }, summaryOf(c.key)),
+    kids.length ? kidBar(kids, `${c.key}: ${s.count}${v.blind ? "" : " gemergt"}, ${s.label}`) : null,
   );
 }
 
-function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
-  const run = liveRun(lane);
-  // nothing reports where this run stands: its chips' „wartet“ would be a guess
-  const blind = !!run && blindRun(timeline(run));
+function rowEl(lane: Lane, v: LaneView): HTMLElement {
+  const { run, chips } = v;
   const id = lane.server.id;
   const now = Date.now();
-  const sig = JSON.stringify([lane.server, run?.id, run?.branch, run?.config, run?.status, run?.pane, blind, chips, [...fresh].filter(([, t]) => t > now).map(([k]) => k), chips.map((c) => summaryOf(c.key)), sideServer === id]);
+  const sig = JSON.stringify([lane.server, run?.id, run?.branch, run?.config, run?.status, run?.pane, v.blind, v.round, v.step, chips, [...v.kids], [...fresh].filter(([, t]) => t > now).map(([k]) => k), chips.map((c) => summaryOf(c.key)), sideServer === id]);
   let row = rowEls.get(id);
   if (row?.sig === sig) return row.el;
-  const p = runProgress(chips);
+  const p = childProgress(v.all, v.blind);
   const agent = run ? run.config.agentLabel || run.config.agent || "" : "";
   const el = h(
     "div",
@@ -213,19 +282,15 @@ function rowEl(lane: Lane, chips: DockChip[]): HTMLElement {
       h("b", { class: "dock-name" }, lane.server.label),
       h("span", { class: "dock-branch mono muted" }, run ? run.branch : ""),
       h("span", { class: "dock-agent muted" }, run ? agent : "kein Lauf"),
+      h("span", { class: "dock-of" }, chips.length ? (run ? p.short : `${chips.length} wartend`) : "", chips.length ? kidBar(v.all, p.text) : null),
+      run ? h("span", { class: "dock-round muted" }, v.blind ? "Stand unbekannt" : v.round) : null,
       run ? waitingNote(id, run, "dock-wait") : null,
-      h(
-        "span",
-        { class: "dock-of" },
-        chips.length ? (run ? (blind ? `${p.total} · Stand unbekannt` : `${p.at} von ${p.total}`) : `${p.total} wartend`) : "",
-        chips.length ? dots(chips) : null,
-      ),
       // a machine without a run but with tickets waiting: start right from its row
       !run && chips.length
         ? h("button", { class: "btn small primary dock-start", "data-start": true, title: "Lauf auf diesem Rechner starten" }, "▷ Lauf starten")
         : null,
     ),
-    h("div", { class: "dock-chips", "data-list": true }, ...(chips.length ? chips.map((c, i) => chipEl(c, i, chips, blind)) : [h("p", { class: "empty" }, "Leer – Ticket hierher ziehen")])),
+    h("div", { class: "dock-chips", "data-list": true }, ...(chips.length ? chips.map((c, i) => chipEl(c, i, v)) : [h("p", { class: "empty" }, "Leer – Ticket hierher ziehen")])),
   );
   el.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target === el) openRunSide(id);
@@ -241,22 +306,18 @@ export function renderDock(d: Derived): void {
   lastDerived = d;
   const keys = ticketKeys();
   const open = isOpen();
-  const lanes = d.lanes.map((lane) => ({ lane, chips: chipsOf(d, lane, keys), run: liveRun(lane) })).filter((x) => x.run || x.chips.length);
-  const live = lanes.filter((x) => x.run);
+  const lanes = d.lanes.map((lane) => ({ lane, v: laneView(d, lane, keys) })).filter((x) => x.v.run || x.v.chips.length);
+  const live = lanes.filter((x) => x.v.run);
   titleEl.textContent = `Sandcastle · ${live.length} ${live.length === 1 ? "Lauf" : "Läufe"}`;
   root.querySelector(".dock-toggle")?.setAttribute("aria-expanded", String(open));
   root.classList.toggle("closed", !open);
-  const summary = live.map((x) => {
-    const p = runProgress(x.chips);
-    return `${x.lane.server.label} ${p.at} von ${p.total}`;
-  });
-  summaryEl.textContent = open ? "" : summary.join(" · ");
+  summaryEl.textContent = open ? "" : live.map((x) => `${x.lane.server.label} ${childProgress(x.v.all, x.v.blind).short}`).join(" · ");
   bodyEl.hidden = !open;
   if (open)
     reconcile(
       bodyEl,
       lanes.length
-        ? lanes.map((x) => rowEl(x.lane, x.chips))
+        ? lanes.map((x) => rowEl(x.lane, x.v))
         : [h("p", { class: "empty" }, state.servers.length ? "Kein Lauf – „+ Neuer Lauf“ startet einen." : "Rechner werden gesucht …")],
     );
   renderRunSide(d);
@@ -321,48 +382,71 @@ function openLog(server: string, run: Run, n: number | null): void {
   hooks.show("runs");
 }
 
-function phaseChips(stage: number): HTMLElement {
+/** Stories whose children the user folded in or out (`<server>|<key>`); the rest follow their activity. */
+const folds = new Map<string, boolean>();
+
+function childRow(server: string, run: Run | undefined, k: ChildInfo): HTMLElement {
+  const d = lastDerived;
+  const title = run?.issues.find((i) => i.n === k.n)?.title ?? d?.issues.get(k.n)?.title ?? "";
   return h(
-    "div",
-    { class: "stage-chips" },
-    ...STAGES.map((s, i) => h("span", { class: `stage${i < stage ? " done" : i === stage ? " current" : ""}` }, i < stage ? `✓ ${s}` : s)),
+    "li",
+    { class: "run-kid", "data-status": k.status },
+    h(
+      "div",
+      { class: "run-kid-row" },
+      h("span", { class: "run-kid-n" }, `#${k.n}`),
+      h("span", { class: "run-kid-title", title }, title),
+      h("span", { class: "run-kid-st", "data-status": k.status }, childLabel(k)),
+      run && isWorking(k) ? h("button", { class: "link", "aria-label": `Log von #${k.n}`, onclick: () => openLog(server, run, k.n) }, "Log") : null,
+    ),
+    k.status === "failed" && k.reason ? h("p", { class: "run-kid-reason", title: k.reason }, k.reason) : null,
   );
 }
 
-function ticketBlock(server: string, run: Run | undefined, c: DockChip, i: number, chips: DockChip[]): HTMLElement {
+function ticketBlock(server: string, v: LaneView, c: DockChip, i: number): HTMLElement {
   const d = lastDerived;
+  const { run, chips } = v;
   const deps = d ? dependsOn(chips, c, (n) => d.issues.get(n)?.blockedBy ?? []) : [];
-  const waitingOn = deps.find((k) => chips.find((x) => x.key === k)?.phase !== "merged");
-  const reason = run?.issues.find((x) => c.children.includes(x.n) && x.reason)?.reason;
-  const status =
-    c.phase === "queued"
-      ? run && blindRun(timeline(run))
-        ? "ohne Angabe"
-        : waitingOn
-          ? `wartet auf ${waitingOn}`
-          : "wartet"
-      : c.phase === "merged"
-        ? "gemergt"
-        : c.phase === "failed"
-          ? `fehlgeschlagen${reason ? `: ${reason}` : ""}`
-          : chipText(c).replace(/^[🔒⏱✓✗] /u, "");
-  const logIssue = run?.issues.find((x) => c.children.includes(x.n) && x.logs.length);
+  const kids = v.kids.get(c.key) ?? [];
+  const s = storySummary(kids, v.step);
+  const waiting = c.phase === "queued";
+  const fold = `${server}|${c.key}`;
+  const open = folds.get(fold) ?? (s.activity === "working" || s.activity === "merging" || s.activity === "ready");
+  const toggle = () => {
+    folds.set(fold, !open);
+    sideSig = "";
+    if (lastDerived) renderRunSide(lastDerived);
+  };
   const up = moveChip(chips, c.key, -1);
   const down = moveChip(chips, c.key, 1);
   return h(
     "div",
-    { class: `run-ticket ph-${c.phase}${deps.length ? " dep" : ""}` },
-    deps.length ? h("div", { class: "dep-note muted" }, `↳ baut auf ${deps.join(", ")}`) : null,
-    h("div", { class: "run-ticket-top" }, h("span", { class: "pos" }, i + 1), " ", h("b", {}, c.key), " ", h("span", {}, summaryOf(c.key)), isBusy(c.phase) ? h("span", { class: "lock", title: "wird gerade gebaut" }, "🔒") : null),
-    phaseChips(c.stage),
+    { class: "run-ticket", "data-activity": s.activity },
+    deps.length ? h("div", { class: "dep-note muted" }, icon(ICON.cornerDownRight, "dep-ico"), `baut auf ${deps.join(", ")}`) : null,
+    h(
+      "div",
+      { class: "run-ticket-top" },
+      h("span", { class: "pos" }, i + 1),
+      h("span", { class: "run-ticket-name" }, h("b", {}, c.key), " ", summaryOf(c.key)),
+      !waiting && s.activity !== "done" ? icon(ICON.lock, "lock") : null,
+    ),
     h(
       "div",
       { class: "run-ticket-st" },
-      h("span", { class: `st ph-${c.phase}` }, status),
-      h("span", { class: "grow" }),
-      run && logIssue ? h("button", { class: "link", onclick: () => openLog(server, run, logIssue.n) }, "Protokoll") : null,
+      h("b", { class: "run-ticket-n" }, v.blind ? s.count : `${s.count} gemergt`),
+      kids.length ? kidBar(kids, `${c.key}: ${s.count}${v.blind ? "" : " gemergt"}, ${s.label}`) : null,
+      h("span", { class: "run-ticket-act", "data-activity": s.activity }, s.label),
     ),
-    c.phase === "queued"
+    kids.length
+      ? h(
+          "button",
+          { class: "run-fold", "aria-expanded": String(open), onclick: toggle },
+          icon(open ? ICON.chevDown : ICON.chevRight, "fold-ico"),
+          open ? "Kinder ausblenden" : `${kids.length} ${kids.length === 1 ? "Kind" : "Kinder"} anzeigen`,
+        )
+      : null,
+    open ? h("ul", { class: "run-kids" }, ...kids.map((k) => childRow(server, run, k))) : null,
+    waiting
       ? h(
           "div",
           { class: "run-ticket-actions" },
@@ -375,17 +459,38 @@ function ticketBlock(server: string, run: Run | undefined, c: DockChip, i: numbe
   );
 }
 
+/** The round box: „Runde 3 von max. 60 · jetzt: …“, Planer wählt · Kinder bauen · Merge, children merged. */
+function roundBox(v: LaneView): HTMLElement {
+  const p = childProgress(v.all, v.blind);
+  const pass = v.run?.flow?.pass;
+  const now = ROUND_STEPS.findIndex((s) => s.id === v.step);
+  return h(
+    "div",
+    { class: "run-round", role: "status", "data-unknown": v.blind ? "true" : null },
+    h("p", { class: "run-round-text" }, pass && pass.n > 1 ? `${v.round} · Durchgang ${pass.n}` : v.round),
+    v.steps
+      ? h(
+          "ol",
+          { class: "run-round-steps", "aria-hidden": "true" },
+          ...ROUND_STEPS.map((s, i) => h("li", { "data-state": i < now ? "done" : i === now ? "active" : "todo" }, s.label)),
+        )
+      : null,
+    v.all.length ? h("div", { class: "run-round-progress" }, h("span", { class: "muted" }, p.text), kidBar(v.all, p.text)) : null,
+  );
+}
+
 function renderRunSide(d: Derived): void {
   if (!sideServer || !sidePanel) return;
   const server = sideServer;
   const lane = d.lanes.find((l) => l.server.id === server);
-  const run = lane ? liveRun(lane) : undefined;
-  const chips = lane ? chipsOf(d, lane, ticketKeys()) : [];
-  const sig = JSON.stringify([server, run, chips, chips.map((c) => summaryOf(c.key)), Math.floor(Date.now() / 60_000)]);
+  const v: LaneView = lane ? laneView(d, lane, ticketKeys()) : { run: undefined, blind: false, chips: [], kids: new Map(), all: [], step: null, round: "", steps: false };
+  const { run, chips } = v;
+  const titles = v.all.map((k) => run?.issues.find((i) => i.n === k.n)?.title ?? d.issues.get(k.n)?.title);
+  const sig = JSON.stringify([server, run, chips, [...v.kids], titles, [...folds], chips.map((c) => summaryOf(c.key)), Math.floor(Date.now() / 60_000)]);
   if (sig === sideSig) return;
   sideSig = sig;
   const label = lane?.server.label ?? server;
-  const p = runProgress(chips);
+  const parallel = run?.config.parallel;
   fill(
     sidePanel,
     h("div", { class: "side-head" }, h("button", { class: "btn ghost", onclick: closeSidebar }, "✕ Schließen")),
@@ -400,24 +505,20 @@ function renderRunSide(d: Derived): void {
             h("dt", {}, "Ziel-Branch"),
             h("dd", { class: "mono" }, run.branch || "–"),
             h("dt", {}, "Agent"),
-            h("dd", {}, run.config.agentLabel || run.config.agent || "–"),
+            h("dd", {}, run.config.agentLabel || run.config.agent || "–", parallel ? h("span", { class: "muted" }, ` · ${parallel} ${parallel === 1 ? "Kind" : "Kinder"} gleichzeitig`) : null),
             h("dt", {}, "Gestartet"),
             h("dd", {}, run.startedAt ? `vor ${since(run.startedAt)}` : "–"),
-            run.flow?.iteration ? h("dt", {}, "Runde") : null,
-            run.flow?.iteration ? h("dd", {}, `${run.flow.iteration.n}${run.flow.iteration.max ? ` von ${run.flow.iteration.max}` : ""}${run.flow.pass && run.flow.pass.n > 1 ? ` · Durchgang ${run.flow.pass.n}` : ""}`) : null,
-            h("dt", {}, "Fortschritt"),
-            h("dd", { class: "run-progress" }, h("b", {}, `${p.at} von ${p.total}`), dots(chips)),
             h("dt", {}, "Pull Request"),
             h("dd", {}, run.pr && run.slug ? h("button", { class: "link", onclick: () => openExternal(`https://github.com/${run.slug}/pull/${run.pr}`) }, `#${run.pr}`) : "noch keiner"),
           )
         : h("p", { class: "muted" }, chips.length ? "Diese Tickets warten auf den nächsten Lauf." : "Keine Tickets eingereiht."),
-      run?.flow ? stageLineEl(run.flow) : null,
+      run ? roundBox(v) : null,
       run ? waitingNote(server, run, "run-wait") : null,
       run
         ? h("div", { class: "btn-row" }, h("button", { class: "btn", onclick: () => openLog(server, run, null) }, "Protokoll öffnen"), stopButton(server, run))
         : h("div", { class: "btn-row" }, h("button", { class: "btn primary", onclick: () => newRunModal(server) }, "Lauf starten")),
-      h("h3", { class: "run-side-h" }, `${run ? "Tickets im Lauf" : "Warteschlange"} (${chips.length})`),
-      ...chips.map((c, i) => ticketBlock(server, run, c, i, chips)),
+      h("h3", { class: "run-side-h" }, `${run ? "Stories in Reihenfolge" : "Warteschlange"} (${chips.length})`),
+      ...chips.map((c, i) => ticketBlock(server, v, c, i)),
     ),
   );
 }

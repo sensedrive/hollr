@@ -1,12 +1,12 @@
 /**
- * Pure logic of the Sandcastle dock below the Tickets board: a machine's lane (GitHub issues in run/queue order)
- * folded to JIRA tickets („chips“), their aggregated phase and stage, the run's progress and reordering whole
- * tickets inside the waiting part of a lane. No DOM, no state – tested in dock.test.ts.
+ * Pure logic of the Sandcastle dock below the Tickets board and its run panel (magicfink sandcastle-board v24): a
+ * machine's lane (GitHub issues in run/queue order) folded to JIRA tickets („chips“), the state of each child issue,
+ * a story's „3/9 gemergt“ with its most active status, the loop's round (Planer wählt · Kinder bauen · Merge) and
+ * reordering whole tickets inside the waiting part of a lane. The Sandcastle loop works per child issue: a round's
+ * planner picks free children, each gets an implementer then a reviewer, one merger merges the round's finished
+ * ones – planner and merge belong to the round, not to a story. No DOM, no state – tested in dock.test.ts.
  */
-import type { Flow, Phase, StageState } from "./types";
-
-/** The four steps a ticket goes through in a run (chips in the details panel). */
-export const STAGES = ["Planer", "Implementer", "Code-Review", "Merge"] as const;
+import type { Flow, Phase } from "./types";
 
 export interface DockChip {
   /** JIRA key, `#<n>` for an issue without ticket */
@@ -14,8 +14,6 @@ export interface DockChip {
   /** the ticket's issues in this lane, in lane order */
   children: number[];
   phase: Phase;
-  /** index of the current step (STAGES): -1 = not started, 4 = everything done */
-  stage: number;
 }
 
 /** What one ticket is doing, from its issues' phases: the busiest child wins, merged only when all are. */
@@ -24,99 +22,193 @@ export function ticketPhase(phases: Phase[]): Phase {
   return rank.find((p) => phases.includes(p)) ?? "merged";
 }
 
-/** Index of the current stage (STAGES) from a phase alone; before it all are done. -1 = not started, 4 = everything done. */
-export function stageOf(phase: Phase): number {
-  return ({ queued: -1, planned: 0, building: 1, reviewing: 2, merged: 4, failed: -1, "no-commits": -1 } as const)[phase];
-}
-
-/**
- * The step of one issue in a batch flow, from `role.started`/`role.ended` and the assignment's result: the role
- * working on it, else the next one due. A queued issue is at the planner while it plans; undefined = the flow
- * says nothing (not planned, or it failed – its phase tells).
- */
-export function flowStage(flow: Flow, n: number): number | undefined {
-  const a = flow.assignments.find((x) => x.id === n);
-  if (!a) return flow.active.some((r) => r.role === "planner") ? 0 : undefined;
-  if (a.result === "merged") return 4;
-  if (a.result !== "running") return undefined;
-  if (a.role) return { planner: 0, implementer: 1, reviewer: 2, merger: 3 }[a.role];
-  return a.reviewed ? 3 : a.commits > 0 ? 2 : 1;
-}
-
-export const CHIP_TEXT: Readonly<Record<Phase, string>> = {
-  queued: "⏱ wartet",
-  planned: "geplant",
-  building: "🔒 Implementer läuft",
-  reviewing: "🔒 Code-Review läuft",
-  merged: "✓ gemergt",
-  failed: "✗ fehlgeschlagen",
-  "no-commits": "ohne Commits",
-};
-
-/** What a chip says: the phase, or the planner/merger step a flow reports (and what a built issue waits for). */
-export function chipText(c: DockChip): string {
-  if (c.stage === 0 && (c.phase === "queued" || c.phase === "planned")) return "🔒 Planer läuft";
-  if (c.stage === 2 && c.phase === "planned") return "wartet auf Code-Review";
-  if (c.stage === 3 && c.phase === "reviewing") return "🔒 Merge läuft";
-  return CHIP_TEXT[c.phase];
-}
-
-/**
- * Lane order (issue numbers) → one chip per ticket at the place of its first issue. `stepOf` (a run's flow) gives an
- * issue's step; without it the step follows the phase. A ticket stands at its busiest unfinished issue's step.
- */
-export function laneChips(
-  order: readonly number[],
-  ticketOf: (n: number) => string | undefined,
-  phaseOf: (n: number) => Phase | undefined,
-  stepOf: (n: number) => number | undefined = () => undefined,
-): DockChip[] {
-  const byKey = new Map<string, { key: string; children: number[]; phases: Phase[]; steps: number[] }>();
+/** Lane order (issue numbers) → one chip per ticket at the place of its first issue. */
+export function laneChips(order: readonly number[], ticketOf: (n: number) => string | undefined, phaseOf: (n: number) => Phase | undefined): DockChip[] {
+  const byKey = new Map<string, { key: string; children: number[]; phases: Phase[] }>();
   for (const n of order) {
     const key = ticketOf(n) ?? `#${n}`;
     let c = byKey.get(key);
     if (!c) {
-      c = { key, children: [], phases: [], steps: [] };
+      c = { key, children: [], phases: [] };
       byKey.set(key, c);
     }
-    const phase = phaseOf(n) ?? "queued";
     c.children.push(n);
-    c.phases.push(phase);
-    c.steps.push(stepOf(n) ?? stageOf(phase));
+    c.phases.push(phaseOf(n) ?? "queued");
   }
-  return [...byKey.values()].map((c) => {
-    const phase = ticketPhase(c.phases);
-    const busy = c.steps.filter((s) => s >= 0 && s < 4);
-    const stage = busy.length ? Math.max(...busy) : c.steps.every((s) => s === 4) ? 4 : stageOf(phase);
-    return { key: c.key, children: c.children, phase, stage };
-  });
+  return [...byKey.values()].map((c) => ({ key: c.key, children: c.children, phase: ticketPhase(c.phases) }));
 }
 
-const STAGE_LABEL: Record<string, string> = {
+// ---- children
+
+/** Where one child issue stands in the run; unknown = the run writes no flow log, its state would be a guess. */
+export type ChildStatus = "waiting" | "blocked" | "implementer" | "review" | "ready" | "merged" | "failed" | "empty" | "unknown";
+
+export interface ChildInfo {
+  n: number;
+  status: ChildStatus;
+  /** blocked: the open issue it waits for */
+  blockedBy: number | null;
+  /** failed: why */
+  reason: string | null;
+}
+
+const CHILD_LABEL: Readonly<Record<Exclude<ChildStatus, "blocked">, string>> = {
+  waiting: "wartet",
+  implementer: "Implementer",
+  review: "Code-Review",
+  ready: "wartet auf Merge",
+  merged: "gemergt",
+  failed: "fehlgeschlagen",
+  empty: "ohne Commits",
+  unknown: "ohne Angabe",
+};
+
+/** The child's pill: „Implementer“, „wartet auf #3605“, „ohne Angabe“ … */
+export const childLabel = (c: ChildInfo): string => (c.status === "blocked" ? `wartet auf #${c.blockedBy ?? "?"}` : CHILD_LABEL[c.status]);
+
+/** An implementer or reviewer works on it now (row highlighted, „Log“ link). */
+export const isWorking = (c: ChildInfo): boolean => c.status === "implementer" || c.status === "review";
+
+const SEGMENT: Readonly<Record<ChildStatus, string>> = {
+  waiting: "queued",
+  blocked: "queued",
+  unknown: "queued",
+  implementer: "building",
+  review: "reviewing",
+  ready: "ready",
+  merged: "merged",
+  failed: "failed",
+  empty: "empty",
+};
+
+/** Segment class (`.seg.<x>`) of a child in the progress bars. */
+export const childSegment = (c: ChildInfo): string => SEGMENT[c.status];
+
+/**
+ * A child's state: from its assignment in the run's flow (role at work, merged, failed or rejected; built and
+ * reviewed without a role = waiting for the round's merge), else from its phase. `blocker` = an open issue it waits
+ * for (only matters while it waits); `blind` = nothing reports the run's state.
+ */
+export function childStatus(
+  n: number,
+  a: { phase: Phase | undefined; flow: Flow | null | undefined; blind: boolean; blocker?: number | null; reason?: string | null },
+): ChildInfo {
+  const out = (status: ChildStatus, reason: string | null = null): ChildInfo => ({ n, status, blockedBy: status === "blocked" ? (a.blocker ?? null) : null, reason });
+  if (a.blind) return out("unknown");
+  if (a.phase === "merged") return out("merged");
+  const as = a.flow?.assignments.find((x) => x.id === n);
+  if (as?.result === "merged") return out("merged");
+  if (as && as.result !== "running") return out("failed", as.reason ?? a.reason ?? null);
+  if (as) {
+    if (as.role === "implementer") return out("implementer");
+    if (as.role === "reviewer") return out("review");
+    if (as.role === "merger" || as.reviewed) return out("ready");
+    return out(as.commits > 0 ? "review" : "implementer");
+  }
+  switch (a.phase) {
+    case "failed":
+      return out("failed", a.reason ?? null);
+    case "no-commits":
+      return out("empty");
+    case "building":
+    case "planned":
+      return out("implementer");
+    case "reviewing":
+      return out("review");
+    default:
+      return out(a.blocker ? "blocked" : "waiting");
+  }
+}
+
+// ---- stories
+
+export type StoryActivity = "working" | "merging" | "ready" | "waiting" | "failed" | "done" | "unknown";
+
+export interface StorySummary {
+  merged: number;
+  total: number;
+  /** „3/9“, blind „9 Kinder“ */
+  count: string;
+  activity: StoryActivity;
+  /** „2 in Arbeit“, „im Merge“, „wartet“, „fertig“, „ohne Angabe“ … */
+  label: string;
+}
+
+const kids = (n: number) => `${n} ${n === 1 ? "Kind" : "Kinder"}`;
+
+/** A story's merged count and its most active status: in work before merge before waiting before done. */
+export function storySummary(children: readonly ChildInfo[], step: RoundStep | null): StorySummary {
+  const total = children.length;
+  const count = (s: ChildStatus) => children.filter((c) => c.status === s).length;
+  const merged = count("merged");
+  const base = { merged, total, count: `${merged}/${total}` };
+  if (total && children.every((c) => c.status === "unknown")) return { ...base, count: kids(total), activity: "unknown", label: "ohne Angabe" };
+  const working = children.filter(isWorking).length;
+  if (working) return { ...base, activity: "working", label: `${working} in Arbeit` };
+  if (count("ready")) return step === "merge" ? { ...base, activity: "merging", label: "im Merge" } : { ...base, activity: "ready", label: "wartet auf Merge" };
+  if (count("waiting") || count("blocked")) return { ...base, activity: "waiting", label: "wartet" };
+  const failed = count("failed");
+  if (failed) return { ...base, activity: "failed", label: `fertig, ${failed} fehlgeschl.` };
+  return { ...base, activity: "done", label: "fertig" };
+}
+
+/** „6 von 18 Kindern gemergt“ / „6/18 gemergt“ – the run's progress in children, not stories. */
+export function childProgress(children: readonly ChildInfo[], blind: boolean): { text: string; short: string } {
+  const total = children.length;
+  if (blind) return { text: `${kids(total)}, Stand unbekannt`, short: `${kids(total)} · ?` };
+  const merged = children.filter((c) => c.status === "merged").length;
+  return { text: `${merged} von ${total} ${total === 1 ? "Kind" : "Kindern"} gemergt`, short: `${merged}/${total} gemergt` };
+}
+
+// ---- round
+
+export type RoundStep = "planner" | "building" | "merge";
+
+export const ROUND_STEPS: readonly { id: RoundStep; label: string }[] = [
+  { id: "planner", label: "Planer wählt" },
+  { id: "building", label: "Kinder bauen" },
+  { id: "merge", label: "Merge" },
+];
+
+const STAGE_LABEL: Readonly<Record<string, string>> = {
   worktree: "Worktree",
-  sandcastle: "Sandcastle",
   checks: "Prüfungen",
   pr: "PR",
   deploy: "Testserver",
   testplan: "Testanweisung",
   teardown: "Abbau",
 };
-const STAGE_MARK: Record<StageState, string> = { pending: "", running: "●", ok: "✓", failed: "✗", skipped: "–" };
 
-/** The flow's stages for the compact line „Worktree ✓ · Sandcastle ● · Prüfungen …“. */
-export function stageLine(flow: Flow): { stage: string; text: string; state: StageState; current: boolean; reason: string | null }[] {
-  return flow.stages.map((s) => {
-    const label = STAGE_LABEL[s.stage] ?? s.stage;
-    const mark = STAGE_MARK[s.state];
-    return { stage: s.stage, text: mark ? `${label} ${mark}` : label, state: s.state, current: s.stage === flow.current, reason: s.reason };
-  });
+/** What the round does now, from the flow's active roles (children at work count as building). */
+export function roundStep(flow: Flow | null | undefined, working: number): RoundStep | null {
+  const roles = new Set((flow?.active ?? []).map((r) => r.role));
+  if (roles.has("merger")) return "merge";
+  if (roles.has("implementer") || roles.has("reviewer") || working > 0) return "building";
+  if (roles.has("planner")) return "planner";
+  return null;
 }
 
-/** „2 von 4“: the place of the furthest ticket the run has reached (nothing started yet: 1). */
-export function runProgress(chips: readonly DockChip[]): { at: number; total: number } {
-  const i = chips.findLastIndex((c) => c.phase !== "queued");
-  return { at: Math.min(chips.length, Math.max(1, i + 1)), total: chips.length };
+/**
+ * „Runde 3 von max. 60 · jetzt: 2 Kinder in Arbeit“ (or „jetzt: Planer wählt“ / „jetzt: Merge“); after the loop
+ * the stage the run is at; blind: „Stand unbekannt – …“. `working` = children an implementer or reviewer has now.
+ * `steps`: the round strip (Planer wählt · Kinder bauen · Merge) applies – a flow reports a loop still running.
+ */
+export function roundLine(flow: Flow | null | undefined, blind: boolean, working: number): { text: string; step: RoundStep | null; steps: boolean } {
+  if (blind) return { text: "Stand unbekannt – dieser Lauf schreibt kein Ablauf-Log", step: null, steps: false };
+  const loop = flow?.stages.find((s) => s.stage === "sandcastle")?.state;
+  if (flow && (loop === "ok" || loop === "failed" || loop === "skipped")) {
+    const at = flow.current && flow.current !== "sandcastle" ? STAGE_LABEL[flow.current] : undefined;
+    return { text: at ? `Schleife fertig · jetzt: ${at}` : "Schleife fertig", step: null, steps: false };
+  }
+  const step = roundStep(flow, working);
+  const what = step === "planner" ? "Planer wählt" : step === "merge" ? "Merge" : step === "building" ? `${kids(working)} in Arbeit` : null;
+  const it = flow?.iteration;
+  if (!it) return { text: what ? `jetzt: ${what}` : flow ? "noch keine Runde – startet mit der Schleife" : "Runde unbekannt", step, steps: !!flow };
+  const round = `Runde ${it.n}${it.max ? ` von max. ${it.max}` : ""}`;
+  return { text: what ? `${round} · jetzt: ${what}` : round, step, steps: true };
 }
+
+// ---- lane order
 
 /**
  * Moves a waiting ticket one place up (-1) or down (1) among the waiting tickets; the new lane order (issue
