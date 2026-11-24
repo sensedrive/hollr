@@ -159,7 +159,8 @@ export function parseStatusMd(text: string): {
   n: number | null;
   notes: string[];
 } {
-  const done = new Array<boolean>(8).fill(false);
+  // step → done as the file says; a step the file never mentions has no entry
+  const done: (boolean | undefined)[] = new Array(8).fill(undefined);
   const notes: string[] = [];
   let n: number | null = null;
   let open = false;
@@ -188,7 +189,11 @@ export function parseStatusMd(text: string): {
     }
     notes.push(trimmed.length > NOTE_LEN ? `${trimmed.slice(0, NOTE_LEN - 1)}…` : trimmed);
   }
-  const steps = STEP_LABELS.map((label, i) => ({ n: i + 1, label, done: done[i + 1] ?? false }));
+  // the grill runs its steps in order: an earlier step the file never mentions is done when a later one is
+  // (older STATUS.md files skip „Ticket gelesen“/„Grill“ and would read as „Schritt 1/7“); a step it lists as
+  // open or started stays open
+  const lastDone = Math.max(0, ...Object.entries(done).filter(([, v]) => v).map(([k]) => Number(k)));
+  const steps = STEP_LABELS.map((label, i) => ({ n: i + 1, label, done: done[i + 1] ?? i + 1 <= lastDone }));
   const first = steps.find((s) => !s.done);
   return { steps, step: first ? first.n : 8, n, notes: notes.slice(-NOTES_MAX) };
 }

@@ -96,6 +96,10 @@ Erledigt:
     expect(
       done("Erledigt:\n- Schritt 1/2: Grill in zwei Runden\nOffen: 3 Jira\n- 3 Kommentar"),
     ).toEqual([1, 2, 3]);
+    // an older file that starts its list at step 3: 1 and 2 are done, the explicitly open 7 stays open
+    const old = parseStatusMd("- 3. JIRA-Kommentar\n- 4. Spec-PR gemergt\n- 5. Entwürfe\n- 6. Story #3440\n- [ ] 7 Bericht");
+    expect(old.steps.filter((x) => x.done).map((x) => x.n)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(old.step).toBe(7);
   });
 
   test("notes: last 30, long lines cut", () => {

@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 61,
+    version: "0.52.2",
+    date: "24.11.2026",
+    items: [
+      { icon: "✓", text: "Behoben: Ältere Grills zeigten „Schritt 1/7“, obwohl sie fast fertig waren – Schritte, die die Statusdatei nicht nennt, zählen als erledigt, wenn ein späterer erledigt ist." },
+    ],
+  },
+  {
     build: 60,
     version: "0.52.1",
     date: "23.11.2026",

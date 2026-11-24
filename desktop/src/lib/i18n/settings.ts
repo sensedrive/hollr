@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Behoben: Ältere Grills zeigten „Schritt 1/7“, obwohl sie fast fertig waren – Schritte, die die Statusdatei nicht nennt, zählen als erledigt, wenn ein späterer erledigt ist.":
+    "Fixed: older grills showed “step 1/7” although they were nearly done – steps the status file doesn't mention count as done when a later one is.",
   "Plugins verbinden sich selbst neu, wenn ihr Dienst auf dem Rechner neu gestartet wurde – kein „Load failed“ mehr, kein Wiederöffnen nötig.":
     "Plugins reconnect by themselves when their service on the machine was restarted – no more “Load failed”, no reopening needed.",
   "Einstellungen › Integrationen: JIRA-Zugang einmal eintragen – Hollr prüft ihn und hinterlegt ihn auf allen gekoppelten Rechnern (nur dort, nie in der App).":
