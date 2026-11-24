@@ -29,6 +29,7 @@ import { runEvents } from "./events";
 import { paneContext, readPath } from "./file";
 import { type ForkRequest, forkPane } from "./fork";
 import { pruneHidden, setHidden } from "./hiddenspaces";
+import { pruneOrigins } from "./spaceorigins";
 import { loadShared, patchShared, type SharedChange, stampPanes } from "./shared";
 import { type MachinesRequest, machines } from "./machines";
 import {
@@ -123,7 +124,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.57.2";
+export const VERSION = "0.57.3";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -676,9 +677,21 @@ async function gate(): Promise<number> {
     }
     case "spaces": {
       const spaces = await listSpaces();
-      // hidden on this server, so the desktop app and the phone show the same list
-      const hidden = pruneHidden(spaces.map((s) => s.id));
-      json({ spaces: spaces.map((s) => (hidden.has(s.id) ? { ...s, hidden: true } : s)) });
+      // hidden on this server, so the desktop app and the phone show the same list; spaces Hollr opened for a
+      // Sandcastle run or a grill carry their origin (spaceorigins.ts)
+      const ids = spaces.map((s) => s.id);
+      const hidden = pruneHidden(ids);
+      const origins = pruneOrigins(ids);
+      json({
+        spaces: spaces.map((s) => {
+          const origin = origins.get(s.id);
+          return {
+            ...s,
+            ...(hidden.has(s.id) ? { hidden: true } : {}),
+            ...(origin ? { origin } : {}),
+          };
+        }),
+      });
       return 0;
     }
     case "attach":

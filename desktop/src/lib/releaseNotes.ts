@@ -12,6 +12,16 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 74,
+    version: "0.57.3",
+    date: "24.11.2026",
+    items: [
+      { icon: "🏰", text: "Spaces: was Hollr für Sandcastle-Läufe und Grills öffnet, steht in einer eigenen Gruppe „Sandcastle & Grills“." },
+      { icon: "⬇️", text: "Grillen holt vorher den neuesten Stand in den Hauptordner (nur Vorspulen, eigene Änderungen bleiben); klappt das nicht, sagt das Board warum." },
+      { icon: "ℹ️", text: "Spaces: *4 ↑1 ↓29 erklärt sich beim Darüberfahren – geänderte Dateien, nicht gepushte Commits, Commits hinter dem Server." },
+    ],
+  },
+  {
     build: 73,
     version: "0.57.2",
     date: "24.11.2026",

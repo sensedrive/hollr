@@ -108,8 +108,9 @@
   const sections = $derived(
     app.servers.filter((s) => s.id === currentServer()).map((s) => {
       const spaces = (app.spaces[s.id] ?? []) as FullSpace[];
-      // hidden ones (also off the dashboard) live in the „Versteckt“ list below until they need you
-      const visible = spaces.filter((sp) => !sp.hidden || statusOf(s.id, sp) === "blocked");
+      // hidden ones (also off the dashboard) live in the „Versteckt“ list below until they need you; the ones Hollr
+      // opened for a Sandcastle run or a grill get their own list („Sandcastle & Grills“)
+      const visible = spaces.filter((sp) => (!sp.hidden || statusOf(s.id, sp) === "blocked") && !sp.origin);
       return { server: s, loaded: app.spaces[s.id] !== undefined, groups: sortGroups(s.id, groupSpaces(visible)) };
     }),
   );
@@ -295,6 +296,25 @@
   }
 
   const hiddenList = $derived(hiddenSpaces.list(currentServer()));
+  /** spaces Hollr opened for runs and grills (server's `origin`): their own fold-out list – hidden ones only while
+   *  they wait for you, like the main list */
+  const hollrList = $derived(((app.spaces[currentServer()] ?? []) as FullSpace[])
+    .filter((sp) => sp.origin && (!sp.hidden || statusOf(currentServer(), sp) === "blocked")));
+  const HOLLR_OPEN = "hollr.sidebar.hollrOpen";
+  let hollrOpen = $state(localStorage.getItem(HOLLR_OPEN) !== "0");
+  function toggleHollr() {
+    hollrOpen = !hollrOpen;
+    try {
+      localStorage.setItem(HOLLR_OPEN, hollrOpen ? "1" : "0");
+    } catch {}
+  }
+  /** what *4 ↑1 ↓29 next to a space means */
+  const statsTitle = (g: { dirty: number; ahead: number; behind: number }) =>
+    [
+      g.dirty > 0 ? t("*{n}: {n} geänderte Dateien, nicht committet", { n: g.dirty }) : "",
+      g.ahead > 0 ? t("↑{n}: {n} Commits noch nicht gepusht", { n: g.ahead }) : "",
+      g.behind > 0 ? t("↓{n}: {n} Commits hinter dem Server – git pull holt sie", { n: g.behind }) : "",
+    ].filter(Boolean).join("\n");
   /** „Versteckt“ open shows the hidden spaces – they stay hidden (this device only, like folding) */
   const HIDDEN_OPEN = "hollr.sidebar.hiddenOpen";
   let hiddenOpen = $state(localStorage.getItem(HIDDEN_OPEN) === "1");
@@ -354,7 +374,7 @@
             <span class="name ellipsis" class:gone={sp.missing}>{sp.label}</span>
             {#if sp.missing}<span class="lost" title={t("Der Ordner dieses Spaces fehlt.")}>{t("Ordner fehlt")}</span>{/if}
             {#if !nested && sp.git}
-              <span class="stats">{#if sp.git.dirty > 0}<span>*{sp.git.dirty}</span>{/if}{#if sp.git.ahead > 0}<span>↑{sp.git.ahead}</span>{/if}{#if sp.git.behind > 0}<span>↓{sp.git.behind}</span>{/if}</span>
+              <span class="stats" title={statsTitle(sp.git)}>{#if sp.git.dirty > 0}<span>*{sp.git.dirty}</span>{/if}{#if sp.git.ahead > 0}<span>↑{sp.git.ahead}</span>{/if}{#if sp.git.behind > 0}<span>↓{sp.git.behind}</span>{/if}</span>
             {/if}
             <LiveMark server={sec.server.id} ws={sp.id} />
           </button>
@@ -371,6 +391,32 @@
     {/each}
     </div>
   {/each}
+  {#if hollrList.length}
+    {@const server = currentServer()}
+    <div class="hollr-box">
+      <button class="hidden-head" onclick={toggleHollr} aria-expanded={hollrOpen}
+        title={t("Spaces, die Hollr für Sandcastle-Läufe und Grills geöffnet hat")}>
+        <Icon name={hollrOpen ? "chevronD" : "chevronR"} size={12} />
+        <span>{t("Sandcastle & Grills")}</span>
+        <span class="hcount">{hollrList.length}</span>
+      </button>
+      {#if hollrOpen}
+        {#each hollrList as sp (sp.id)}
+          {@const st = statusOf(server, sp)}
+          <div class="srow" class:sel={currentWs === `${server}|${sp.id}`}>
+            <button class="item" onclick={() => open(server, sp)} oncontextmenu={(e) => rowMenu(e, server, sp)}
+              title={[sp.label, sp.git?.branch, statusLabel(st), sp.root].filter(Boolean).join(" · ")}>
+              <span class="dotbox">{#if st === "working" || st === "blocked" || st === "done"}<span class="dot {st}"></span>{/if}</span>
+              <span class="name ellipsis">{sp.label}</span>
+              <LiveMark server={server} ws={sp.id} />
+            </button>
+            <button class="hide" title={t("Verstecken – läuft weiter")} aria-label={t("Verstecken")}
+              onclick={() => void hideSpace(server, sp.id)}><Icon name="minus" size={12} /></button>
+          </div>
+        {/each}
+      {/if}
+    </div>
+  {/if}
   <button class="addspace" disabled={!currentServer() || adding} onclick={() => void newMain()}>
     <Icon name="plus" size={14} /> {t("Neuer Space")}
   </button>
@@ -505,6 +551,8 @@
   .hidden-head:hover, .hidden-head:focus-visible { color: var(--fg); }
   .hidden-head:focus-visible { outline: 2px solid var(--accent); }
   .hcount { font: 11px var(--mono); padding: 0 5px; border-radius: 99px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  /* spaces Hollr opened for runs and grills, below the user's own */
+  .hollr-box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin-top: 4px; }
   .hidden-list { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; max-height: 40vh; overflow-y: auto; }
   .hrow { cursor: grab; }
   .hrow .item { padding-right: 52px; }

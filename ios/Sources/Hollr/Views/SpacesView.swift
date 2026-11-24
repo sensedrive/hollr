@@ -133,9 +133,10 @@ struct SpacesView: View {
     }
 
     /// One server's section as rows: loading placeholders, the main rows (not hidden or waiting for you, in the
-    /// dragged order, worktrees nested), „Versteckt“ and – unfolded – the hidden ones. One flat list with ids unique in
-    /// the whole List (`scope` = the server): a SwiftUI List whose diff sees an id twice, or rows that come and go
-    /// through `if`s next to moving ones, crashes UICollectionView ("invalid number of items", bad moves/deletes).
+    /// dragged order, worktrees nested), „Sandcastle & Grills“ (spaces Hollr opened for runs and grills), „Versteckt“
+    /// and – unfolded – the hidden ones. One flat list with ids unique in the whole List (`scope` = the server): a
+    /// SwiftUI List whose diff sees an id twice, or rows that come and go through `if`s next to moving ones, crashes
+    /// UICollectionView ("invalid number of items", bad moves/deletes).
     static func rows(_ spaces: [Space]?, status: (Space) -> String, order: SharedState?, hiddenOpen: Bool,
                      scope: String) -> [SpaceListRow] {
         var out: [SpaceListRow] = []
@@ -144,7 +145,8 @@ struct SpacesView: View {
         }
         var seen = Set<String>()
         let unique: [Space] = (spaces ?? []).filter { seen.insert($0.id).inserted }
-        let groups = SharedOrder.groups(group(HiddenSpaces.shown(unique, status: status)), in: order)
+        let shown = HiddenSpaces.shown(unique, status: status)
+        let groups = SharedOrder.groups(group(shown.filter { $0.origin == nil }), in: order)
         var listed = Set<String>()
         for group in groups {
             for space in group.spaces where listed.insert(space.id).inserted {
@@ -152,6 +154,13 @@ struct SpacesView: View {
             }
         }
         if unique.isEmpty { out.append(SpaceListRow(id: "\(scope)|loading", kind: .loading)) }
+        let opened: [Space] = shown.filter { $0.origin != nil && !listed.contains($0.id) }
+        if !opened.isEmpty {
+            out.append(SpaceListRow(id: "\(scope)|hollr", kind: .hollrHeader(opened.count)))
+            for space in opened where listed.insert(space.id).inserted {
+                out.append(SpaceListRow(id: "\(scope)|\(space.id)", kind: .space(space, nested: false)))
+            }
+        }
         let hidden: [Space] = HiddenSpaces.hidden(unique).filter { !listed.contains($0.id) }
         if !hidden.isEmpty {
             out.append(SpaceListRow(id: "\(scope)|hidden", kind: .hiddenToggle(hidden.count)))
@@ -169,6 +178,8 @@ struct SpaceListRow: Identifiable, Equatable {
         case skeleton(Int)
         case space(Space, nested: Bool)
         case loading
+        /// „Sandcastle & Grills“ above the spaces Hollr opened for runs and grills; how many
+        case hollrHeader(Int)
         /// how many are hidden
         case hiddenToggle(Int)
         case hidden(Space)
@@ -210,6 +221,14 @@ private struct SpacesSection: View {
         case let .skeleton(i): skeleton(i)
         case .loading: Text("Lade …").foregroundStyle(Theme.muted)
         case let .hiddenToggle(count): HiddenToggle(count: count, open: $hiddenOpen)
+        case let .hollrHeader(count):
+            HStack(spacing: Gap.s) {
+                Text("Sandcastle & Grills")
+                Text(verbatim: "\(count)").font(Typo.monoXS)
+            }
+            .font(Typo.note)
+            .foregroundStyle(Theme.dim)
+            .accessibilityAddTraits(.isHeader)
         case let .space(space, nested): visibleRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr), nested: nested)
         case let .hidden(space): hiddenRow(space, status: urgentStatus(of: space, in: refs, herdr: herdr))
         }

@@ -5,6 +5,7 @@ import { claudeSessionFile } from "./claudelog";
 import { type ForkMark, forkMarks } from "./fork";
 import { startArgs } from "./models";
 import { findSessionByTitle } from "./sessionlog";
+import { recordOrigin, type SpaceOrigin } from "./spaceorigins";
 
 export interface Agent {
   pane: string;
@@ -134,7 +135,9 @@ function terminalTitle(raw: RawAgent): string {
 function statusOf(raw: RawAgent): string {
   const status = raw.agent_status ?? "unknown";
   if (status !== "idle" && status !== "unknown") return status;
-  return raw.agent === "omp" && /^π\s*[\u2801-\u28ff]/u.test(raw.terminal_title_stripped ?? "") ? "working" : status;
+  return raw.agent === "omp" && /^π\s*[\u2801-\u28ff]/u.test(raw.terminal_title_stripped ?? "")
+    ? "working"
+    : status;
 }
 
 export function toAgent(raw: RawAgent): Agent {
@@ -396,6 +399,8 @@ export interface NewChatRequest {
   level?: string;
   /** false: open in the background (a sidechat), the user stays where they are */
   focus?: boolean;
+  /** a new workspace Hollr opens for a Sandcastle run or a grill – the apps list it apart (spaceorigins.ts) */
+  origin?: SpaceOrigin;
 }
 
 /** After creating a pane, bring its workspace and tab to the front in herdr. */
@@ -448,6 +453,9 @@ export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Pr
   };
   const pane = created.root_pane?.pane_id ?? created.pane?.pane_id;
   if (!pane) throw new HerdrError("create_failed", "herdr hat kein Pane geliefert");
+  // before anything waits: the apps refresh their space list as soon as herdr reports the new workspace
+  const ws = created.workspace?.workspace_id;
+  if (req.origin && ws) recordOrigin(ws, req.origin);
   await Bun.sleep(400); // let the shell come up
   if (req.focus !== false) await focusCreated(exec, pane, created);
   if (req.kind === "shell") return pane;

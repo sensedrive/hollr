@@ -1787,6 +1787,26 @@
         }
       }
     },
+    "Sandcastle & Grills": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sandcastle & grills"
+          }
+        }
+      }
+    },
+    "Spaces: was Hollr für Sandcastle-Läufe und Grills öffnet, steht in einer eigenen Gruppe „Sandcastle & Grills“": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spaces: what Hollr opens for Sandcastle runs and grills sits in its own group “Sandcastle & grills”"
+          }
+        }
+      }
+    },
     "Sandcastle-Board: Tickets grillen oder auto-grillen; Chat-Menü › „Im Board zeigen“ bei Grill-Sitzungen": {
       "localizations": {
         "en": {

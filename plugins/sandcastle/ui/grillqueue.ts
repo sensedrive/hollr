@@ -64,11 +64,12 @@ export async function startGrill(server: string, n: number, mode: GrillMode, adv
   starting.add(id);
   hooks.render();
   try {
-    const grill = await sc.grillStart(server, slug, { n, key, mode, advisor: mode === "auto" ? advisor : null });
+    const { grill, note } = await sc.grillStart(server, slug, { n, key, mode, advisor: mode === "auto" ? advisor : null });
     recent.push({ server, slug, n, at: Date.now() });
     putGrill(server, grill);
     remember(server, mode, advisor);
     toast(`${mode === "auto" ? "Auto-Grill" : "Grill"} für #${n} auf ${serverLabel(server)} gestartet`, "info");
+    if (note) toast(`#${n}: ${note}`);
     if (mode === "interactive" && grill.pane && hasHost()) openSession(server, grill.pane);
     return true;
   } catch (err) {
@@ -139,9 +140,10 @@ export function pumpGrills(): void {
     queue = queue.filter((x) => x !== q);
     inflight.set(id, q);
     sc.grillStart(q.server, q.slug, { n: q.n, key: q.key, mode: "auto", advisor: q.advisor })
-      .then((grill) => {
+      .then(({ grill, note }) => {
         recent.push({ server: q.server, slug: q.slug, n: q.n, at: Date.now() });
         putGrill(q.server, grill);
+        if (note) toast(`#${q.n}: ${note}`);
       })
       .catch((err) => toast(`#${q.n}: ${errorText(err)}`))
       .finally(() => {

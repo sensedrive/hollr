@@ -37,6 +37,7 @@ import { type Flow, flowLive, flowPr, readBatchFlows } from "./flows";
 import { parseEntry } from "./sessionlog";
 import { type Agent, execHerdr, Herdr, newChat, promptWhenReady } from "./herdr";
 import { which } from "./tools";
+import type { SpaceOrigin } from "./spaceorigins";
 
 // ── types (the wire format, see the plugin's contract) ──────────────────────────────────────────────
 
@@ -230,8 +231,15 @@ export interface Deps {
   agents?: Agent[] | null;
   /** false: never start a `gh pr list` */
   prLookup?: boolean;
-  /** opens the omp session for `start` (default: herdr) and returns its pane */
-  startSession?: (cwd: string, label: string, prompt: string) => Promise<string>;
+  /** opens the omp session for `start` / `grill-start` (default: herdr) and returns its pane */
+  startSession?: (
+    cwd: string,
+    label: string,
+    prompt: string,
+    origin: SpaceOrigin,
+  ) => Promise<string>;
+  /** brings the main checkout up to its upstream before a grill (default: git); returns why not */
+  fastForward?: (root: string) => Promise<string | null>;
   /** the queue-labelled open issues for `start` (default: gh); null = unknown */
   queuedIssues?: (p: Project) => Promise<number[] | null>;
   /** queued issue → its story (`## Parent`), for a loop without queue mode (default: gh) */
@@ -1806,10 +1814,15 @@ async function ghQueued(p: Project): Promise<number[] | null> {
   }
 }
 
-async function heardSession(cwd: string, label: string, prompt: string): Promise<string> {
+async function heardSession(
+  cwd: string,
+  label: string,
+  prompt: string,
+  origin: SpaceOrigin,
+): Promise<string> {
   const herdr = new Herdr();
   // in the background: a start from the phone must not pull the Mac's herdr to that tab
-  const pane = await newChat(herdr, execHerdr, { kind: "omp", cwd, label, focus: false });
+  const pane = await newChat(herdr, execHerdr, { kind: "omp", cwd, label, focus: false, origin });
   await promptWhenReady(herdr, pane, prompt);
   return pane;
 }
@@ -1833,7 +1846,8 @@ async function planRun(project: Project, req: SandcastleRequest, deps: Deps, wri
   const ordered = first.length
     ? [...first, ...current.order.filter((n) => !first.includes(n))]
     : current.order;
-  const queue = write && first.length ? writeQueue(project.gitCommonDir, { order: ordered }) : current;
+  const queue =
+    write && first.length ? writeQueue(project.gitCommonDir, { order: ordered }) : current;
   const labelled = await (deps.queuedIssues ?? ghQueued)(project);
   // the explicit tickets get their queue label right before the start: they count as queued
   const order = labelled ? effectiveOrder(ordered, [...labelled, ...first]) : ordered;
@@ -1876,6 +1890,7 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
       project.root,
       `Sandcastle ${project.name}`,
       prompt,
+      "sandcastle",
     );
     const lock: RunRecord = {
       id: String(Date.parse(startedAt)),
@@ -1921,7 +1936,10 @@ async function stopRun(deps: Deps) {
 }
 
 /** Opens an omp session grilling one ticket – at most one live grill per ticket on this machine. */
-async function startGrill(req: SandcastleRequest, deps: Deps): Promise<{ grill: Grill }> {
+async function startGrill(
+  req: SandcastleRequest,
+  deps: Deps,
+): Promise<{ grill: Grill; note?: string }> {
   const cache = await projectCache(deps);
   const project = projectBySlug(cache, req.slug);
   const g = validateGrillRequest(req);
@@ -1946,8 +1964,15 @@ async function startGrill(req: SandcastleRequest, deps: Deps): Promise<{ grill: 
     if (live)
       throw new Error(`Für #${g.n} läuft schon ein Grill (${hostname().replace(/\.local$/, "")}).`);
     const label = grillLabel(g);
+    // the grill reads the main checkout: it should see what is on the server, not a stale main
+    const note = await (deps.fastForward ?? fastForward)(project.root);
     const startedAt = new Date().toISOString();
-    const pane = await (deps.startSession ?? heardSession)(project.root, label, grillPrompt(g));
+    const pane = await (deps.startSession ?? heardSession)(
+      project.root,
+      label,
+      grillPrompt(g),
+      "grill",
+    );
     recordGrill(grillsFile(), { slug: project.slug, ...g, pane, startedAt }, now);
     // herdr may not list the new pane yet: it is the grill, working
     const started: Agent = {
@@ -1968,10 +1993,27 @@ async function startGrill(req: SandcastleRequest, deps: Deps): Promise<{ grill: 
     });
     const grill = grills.find((x) => x.slug === project.slug && x.n === g.n);
     if (!grill) throw new Error(`Grill für #${g.n} gestartet, aber nicht gefunden.`);
-    return { grill };
+    return note ? { grill, note } : { grill };
   } finally {
     release();
   }
+}
+
+/** Brings a main checkout up to its upstream: fast-forward only, so local changes and local commits stay
+ *  untouched. Returns why it stayed behind (shown to the user), null when it is up to date. */
+export async function fastForward(root: string): Promise<string | null> {
+  const git = (...args: string[]) => run(["git", "-C", root, ...args], { timeoutMs: 60_000 });
+  const first = (s: string) => s.trim().split("\n")[0] ?? "";
+  const fetched = await git("fetch", "--quiet");
+  if (!fetched.ok) return `Hauptordner nicht aktualisiert – git fetch: ${first(fetched.err)}`;
+  const behind = await git("rev-list", "--count", "HEAD..@{u}");
+  // no upstream (a local branch): nothing to catch up with
+  const n = behind.ok ? Number(behind.out.trim()) : 0;
+  if (!n) return null;
+  const merged = await git("merge", "--ff-only", "--quiet", "@{u}");
+  return merged.ok
+    ? null
+    : `Hauptordner ist ${n} Commit(s) hinter dem Server und ließ sich nicht vorspulen (${first(merged.err)}) – der Grill liest den alten Stand.`;
 }
 
 // ── gate entry ─────────────────────────────────────────────────────────────────────────────────────

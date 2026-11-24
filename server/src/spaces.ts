@@ -48,6 +48,8 @@ export interface Space {
   missing?: boolean;
   /** hidden from the apps' lists (hiddenspaces.ts) – set by the `spaces` gate command */
   hidden?: boolean;
+  /** opened by Hollr for a Sandcastle run or a grill (spaceorigins.ts) – set by the `spaces` gate command */
+  origin?: "sandcastle" | "grill";
 }
 
 export interface GitSummary {

@@ -185,6 +185,12 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Spaces: was Hollr für Sandcastle-Läufe und Grills öffnet, steht in einer eigenen Gruppe „Sandcastle & Grills“.":
+    "Spaces: what Hollr opens for Sandcastle runs and grills sits in its own group “Sandcastle & grills”.",
+  "Grillen holt vorher den neuesten Stand in den Hauptordner (nur Vorspulen, eigene Änderungen bleiben); klappt das nicht, sagt das Board warum.":
+    "Grilling first brings the main checkout up to date (fast-forward only, your changes stay); if that fails, the board says why.",
+  "Spaces: *4 ↑1 ↓29 erklärt sich beim Darüberfahren – geänderte Dateien, nicht gepushte Commits, Commits hinter dem Server.":
+    "Spaces: hover *4 ↑1 ↓29 for what it means – changed files, unpushed commits, commits behind the server.",
   "Plugins bleiben offen: Wer vom Sandcastle-Board in einen Chat wechselt und zurück, findet es genau so wieder – Filter, geöffnetes Ticket, Scrollstand.":
     "Plugins stay open: switching from the Sandcastle board to a chat and back finds it exactly as you left it – filters, open ticket, scroll position.",
   "Sandcastle: Läufe ohne Ablauf-Log zeigen keinen geratenen Schritt mehr (bisher hing er auf „Vorprüfung“), sondern was der Agent zuletzt geschrieben hat und gerade tut.":

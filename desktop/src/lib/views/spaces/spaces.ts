@@ -14,6 +14,8 @@ export type FullSpace = Space & {
   missing?: boolean;
   /** hidden from the lists – kept on the server, the phone shows the same (hiddenSpaces.svelte.ts) */
   hidden?: boolean;
+  /** opened by Hollr for a Sandcastle run or a grill: listed apart from the user's own spaces */
+  origin?: "sandcastle" | "grill";
   git?: Space["git"] & { lastCommit?: { hash: string; subject: string; at: number } };
 };
 

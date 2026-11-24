@@ -32,6 +32,7 @@ import {
   sandcastleEnv,
   sectionsSince,
   skillPrompt,
+  fastForward,
   fixedScope,
   parentOf,
   validateConfig,
@@ -487,7 +488,17 @@ describe("start / release (queue mode via events)", () => {
   test("preview for a loop without queue mode: the queued tickets as stories, batch or single", async () => {
     // origin/main without .sandcastle/queue.mts: the loop doesn't know the queue
     const empty = Bun.spawnSync(
-      ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit-tree", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "-m", "old"],
+      [
+        "git",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "user.name=t",
+        "commit-tree",
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "-m",
+        "old",
+      ],
       { cwd: shop },
     );
     git(shop, "update-ref", "refs/remotes/origin/main", empty.stdout.toString().trim());
@@ -760,6 +771,7 @@ describe("grills", () => {
       sessions.push({ cwd, label, prompt });
       return `w6:p${sessions.length}`;
     },
+    fastForward: async () => null,
   };
 
   test("status lists the STATUS.md grill with its labelled pane; the worktree's grill without one", async () => {
@@ -1000,5 +1012,46 @@ describe("pure parts", () => {
     expect(skillPrompt("tendr", single, false, [2347])).toBe(
       "/skill:lul-workr-run-sandcastle tendr opus-5.5 1 2347 --testnote",
     );
+  });
+});
+
+describe("fastForward (main checkout before a grill)", () => {
+  const dir = join(root, "ff");
+  const upstream = join(dir, "up.git");
+  const main = join(dir, "main");
+  const other = join(dir, "other");
+  const commit = (cwd: string, file: string) => {
+    writeFileSync(join(cwd, file), file);
+    git(cwd, "add", file);
+    git(cwd, "commit", "-qm", file);
+  };
+  const head = (cwd: string) =>
+    Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd }).stdout.toString().trim();
+
+  beforeAll(() => {
+    mkdirSync(dir, { recursive: true });
+    git(dir, "init", "-q", "--bare", "-b", "main", upstream);
+    git(dir, "clone", "-q", upstream, main);
+    commit(main, "a.txt");
+    git(main, "push", "-q", "-u", "origin", "main");
+    git(dir, "clone", "-q", upstream, other);
+  });
+
+  test("catches up behind main and keeps local edits", async () => {
+    commit(other, "b.txt");
+    git(other, "push", "-q");
+    writeFileSync(join(main, "a.txt"), "edited");
+    expect(await fastForward(main)).toBeNull();
+    expect(head(main)).toBe(head(other));
+    expect(readFileSync(join(main, "a.txt"), "utf8")).toBe("edited");
+  });
+
+  test("a diverged main stays as it is and says why", async () => {
+    commit(main, "c.txt");
+    commit(other, "d.txt");
+    git(other, "push", "-q");
+    const before = head(main);
+    expect(await fastForward(main)).toContain("1 Commit(s) hinter dem Server");
+    expect(head(main)).toBe(before);
   });
 });

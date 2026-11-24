@@ -30,6 +30,8 @@ struct Space: Codable, Identifiable, Hashable {
     var missing: Bool? = nil
     /// taken off the apps' lists with „Verstecken“ (kept on the server, same on every device); older servers don't send it
     var hidden: Bool? = nil
+    /// opened by Hollr for a Sandcastle run or a grill ("sandcastle" / "grill"): listed apart; older servers don't send it
+    var origin: String? = nil
 
     var folder: String { root.split(separator: "/").last.map(String.init) ?? root }
     var isHidden: Bool { hidden == true }

@@ -254,8 +254,9 @@ export const sc = {
   release: (server: string) => gate(server, { op: "release" }),
   /** Ctrl-C into the run's session, then frees the lock */
   stop: (server: string) => gate(server, { op: "stop" }),
+  /** `note`: why the main checkout stayed behind its upstream (the grill reads the old state) */
   grillStart: (server: string, slug: string, g: { n: number; key: string | null; mode: GrillMode; advisor: string | null }) =>
-    gate<{ grill: Grill }>(server, { op: "grill-start", slug, ...g }, 60_000).then((r) => r.grill),
+    gate<{ grill: Grill; note?: string }>(server, { op: "grill-start", slug, ...g }, 120_000),
 };
 
 /** Opens the run's omp session in Hollr. */

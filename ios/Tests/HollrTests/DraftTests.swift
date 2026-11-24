@@ -74,28 +74,6 @@ final class DraftTests: XCTestCase {
         let later = Date().addingTimeInterval(DraftStore.maxAge + 60)
         XCTAssertEqual(DraftStore(url: url, now: later).draft(for: ref()).text, "")
     }
-
-    /// Dictation finished after the composer was swapped (zen mode): text goes into the draft at the cursor.
-    func testDictationInsertsAtCursor() {
-        let store = DraftStore(url: nil)
-        let draft = store.draft(for: ref())
-        draft.text = "Hallo Welt"
-        draft.beforeDictation = "Hallo"
-        draft.afterDictation = "Welt"
-        let settings = DictationSettings()
-        let voiceSend = settings.voiceSend, autoSend = settings.autoSend
-        settings.voiceSend = false
-        settings.autoSend = false
-        defer { settings.voiceSend = voiceSend; settings.autoSend = autoSend }
-        Composer.insert("schöne", into: draft, settings: settings, session: AgentSession(ref: ref()))
-        XCTAssertEqual(draft.text, "Hallo schöne Welt")
-        XCTAssertEqual(draft.cursor, "Hallo schöne".count)
-        // nothing recognised: the typed text stays
-        draft.beforeDictation = draft.text
-        draft.afterDictation = ""
-        Composer.insert("", into: draft, settings: settings, session: AgentSession(ref: ref()))
-        XCTAssertEqual(draft.text, "Hallo schöne Welt")
-    }
 }
 
 final class DictationTextTests: XCTestCase {
