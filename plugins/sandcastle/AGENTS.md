@@ -3,6 +3,9 @@
 - Design source of truth: magicfink project `sandcastle-board` (https://magicfink.finksmart.de/p/sandcastle-board).
   Every visible UI change goes there first (design request, `mode: "change"`), then into `ui/` to match the rendered frames.
   Logic without a visual effect may be built in parallel.
+- A change request to a screen that already exists attaches a screenshot of it with real data (`attachments` of
+  `submit_design_request`): magicfink designs with tidy fixtures otherwise, and long titles, volume and repeated keys
+  only show up after the build.
 - Design ledger below: every state of the design is listed with its build status. A design request adds its new states
   as „offen“ right away; building one sets it to „gebaut“. Nothing designed stays invisible as „probably done“.
 - Data contracts: server gate `sandcastle` (`server/src/sandcastle.ts`) for per-machine runs/queues/logs; this plugin's server does GitHub only.
