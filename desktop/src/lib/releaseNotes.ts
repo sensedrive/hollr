@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 68,
+    version: "0.56.0",
+    date: "24.11.2026",
+    items: [
+      { icon: "🔎", text: "Suche (⌘K) findet Tickets: JIRA-Schlüssel, #Issue-Nummern oder Wörter aus dem Titel – ↩ öffnet das Ticket im Sandcastle-Board." },
+      { icon: "↔", text: "Übersicht: „Läuft gerade“ links und startet mit „Arbeitet“, „Braucht dich“ rechts." },
+    ],
+  },
+  {
     build: 67,
     version: "0.55.0",
     date: "24.11.2026",

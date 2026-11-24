@@ -8018,8 +8018,8 @@
     "Pausiert – tippe auf den Knopf, um weiterzusprechen.": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Paused – tap the button to keep talking." } } }
     },
-    "Sprich einfach los – der Text erscheint nach jeder kurzen Pause.": {
-      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Just start talking – the text appears after every short pause." } } }
+    "Diktat: der Text erscheint jetzt schon beim Sprechen, nicht erst nach einer Pause": {
+      "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Dictation: the text now appears while you speak, not only after a pause" } } }
     },
     "Wandle um …": {
       "localizations": { "en": { "stringUnit": { "state": "translated", "value": "Converting …" } } }

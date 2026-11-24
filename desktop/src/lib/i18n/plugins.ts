@@ -10,4 +10,9 @@ export default {
   "Kein Server hat das Sandcastle-Plugin.": "No server has the Sandcastle plugin.",
   "In der Navigation anpinnen": "Pin to the navigation",
   "Aus der Navigation lösen": "Unpin from the navigation",
+  // ⌘K palette: the Sandcastle board's ticket search
+  Tickets: "Tickets",
+  "Suche Tickets …": "Searching tickets …",
+  offen: "open",
+  geschlossen: "closed",
 };

@@ -1,6 +1,7 @@
 /**
  * The board's JSON API (/api/*), keyed by repo slug (contract C): GitHub issues, and JIRA tickets with their
- * GitHub family and drift (/api/jira/*, /api/drift/*), and the drift guard (/api/guard). Queue order, runs and
+ * GitHub family and drift (/api/jira/*, /api/drift/*), the drift guard (/api/guard) and the ticket search over all
+ * projects (/api/search, src/search.ts). Queue order, runs and
  * logs are the machines' business (`hollr gate sandcastle`, reached through the Hollr host relay, or
  * /api/host/gate when the page runs outside Hollr). Errors answer {error} with 400, 404, 409 (JIRA:
  * `jira-missing`, transition not possible) or 502.
@@ -18,6 +19,7 @@ import type { JiraCache } from "./jiracache";
 import type { LiveRuns } from "./live";
 import type { Prefs } from "./prefs";
 import type { Gate, Projects } from "./projects";
+import { searchTickets } from "./search";
 import type { CommentOut, Issue, IssueDetail, Project } from "./types";
 
 export interface Ctx {
@@ -173,6 +175,11 @@ async function route(req: Request, url: URL, ctx: Ctx): Promise<unknown> {
     const p = await project(q.get("slug"));
     const page = await github.fetchClosedBefore(p.slug, q.get("before") ?? "");
     return { issues: page.issues.filter((i) => classify(i, p.labels) !== "story"), closedOlder: page.closedOlder };
+  }
+
+  if (method === "GET" && path === "/api/search") {
+    const limit = Number(q.get("limit") ?? 20);
+    return searchTickets(ctx, q.get("q") ?? "", Number.isInteger(limit) ? Math.min(50, Math.max(1, limit)) : 20);
   }
 
   if (method === "GET" && path === "/api/issue") return issueDetail(ctx, await project(q.get("slug")), issueNumber(q.get("n")));

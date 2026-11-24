@@ -361,6 +361,41 @@ export async function openPlugin(
   }
 }
 
+/**
+ * A read-only call of the plugin's own API (`plugins` op `api`) – for app pages that can't reach the plugin
+ * themselves (the desktop webview: no CORS). Only GET of `/api/…` paths, started if needed; answers the
+ * plugin's JSON as is.
+ */
+export async function pluginApi(id: string, path: string, cli: string[]): Promise<unknown> {
+  const pathname = path.split("?")[0] ?? "";
+  let decoded = "..";
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {}
+  // the query may hold anything (encoded); the path itself stays under /api/ (undecodable counts as `..`)
+  if (!pathname.startsWith("/api/") || decoded.includes("..") || /[\s\\#]/.test(path))
+    throw new Error(`Ungültiger Plugin-Pfad „${path}“`);
+  const { port } = await openPlugin(id, cli);
+  const s = readState(id);
+  if (s?.port !== port) throw new Error(`Plugin ${id} läuft nicht`);
+  let res: Response;
+  try {
+    res = await fetch(`http://127.0.0.1:${port}${path}`, {
+      headers: { Authorization: `Bearer ${s.token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    const timeout = err instanceof Error && err.name === "TimeoutError";
+    throw new Error(timeout ? `Plugin ${id} antwortet nicht (Zeitüberschreitung)` : `Plugin ${id} ist nicht erreichbar`);
+  }
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Plugin ${id} antwortet ${res.status} ohne JSON`);
+  }
+}
+
 export function stopPlugin(id: string): boolean {
   if (!ID_RE.test(id)) return false;
   const pid = runningPid(id);

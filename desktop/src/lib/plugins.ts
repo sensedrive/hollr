@@ -53,3 +53,26 @@ export async function boardServer(prefer: string, servers: string[]): Promise<st
   for (const s of servers) if (s !== prefer && (await listsBoard(s))) return s;
   return undefined;
 }
+
+/** A ticket the Sandcastle plugin's search found (plugins/sandcastle/src/search.ts). */
+export interface TicketHit {
+  kind: "jira" | "issue";
+  /** JIRA key (kind jira) */
+  key?: string;
+  /** GitHub issue number (kind issue) */
+  n?: number;
+  title: string;
+  status: string;
+  type?: string;
+  /** owner/repo of the project */
+  slug: string;
+  project: string;
+}
+
+/** JIRA tickets and GitHub issues of every lul-workr project on `server` (the `plugins` gate's read-only api op). */
+export const searchTickets = (server: string, q: string) =>
+  gate<{ items?: TicketHit[] }>(server, "plugins", {
+    op: "api",
+    id: "sandcastle",
+    path: `/api/search?q=${encodeURIComponent(q)}&limit=20`,
+  }).then((r) => r.items ?? []);

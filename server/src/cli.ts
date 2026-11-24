@@ -115,6 +115,7 @@ import {
   listPlugins,
   loadRegistry,
   openPlugin,
+  pluginApi,
   runningPid,
   stopPlugin,
   unlinkPlugin,
@@ -122,7 +123,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.55.0";
+export const VERSION = "0.56.0";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 
@@ -576,11 +577,20 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "plugins": {
-      const req = JSON.parse((await readStdinLine()) || "{}") as { op?: string; id?: string };
+      const req = JSON.parse((await readStdinLine()) || "{}") as {
+        op?: string;
+        id?: string;
+        path?: string;
+        method?: string;
+      };
       try {
         if (req.op === "open") {
           log("gate", `plugins open ${req.id}`);
           json(await openPlugin(req.id ?? "", hollrCli()));
+        } else if (req.op === "api") {
+          // read-only proxy to the plugin's /api (not logged: the palette asks per keystroke)
+          if ((req.method ?? "GET") !== "GET") throw new Error("Nur GET ist erlaubt");
+          json(await pluginApi(req.id ?? "", req.path ?? "", hollrCli()));
         } else json({ plugins: listPlugins() });
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });

@@ -149,13 +149,16 @@ struct DictationOverlay: View {
             if preparing, case .preparing(let message) = dictator.state, !message.isEmpty { hint = message }
             else if preparing { hint = String(localized: "Mikrofon startet …") }
             else if dictator.paused { hint = String(localized: "Pausiert – tippe auf den Knopf, um weiterzusprechen.") }
-            else if settings.engine == .apple { hint = String(localized: "Sprich einfach los …") }
-            else { hint = String(localized: "Sprich einfach los – der Text erscheint nach jeder kurzen Pause.") }
+            else { hint = String(localized: "Sprich einfach los …") }
             return Text(join(head, tail).isEmpty ? "" : join(head, tail) + "\n\n").foregroundColor(quiet)
                 + Text(hint).foregroundColor(Theme.dim)
         }
+        // what is being said right now (Parakeet/Whisper preview) is softer: it can still change
+        let live = mine ? dictator.pending : ""
+        let firm = live.isEmpty ? spoken : String(spoken.dropLast(live.count)).trimmingCharacters(in: .whitespaces)
         return Text(head.isEmpty ? "" : head + " ").foregroundColor(quiet)
-            + Text(spoken).foregroundColor(Theme.fg)
+            + Text(firm).foregroundColor(Theme.fg)
+            + Text(live.isEmpty ? "" : (firm.isEmpty ? "" : " ") + live).foregroundColor(Theme.fg.opacity(0.6))
             + Text(tail.isEmpty ? "" : " " + tail).foregroundColor(quiet)
     }
 

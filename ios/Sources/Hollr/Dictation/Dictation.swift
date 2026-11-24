@@ -25,8 +25,10 @@ final class Dictator {
     }
 
     private(set) var state: State = .idle
-    /// Recognised text so far (Apple streams it, Parakeet/Whisper fill it chunk by chunk).
+    /// Recognised text so far (Apple streams it, Parakeet/Whisper fill it chunk by chunk plus a live preview).
     private(set) var text = ""
+    /// the end of `text` that is only a preview of what is being said now (Parakeet/Whisper) – it may still change
+    private(set) var pending = ""
     private(set) var level: Float = 0
     /// short notice after a dictation ("Nichts verstanden", "Aufnahme unterbrochen" …)
     private(set) var notice: String?
@@ -63,6 +65,11 @@ final class Dictator {
     private var cut = 0
     private var chunks: Task<Void, Never>?
     private var chunkTimer: Task<Void, Never>?
+    /// chunks waiting for or in transcription; the live preview waits while there are any
+    private var pendingChunks = 0
+    /// the live preview in flight, and when the last one started
+    private var previewing: Task<Void, Never>?
+    private var lastPreview = Date.distantPast
     private var observers: [NSObjectProtocol] = []
     /// bumped by every start and cancel: work of an older dictation (a slow start, a chunk) is dropped
     private var generation = 0
@@ -84,6 +91,9 @@ final class Dictator {
         self.settings = settings
         self.context = settings.sessionVocabulary ? context : DictationContext()
         text = ""
+        pending = ""
+        pendingChunks = 0
+        lastPreview = .distantPast
         notice = nil
         committed = ""
         cut = 0
@@ -319,10 +329,14 @@ final class Dictator {
 
     private func reset() {
         paused = false
+        pending = ""
         chunkTimer?.cancel()
         chunkTimer = nil
         chunks?.cancel()
         chunks = nil
+        previewing?.cancel()
+        previewing = nil
+        pendingChunks = 0
         // a dropped engine would keep its analyzer waiting for audio forever
         if #available(iOS 26, *) { (apple as? AppleDictationEngine)?.cancel() }
         legacy?.cancel()
@@ -376,11 +390,14 @@ final class Dictator {
                 guard let self, self.state == .recording else { return }
                 if self.paused { continue }
                 let total = self.collector.count
-                guard let point = Silence.cutPoint(energies: self.collector.energies(), from: self.cut, total: total),
-                      point > self.cut else { continue }
-                let piece = self.collector.slice(self.cut..<point)
-                self.cut = point
-                self.enqueueChunk(piece)
+                if let point = Silence.cutPoint(energies: self.collector.energies(), from: self.cut, total: total),
+                   point > self.cut {
+                    let piece = self.collector.slice(self.cut..<point)
+                    self.cut = point
+                    self.enqueueChunk(piece)
+                } else {
+                    self.previewTail(total: total)
+                }
             }
         }
     }
@@ -389,16 +406,47 @@ final class Dictator {
     private func enqueueChunk(_ piece: [Float]) {
         let previous = chunks
         let gen = generation
+        pendingChunks += 1
         chunks = Task { [weak self] in
             await previous?.value
-            guard let self, !Task.isCancelled, gen == self.generation else { return }
+            guard let self else { return }
+            // a chunk of an older dictation must not count against the new one
+            defer { if gen == self.generation { self.pendingChunks = max(0, self.pendingChunks - 1) } }
+            guard !Task.isCancelled, gen == self.generation else { return }
             do {
                 guard let text = try await self.transcribeChunk(piece), gen == self.generation else { return }
                 self.committed = self.join(self.committed, text)
+                self.pending = ""
                 if self.state == .recording { self.text = self.committed }
             } catch {
                 HollrLog.error("dictation chunk: \(error)")
             }
+        }
+    }
+
+    // MARK: Live preview – what is being said right now
+
+    /// a chunk is only cut at a pause after ≥ 6 s of speech, so the text would stay empty that long: the audio
+    /// since the last cut is transcribed on its own every ~1 s (Whisper ~2 s) and shown after the committed text;
+    /// the chunk replaces it once it's cut. Never while a chunk is being transcribed (it wins the model).
+    private func previewTail(total: Int) {
+        guard previewing == nil, pendingChunks == 0 else { return }
+        let rate = AudioCollector.rate
+        let tail = total - cut
+        let every = active == .whisper ? 2.0 : 1.0
+        guard tail >= rate, Date().timeIntervalSince(lastPreview) >= every,
+              active != .whisper || tail <= 25 * rate else { return }
+        let from = cut
+        let piece = collector.slice(from..<total)
+        let gen = generation
+        lastPreview = Date()
+        previewing = Task { [weak self] in
+            guard let self else { return }
+            defer { self.previewing = nil }
+            guard let text = try? await self.transcribeChunk(piece),
+                  gen == self.generation, self.state == .recording, self.cut == from else { return }
+            self.pending = text
+            self.text = self.join(self.committed, text)
         }
     }
 
@@ -440,16 +488,22 @@ final class Dictator {
         self.context = context
         active = settings.engine
         text = ""
+        pending = ""
+        pendingChunks = 0
+        lastPreview = .distantPast
+        generation += 1
         committed = ""
         cut = 0
         collector.reset()
         state = .recording
         if active != .apple { startChunking() }
         let format = file.processingFormat
+        var seen = ""
         while let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096),
               (try? file.read(into: buffer, frameCount: 4096)) != nil, buffer.frameLength > 0 {
             collector.ingest(buffer)
             try? await Task.sleep(for: .milliseconds(Int(Double(buffer.frameLength) / format.sampleRate * 1000)))
+            if !text.isEmpty, text != seen { seen = text; HollrLog.info("dictate-test: live \(String(format: "%.1f", recordedSeconds))s: \(text.prefix(80))") }
         }
         HollrLog.info("dictate-test: \(committed.isEmpty ? "no" : "had") text before stop: \(committed.prefix(80))")
         return await stop(settings: settings)

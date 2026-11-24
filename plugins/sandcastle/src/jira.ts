@@ -406,6 +406,17 @@ export class JiraClient {
     return this.search(`project = ${key} AND updated >= -${minutes}m ORDER BY Rank ASC`);
   }
 
+  /** At most `max` tickets of the project whose text matches `text`, newest first – one page, no paging. */
+  async searchText(projectKey: string, text: string, max: number): Promise<JiraTicket[]> {
+    const key = checkProjectKey(projectKey);
+    const page = await this.request<{ issues?: RawIssue[] }>("POST", "/rest/api/3/search/jql", {
+      jql: `project = ${key} AND text ~ ${jqlString(text)} ORDER BY updated DESC`,
+      fields: FIELDS,
+      maxResults: max,
+    });
+    return (page.issues ?? []).map(toTicket);
+  }
+
   async ticket(key: string): Promise<JiraTicket> {
     return toTicket(await this.request<RawIssue>("GET", `/rest/api/3/issue/${checkKey(key)}?fields=${FIELDS.join(",")}`));
   }

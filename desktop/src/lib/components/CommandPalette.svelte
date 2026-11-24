@@ -1,8 +1,9 @@
 <script lang="ts">
   // ⌘K: one search over every session (all servers, the ones that need you first), the current server's spaces
   // and the app's commands with their shortcuts – it replaces the long ⋯ menu as the place to find things, and
-  // keeps the old "Agents" and "Spaces" lists reachable. Every typed word has to match (palette.ts). ↑↓ / Tab
-  // choose, ↩ runs, Esc closes.
+  // keeps the old "Agents" and "Spaces" lists reachable. Every typed word has to match (palette.ts). From two
+  // characters on it also asks the Sandcastle board's ticket search (JIRA tickets, GitHub issues) on the server
+  // that has the plugin. ↑↓ / Tab choose, ↩ runs, Esc closes.
   import { tick } from "svelte";
   import { statusLabel, t } from "$lib/i18n";
   import { allPanes, app, dialogs, findPane, go, lastTabRoute, nav, tabName } from "$lib/store.svelte";
@@ -10,6 +11,7 @@
   import { currentServer } from "$lib/currentServer.svelte";
   import { statusRank } from "$lib/views/dashboard/util";
   import { matchItems } from "$lib/palette";
+  import { boardServer, searchTickets } from "$lib/plugins";
   import type { FullSpace } from "$lib/views/spaces/spaces";
   import Icon from "./git/Icon.svelte";
 
@@ -63,13 +65,44 @@
   let input = $state<HTMLInputElement>();
   $effect(() => void tick().then(() => input?.focus()));
 
+  // ---- tickets: the board server's search, 250 ms after the last keystroke; a newer query drops older answers
+  const board = boardServer(currentServer(), app.servers.map((s) => s.id));
+  let tickets = $state<Item[]>([]);
+  let ticketsLoading = $state(false);
+  let ticketSeq = 0;
+  $effect(() => {
+    const q = query.trim();
+    const seq = ++ticketSeq;
+    tickets = [];
+    ticketsLoading = false;
+    if (q.length < 2) return;
+    const timer = setTimeout(async () => {
+      const server = await board;
+      if (!server || seq !== ticketSeq) return;
+      ticketsLoading = true;
+      const hits = await searchTickets(server, q).catch(() => []);
+      if (seq !== ticketSeq) return;
+      ticketsLoading = false;
+      tickets = hits.slice(0, 8).map((h): Item => ({
+        id: h.kind === "jira" ? `t:${h.key}` : `t:${h.slug}#${h.n}`,
+        label: `${h.kind === "jira" ? h.key : `#${h.n}`} · ${h.title}`,
+        icon: h.kind === "jira" ? "tag" : "circle",
+        sub: `${h.project} · ${t(h.status)}`,
+        run: () => go({ view: "plugin", server, id: "sandcastle", open: h.kind === "jira" ? `${h.key}:` : `:${h.n}`, repo: h.slug }),
+      }));
+    }, 250);
+    return () => clearTimeout(timer);
+  });
+
   const groups = $derived.by(() => {
     const q = query.trim();
     return [
       { title: t("Sitzungen"), items: matchItems(sessions, q).slice(0, q ? 12 : 6) },
       { title: t("Spaces"), items: matchItems(spaces, q).slice(0, q ? 8 : 4) },
+      // the server already matched them: every word in key or title
+      { title: t("Tickets"), items: tickets, loading: ticketsLoading },
       { title: t("Befehle"), items: matchItems(commands, q) },
-    ].filter((g) => g.items.length);
+    ].filter((g) => g.items.length || g.loading);
   });
   const flat = $derived(groups.flatMap((g) => g.items));
   $effect(() => {
@@ -116,7 +149,7 @@
       <kbd>Esc</kbd>
     </div>
     <div class="list" id="palette-list" role="listbox" bind:this={list}>
-      {#if !flat.length}<div class="empty">{t("Nichts gefunden")}</div>{/if}
+      {#if !flat.length && !ticketsLoading}<div class="empty">{t("Nichts gefunden")}</div>{/if}
       {#each groups as g (g.title)}
         <div class="group">{g.title}</div>
         {#each g.items as i (i.id)}
@@ -128,6 +161,7 @@
             {#if i.kbd}<kbd>{i.kbd}</kbd>{/if}
           </button>
         {/each}
+        {#if g.loading}<div class="loading">{t("Suche Tickets …")}</div>{/if}
       {/each}
     </div>
     <div class="foot">{t("↑↓ wählen · ↩ öffnen · Esc schließen")}</div>
@@ -158,4 +192,5 @@
   .sub { flex: 1; min-width: 0; color: var(--dim); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .empty { padding: 20px; text-align: center; color: var(--dim); font-size: 13px; }
   .foot { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--dim); }
+  .loading { padding: 8px 10px 8px 36px; font-size: 12.5px; color: var(--dim); }
 </style>

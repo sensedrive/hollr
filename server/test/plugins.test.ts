@@ -6,6 +6,7 @@ import {
   linkPlugin,
   listPlugins,
   openPlugin,
+  pluginApi,
   runningPid,
   stopPlugin,
   unlinkPlugin,
@@ -24,6 +25,47 @@ const ready = process.env.HOLLR_PLUGIN_READY_FILE ?? "";
 writeFileSync(ready + ".tmp", JSON.stringify({ port: server.port, pid: process.pid }));
 renameSync(ready + ".tmp", ready);
 `;
+
+/** answers /api/echo with its path and q – only with the plugin token */
+const API_SERVER = `import { renameSync, writeFileSync } from "node:fs";
+const token = process.env.HOLLR_PLUGIN_TOKEN;
+const server = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  fetch: (req) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/__hollr/health") return new Response("ok");
+    if (req.headers.get("authorization") !== "Bearer " + token) return Response.json({ error: "unauthorized" }, { status: 401 });
+    if (url.pathname === "/api/echo") return Response.json({ path: url.pathname, q: url.searchParams.get("q"), host: req.headers.get("host") });
+    return Response.json({ error: "Unbekannter Pfad." }, { status: 404 });
+  },
+});
+const ready = process.env.HOLLR_PLUGIN_READY_FILE ?? "";
+writeFileSync(ready + ".tmp", JSON.stringify({ port: server.port, pid: process.pid }));
+renameSync(ready + ".tmp", ready);
+`;
+
+async function gateRun(stdin: string): Promise<unknown> {
+  const proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli.ts"), "gate"], {
+    env: {
+      PATH: Bun.env.PATH ?? "/usr/bin:/bin",
+      HOME: root,
+      HOLLR_GATE_PATH: "1",
+      HOLLR_AUTHORIZED_KEYS: join(root, "authorized_keys"),
+      HOLLR_STATE_DIR: join(root, "state"),
+      HOLLR_PLUGINS_FILE: join(root, "plugins.json"),
+      XDG_STATE_HOME: root,
+      XDG_CONFIG_HOME: root,
+      SSH_ORIGINAL_COMMAND: "plugins",
+    },
+    stdin: new Blob([`${stdin}\n`]),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const out = await new Response(proc.stdout).text();
+  expect(await proc.exited).toBe(0);
+  return JSON.parse(out);
+}
 
 function fixture(name: string, manifest: Record<string, unknown>, server?: string): string {
   const dir = join(root, name);
@@ -48,7 +90,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  for (const id of ["demo", "mute"]) stopPlugin(id);
+  for (const id of ["demo", "mute", "apidemo"]) stopPlugin(id);
   for (const k of ["HOME", "HOLLR_PLUGINS_FILE", "HOLLR_STATE_DIR"]) {
     if (saved[k] === undefined) delete Bun.env[k];
     else Bun.env[k] = saved[k];
@@ -163,25 +205,36 @@ describe("plugin host", () => {
   }, 15_000);
 
   test("gate `plugins` lists the linked plugins", async () => {
-    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli.ts"), "gate"], {
-      env: {
-        PATH: Bun.env.PATH ?? "/usr/bin:/bin",
-        HOME: root,
-        HOLLR_GATE_PATH: "1",
-        HOLLR_AUTHORIZED_KEYS: join(root, "authorized_keys"),
-        HOLLR_STATE_DIR: join(root, "state"),
-        HOLLR_PLUGINS_FILE: join(root, "plugins.json"),
-        XDG_STATE_HOME: root,
-        XDG_CONFIG_HOME: root,
-        SSH_ORIGINAL_COMMAND: "plugins",
-      },
-      stdin: new Blob(['{"op":"list"}\n']),
-      stdout: "pipe",
-      stderr: "pipe",
+    const res = await gateRun('{"op":"list"}');
+    expect(res).toMatchObject({ plugins: expect.arrayContaining([expect.objectContaining({ id: "demo", name: "Demo" })]) });
+  });
+
+  test("api: a GET of the plugin's /api with its token, JSON as is", async () => {
+    linkPlugin(fixture("apidemo", { id: "apidemo", name: "Api", version: "1", entry: "server.ts" }, API_SERVER));
+    const out = await pluginApi("apidemo", "/api/echo?q=a%20b%20%2312", [process.execPath]);
+    expect(out).toMatchObject({ path: "/api/echo", q: "a b #12", host: expect.stringMatching(/^127\.0\.0\.1:\d+$/) });
+    // the plugin's own errors pass through
+    expect(await pluginApi("apidemo", "/api/nope", [process.execPath])).toEqual({ error: "Unbekannter Pfad." });
+  });
+
+  test("api: only /api/ paths, no .. (also encoded), no unlinked plugin", async () => {
+    for (const bad of ["/__hollr/health", "/api/../x", "/api/%2e%2e/x", "/api/%zz", "api/echo", "/api/echo#x", "/api/a b"])
+      await expect(pluginApi("apidemo", bad, [process.execPath])).rejects.toThrow("Ungültiger Plugin-Pfad");
+    // `..` in the (encoded) query is just text
+    expect(await pluginApi("apidemo", "/api/echo?q=a..b", [process.execPath])).toMatchObject({ q: "a..b" });
+    await expect(pluginApi("nichtda", "/api/echo", [process.execPath])).rejects.toThrow("nicht verknüpft");
+  });
+
+  test("gate `plugins` op api proxies GETs and refuses other methods", async () => {
+    expect(await gateRun('{"op":"api","id":"apidemo","path":"/api/echo?q=TENDR-1037"}')).toMatchObject({
+      path: "/api/echo",
+      q: "TENDR-1037",
     });
-    const out = await new Response(proc.stdout).text();
-    expect(await proc.exited).toBe(0);
-    const res = JSON.parse(out) as { plugins: { id: string; name: string }[] };
-    expect(res.plugins.find((p) => p.id === "demo")?.name).toBe("Demo");
+    expect(await gateRun('{"op":"api","id":"apidemo","path":"/api/echo","method":"POST"}')).toEqual({
+      error: "Nur GET ist erlaubt",
+    });
+    expect(await gateRun('{"op":"api","id":"apidemo","path":"/x"}')).toMatchObject({
+      error: expect.stringContaining("Ungültiger Plugin-Pfad"),
+    });
   });
 });
