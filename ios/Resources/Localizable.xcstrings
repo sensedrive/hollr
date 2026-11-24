@@ -7941,6 +7941,16 @@
         }
       }
     },
+    "„Braucht dich“: neue Ergebnisse als schmale Karte in zwei Zeilen – Antworten, Terminal und Gesehen direkt in der Zeile": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Needs you”: new results as a slim two-line card – reply, terminal and seen right in the row"
+          }
+        }
+      }
+    },
     "Übersicht: „Zuletzt“ statt „Alle“ – alle Agenten in einer Liste, wer zuletzt etwas gemeldet hat, steht oben; arbeitende zeigen, seit wann": {
       "localizations": {
         "en": {

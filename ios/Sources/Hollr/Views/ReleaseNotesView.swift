@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 68, date: "24.11.2026", items: [
+            ("rectangle.compress.vertical", String(localized: "„Braucht dich“: neue Ergebnisse als schmale Karte in zwei Zeilen – Antworten, Terminal und Gesehen direkt in der Zeile")),
+        ]),
         ReleaseNote(build: 67, date: "24.11.2026", items: [
             ("clock", String(localized: "Übersicht: „Zuletzt“ statt „Alle“ – alle Agenten in einer Liste, wer zuletzt etwas gemeldet hat, steht oben; arbeitende zeigen, seit wann")),
             ("checkmark.circle", String(localized: "Sitzungen auf Servern zeigen wieder, dass sie arbeiten")),

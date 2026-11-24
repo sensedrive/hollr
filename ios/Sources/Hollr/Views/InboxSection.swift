@@ -93,6 +93,59 @@ private struct InboxCard: View {
     private var showsReply: Bool { replying || entry.kind == .ask || entry.kind == .error }
 
     var body: some View {
+        if entry.kind == .done && !replying { compact } else { full }
+    }
+
+    /// a new result in two lines: kind, name, project and the quick actions on one row, its last words below –
+    /// many results stay scannable
+    private var compact: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: Gap.s) {
+                IconView(kind.icon, size: 10)
+                    .foregroundStyle(kind.color)
+                    .frame(width: 18, height: 18)
+                    .background(kind.color.opacity(0.2), in: Circle())
+                    .accessibilityLabel(kind.label)
+                Button(action: open) {
+                    HStack(spacing: 6) {
+                        Text(entry.ref.title).font(Typo.md.weight(.semibold)).foregroundStyle(Theme.fg).lineLimit(1)
+                        ProjectBar(color: Theme.identity(entry.ref.workspace), height: 11)
+                        // the project stays readable (up to 110 pt); a long title gives way
+                        Text(entry.ref.workspace).font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(1)
+                            .frame(maxWidth: 110, alignment: .leading)
+                            .layoutPriority(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Chat öffnen")
+                Button { replying = true; focused = true } label: { IconView(.reply, size: 14) }
+                    .buttonStyle(.icon(size: 32))
+                    .accessibilityLabel("Weiter …")
+                Button {
+                    showTerminal = true
+                    Task { await herdr.opened(entry.ref) }
+                } label: { IconView(.terminal, size: 14) }
+                    .buttonStyle(.icon(size: 32))
+                    .accessibilityLabel("Terminal")
+                Button(action: seen) { IconView(.check, size: 14) }
+                    .buttonStyle(.icon(size: 32))
+                    .accessibilityLabel("Als gesehen markieren")
+            }
+            if !entry.text.isEmpty {
+                Text(entry.text).font(Typo.sm).foregroundStyle(Theme.muted).lineLimit(2)
+                    .padding(.leading, 18 + Gap.s)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: open)
+            }
+        }
+        .focusCardStyle(kind, compact: true)
+        .fullScreenCover(isPresented: $showTerminal) { TerminalScreen(ref: entry.ref) }
+    }
+
+    private var full: some View {
         VStack(alignment: .leading, spacing: Gap.m) {
             FocusCardHead(kind: kind, project: entry.ref.workspace, projectColor: Theme.identity(entry.ref.workspace),
                           branch: branch, onSeen: onSeen)

@@ -516,11 +516,12 @@ struct FocusCardHead: View {
 }
 
 extension View {
-    /// Focus card frame: raised (or page) fill, kind-tinted 1 pt border, 3 pt kind bar on the left, 16 pt corners.
-    func focusCardStyle(_ kind: FocusKind, selected: Bool = false) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+    /// Focus card frame: raised (or page) fill, kind-tinted 1 pt border, 3 pt kind bar on the left, 16 pt corners;
+    /// compact (a new result as two lines) with less padding.
+    func focusCardStyle(_ kind: FocusKind, selected: Bool = false, compact: Bool = false) -> some View {
+        let shape = RoundedRectangle(cornerRadius: compact ? Radius.lg : Radius.xl, style: .continuous)
         return self
-            .padding(.vertical, 14).padding(.leading, 16).padding(.trailing, 14)
+            .padding(.vertical, compact ? 6 : 14).padding(.leading, compact ? 12 : 16).padding(.trailing, compact ? 6 : 14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(kind.calm ? Theme.bg : Theme.raised, in: shape)
             .overlay(alignment: .leading) {
