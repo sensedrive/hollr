@@ -74,16 +74,18 @@ function flowStations(flow: Flow): StationState[] {
   return [worktree, pre, sandcastle, st("checks"), st("pr"), test, report];
 }
 
-/** Without a flow: only what the status knows. */
+/** Without a flow: only what the status knows. A run with no events (a fixed scope, or a skill that builds in a
+ *  worktree of its own) tells nothing past its start – its stations stay „unknown“, never a guessed step. */
 function statusStations(run: Run): StationState[] {
   const ended = run.status === "ended";
   const loopDone = run.status === "loop-ended" || ended;
   const loopStarted = loopDone || run.issues.some((i) => i.phase !== "queued");
+  if (!loopStarted) return ["done", "unknown", "unknown", "unknown", "unknown", "unknown", "unknown"];
   const afterLoop: StationState = run.pr ? "done" : "unknown";
   return [
     "done",
-    loopStarted ? "done" : ended ? "unknown" : "current",
-    loopDone ? "done" : loopStarted ? "current" : "todo",
+    "done",
+    loopDone ? "done" : "current",
     loopDone ? afterLoop : "todo",
     loopDone ? afterLoop : "todo",
     loopDone ? "unknown" : "todo",
@@ -91,12 +93,12 @@ function statusStations(run: Run): StationState[] {
   ];
 }
 
-/** The stations with their states; a run waiting for an answer waits at its current (else next open) station. */
+/** The stations with their states; a run waiting for an answer waits at its current (with a flow: else next open) station. */
 export function timeline(run: Run): Station[] {
   const states = run.flow ? flowStations(run.flow) : statusStations(run);
   if (run.status === "waiting") {
     const at = states.indexOf("current");
-    const i = at >= 0 ? at : states.findIndex((s) => s === "todo" || s === "unknown");
+    const i = at >= 0 || !run.flow ? at : states.findIndex((s) => s === "todo" || s === "unknown");
     if (i >= 0) states[i] = "waiting";
   }
   if (run.status === "ended") for (let i = 0; i < states.length; i++) if (states[i] === "current") states[i] = "unknown";
@@ -124,7 +126,7 @@ export function stepText(run: Run, stations: Station[] = timeline(run)): string 
   const reviewing = run.issues.find((i) => i.phase === "reviewing");
   if (reviewing) return `Code-Review an #${reviewing.n}`;
   const at = currentStation(stations);
-  if (!at) return run.status === "loop-ended" ? "Schleife fertig – Prüfungen/PR" : "–";
+  if (!at) return run.status === "loop-ended" ? "Schleife fertig – Prüfungen/PR" : run.agent?.doing ? run.agent.doing : "ohne Angabe";
   return at.label;
 }
 
@@ -175,6 +177,8 @@ export function clearText(run: Run, stations: Station[], openBlockers: (n: numbe
   const failed = stations.find((s) => s.state === "failed");
   if (failed && !currentStation(stations)) return `${failed.label} ist fehlgeschlagen${failed.reason ? `: ${failed.reason}` : ""}.`;
   const at = currentStation(stations);
+  if (!at && !run.flow && run.status !== "loop-ended")
+    return "Dieser Lauf schreibt noch kein Ablauf-Log – welcher Schritt gerade läuft, weiß das Board nicht. Was der Agent zuletzt geschrieben hat, steht darunter.";
   if (!at) return [done, "Die Schleife ist fertig. Danach prüft der Agent, öffnet den PR und – je nach Wahl – einen Testserver; welcher Schritt gerade läuft, meldet dieser Lauf nicht."].filter(Boolean).join(" ");
   if (at.id === "schleife") return loopText(run, openBlockers);
   if (at.id === "start" || at.id === "vorpruefung") return STATION_NOW[at.id] ?? "";

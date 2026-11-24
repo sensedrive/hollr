@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 72,
+    version: "0.57.1",
+    date: "24.11.2026",
+    items: [
+      { icon: "🔧", text: "Sandcastle: Läufe ohne Ablauf-Log zeigen keinen geratenen Schritt mehr (bisher hing er auf „Vorprüfung“), sondern was der Agent zuletzt geschrieben hat und gerade tut." },
+    ],
+  },
+  {
     build: 71,
     version: "0.57.0",
     date: "24.11.2026",

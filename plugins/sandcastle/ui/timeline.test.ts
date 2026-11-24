@@ -71,7 +71,13 @@ describe("timeline", () => {
   });
 
   test("without a flow only what the status knows", () => {
-    expect(states(run("running", ["queued"]))).toEqual(["done", "current", "todo", "todo", "todo", "todo", "todo"]);
+    // no event yet: the board knows nothing past the start – no guessed step
+    const quiet = run("running", ["queued"], { agent: { say: null, doing: "Running unit tests", at: null } });
+    expect(states(quiet)).toEqual(["done", "unknown", "unknown", "unknown", "unknown", "unknown", "unknown"]);
+    expect(stepText(quiet)).toBe("Running unit tests");
+    expect(clearText(quiet, timeline(quiet), () => [])).toContain("noch kein Ablauf-Log");
+    expect(states(run("waiting", ["queued"]))).not.toContain("waiting");
+    expect(states(run("running", ["building"]))).toEqual(["done", "done", "current", "todo", "todo", "todo", "todo"]);
     expect(states(run("loop-ended", ["merged"]))).toEqual(["done", "done", "done", "unknown", "unknown", "unknown", "unknown"]);
     expect(states(run("loop-ended", ["merged"], { pr: 7 }))).toEqual(["done", "done", "done", "done", "done", "unknown", "unknown"]);
   });

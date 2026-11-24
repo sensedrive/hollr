@@ -34,6 +34,7 @@ import {
   validateGrillRequest,
 } from "./grills";
 import { type Flow, flowLive, flowPr, readBatchFlows } from "./flows";
+import { parseEntry } from "./sessionlog";
 import { type Agent, execHerdr, Herdr, newChat, promptWhenReady } from "./herdr";
 import { which } from "./tools";
 
@@ -189,6 +190,17 @@ export interface Run {
   logs: LogFile[];
   /** the batch flow of this run (skippr's „Ablauf-Log v1“); null: none, issues come from events.jsonl/logs */
   flow: Flow | null;
+  /** what the run's agent last said and is doing, from its session log; null: no live session */
+  agent: AgentNote | null;
+}
+
+/** The tail of a run's agent session: its last answer and the tool it runs since. */
+export interface AgentNote {
+  say: string | null;
+  /** the intent of the newest tool call after that answer */
+  doing: string | null;
+  /** when it said it (ISO) */
+  at: string | null;
 }
 
 export interface SandcastleRequest {
@@ -1374,6 +1386,7 @@ function buildRun(a: RunInput): Run {
         : null),
     logs: a.logs.filter((l) => l.issue === null),
     flow: a.flow,
+    agent: null,
   };
 }
 
@@ -1521,6 +1534,12 @@ async function scan(
   const runs = entries.map(({ flows: _, ...e }) =>
     buildRun({ ...e, flowLive: !!e.flow && flowLive(e.flow, now, host) }),
   );
+  // without a flow log the agent's own words are the only report of where a running run stands
+  for (const r of runs) {
+    if (r.status === "ended" || !r.pane) continue;
+    const file = agents?.find((x) => x.pane === r.pane)?.sessionFile;
+    if (file) r.agent = agentNote(file);
+  }
   runs.sort(
     (a, b) =>
       Number(b.alive) - Number(a.alive) ||
@@ -1529,6 +1548,45 @@ async function scan(
   );
   const grills = labels ? grillsOf({ cache, byCommon, dirs: roots, agents, labels, now }) : [];
   return { runs, lock: lockActive ? lock : null, grills };
+}
+
+/** The run agent's last answer and current tool, read from the session log's tail only (logs grow to MBs). */
+export function agentNote(file: string, tailBytes = 256 * 1024): AgentNote | null {
+  let text: string;
+  try {
+    const size = statSync(file).size;
+    const start = Math.max(0, size - tailBytes);
+    const buf = Buffer.alloc(size - start);
+    const fd = openSync(file, "r");
+    try {
+      readSync(fd, buf, 0, buf.length, start);
+    } finally {
+      closeSync(fd);
+    }
+    text = buf.toString("utf8");
+    // the first line may be cut
+    if (start > 0) text = text.slice(text.indexOf("\n") + 1);
+  } catch {
+    return null;
+  }
+  let doing: string | null = null;
+  const lines = text.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line) continue;
+    for (const ev of parseEntry(line).reverse()) {
+      if (ev.t === "tool" && !doing && ev.intent) doing = ev.intent;
+      if (ev.t === "answer" && ev.text.trim()) {
+        let at: string | null = null;
+        try {
+          at = (JSON.parse(line) as { timestamp?: string }).timestamp ?? null;
+        } catch {}
+        const say = ev.text.trim();
+        return { say: say.length > 600 ? `${say.slice(0, 600)} …` : say, doing, at };
+      }
+    }
+  }
+  return doing ? { say: null, doing, at: null } : null;
 }
 
 // ── log tail ───────────────────────────────────────────────────────────────────────────────────────

@@ -113,6 +113,8 @@ export interface Run {
   logs: LogFile[];
   /** the run's batch flow (skippr's „Ablauf-Log v1“); absent on older hollr, null without a flow file */
   flow?: Flow | null;
+  /** what the run's agent last said and is doing (its session log); absent on older hollr */
+  agent?: { say: string | null; doing: string | null; at: string | null } | null;
 }
 
 export type FlowRole = "planner" | "implementer" | "reviewer" | "merger";

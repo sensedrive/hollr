@@ -489,6 +489,15 @@ function timelineEl(r: Run, stations: Station[]): HTMLElement {
     { class: "timeline", "data-status": r.status, "aria-labelledby": "tl-title" },
     h("h3", { class: "tl-title", id: "tl-title" }, ended ? "So ist der Lauf verlaufen" : "Was passiert gerade"),
     h("p", { class: "tl-clear" }, r.status === "waiting" ? h("strong", {}, `Wartet auf deine Antwort${at ? `: ${at.label}` : ""}.`) : null, r.status === "waiting" ? " " : null, text),
+    !ended && (r.agent?.say || r.agent?.doing)
+      ? h(
+          "div",
+          { class: "tl-agent" },
+          h("span", { class: "tl-agent-head" }, `Zuletzt vom Agenten${r.agent.at ? ` · ${since(r.agent.at) === "0 Min." ? "gerade eben" : `vor ${since(r.agent.at)}`}` : ""}`),
+          r.agent.say ? h("p", { class: "tl-agent-say" }, r.agent.say.replace(/\*\*|`/g, "")) : null,
+          r.agent.doing ? h("span", { class: "tl-agent-doing" }, `Gerade: ${r.agent.doing}`) : null,
+        )
+      : null,
     h(
       "ol",
       { class: "tl-list" },
