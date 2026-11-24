@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Plugins bleiben offen: Wer vom Sandcastle-Board in einen Chat wechselt und zurück, findet es genau so wieder – Filter, geöffnetes Ticket, Scrollstand.":
+    "Plugins stay open: switching from the Sandcastle board to a chat and back finds it exactly as you left it – filters, open ticket, scroll position.",
   "Sandcastle: Läufe ohne Ablauf-Log zeigen keinen geratenen Schritt mehr (bisher hing er auf „Vorprüfung“), sondern was der Agent zuletzt geschrieben hat und gerade tut.":
     "Sandcastle: runs without a flow log no longer show a guessed step (it used to stick at “Pre-check”), but what the agent last wrote and is doing now.",
   "Sandcastle: neue Läufe-Ansicht – je Rechner ein klarer Status, rechts „Was passiert gerade“ als Zeitleiste von Start bis Bericht, deutlicher Hinweis, wenn der Lauf auf deine Antwort wartet.":

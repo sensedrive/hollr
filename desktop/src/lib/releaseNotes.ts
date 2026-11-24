@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 73,
+    version: "0.57.2",
+    date: "24.11.2026",
+    items: [
+      { icon: "🧩", text: "Plugins bleiben offen: Wer vom Sandcastle-Board in einen Chat wechselt und zurück, findet es genau so wieder – Filter, geöffnetes Ticket, Scrollstand." },
+    ],
+  },
+  {
     build: 72,
     version: "0.57.1",
     date: "24.11.2026",

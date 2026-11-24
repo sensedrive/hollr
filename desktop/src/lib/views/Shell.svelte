@@ -48,6 +48,22 @@
   const pinnedActive = $derived(nav.route.view === "plugin" && pinned.some((p) => nav.route.view === "plugin" && p.server === nav.route.server && p.id === nav.route.id));
   const serverLabel = (id: string) => serverById(id)?.label ?? id;
 
+  // A plugin page once opened stays mounted (hidden while another view shows): going to a chat and back finds
+  // it exactly as left – filters, open ticket panel, scroll – instead of a freshly loaded board.
+  type KeptPlugin = { server: string; id: string; open?: string; repo?: string; ask?: number };
+  let keptPlugins = $state<KeptPlugin[]>([]);
+  $effect(() => {
+    const r = nav.route;
+    if (r.view !== "plugin") return;
+    const next: KeptPlugin = { server: r.server, id: r.id, open: r.open, repo: r.repo, ask: r.ask };
+    untrack(() => {
+      const i = keptPlugins.findIndex((k) => k.server === next.server && k.id === next.id);
+      if (i < 0) keptPlugins.push(next);
+      else keptPlugins[i] = next;
+    });
+  });
+  const showsPlugin = (k: KeptPlugin) => nav.route.view === "plugin" && nav.route.server === k.server && nav.route.id === k.id;
+
   function onKey(e: KeyboardEvent) {
     const mod = e.metaKey || e.ctrlKey;
     // ⌘⌥1…9 switch servers (ServerTabs)
@@ -255,6 +271,11 @@
 
   <section class="main">
     <div class="view">
+      {#each keptPlugins as k (`${k.server}|${k.id}`)}
+        <div class="kept" class:off={!showsPlugin(k)} aria-hidden={!showsPlugin(k)}>
+          <PluginView server={k.server} id={k.id} open={k.open} repo={k.repo} ask={k.ask} />
+        </div>
+      {/each}
       {#if nav.route.view === "agent"}
         {#if current}
           <!-- the session renders its space's tab bar itself: its tools (Chat/Terminal, Git, Browser, Info) sit in it -->
@@ -283,9 +304,7 @@
       {:else if nav.route.view === "plugins"}
         <Plugins />
       {:else if nav.route.view === "plugin"}
-        {#key `${nav.route.server}|${nav.route.id}`}
-          <PluginView server={nav.route.server} id={nav.route.id} open={nav.route.open} repo={nav.route.repo} ask={nav.route.ask} />
-        {/key}
+        <!-- shown by its kept page above -->
       {:else}
         <Dashboard />
       {/if}
@@ -334,6 +353,11 @@
   .bottom { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 1px; }
   .main { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }
   .view { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr); }
+  /* kept plugin pages and the routed view share the one cell */
+  .view > :global(*) { grid-area: 1 / 1; }
+  .kept { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
+  /* not display:none – the frame keeps its layout, so its scroll positions survive */
+  .kept.off { visibility: hidden; pointer-events: none; }
   .agentwrap { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
   .empty { height: 100%; display: grid; place-items: center; color: var(--muted); }
 </style>
