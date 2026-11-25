@@ -227,12 +227,30 @@ describe("target machine", () => {
     expect(job.exit).toBe(0);
     expect(job.log).toContain("Cloning into");
     expect(existsSync(join(clone, ".git"))).toBe(true);
+    // an https clone fetches through gh later, without a prompt and without touching the global git config
+    const helper = Bun.spawnSync(["git", "-C", clone, "config", "--local", "credential.https://github.com.helper"]);
+    expect(helper.stdout.toString().trim()).toBe(`!${join(fakes, "gh")} auth git-credential`);
     await expect(call({ op: "setup-clone", slug: SLUG })).rejects.toThrow("gibt es schon – nicht überschrieben");
   });
 
   test("setup-clone refuses a project the machine already has", async () => {
     on(target);
     await expect(call({ op: "setup-clone", slug: "acme/other" })).rejects.toThrow("schon ausgecheckt");
+  });
+
+  test("setup-clone clones over SSH on a machine whose checkouts use SSH", async () => {
+    const box = join(root, "sshbox");
+    const other = join(box, "code", "other");
+    mkdirSync(other, { recursive: true });
+    writeFileSync(join(other, ".lul-workr.json"), shopConfig("acme/other"));
+    git(other, "init", "-q");
+    git(other, "remote", "add", "origin", "git@github.com:acme/other.git");
+    fake("gitclone", `echo "$*" > "${join(box, "clone-args")}"; mkdir -p "$3/.git"`);
+    on(box);
+    const r = await call<{ path: string }>({ op: "setup-clone", slug: SLUG }, { bin: (n) => (n === "git" ? join(fakes, "gitclone") : deps.bin?.(n)) });
+    expect(r.path).toBe(join(box, "code", "shop"));
+    expect((await settle(SLUG, "clone")).exit).toBe(0);
+    expect(readFileSync(join(box, "clone-args"), "utf8").trim()).toBe(`clone git@github.com:${SLUG}.git ${join(box, "code", "shop")}`);
   });
 
   test("setup-files-write: env files 600, config 644, never over an existing file without overwrite", async () => {

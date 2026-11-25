@@ -662,18 +662,39 @@ async function setupCheck(req: SandcastleRequest, deps: SetupDeps) {
   };
 }
 
-/** `setup-clone`: `gh repo clone` into the projects folder (default branch); never over an existing path. */
+/**
+ * How this machine reaches GitHub: the protocol most of its checkouts' `origin` use. A clone must fetch and push
+ * later without a prompt – an https clone on a machine that only has an SSH key fails at its first fetch.
+ */
+async function usesSsh(cache: ProjectCache): Promise<boolean> {
+  const roots = cache.checkouts.length ? cache.checkouts.map((c) => c.root) : cache.projects.map((p) => p.root);
+  const urls = await Promise.all(roots.map((r) => run(["git", "-C", r, "remote", "get-url", "origin"])));
+  const ssh = urls.filter((u) => u.ok && /^(git@|ssh:\/\/)/.test(u.out.trim())).length;
+  return ssh > urls.filter((u) => u.ok).length / 2;
+}
+
+/**
+ * `setup-clone`: clone into the projects folder (default branch); never over an existing path. Over SSH when the
+ * machine's checkouts use SSH, else `gh repo clone` with gh as the checkout's credential helper.
+ */
 async function setupClone(req: SandcastleRequest, deps: SetupDeps) {
   const slug = validSlug(req.slug);
-  const place = await placeOf(await projectCache(deps), slug);
+  const cache = await projectCache(deps);
+  const place = await placeOf(cache, slug);
   if (place.known) throw new Error(`${slug} ist auf ${machine()} schon ausgecheckt: ${tilde(place.path)}`);
   if (jobState(slug, "clone")?.running) throw new Error("Wird schon geklont.");
   if (existsSync(place.path))
     throw new Error(`Ordner ${tilde(place.path)} gibt es schon – nicht überschrieben.`);
+  mkdirSync(dirname(place.path), { recursive: true });
+  if (await usesSsh(cache)) {
+    const git = binOf(deps)("git") ?? "git";
+    const job = startJob(slug, "clone", [git, "clone", `git@github.com:${slug}.git`, place.path], dirname(place.path));
+    return { path: place.path, job };
+  }
   const gh = binOf(deps)("gh");
   if (!gh) throw new Error(`gh ist auf ${machine()} nicht installiert.`);
-  mkdirSync(dirname(place.path), { recursive: true });
-  const job = startJob(slug, "clone", [gh, "repo", "clone", slug, place.path], dirname(place.path));
+  const script = '"$1" repo clone "$2" "$3" && git -C "$3" config --local credential.https://github.com.helper "!$1 auth git-credential"';
+  const job = startJob(slug, "clone", ["sh", "-c", script, "sh", gh, slug, place.path], dirname(place.path));
   return { path: place.path, job };
 }
 
