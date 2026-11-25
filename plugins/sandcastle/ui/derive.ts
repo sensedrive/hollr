@@ -1,6 +1,6 @@
 /** Board facts derived from the state, shared by board, details panel and Läufe view. Cheap: recomputed per render. */
 import { grillFamilies, type TicketGrill, ticketGrills } from "./grill";
-import { assignLanes, classify, laneRuns, type TicketRun, ticketRuns } from "./model";
+import { adoption, assignLanes, classify, laneRuns, type TicketRun, ticketRuns } from "./model";
 import { currentProject, laneServers, state } from "./state";
 import type { Column, Family, Issue, Project, Run, Server, TicketFlags } from "./types";
 
@@ -19,6 +19,8 @@ export interface Derived {
   lanes: Lane[];
   /** queued tickets when no machine has the repo checked out (no lanes known yet) */
   unlaned: number[];
+  /** queued tickets in no machine's queue file → the lane file they have to be written to (null: none, or not safe yet) */
+  adopt: { server: string; add: number[] } | null;
   laneOf: Map<number, string>;
   runs: Map<number, TicketRun>;
   open: Set<number>;
@@ -64,9 +66,23 @@ export function derive(): Derived {
     if (!servers.includes(s) && state.statuses.get(s.id)?.runs.some((r) => r.slug === state.slug && r.status !== "ended")) servers.push(s);
   const split = assignLanes(
     queued,
-    servers.map((s) => ({ server: s.id, order: state.queues.get(s.id)?.order ?? [] })),
+    servers.map((s) => ({ server: s.id, order: state.queues.get(s.id)?.order ?? [], online: s.online })),
     pinned,
   );
+  // only machines with a checkout have a queue file; the board's GitHub answer must be this page's own
+  const adopt =
+    project && state.fresh.board === state.slug
+      ? adoption(
+          queued,
+          laneServers().map((s) => ({
+            server: s.id,
+            online: s.online,
+            order: state.queues.get(s.id)?.order ?? null,
+            fresh: state.fresh.queues.has(s.id) && state.fresh.statuses.has(s.id),
+          })),
+          pinned,
+        )
+      : null;
   const laneOf = new Map<number, string>();
   const lanes = servers.map((server) => {
     const order = split.get(server.id) ?? [];
@@ -79,6 +95,7 @@ export function derive(): Derived {
     columns,
     lanes,
     unlaned: servers.length ? [] : [...queued].sort((a, b) => a - b),
+    adopt,
     laneOf,
     runs,
     open,

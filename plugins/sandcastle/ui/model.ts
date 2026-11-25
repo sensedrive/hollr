@@ -26,26 +26,80 @@ export function effectiveOrder(order: number[], queued: number[]): number[] {
 export interface LaneOrder {
   server: string;
   order: number[];
+  /** absent = online (tests, callers that don't know) */
+  online?: boolean;
 }
+
+/** Where a queued ticket named in no queue file belongs: the first online lane (the plugin's own machine comes first). */
+export const homeLane = <L extends { online?: boolean }>(lanes: L[]): L | undefined => lanes.find((l) => l.online !== false);
 
 /**
  * Splits the queued issues over the machines' lanes. A ticket a live run is working on belongs to that run's
  * machine (pinned, listed first in run order); otherwise the first lane whose queue file names it; one named
- * nowhere goes to the first lane (the plugin's own machine comes first) – that loop would pick it up.
+ * nowhere shows in the home lane – the board writes it there (`adoption`).
  */
 export function assignLanes(queued: number[], lanes: LaneOrder[], pinned = new Map<number, string>()): Map<string, number[]> {
   const out = new Map<string, number[]>(lanes.map((l) => [l.server, []]));
-  const first = lanes[0];
-  if (!first) return out;
+  const home = homeLane(lanes) ?? lanes[0];
+  if (!home) return out;
   const top = new Map<string, number[]>(lanes.map((l) => [l.server, []]));
   for (const [n, server] of pinned) top.get(server)?.push(n);
   for (const n of queued) {
     const server = pinned.get(n);
     if (server && top.has(server)) continue;
-    const lane = lanes.find((l) => l.order.includes(n)) ?? first;
+    const lane = lanes.find((l) => l.order.includes(n)) ?? home;
     out.get(lane.server)?.push(n);
   }
   for (const l of lanes) out.set(l.server, [...(top.get(l.server) ?? []), ...effectiveOrder(l.order, out.get(l.server) ?? [])]);
+  return out;
+}
+
+export interface LaneKnowledge {
+  server: string;
+  online: boolean;
+  /** the machine's queue file; null = never read (an offline machine without a cached copy) */
+  order: number[] | null;
+  /** read from the machine in this page's life for this repo (queue file and run status) */
+  fresh: boolean;
+}
+
+/**
+ * Every queued ticket must sit in exactly one machine's queue file – the loops run only their own file. Which
+ * queued tickets (ascending) the board has to append to which lane: those named in no lane's file and not pinned to
+ * a live run, into the home lane. Null while that can't be told safely: a lane whose file is unknown or an online
+ * lane not read yet might already name the ticket (it would end up in two lanes).
+ */
+export function adoption(queued: number[], lanes: LaneKnowledge[], pinned: Map<number, string>): { server: string; add: number[] } | null {
+  if (lanes.some((l) => l.order === null || (l.online && !l.fresh))) return null;
+  const home = homeLane(lanes);
+  if (!home) return null;
+  const add = queued.filter((n) => !pinned.has(n) && !lanes.some((l) => l.order?.includes(n))).sort((a, b) => a - b);
+  return add.length ? { server: home.server, add: [...new Set(add)] } : null;
+}
+
+/** What `queue-add` stores: the file's order, then the added numbers it lacks – a union, nothing dropped. */
+export const unionOrder = (order: number[], add: number[]): number[] => [...new Set([...order, ...add])];
+
+export interface LaneFile {
+  server: string;
+  /** the machine's host name (gate `status`) – the same on every board, unlike the order of the lanes */
+  host: string;
+  order: number[];
+}
+
+/**
+ * After the board appended `added` to a lane: those now named in more than one lane's file → server → the numbers
+ * to take out there. Two boards on different plugin hosts (each with its own machine as first lane) may adopt the
+ * same ticket at once; the later one sees both files and keeps the lane whose host name sorts first, so every
+ * board settles on the same lane.
+ */
+export function doubles(added: number[], lanes: LaneFile[]): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  const rank = [...lanes].sort((a, b) => (a.host < b.host ? -1 : a.host > b.host ? 1 : a.server < b.server ? -1 : a.server > b.server ? 1 : 0));
+  for (const n of new Set(added)) {
+    const [, ...extra] = rank.filter((l) => l.order.includes(n));
+    for (const l of extra) out.set(l.server, [...(out.get(l.server) ?? []), n]);
+  }
   return out;
 }
 

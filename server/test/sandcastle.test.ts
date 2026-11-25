@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -28,6 +29,7 @@ import {
   type Run,
   type RunIssue,
   readLogText,
+  readQueue,
   sandcastle,
   sandcastleEnv,
   sectionsSince,
@@ -375,6 +377,72 @@ describe("queue", () => {
     await expect(sandcastle({ op: "queue-set", slug: SLUG, order: "5" }, base)).rejects.toThrow(
       "order",
     );
+  });
+
+  test("queue-add / queue-remove change only what they name; concurrent changes merge; a stale lock is broken", async () => {
+    const dir = join(shop, ".git", "hollr-sandcastle");
+    const q = join(dir, "queue.json");
+    mkdirSync(dir, { recursive: true });
+    const prior = existsSync(q) ? readFileSync(q, "utf8") : "{}";
+    writeFileSync(
+      q,
+      JSON.stringify({ version: 1, order: [5, 3], tickets: { "5": { deploy: true } }, future: "bleibt" }),
+    );
+    const first = await sandcastle({ op: "queue-add", slug: SLUG, add: [3, 9, 7] }, base);
+    expect(first).toEqual({
+      order: [5, 3, 9, 7],
+      tickets: { "5": { deploy: true, testnote: false, video: false } },
+    });
+    // idempotent: nothing new, file untouched
+    const before = readFileSync(q, "utf8");
+    expect(await sandcastle({ op: "queue-add", slug: SLUG, add: [9, 5] }, base)).toEqual(first);
+    expect(readFileSync(q, "utf8")).toBe(before);
+    // boards changing the file at once go through separate gate processes: no change may be lost
+    const src = join(import.meta.dir, "..", "src", "sandcastle.ts");
+    const gitDir = JSON.stringify(join(shop, ".git"));
+    const scripts = [
+      ...[100, 200, 300].map(
+        (start) => `for (let i = 0; i < 15; i++) editQueueOrder(${gitDir}, { add: [${start} + i] });`,
+      ),
+      `editQueueOrder(${gitDir}, { remove: [3] }); editQueueOrder(${gitDir}, { remove: [9] });`,
+    ];
+    const procs = scripts.map((body) =>
+      Bun.spawn(
+        [
+          process.execPath,
+          "-e",
+          // a separate process on purpose: the lock must hold across processes, so the module loads there
+          `const { editQueueOrder } = await import(${JSON.stringify(src)}); ${body}`,
+        ],
+        { stdout: "ignore", stderr: "inherit" },
+      ),
+    );
+    for (const p of procs) expect(await p.exited).toBe(0);
+    const { order } = readQueue(join(shop, ".git"));
+    expect(order.slice(0, 2)).toEqual([5, 7]);
+    expect(order.length).toBe(2 + 45);
+    expect(JSON.parse(readFileSync(q, "utf8")).future).toBe("bleibt");
+    // remove ignores what isn't there; the flags of a removed ticket stay, as with queue-set
+    expect(await sandcastle({ op: "queue-remove", slug: SLUG, remove: [5, 999] }, base)).toEqual({
+      order: order.slice(1),
+      tickets: { "5": { deploy: true, testnote: false, video: false } },
+    });
+    // a lock left by a killed process (older than 10 s) does not block forever
+    const lock = join(dir, "queue.lock");
+    mkdirSync(lock);
+    utimesSync(lock, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    await sandcastle({ op: "queue-add", slug: SLUG, add: [13] }, base);
+    expect(readQueue(join(shop, ".git")).order).toContain(13);
+    expect(existsSync(lock)).toBe(false);
+    await expect(sandcastle({ op: "queue-add", slug: SLUG, add: [1, -2] }, base)).rejects.toThrow(
+      "add",
+    );
+    await expect(sandcastle({ op: "queue-add", slug: SLUG, add: "4" }, base)).rejects.toThrow(
+      "add",
+    );
+    await expect(sandcastle({ op: "queue-remove", slug: SLUG }, base)).rejects.toThrow("remove");
+    // later tests start from the queue the round-trip test left
+    writeFileSync(q, prior);
   });
 
   test("effective order: stored order of queued issues, then new ones ascending", () => {

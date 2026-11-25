@@ -611,7 +611,7 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "sandcastle": {
-      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|preview|start|release|stop|grill-start|setup-*}
+      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|queue-add|queue-remove|preview|start|release|stop|grill-start|setup-*}
       try {
         const req = JSON.parse((await readStdinLine(256 * 1024)) || "{}") as SandcastleRequest;
         // op and slug only: setup-files-read answers and setup-files-write carries file contents (env secrets)
@@ -621,6 +621,8 @@ async function gate(): Promise<number> {
             "release",
             "stop",
             "queue-set",
+            "queue-add",
+            "queue-remove",
             "grill-start",
             "setup-clone",
             "setup-files-read",

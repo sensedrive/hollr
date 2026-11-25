@@ -261,6 +261,10 @@ export const sc = {
   /** `tickets`: flags per issue; null removes an issue's flags */
   queueSet: (server: string, slug: string, patch: { order?: number[]; tickets?: Record<string, TicketFlags | null> }) =>
     gate<QueueState>(server, { op: "queue-set", slug, ...patch }),
+  /** appends the numbers the machine's order lacks, on the stored file (merges with other boards' writes) */
+  queueAdd: (server: string, slug: string, add: number[]) => gate<QueueState>(server, { op: "queue-add", slug, add }),
+  /** takes numbers out of the machine's order, on the stored file */
+  queueRemove: (server: string, slug: string, remove: number[]) => gate<QueueState>(server, { op: "queue-remove", slug, remove }),
   /** `tickets`: issue numbers put at the front of the queue before the run starts */
   start: (server: string, slug: string, config: RunConfig, tickets: number[] = []) =>
     gate<{ pane: string | null }>(server, tickets.length ? { op: "start", slug, config, tickets } : { op: "start", slug, config }, 60_000),

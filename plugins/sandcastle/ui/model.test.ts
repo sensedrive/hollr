@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  adoption,
   assignLanes,
   branchColour,
   classify,
+  doubles,
   effectiveOrder,
   laneSummary,
   normaliseFlags,
@@ -10,6 +12,7 @@ import {
   segments,
   shortBranch,
   ticketRuns,
+  unionOrder,
 } from "./model";
 import type { Phase, Run, RunIssue, Status } from "./types";
 
@@ -63,6 +66,59 @@ describe("lanes", () => {
     expect(placeBefore([1, 2, 3], 1, null)).toEqual([2, 3, 1]);
     expect(placeBefore([1, 2, 3], 2, 2)).toEqual([1, 3, 2]);
     expect(placeBefore([1, 2], 9, 2)).toEqual([1, 9, 2]);
+  });
+  test("an unnamed ticket shows in the first online lane", () => {
+    const lanes = assignLanes([4], [
+      { server: "mbp", order: [], online: false },
+      { server: "workr", order: [] },
+    ]);
+    expect(lanes.get("workr")).toEqual([4]);
+    expect(lanes.get("mbp")).toEqual([]);
+  });
+});
+
+describe("lane membership", () => {
+  const lane = (server: string, order: number[] | null, over: { online?: boolean; fresh?: boolean } = {}) => ({
+    server,
+    order,
+    online: over.online ?? true,
+    fresh: over.fresh ?? true,
+  });
+  test("queued tickets in no file go to the first online lane, ascending, where the board shows them", () => {
+    const lanes = [lane("mbp", [3], { online: false }), lane("workr", [2]), lane("buzz", [])];
+    expect(adoption([9, 2, 3, 4], lanes, new Map())).toEqual({ server: "workr", add: [4, 9] });
+    const shown = assignLanes([9, 2, 3, 4], lanes.map((l) => ({ server: l.server, order: l.order ?? [], online: l.online })));
+    expect(shown.get("workr")).toEqual([2, 4, 9]);
+  });
+  test("never into a second lane: a ticket any file names (an offline machine's cached one too) stays where it is", () => {
+    const lanes = [lane("mbp", []), lane("workr", [5], { online: false, fresh: false })];
+    expect(adoption([5], lanes, new Map())).toBeNull();
+    expect(adoption([5, 6], lanes, new Map())).toEqual({ server: "mbp", add: [6] });
+  });
+  test("pinned (a live run has it) and nothing missing → nothing to write", () => {
+    expect(adoption([7], [lane("mbp", [])], new Map([[7, "workr"]]))).toBeNull();
+    expect(adoption([1], [lane("mbp", [1])], new Map())).toBeNull();
+  });
+  test("not while a file could still name it: never read, or an online machine not asked in this page", () => {
+    expect(adoption([8], [lane("mbp", []), lane("workr", null, { online: false, fresh: false })], new Map())).toBeNull();
+    expect(adoption([8], [lane("mbp", []), lane("workr", [], { fresh: false })], new Map())).toBeNull();
+    expect(adoption([8], [lane("mbp", [], { online: false })], new Map())).toBeNull();
+    expect(adoption([8], [], new Map())).toBeNull();
+  });
+  test("union merge: what the file has stays in its order, added numbers it lacks go to the end", () => {
+    expect(unionOrder([5, 3], [3, 9, 7, 9])).toEqual([5, 3, 9, 7]);
+    expect(unionOrder([], [4])).toEqual([4]);
+  });
+  test("adopted twice at once: the lane whose host sorts first keeps it, whichever board decides", () => {
+    const files = [
+      { server: "a", host: "martins-mbp", order: [1, 4] },
+      { server: "b", host: "buzz", order: [4, 2] },
+      { server: "c", host: "zeta", order: [4] },
+    ];
+    const drop = doubles([4, 2], files);
+    expect(drop).toEqual(new Map([["a", [4]], ["c", [4]]]));
+    expect(doubles([4], [...files].reverse())).toEqual(drop);
+    expect(doubles([1], files).size).toBe(0);
   });
 });
 

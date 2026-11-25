@@ -4,7 +4,7 @@
  * each machine's projects/status/queue, the GitHub board, the JIRA board) then loads on its own and re-renders when
  * it arrives – nothing waits for the slowest machine.
  */
-import { writing } from "./actions";
+import { adoptLanes, writing } from "./actions";
 import { api, type HostTheme, hostTheme, initToken, sc, servers, hostEvents } from "./api";
 import { dragging } from "./drag";
 import { fill, h, reconcile } from "./dom";
@@ -113,6 +113,7 @@ function useSlug(slug: string): void {
   state.olderClosed = [];
   state.closedOlder = 0;
   state.queues = new Map(Object.entries(cacheGet<Record<string, QueueState>>(`queues.${slug}`) ?? {}));
+  state.fresh.queues.clear();
   prefSet("slug", slug);
   clearCards();
   clearTicketCards();
@@ -309,6 +310,7 @@ async function loadStatus(s: Server): Promise<void> {
     async () => {
       try {
         state.statuses.set(s.id, await sc.status(s.id));
+        state.fresh.statuses.add(s.id);
         pumpGrills();
         if (state.statusErrors.get(s.id)?.startsWith("Status")) state.statusErrors.delete(s.id);
       } catch (err) {
@@ -330,7 +332,7 @@ async function loadBoard(full = false): Promise<void> {
     const since = state.board?.etag ? `&since=${encodeURIComponent(state.board.etag)}` : "";
     const res = await api<BoardData | { same: true }>(`/api/board?slug=${encodeURIComponent(slug)}${since}${full ? "&refresh=1" : ""}`);
     last.board = Date.now();
-    if (slug === state.slug) freshBoard = slug;
+    if (slug === state.slug) state.fresh.board = slug;
     if (slug !== state.slug || "same" in res || writing() || dragging()) return;
     state.board = res;
     cacheSet(`board.${slug}`, res);
@@ -387,6 +389,7 @@ async function loadQueues(): Promise<void> {
         const q = await sc.queue(s.id, slug);
         if (slug !== state.slug || writing() || dragging()) return;
         state.queues.set(s.id, q);
+        state.fresh.queues.add(s.id);
         saveMap(`queues.${slug}`, state.queues);
         hooks.render();
       }, true),
@@ -436,6 +439,8 @@ function tick(force = false, full = false): void {
     last.queues = now;
     loadQueues();
   }
+  // queued tickets named in no machine's queue file go into the first online lane's file (once every lane is known)
+  if (!dragging()) adoptLanes();
 }
 
 /** Reload button / visibility return: everything now, projects re-scanned only on the button. */
@@ -461,8 +466,6 @@ document.addEventListener("visibilitychange", () => {
 let pendingOpen: OpenTarget | null = null;
 /** the project switch is decided once per link, as soon as projects are known */
 let openSwitched = false;
-/** slug whose board answered from the network since the page opened (a key-only link may then give up) */
-let freshBoard = "";
 /** slug whose JIRA board was asked over the network since the page opened (a `:n` link then stops waiting) */
 let freshJira = "";
 
@@ -540,7 +543,7 @@ function tryOpen(): void {
     pendingOpen = null;
     showMode("werkbank");
     openIssue(issue.number);
-  } else if (freshBoard === state.slug) {
+  } else if (state.fresh.board === state.slug) {
     pendingOpen = null;
     toast(`${t.key} ist in diesem Board nicht zu finden.`);
   }

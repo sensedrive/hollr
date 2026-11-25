@@ -213,6 +213,10 @@ export interface SandcastleRequest {
   slug?: string;
   order?: unknown;
   tickets?: unknown;
+  /** queue-add: issue numbers to append where missing */
+  add?: unknown;
+  /** queue-remove: issue numbers to take out */
+  remove?: unknown;
   config?: Record<string, unknown>;
   /** grill-start */
   n?: unknown;
@@ -638,6 +642,39 @@ export function readQueue(gitCommonDir: string): {
 }
 
 /**
+ * Read-modify-write of queue.json under a short lock: every open board (one per paired device) and the start write
+ * this file through separate gate processes, and an append must never be lost to a write in between.
+ */
+function withQueueLock<T>(gitCommonDir: string, fn: () => T): T {
+  const lock = join(queueDir(gitCommonDir), "queue.lock");
+  mkdirSync(queueDir(gitCommonDir), { recursive: true });
+  for (let waited = 0; ; waited += 20) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch {
+      // held: a write takes milliseconds, a lock older than 10 s is left over from a killed process
+      const since = mtimeOf(lock);
+      if (since && Date.now() - since > 10_000) rmSync(lock, { recursive: true, force: true });
+      else if (waited >= 5000)
+        throw new Error("Die Warteschlange wird gerade geschrieben – bitte erneut versuchen.");
+      else Bun.sleepSync(20);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
+/** queue.json as a plain object (other fields are kept on write). */
+function rawQueue(gitCommonDir: string): Record<string, unknown> {
+  const raw = readJson<Record<string, unknown>>(queueFile(gitCommonDir));
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+
+/**
  * Replaces `order` and merges `tickets` (null removes a ticket's flags); other fields of the file stay –
  * the loop reads only `order`.
  */
@@ -645,28 +682,66 @@ export function writeQueue(
   gitCommonDir: string,
   patch: { order?: unknown; tickets?: unknown },
 ): { order: number[]; tickets: Record<string, TicketFlags> } {
-  const file = queueFile(gitCommonDir);
-  const raw = readJson<Record<string, unknown>>(file);
-  const data: Record<string, unknown> =
-    raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const current = readQueue(gitCommonDir);
-  if (patch.order !== undefined) {
-    if (!Array.isArray(patch.order))
-      throw new Error("order muss eine Liste von Issue-Nummern sein.");
-    current.order = positiveInts(patch.order);
-  }
-  if (patch.tickets !== undefined) {
-    if (typeof patch.tickets !== "object" || patch.tickets === null || Array.isArray(patch.tickets))
-      throw new Error("tickets muss ein Objekt sein.");
-    for (const [k, v] of Object.entries(patch.tickets)) {
-      if (!/^\d+$/.test(k)) throw new Error(`Ungültige Issue-Nummer „${k}“.`);
-      const f = normalizeFlags(v);
-      if (f) current.tickets[k] = f;
-      else delete current.tickets[k];
+  return withQueueLock(gitCommonDir, () => {
+    const data = rawQueue(gitCommonDir);
+    const current = readQueue(gitCommonDir);
+    if (patch.order !== undefined) {
+      if (!Array.isArray(patch.order))
+        throw new Error("order muss eine Liste von Issue-Nummern sein.");
+      current.order = positiveInts(patch.order);
     }
-  }
-  writeJson(file, { ...data, version: 1, order: current.order, tickets: current.tickets });
-  return current;
+    if (patch.tickets !== undefined) {
+      if (typeof patch.tickets !== "object" || patch.tickets === null || Array.isArray(patch.tickets))
+        throw new Error("tickets muss ein Objekt sein.");
+      for (const [k, v] of Object.entries(patch.tickets)) {
+        if (!/^\d+$/.test(k)) throw new Error(`Ungültige Issue-Nummer „${k}“.`);
+        const f = normalizeFlags(v);
+        if (f) current.tickets[k] = f;
+        else delete current.tickets[k];
+      }
+    }
+    writeJson(queueFile(gitCommonDir), {
+      ...data,
+      version: 1,
+      order: current.order,
+      tickets: current.tickets,
+    });
+    return current;
+  });
+}
+
+/**
+ * `queue-add` / `queue-remove`: appends the numbers `order` lacks to its end (in the given order), or takes numbers
+ * out – on the stored order under the lock, so boards changing the file at the same time never drop each other's
+ * entries. Unchanged: nothing is written. Ticket flags stay.
+ */
+export function editQueueOrder(
+  gitCommonDir: string,
+  change: { add?: unknown; remove?: unknown },
+): { order: number[]; tickets: Record<string, TicketFlags> } {
+  const list = (v: unknown, name: string) => {
+    const ns = positiveInts(v);
+    if (!Array.isArray(v) || ns.length !== new Set(v).size)
+      throw new Error(`${name} muss eine Liste von Issue-Nummern sein.`);
+    return ns;
+  };
+  const add = change.add === undefined ? [] : list(change.add, "add");
+  const remove = new Set(change.remove === undefined ? [] : list(change.remove, "remove"));
+  return withQueueLock(gitCommonDir, () => {
+    const current = readQueue(gitCommonDir);
+    const kept = current.order.filter((n) => !remove.has(n));
+    const order = [...kept, ...add.filter((n) => !kept.includes(n) && !remove.has(n))];
+    if (order.length === current.order.length && order.every((n, i) => n === current.order[i]))
+      return current;
+    current.order = order;
+    writeJson(queueFile(gitCommonDir), {
+      ...rawQueue(gitCommonDir),
+      version: 1,
+      order,
+      tickets: current.tickets,
+    });
+    return current;
+  });
 }
 
 /**
@@ -2070,6 +2145,14 @@ export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promi
       return writeQueue(projectBySlug(await projectCache(deps), req.slug).gitCommonDir, {
         order: req.order,
         tickets: req.tickets,
+      });
+    case "queue-add":
+      return editQueueOrder(projectBySlug(await projectCache(deps), req.slug).gitCommonDir, {
+        add: req.add ?? null,
+      });
+    case "queue-remove":
+      return editQueueOrder(projectBySlug(await projectCache(deps), req.slug).gitCommonDir, {
+        remove: req.remove ?? null,
       });
     case "preview":
       return previewRun(req, deps);
