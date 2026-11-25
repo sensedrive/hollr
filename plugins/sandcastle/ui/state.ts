@@ -5,7 +5,7 @@
 import { api, apiKeepalive } from "./api";
 import type { BoardData, Issue, JiraBoardData, Project, QueueState, Server, Status } from "./types";
 
-export type View = "board" | "runs";
+export type View = "board" | "runs" | "versions";
 /** What „Board“ shows: JIRA tickets (default) or the GitHub issues of the Werkbank. */
 export type Mode = "tickets" | "werkbank";
 
@@ -84,6 +84,10 @@ export const hooks = {
   reloadBoard: async (): Promise<void> => {},
   reloadStatus: async (): Promise<void> => {},
   reloadQueues: async (): Promise<void> => {},
+  /** one machine's project list anew (its lul-workr ranges after an update) */
+  reloadProjects: async (_server: string): Promise<void> => {},
+  /** the reload button: every source now */
+  refresh: () => {},
   show: (_view: View) => {},
   /** switches Tickets | Werkbank (and to „Board“) */
   showMode: (_mode: Mode) => {},

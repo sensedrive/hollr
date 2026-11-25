@@ -37,6 +37,7 @@ import { type Flow, flowLive, flowPr, readFlows } from "./flows";
 import { parseEntry } from "./sessionlog";
 import { type Agent, execHerdr, Herdr, newChat, promptWhenReady } from "./herdr";
 import { which } from "./tools";
+import { satisfies } from "./semver";
 import type { SpaceOrigin } from "./spaceorigins";
 
 // ── types (the wire format, see the plugin's contract) ──────────────────────────────────────────────
@@ -75,9 +76,25 @@ export interface Project {
   };
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
-  /** the loop on the default branch knows the queue (lul-workr-setup → Sandcastle nachziehen) */
+  /**
+   * the loop knows the queue: a bundle project whose `lulWorkr` range the installed lul-workr satisfies, a forked
+   * loop whose default branch has the queue mode (lul-workr-setup → Sandcastle nachziehen)
+   */
   queueSupported: boolean;
+  lulWorkr: LulWorkrFacts;
   error?: string;
+}
+
+/** Where the project's loop comes from (lul-workr-init `engine/src/project.ts` `Mode`). */
+export type LulWorkrMode = "bundle" | "forked" | "none";
+
+export interface LulWorkrFacts {
+  /** `lulWorkr` of `.lul-workr.json`: the version range of the bundle the project runs on */
+  required: string | null;
+  configVersion: number | null;
+  mode: LulWorkrMode;
+  /** this machine's lul-workr satisfies `required`; null without a range */
+  satisfied: boolean | null;
 }
 
 export interface TicketFlags {
@@ -260,6 +277,8 @@ export interface Deps {
   sendKeys?: (pane: string, keys: string[]) => Promise<void>;
   /** pane → its herdr tab and workspace labels (default: herdr) */
   labels?: Map<string, string[]>;
+  /** this machine's `lul-workr --version` (default: measured, cached); null = not installed */
+  lulWorkr?: string | null;
 }
 
 // ── small helpers ──────────────────────────────────────────────────────────────────────────────────
@@ -374,6 +393,9 @@ type LabelKey = "queue" | "story" | "grillTicket" | "grill" | "ready" | "ciFaile
 /** `.lul-workr.json` as far as Sandcastle reads it; labels exist as `github.labels.*` and as `github.*`. */
 interface Config {
   project?: unknown;
+  /** version range of the lul-workr bundle (`^1.1`); set by `lul-workr project migrate` */
+  lulWorkr?: unknown;
+  configVersion?: unknown;
   repo?: { slug?: unknown; defaultBranch?: unknown };
   jira?: {
     baseUrl?: unknown;
@@ -398,12 +420,13 @@ interface Config {
   };
 }
 
-/** The project of a parsed `.lul-workr.json` in `root` (pure; queue support is measured by the caller). */
+/** The project of a parsed `.lul-workr.json` in `root` (pure; queue support and the mode are measured by the caller). */
 export function projectFromConfig(
   cfg: Config,
   root: string,
   gitCommonDir: string,
   queueSupported: boolean,
+  mode: LulWorkrMode = "none",
 ): Project {
   const gh = cfg.github ?? {};
   const label = (key: LabelKey) => str(gh.labels?.[key]) ?? str(gh[key]);
@@ -456,11 +479,77 @@ export function projectFromConfig(
         typeof parallel === "number" && Number.isInteger(parallel) && parallel >= 1 ? parallel : 1,
     },
     queueSupported,
+    lulWorkr: {
+      required: str(cfg.lulWorkr) ?? null,
+      configVersion: typeof cfg.configVersion === "number" ? cfg.configVersion : null,
+      mode,
+      satisfied: null,
+    },
     ...(slug ? {} : { error: ".lul-workr.json: repo.slug fehlt" }),
   };
 }
 
-export async function measureQueueSupport(root: string, defaultBranch: string): Promise<boolean> {
+/**
+ * The mode as lul-workr itself decides it (lul-workr-init `engine/src/project.ts` `detectMode`): a loop of its own
+ * (`.sandcastle/main.mts`) = forked, else a `lulWorkr` range = bundle, else none. Read from the main checkout's
+ * files, without running lul-workr. `lul-workr project check` additionally checks the Dockerfile's
+ * `FROM lul-workr-sandbox` (engine `check.ts`) – a check of the project, not part of the mode.
+ */
+export function lulWorkrMode(root: string, cfg: Config): LulWorkrMode {
+  if (existsSync(join(root, ".sandcastle", "main.mts"))) return "forked";
+  return str(cfg.lulWorkr) ? "bundle" : "none";
+}
+
+/** `.lul-workr.json` of a checkout; {} when it is missing or broken. */
+function readConfig(root: string): Config {
+  return readJson<Config>(join(root, ".lul-workr.json")) ?? {};
+}
+
+/** Does `installed` satisfy the project's range? null without a range (engine `checkRange`). */
+export function rangeSatisfied(required: string | null, installed: string | null): boolean | null {
+  if (!required) return null;
+  return !!installed && satisfies(installed, required);
+}
+
+const LUL_WORKR_TTL = 10 * 60_000;
+
+/**
+ * This machine's `lul-workr --version`; null = not installed. Cached in the state dir for 10 minutes like the tools'
+ * latest versions, and measured anew as soon as the launcher changes (`lul-workr install` rewrites it on update).
+ */
+export function installedLulWorkr(now = Date.now()): string | null {
+  const bin = which("lul-workr");
+  if (!bin) return null;
+  const mtime = mtimeOf(bin);
+  const file = join(stateDir(), "lul-workr-version.json");
+  const cached = readJson<{ bin: string; mtime: number; at: number; version: string | null }>(file);
+  if (cached?.bin === bin && cached.mtime === mtime && now - cached.at < LUL_WORKR_TTL)
+    return cached.version;
+  let version: string | null = null;
+  try {
+    const r = Bun.spawnSync([bin, "--version"], {
+      stdout: "pipe",
+      stderr: "ignore",
+      timeout: 10_000,
+    });
+    version = r.stdout.toString().match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? null;
+  } catch {}
+  writeJson(file, { bin, mtime, at: now, version });
+  return version;
+}
+
+/**
+ * Whether the project's loop works a queue: in bundle mode the installed lul-workr satisfies the range (the bundle
+ * always knows the queue), a forked loop has the queue mode on its default branch.
+ */
+export async function measureQueueSupport(
+  root: string,
+  defaultBranch: string,
+  installed: string | null = installedLulWorkr(),
+): Promise<boolean> {
+  const cfg = readConfig(root);
+  if (lulWorkrMode(root, cfg) === "bundle")
+    return rangeSatisfied(str(cfg.lulWorkr) ?? null, installed) === true;
   const r = await run(["git", "-C", root, "show", `origin/${defaultBranch}:.sandcastle/queue.mts`]);
   return r.ok && r.out.includes("hollr-sandcastle");
 }
@@ -481,7 +570,7 @@ export interface ProjectCache {
 }
 
 /** Bumped whenever Project gains fields, so cached projects never miss them. */
-const PROJECTS_VERSION = 3;
+const PROJECTS_VERSION = 4;
 
 const projectsFile = () => join(stateDir(), "projects.json");
 
@@ -503,13 +592,24 @@ async function projectAt(dir: string): Promise<Project | undefined> {
     cfg = JSON.parse(readFileSync(join(dir, ".lul-workr.json"), "utf8"));
   } catch {
     return {
-      ...projectFromConfig({}, dir, gitCommonDir, false),
+      ...projectFromConfig({}, dir, gitCommonDir, false, lulWorkrMode(dir, {})),
       error: ".lul-workr.json ist kein gültiges JSON",
     };
   }
-  const p = projectFromConfig(cfg, dir, gitCommonDir, false);
-  if (!p.error) p.queueSupported = await measureQueueSupport(dir, p.defaultBranch);
+  const p = projectFromConfig(cfg, dir, gitCommonDir, false, lulWorkrMode(dir, cfg));
+  // a bundle project's queue support follows the installed version: set on every read (withInstalled)
+  if (!p.error && p.lulWorkr.mode !== "bundle")
+    p.queueSupported = await measureQueueSupport(dir, p.defaultBranch, null);
   return p;
+}
+
+/** The cached projects against this machine's lul-workr as installed now (it changes faster than the cache). */
+function withInstalled(cache: ProjectCache, installed: string | null): ProjectCache {
+  for (const p of cache.projects) {
+    p.lulWorkr.satisfied = rangeSatisfied(p.lulWorkr.required, installed);
+    if (p.lulWorkr.mode === "bundle" && !p.error) p.queueSupported = p.lulWorkr.satisfied === true;
+  }
+  return cache;
 }
 
 /** Of two checkouts of one repo the board shows one: the folder named like the repo, else the busier one. */
@@ -583,9 +683,11 @@ async function rescan(): Promise<ProjectCache> {
  * returned as is and refreshed by a detached `hollr gate sandcastle {"op":"projects","refresh":true}`.
  */
 export async function projectCache(deps: Deps, refresh = false): Promise<ProjectCache> {
-  if (refresh) return rescan();
+  const installed = installedOf(deps);
+  if (refresh) return withInstalled(await rescan(), installed);
   const cache = readJson<ProjectCache>(projectsFile());
-  if (!cache?.projects || cache.version !== PROJECTS_VERSION) return rescan();
+  if (!cache?.projects || cache.version !== PROJECTS_VERSION)
+    return withInstalled(await rescan(), installed);
   const now = deps.now ?? Date.now();
   if (
     now - cache.at > PROJECTS_TTL &&
@@ -599,8 +701,11 @@ export async function projectCache(deps: Deps, refresh = false): Promise<Project
       stdin: req,
     });
   }
-  return { ...cache, checkouts: cache.checkouts ?? [] };
+  return withInstalled({ ...cache, checkouts: cache.checkouts ?? [] }, installed);
 }
+
+const installedOf = (deps: Deps) =>
+  deps.lulWorkr !== undefined ? deps.lulWorkr : installedLulWorkr();
 
 function projectBySlug(cache: ProjectCache, slug: unknown): Project {
   const p = cache.projects.find((x) => x.slug === slug);
@@ -1021,6 +1126,8 @@ const LOOP_ARGS = [
   /\.sandcastle\/main\.m?[jt]s\b/,
   // `yarn sandcastle`, `npm run sandcastle` … (yarn runs as `node …/yarn-4.x.cjs sandcastle`)
   /(?:^|[\s/])(?:yarn|npm|pnpm|bun)(?:-[\d.]+)?(?:\.c?js)?(?:\s+run)?\s+sandcastle(?:\s|$)/,
+  // the bundle's loop: `node …/lul-workr.mjs sandcastle run` (not its --dry-run)
+  /\blul-workr(?:\.mjs)?\s+sandcastle\s+run\b(?!.*--dry-run)/,
 ];
 
 /** `ps -axww -o pid=,lstart=,args=` lines that are Sandcastle loops (pure). */
@@ -1935,8 +2042,17 @@ async function planRun(project: Project, req: SandcastleRequest, deps: Deps, wri
   const cfg = validateConfig(req.config ?? {}, project);
   if (project.engine !== "sandcastle")
     throw new Error(`Projekt ${project.name} nutzt den Motor ${project.engine}, nicht Sandcastle.`);
-  // a loop without queue mode (not yet „Sandcastle nachziehen“) still runs: with the queued tickets as a list
-  const queueMode = await measureQueueSupport(project.root, project.defaultBranch);
+  // bundle mode: the same skill line – the skill sees the mode and runs `lul-workr sandcastle run`, which refuses a
+  // range the installed lul-workr doesn't satisfy; say so before a session opens
+  const installed = installedOf(deps);
+  const cfgFile = readConfig(project.root);
+  const required = str(cfgFile.lulWorkr) ?? null;
+  if (lulWorkrMode(project.root, cfgFile) === "bundle" && !rangeSatisfied(required, installed))
+    throw new Error(
+      `lul-workr ${installed ?? "(nicht installiert)"} erfüllt den Bereich „${required}“ von ${project.name} nicht – unter Versionen aktualisieren.`,
+    );
+  // a forked loop without queue mode (not yet „Sandcastle nachziehen“) still runs: with the queued tickets as a list
+  const queueMode = await measureQueueSupport(project.root, project.defaultBranch, installed);
   // an explicit ticket list goes to the front of the queue, in the given order
   const first = positiveInts(req.tickets);
   if (Array.isArray(req.tickets) && first.length !== req.tickets.length)
@@ -2125,7 +2241,7 @@ export async function sandcastle(req: SandcastleRequest, deps: Deps = {}): Promi
       return { projects: (await projectCache(deps, req.refresh === true)).projects };
     case "status": {
       const { runs, lock, grills } = await scan(deps, { agents: true });
-      return { machine: { host: hostname() }, runs, lock, grills };
+      return { machine: { host: hostname(), lulWorkr: installedOf(deps) }, runs, lock, grills };
     }
     case "log": {
       const path = String(req.path ?? "");

@@ -19,6 +19,7 @@ import type {
   SetupJob,
   Status,
   TicketFlags,
+  ToolState,
 } from "./types";
 
 const KEY = "sc.token";
@@ -233,15 +234,18 @@ async function detect(): Promise<Server[]> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** One `hollr gate sandcastle` call on a machine (server id exactly as `servers()` returned it). */
-export async function gate<T>(server: string, stdin: Record<string, unknown>, timeoutMs = 25_000): Promise<T> {
+/**
+ * One `hollr gate <command>` call on a machine (server id exactly as `servers()` returned it); the command must be in
+ * the manifest's `host.gate` allowlist (Hollr relay) and in /api/host/gate's (standalone).
+ */
+export async function gate<T>(server: string, stdin: Record<string, unknown>, timeoutMs = 25_000, command = "sandcastle"): Promise<T> {
   // which channel (and which ids) exist is only known after the first servers answer
   if (mode === null) await servers();
   if (!known.has(server)) throw new Error("Rechner unbekannt");
-  if (mode !== "host") return api<T>("/api/host/gate", { command: "sandcastle", stdin });
+  if (mode !== "host") return api<T>("/api/host/gate", { command, stdin });
   for (let attempt = 0; ; attempt++) {
     try {
-      return await hostCall<T>({ type: "gate", server, command: "sandcastle", stdin }, timeoutMs);
+      return await hostCall<T>({ type: "gate", server, command, stdin }, timeoutMs);
     } catch (err) {
       // desktop loads the plugin's allowlist right after opening and refuses until then
       const early = Date.now() - openedAt < 4000 && attempt < 5;
@@ -291,6 +295,20 @@ export const sc = {
     gate<{ written: { path: SetupFilePath; size: number; mode: string }[] }>(server, { op: "setup-files-write", slug, files, overwrite }),
   setupInstall: (server: string, slug: string) => gate<{ job: SetupJob }>(server, { op: "setup-install", slug }),
 };
+
+/** Gate `tools` – the Werkzeuge screen's: lul-workr's version, newest release and its update on a machine. */
+export const tools = {
+  list: (server: string) => toolsGate(server, { op: "list" }),
+  /** starts `tools run lul-workr` detached on the machine; `list` then reports `running` and the log */
+  updateLulWorkr: (server: string) => toolsGate(server, { op: "run", name: "lul-workr" }),
+};
+
+async function toolsGate(server: string, stdin: Record<string, unknown>): Promise<ToolState[]> {
+  // the gate answers its errors as {error} with exit 0
+  const r = await gate<{ tools?: ToolState[]; error?: string }>(server, stdin, 30_000, "tools");
+  if (r.error || !r.tools) throw new Error(r.error ?? "Werkzeuge: keine Antwort");
+  return r.tools;
+}
 
 /** Opens the run's omp session in Hollr. */
 export function openSession(server: string, pane: string): void {

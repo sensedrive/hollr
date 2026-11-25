@@ -31,6 +31,8 @@ export interface Project {
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
   queueSupported: boolean;
+  /** missing on machines with an older hollr */
+  lulWorkr?: LulWorkrFacts;
   error?: string;
 }
 
@@ -204,7 +206,8 @@ export interface Grill {
 }
 
 export interface Status {
-  machine: { host: string };
+  /** lulWorkr: `lul-workr --version` of the machine, null = not installed; missing with an older hollr */
+  machine: { host: string; lulWorkr?: string | null };
   runs: Run[];
   lock: RunRecord | null;
   /** missing on machines with an older hollr */
@@ -214,6 +217,29 @@ export interface Status {
 export interface QueueState {
   order: number[];
   tickets: Record<string, TicketFlags>;
+}
+
+/** Where a project's loop comes from (server `LulWorkrFacts`, lul-workr-init `engine/src/project.ts`). */
+export interface LulWorkrFacts {
+  /** `lulWorkr` of `.lul-workr.json`, e.g. `^1.1` */
+  required: string | null;
+  configVersion: number | null;
+  mode: "bundle" | "forked" | "none";
+  /** the machine's lul-workr satisfies `required`; null without a range */
+  satisfied: boolean | null;
+}
+
+/** One tool of gate `tools` (the Werkzeuge screen) – only what the Versionen view reads. */
+export interface ToolState {
+  name: string;
+  version?: string;
+  /** newest release (cached 1 h by the machine); undefined = unknown */
+  latest?: string;
+  latestError?: string;
+  updateAvailable?: boolean;
+  running: boolean;
+  exit?: number;
+  log?: string;
 }
 
 export interface LogChunk {

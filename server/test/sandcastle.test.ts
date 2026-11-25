@@ -82,8 +82,8 @@ const agent = (pane: string, cwd: string, status = "working"): Agent => ({
   workspace: "w",
 });
 
-// labels: herdr's tab/workspace labels – never ask the real herdr
-const base: Deps = { prLookup: false, procs: [], agents: [], labels: new Map() };
+// labels: herdr's tab/workspace labels – never ask the real herdr; lulWorkr: never run the machine's lul-workr
+const base: Deps = { prLookup: false, procs: [], agents: [], labels: new Map(), lulWorkr: "1.1.0" };
 const status = async (deps: Deps = {}) =>
   (await sandcastle({ op: "status" }, { ...base, ...deps })) as {
     runs: Run[];
@@ -154,6 +154,23 @@ beforeAll(async () => {
     }),
   );
   git(other, "init", "-q");
+  // a loop of its own: forked
+  mkdirSync(join(other, ".sandcastle"), { recursive: true });
+  writeFileSync(join(other, ".sandcastle", "main.mts"), "// own loop\n");
+  // migrated to the bundle: a range, no loop of its own
+  const bund = join(root, "code", "bund");
+  mkdirSync(join(bund, ".sandcastle"), { recursive: true });
+  writeFileSync(
+    join(bund, ".lul-workr.json"),
+    JSON.stringify({
+      lulWorkr: "^1.1",
+      configVersion: 1,
+      repo: { slug: "acme/bund" },
+      engine: { kind: "sandcastle" },
+    }),
+  );
+  writeFileSync(join(bund, ".sandcastle", "Dockerfile"), "FROM lul-workr-sandbox:1.1.0-node24\n");
+  git(bund, "init", "-q");
   const broken = join(root, "code", "broken");
   mkdirSync(broken, { recursive: true });
   writeFileSync(join(broken, ".lul-workr.json"), "{nope");
@@ -240,6 +257,55 @@ describe("projects", () => {
     expect(projects.find((x) => x.root.endsWith("broken"))?.error).toContain("kein gültiges JSON");
     // the worktree is no project of its own
     expect(projects.filter((x) => x.slug === SLUG)).toHaveLength(1);
+  });
+
+  test("lul-workr mode and range per project, against the version installed now", async () => {
+    const facts = async (lulWorkr: string | null) => {
+      const { projects } = (await sandcastle({ op: "projects" }, { ...base, lulWorkr })) as {
+        projects: Project[];
+      };
+      return Object.fromEntries(
+        projects
+          .filter((p) => p.slug)
+          .map((p) => [p.slug, { ...p.lulWorkr, queueSupported: p.queueSupported }]),
+      );
+    };
+    expect(await facts("1.1.0")).toEqual({
+      "acme/bund": {
+        required: "^1.1",
+        configVersion: 1,
+        mode: "bundle",
+        satisfied: true,
+        queueSupported: true,
+      },
+      "acme/other": {
+        required: null,
+        configVersion: null,
+        mode: "forked",
+        satisfied: null,
+        queueSupported: false,
+      },
+      // no loop of its own and no range: the queue is measured on the default branch as before
+      [SLUG]: { required: null, configVersion: null, mode: "none", satisfied: null, queueSupported: true },
+    });
+    // the cache stays, the installed version is applied on every read
+    expect((await facts("1.0.9"))["acme/bund"]).toMatchObject({ satisfied: false, queueSupported: false });
+    expect((await facts("2.0.0"))["acme/bund"]).toMatchObject({ satisfied: false, queueSupported: false });
+    expect((await facts(null))["acme/bund"]).toMatchObject({ satisfied: false, queueSupported: false });
+    expect((await status()) as unknown).toMatchObject({ machine: { lulWorkr: "1.1.0" } });
+  });
+
+  test("a bundle project starts with the same skill line, but only within its range", async () => {
+    const deps: Deps = { ...base, queuedIssues: async () => [4] };
+    const req = { op: "preview", slug: "acme/bund", config: { agent: "opus-5.5", parallel: 1 } };
+    expect(await sandcastle(req, deps)).toMatchObject({
+      prompt: "/skill:lul-workr-run-sandcastle bund opus-5.5 1 warteschlange --kein-testserver",
+      queueMode: true,
+      scope: null,
+    });
+    await expect(sandcastle(req, { ...deps, lulWorkr: "1.0.0" })).rejects.toThrow(
+      "lul-workr 1.0.0 erfüllt den Bereich „^1.1“ von bund nicht",
+    );
   });
 });
 
@@ -1008,8 +1074,11 @@ describe("pure parts", () => {
       "  102 Mon Nov  3 09:00:00 2026 node /p/.yarn/releases/yarn-4.18.1.cjs sandcastle",
       "  103 Mon Nov 23 10:00:42 2026 /Users/m/.local/bin/hollr /hollr/plugins/sandcastle/server.ts",
       "  104 Mon Nov 23 10:00:42 2026 node yarn.cjs sandcastle:build-image",
+      "  105 Mon Nov 23 10:00:42 2026 node /home/u/.local/share/lul-workr/current/bin/lul-workr.mjs sandcastle run",
+      "  106 Mon Nov 23 10:00:42 2026 node /x/lul-workr.mjs sandcastle run --dry-run",
+      "  107 Mon Nov 23 10:00:42 2026 node /x/lul-workr.mjs project check",
     ].join("\n");
-    expect(parsePs(ps, 0).map((p) => p.pid)).toEqual([101, 102]);
+    expect(parsePs(ps, 0).map((p) => p.pid)).toEqual([101, 102, 105]);
     expect(parsePs(ps, 0)[0]?.start).toBe(Date.parse("Mon Nov 23 10:00:42 2026"));
     expect(
       sandcastleEnv("101 node x PATH=/bin SANDCASTLE_AGENT=opus-5 SANDCASTLE_MAX_PARALLEL=3"),

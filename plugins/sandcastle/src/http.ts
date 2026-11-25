@@ -41,8 +41,9 @@ export interface Ctx {
   guard: Guard;
 }
 
-/** Gate commands /api/host/gate passes on – the same allowlist the manifest gives the Hollr relay. */
-const HOST_GATE: Record<string, true> = { sandcastle: true };
+/** Gate commands /api/host/gate passes on – the same allowlist the manifest gives the Hollr relay (`tools`: the
+ *  Versionen view reads and updates lul-workr like the Werkzeuge screen). */
+const HOST_GATE: Record<string, true> = { sandcastle: true, tools: true };
 
 async function json(req: Request): Promise<Record<string, unknown>> {
   try {

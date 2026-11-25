@@ -31,6 +31,8 @@ export interface Project {
   agents: { key: string; label: string; harness: string; model: string }[];
   defaults: { agent: string; parallel: number };
   queueSupported: boolean;
+  /** where the loop comes from (`lul-workr project check` mode); missing with an older hollr */
+  lulWorkr?: { required: string | null; configVersion: number | null; mode: "bundle" | "forked" | "none"; satisfied: boolean | null };
   error?: string;
 }
 

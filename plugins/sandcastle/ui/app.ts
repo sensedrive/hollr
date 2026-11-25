@@ -1,6 +1,6 @@
 /**
- * Sandcastle board – head bar (project, Tickets | Werkbank, Board | Läufe, machine chips, drift counter, Wächter,
- * reload), data loading and polling. First paint comes from the cache of the last visit; every source (servers,
+ * Sandcastle board – head bar (project, Tickets | Werkbank, Board | Läufe | Versionen, machine chips, drift counter,
+ * Wächter, reload), data loading and polling. First paint comes from the cache of the last visit; every source (servers,
  * each machine's projects/status/queue, the GitHub board, the JIRA board) then loads on its own and re-renders when
  * it arrives – nothing waits for the slowest machine.
  */
@@ -35,6 +35,7 @@ import { boardView, boardVisible, newIssue, renderBoard } from "./views/board";
 import { clearCards } from "./views/cards";
 import { activeTokens, filterBar, setQuery, toggleToken } from "./views/filterbar";
 import { followLog, renderRuns, runsView, STATUS_TEXT } from "./views/runs";
+import { loadVersionTools, renderVersions, versionsView } from "./views/versions";
 import { closeSidebar, openIssue, renderLive } from "./views/sidebar";
 import { applyTheme } from "./theme";
 
@@ -58,6 +59,7 @@ const ticketsTab = h("button", { class: "tab", onclick: () => showMode("tickets"
 const werkbankTab = h("button", { class: "tab", onclick: () => showMode("werkbank") }, "Werkbank");
 const boardTab = h("button", { class: "tab", onclick: () => show("board") }, "Board");
 const runsTab = h("button", { class: "tab", onclick: () => show("runs") }, "Läufe");
+const versionsTab = h("button", { class: "tab", onclick: () => show("versions") }, "Versionen");
 const chips = h("div", { class: "mchips" });
 const driftChip = h("button", { class: "drift-chip", hidden: true, title: "Nur Tickets mit Abweichungen zeigen", onclick: () => toggleDrift() });
 const reload = h("button", { class: "btn icon", title: "Neu laden", "aria-label": "Neu laden", onclick: () => refreshAll(true) }, "↻");
@@ -69,7 +71,11 @@ const werkbankHost = h("div", { class: "view" });
 const ticketsHost = h("div", { class: "view" });
 const boardHost = h("div", { class: "view" }, bar.el, ticketsHost, werkbankHost);
 const runsHost = h("div", { class: "view" });
-const main = h("main", {}, boardHost, runsHost);
+const versionsHost = h("div", { class: "view" });
+const main = h("main", {}, boardHost, runsHost, versionsHost);
+// the Versionen matrix spans all projects: no project, Tickets | Werkbank or Wächter there (design v36)
+const modeTabs = h("div", { class: "tabs" }, ticketsTab, werkbankTab);
+const guardEl = guardControl();
 
 document.body.append(
   h(
@@ -77,11 +83,11 @@ document.body.append(
     { class: "head" },
     h("span", { class: "brand" }, "Sandcastle"),
     projectSelect,
-    h("div", { class: "tabs" }, ticketsTab, werkbankTab),
-    h("div", { class: "tabs" }, boardTab, runsTab),
+    modeTabs,
+    h("div", { class: "tabs" }, boardTab, runsTab, versionsTab),
     chips,
     driftChip,
-    guardControl(),
+    guardEl,
     h("span", { class: "grow" }),
     reload,
   ),
@@ -142,7 +148,8 @@ hooks.render = () => {
       if (state.mode === "tickets") renderTickets();
       else renderBoard();
       bar.update();
-    } else renderRuns();
+    } else if (state.view === "runs") renderRuns();
+    else renderVersions();
     renderTicketLive();
     renderLive();
     if (pendingOpen) tryOpen();
@@ -186,10 +193,14 @@ function show(view: View): void {
   prefSet("view", view);
   boardTab.classList.toggle("active", view === "board");
   runsTab.classList.toggle("active", view === "runs");
+  versionsTab.classList.toggle("active", view === "versions");
   if (view === "runs" && !runsHost.firstChild) runsHost.append(runsView());
+  if (view === "versions" && !versionsHost.firstChild) versionsHost.append(versionsView());
   boardHost.hidden = view !== "board";
   runsHost.hidden = view !== "runs";
-  if (view === "runs") closeSidebar();
+  versionsHost.hidden = view !== "versions";
+  for (const el of [projectSelect, modeTabs, guardEl]) el.hidden = view === "versions";
+  if (view !== "board") closeSidebar();
   showModeHosts();
   hooks.render();
   tick(true);
@@ -439,6 +450,7 @@ function tick(force = false, full = false): void {
     last.queues = now;
     loadQueues();
   }
+  if (state.view === "versions") loadVersionTools(force);
   // queued tickets named in no machine's queue file go into the first online lane's file (once every lane is known)
   if (!dragging()) adoptLanes();
 }
@@ -451,6 +463,11 @@ function refreshAll(button = false): void {
   setTimeout(() => reload.classList.remove("spin"), 600);
   tick(true, button);
 }
+hooks.refresh = () => refreshAll(true);
+hooks.reloadProjects = async (server: string) => {
+  const s = state.servers.find((x) => x.id === server);
+  if (s) await loadMachineProjects(s);
+};
 
 setInterval(() => tick(), 1000);
 setInterval(() => {

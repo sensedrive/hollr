@@ -150,10 +150,11 @@ describe("API", () => {
     expect(labels.body.error).toContain("gibtsnicht");
   });
 
-  test("host gate fallback: only sandcastle passes; gate errors are {error}", async () => {
+  test("host gate fallback: only sandcastle and tools pass; gate errors are {error}", async () => {
     const ok = await call("/api/host/gate", { method: "POST", body: { command: "sandcastle", stdin: { op: "status" } } });
     expect(ok.body).toEqual({ echo: { op: "status" } });
-    for (const command of ["tools", "constructor", ""])
+    expect((await call("/api/host/gate", { method: "POST", body: { command: "tools", stdin: { op: "list" } } })).status).toBe(200);
+    for (const command of ["secrets", "constructor", ""])
       expect((await call("/api/host/gate", { method: "POST", body: { command, stdin: {} } })).status).toBe(400);
     const err = await call("/api/host/gate", { method: "POST", body: { command: "sandcastle", stdin: { op: "boom" } } });
     expect(err).toEqual({ status: 400, body: { error: "Unbekannte Operation." } });

@@ -1,1 +1,1 @@
-{ "id": "sandcastle", "name": "Sandcastle", "description": "Issue-Board und Sandcastle-Läufe", "version": "0.2.0", "entry": "server.ts", "host": { "gate": ["sandcastle"] } }
+{ "id": "sandcastle", "name": "Sandcastle", "description": "Issue-Board und Sandcastle-Läufe", "version": "0.2.0", "entry": "server.ts", "host": { "gate": ["sandcastle", "tools"] } }
