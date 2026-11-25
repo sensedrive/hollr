@@ -49,8 +49,8 @@ export const state = {
   /** this machine's project list was answered in this page's life (the cached one may be stale) */
   localFresh: false,
   /** what this page read from the network (cached copies may be stale): the slug whose board answered, the
-   *  machines whose queue file of the selected repo and whose run status answered */
-  fresh: { board: "", queues: new Set<string>(), statuses: new Set<string>() },
+   *  machines whose project list, whose queue file of the selected repo and whose run status answered */
+  fresh: { board: "", projects: new Set<string>(), queues: new Set<string>(), statuses: new Set<string>() },
 };
 
 /** All known projects by slug: the own machine's first, then what other machines add. */

@@ -288,8 +288,11 @@ async function loadMachineProjects(s: Server, refresh = false): Promise<void> {
   await once(`projects:${s.id}`, async () => {
     try {
       state.machineProjects.set(s.id, await sc.projects(s.id, refresh));
+      state.fresh.projects.add(s.id);
       state.statusErrors.delete(s.id);
     } catch (err) {
+      // [] hides its lanes; the board must not take that for "has no checkout" (adoption waits for an answer)
+      state.fresh.projects.delete(s.id);
       state.machineProjects.set(s.id, []);
       state.statusErrors.set(s.id, `Projekte: ${errorText(err)}`);
     }

@@ -79,11 +79,15 @@ describe("lanes", () => {
 });
 
 describe("lane membership", () => {
-  const lane = (server: string, order: number[] | null, over: { online?: boolean; fresh?: boolean } = {}) => ({
+  type Over = { online?: boolean; fresh?: boolean; projectsFresh?: boolean; checkout?: boolean; runsRepo?: boolean };
+  const lane = (server: string, order: number[] | null, over: Over = {}) => ({
     server,
     order,
     online: over.online ?? true,
     fresh: over.fresh ?? true,
+    projectsFresh: over.projectsFresh ?? over.online ?? true,
+    checkout: over.checkout ?? true,
+    runsRepo: over.runsRepo ?? false,
   });
   test("queued tickets in no file go to the first online lane, ascending, where the board shows them", () => {
     const lanes = [lane("mbp", [3], { online: false }), lane("workr", [2]), lane("buzz", [])];
@@ -105,6 +109,20 @@ describe("lane membership", () => {
     expect(adoption([8], [lane("mbp", []), lane("workr", [], { fresh: false })], new Map())).toBeNull();
     expect(adoption([8], [lane("mbp", [], { online: false })], new Map())).toBeNull();
     expect(adoption([8], [], new Map())).toBeNull();
+  });
+  test("a machine whose project scan failed is no proof it holds no file (ilims: workr had 262… queued, the Mac got them too)", () => {
+    // the failed scan left workr with [] projects: no checkout as far as the board knows, its cached file names 262
+    const mac = lane("mac", []);
+    const workr = lane("workr", [262, 263], { projectsFresh: false, checkout: false });
+    expect(adoption([262, 263], [mac, workr], new Map())).toBeNull();
+    // once workr answers, its file counts
+    expect(adoption([262, 263, 270], [mac, lane("workr", [262, 263])], new Map())).toEqual({ server: "mac", add: [270] });
+    // a machine running the repo whose scan doesn't list the checkout: its file can't be read – wait
+    expect(adoption([262], [mac, lane("workr", null, { checkout: false, runsRepo: true })], new Map())).toBeNull();
+    // an online machine without the repo, and an offline one never seen with it, don't block
+    const other = lane("buzz", null, { checkout: false });
+    const gone = lane("old", null, { online: false, checkout: false });
+    expect(adoption([5], [mac, other, gone], new Map())).toEqual({ server: "mac", add: [5] });
   });
   test("union merge: what the file has stays in its order, added numbers it lacks go to the end", () => {
     expect(unionOrder([5, 3], [3, 9, 7, 9])).toEqual([5, 3, 9, 7]);

@@ -54,24 +54,37 @@ export function assignLanes(queued: number[], lanes: LaneOrder[], pinned = new M
   return out;
 }
 
-export interface LaneKnowledge {
+/** What the board knows about one paired machine, for `adoption`. */
+export interface MachineFacts {
   server: string;
   online: boolean;
-  /** the machine's queue file; null = never read (an offline machine without a cached copy) */
+  /** its project list and run status answered in this page's life – else whether it has the checkout or runs the
+   *  repo is a guess (cache, or [] after a failed project scan) */
+  projectsFresh: boolean;
+  /** the repo is checked out there (its project list, possibly cached) */
+  checkout: boolean;
+  /** a live run of this repo there (run status) */
+  runsRepo: boolean;
+  /** the machine's queue file; null = never read */
   order: number[] | null;
-  /** read from the machine in this page's life for this repo (queue file and run status) */
+  /** queue file and run status read from the machine in this page's life */
   fresh: boolean;
 }
 
 /**
  * Every queued ticket must sit in exactly one machine's queue file – the loops run only their own file. Which
  * queued tickets (ascending) the board has to append to which lane: those named in no lane's file and not pinned to
- * a live run, into the home lane. Null while that can't be told safely: a lane whose file is unknown or an online
- * lane not read yet might already name the ticket (it would end up in two lanes).
+ * a live run, into the first online lane (`machines` in lane order, own machine first). Every machine that may hold
+ * a file counts: one with the checkout, and an online one running the repo. Null while that can't be told safely –
+ * an online machine whose project list didn't answer, a lane whose file is unknown, an online lane not read yet:
+ * each might already name the ticket (it would end up in two lanes). An offline machine never seen with the repo
+ * doesn't block (its loop can't run; the board can't learn more).
  */
-export function adoption(queued: number[], lanes: LaneKnowledge[], pinned: Map<number, string>): { server: string; add: number[] } | null {
+export function adoption(queued: number[], machines: MachineFacts[], pinned: Map<number, string>): { server: string; add: number[] } | null {
+  if (machines.some((m) => m.online && !m.projectsFresh)) return null;
+  const lanes = machines.filter((m) => m.checkout || (m.online && m.runsRepo));
   if (lanes.some((l) => l.order === null || (l.online && !l.fresh))) return null;
-  const home = homeLane(lanes);
+  const home = lanes.find((l) => l.online && l.checkout);
   if (!home) return null;
   const add = queued.filter((n) => !pinned.has(n) && !lanes.some((l) => l.order?.includes(n))).sort((a, b) => a - b);
   return add.length ? { server: home.server, add: [...new Set(add)] } : null;

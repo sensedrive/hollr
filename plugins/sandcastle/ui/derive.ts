@@ -1,7 +1,7 @@
 /** Board facts derived from the state, shared by board, details panel and Läufe view. Cheap: recomputed per render. */
 import { grillFamilies, type TicketGrill, ticketGrills } from "./grill";
 import { adoption, assignLanes, classify, laneRuns, type TicketRun, ticketRuns } from "./model";
-import { currentProject, laneServers, state } from "./state";
+import { currentProject, laneServers, projectOn, state } from "./state";
 import type { Column, Family, Issue, Project, Run, Server, TicketFlags } from "./types";
 
 export interface Lane {
@@ -69,14 +69,19 @@ export function derive(): Derived {
     servers.map((s) => ({ server: s.id, order: state.queues.get(s.id)?.order ?? [], online: s.online })),
     pinned,
   );
-  // only machines with a checkout have a queue file; the board's GitHub answer must be this page's own
+  // every paired machine may hold a queue file of this repo; the board's GitHub answer must be this page's own
+  const lanesFirst = [...servers, ...state.servers.filter((s) => !servers.includes(s))];
   const adopt =
     project && state.fresh.board === state.slug
       ? adoption(
           queued,
-          laneServers().map((s) => ({
+          lanesFirst.map((s) => ({
             server: s.id,
             online: s.online,
+            // whether it has the checkout or runs the repo is only known from its own answers in this page
+            projectsFresh: state.fresh.projects.has(s.id) && state.fresh.statuses.has(s.id),
+            checkout: !!projectOn(s.id),
+            runsRepo: !!state.statuses.get(s.id)?.runs.some((r) => r.slug === state.slug && r.status !== "ended"),
             order: state.queues.get(s.id)?.order ?? null,
             fresh: state.fresh.queues.has(s.id) && state.fresh.statuses.has(s.id),
           })),
