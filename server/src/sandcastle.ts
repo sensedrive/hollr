@@ -82,6 +82,16 @@ export interface Project {
    */
   queueSupported: boolean;
   lulWorkr: LulWorkrFacts;
+  /**
+   * whether a run can put up a test server on workr: the `workr` keys /lul-deploy-workr runs with and its deploy
+   * script; `reason` (German) says what is missing. Measured on every read.
+   */
+  testServer: { ok: boolean; reason: string | null };
+  /**
+   * the repo commits through hooks (active, or set up by the skill's repair: `.husky`, `.githooks`); false: the
+   * run checks the commit format by hand (skill flag `--ohne-haken`). Measured on every read.
+   */
+  commitHooks: boolean;
   error?: string;
 }
 
@@ -418,6 +428,7 @@ interface Config {
     kind?: unknown;
     sandcastle?: { defaults?: { agent?: unknown; parallel?: unknown }; agents?: unknown };
   };
+  workr?: Record<string, unknown>;
 }
 
 /** The project of a parsed `.lul-workr.json` in `root` (pure; queue support and the mode are measured by the caller). */
@@ -485,6 +496,9 @@ export function projectFromConfig(
       mode,
       satisfied: null,
     },
+    // measured from files on every read (localFacts)
+    testServer: { ok: false, reason: null },
+    commitHooks: false,
     ...(slug ? {} : { error: ".lul-workr.json: repo.slug fehlt" }),
   };
 }
@@ -503,6 +517,87 @@ export function lulWorkrMode(root: string, cfg: Config): LulWorkrMode {
 /** `.lul-workr.json` of a checkout; {} when it is missing or broken. */
 function readConfig(root: string): Config {
   return readJson<Config>(join(root, ".lul-workr.json")) ?? {};
+}
+
+/**
+ * The `workr` keys a test server needs: /lul-deploy-workr §1–2 (`scriptsPath`, `host`, `sshUser`, `deploy`) and
+ * lul-workr-run-sandcastle §0 „Alte Stacks auf workr“ (`list`).
+ */
+const WORKR_KEYS = ["scriptsPath", "host", "sshUser", "deploy", "list"];
+
+/**
+ * Whether a run can put up a test server, by the rule of /lul-deploy-workr §1: the `workr` keys above, and
+ * `<workr.scriptsPath>/scripts/workr-deploy.mjs` on this machine (lul-workr-setup „Woher kommen die
+ * workr:*-Befehle?“: a scriptsPath into the void fails every deploy).
+ */
+export function testServerOf(cfg: Config, root: string): { ok: boolean; reason: string | null } {
+  const name = str(cfg.project) ?? basename(root);
+  const workr = cfg.workr ?? {};
+  const missing = WORKR_KEYS.filter((k) => !str(workr[k]));
+  if (missing.length === WORKR_KEYS.length || (missing.length && !cfg.workr))
+    return {
+      ok: false,
+      reason: `${name} hat keinen workr-Abschnitt mit Deploy-Skripten – /lul-workr-setup richtet ihn ein.`,
+    };
+  if (missing.length)
+    return {
+      ok: false,
+      reason: `${name} hat keinen workr-Abschnitt mit Deploy-Skripten (es fehlt ${missing.map((k) => `workr.${k}`).join(", ")}) – /lul-workr-setup richtet ihn ein.`,
+    };
+  const script = join(resolve(root, expandHome(str(workr.scriptsPath) ?? "")), "scripts", "workr-deploy.mjs");
+  if (!existsSync(script))
+    return {
+      ok: false,
+      reason: `workr.scriptsPath von ${name} zeigt ins Leere: ${script} fehlt – /lul-workr-setup richtet ihn ein.`,
+    };
+  return { ok: true, reason: null };
+}
+
+const expandHome = (p: string) => (p === "~" || p.startsWith("~/") ? join(home(), p.slice(1)) : p);
+
+/** `core.hooksPath` from a git config file's `[core]` section; null when it isn't set there. */
+export function hooksPathIn(text: string): string | null {
+  let core = false;
+  let found: string | null = null;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    const section = line.match(/^\[\s*([^\]\s"]+)[^\]]*\]/);
+    if (section) core = section[1]?.toLowerCase() === "core";
+    else if (core) {
+      const kv = line.match(/^hookspath\s*=\s*(.*)$/i);
+      if (kv) found = (kv[1] ?? "").replace(/\s+[#;].*$/, "").replace(/^"(.*)"$/, "$1").trim() || null;
+    }
+  }
+  return found;
+}
+
+/**
+ * Whether the repo commits through hooks, by lul-workr-run-sandcastle §1 (`HP="$(git config core.hooksPath)"`,
+ * default `.husky/_`, a hook there) plus what its REPAIRS.md sets up without asking: „Commit-Haken fallen lautlos
+ * aus“ (`.husky` → `yarn husky`) and the haccp entry (`.githooks` → `git config core.hooksPath .githooks`).
+ * Without any of them the skill had to ask whether to go on without hooks. Reads the repo's and the user's git
+ * config files, runs no git.
+ */
+export function commitHooksAt(root: string, gitCommonDir: string): boolean {
+  const read = (f: string) => (existsSync(f) ? readFileSync(f, "utf8") : "");
+  const hp =
+    hooksPathIn(read(join(gitCommonDir, "config"))) ??
+    hooksPathIn(read(join(home(), ".gitconfig"))) ??
+    hooksPathIn(read(join(home(), ".config", "git", "config")));
+  const hasHook = (d: string) => existsSync(join(d, "pre-commit")) || existsSync(join(d, "commit-msg"));
+  return (
+    hasHook(resolve(root, expandHome(hp ?? ".husky/_"))) ||
+    existsSync(join(root, ".husky")) ||
+    hasHook(join(root, ".githooks"))
+  );
+}
+
+/** A project's test-server and hook facts as the files say now. */
+function localFacts(p: Project): Pick<Project, "testServer" | "commitHooks"> {
+  return {
+    testServer: testServerOf(readConfig(p.root), p.root),
+    commitHooks: commitHooksAt(p.root, p.gitCommonDir),
+  };
 }
 
 /** Does `installed` satisfy the project's range? null without a range (engine `checkRange`). */
@@ -603,11 +698,15 @@ async function projectAt(dir: string): Promise<Project | undefined> {
   return p;
 }
 
-/** The cached projects against this machine's lul-workr as installed now (it changes faster than the cache). */
+/**
+ * The cached projects against this machine as it is now: the installed lul-workr (it changes faster than the
+ * cache) and the test-server and hook facts (file reads).
+ */
 function withInstalled(cache: ProjectCache, installed: string | null): ProjectCache {
   for (const p of cache.projects) {
     p.lulWorkr.satisfied = rangeSatisfied(p.lulWorkr.required, installed);
     if (p.lulWorkr.mode === "bundle" && !p.error) p.queueSupported = p.lulWorkr.satisfied === true;
+    Object.assign(p, localFacts(p));
   }
   return cache;
 }
@@ -1911,13 +2010,15 @@ const TEST_FLAG: Record<RunTest, string> = {
  * doesn't know the queue yet, the queued tickets as a fixed list (`scope`: stories and stand-alone issues; with
  * more than one, `cfg.split` decides batch or one run each; what is queued later waits for the next run).
  * In queue mode the skill reads each ticket's own flags from queue.json: a ticket that asks for the test stack
- * keeps it, so „no test server“ is not passed then.
+ * keeps it, so „no test server“ is not passed then. Without commit hooks `--ohne-haken` settles the skill's
+ * „go on without hooks?“: it checks the commit format by hand before each push.
  */
 export function skillPrompt(
   projectName: string,
   cfg: RunConfig,
   ticketWantsDeploy: boolean,
   scope?: number[],
+  commitHooks = true,
 ): string {
   const agentArg = cfg.agent === "custom" ? `custom:${cfg.provider}:${cfg.model}` : cfg.agent;
   const fixed = !!scope?.length;
@@ -1930,6 +2031,7 @@ export function skillPrompt(
     `/skill:lul-workr-run-sandcastle ${projectName} ${agentArg} ${cfg.parallel} ${umfang}`,
     test,
     cfg.branch ? ` --ziel-branch ${cfg.branch}` : "",
+    commitHooks ? "" : " --ohne-haken",
   ].join("");
 }
 
@@ -2051,6 +2153,10 @@ async function planRun(project: Project, req: SandcastleRequest, deps: Deps, wri
     throw new Error(
       `lul-workr ${installed ?? "(nicht installiert)"} erfüllt den Bereich „${required}“ von ${project.name} nicht – unter Versionen aktualisieren.`,
     );
+  // what the dialog showed, measured again: no test server without the deploy scripts, hooks for the skill line
+  const facts = localFacts(project);
+  if (!facts.testServer.ok && cfg.test !== "none")
+    throw new Error(facts.testServer.reason ?? "Für dieses Projekt gibt es keinen Testserver.");
   // a forked loop without queue mode (not yet „Sandcastle nachziehen“) still runs: with the queued tickets as a list
   const queueMode = await measureQueueSupport(project.root, project.defaultBranch, installed);
   // an explicit ticket list goes to the front of the queue, in the given order
@@ -2067,7 +2173,8 @@ async function planRun(project: Project, req: SandcastleRequest, deps: Deps, wri
   // the explicit tickets get their queue label right before the start: they count as queued
   const order = labelled ? effectiveOrder(ordered, [...labelled, ...first]) : ordered;
   if (!order.length) throw new Error("Die Warteschlange ist leer.");
-  const wantsDeploy = order.some((n) => queue.tickets[String(n)]?.deploy);
+  // a ticket's own test-stack flag can't put up a server the project has no scripts for
+  const wantsDeploy = facts.testServer.ok && order.some((n) => queue.tickets[String(n)]?.deploy);
   const scope = queueMode
     ? undefined
     : fixedScope(order, await (deps.issueParents ?? ghParents)(project, order));
@@ -2076,7 +2183,7 @@ async function planRun(project: Project, req: SandcastleRequest, deps: Deps, wri
     queueMode,
     order,
     scope: scope ?? null,
-    prompt: skillPrompt(project.name, cfg, wantsDeploy, scope),
+    prompt: skillPrompt(project.name, cfg, wantsDeploy, scope, facts.commitHooks),
   };
 }
 

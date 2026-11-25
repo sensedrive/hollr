@@ -1,5 +1,5 @@
 /** Pure board logic: columns, per-machine lanes, ticket phases and branch labels. */
-import type { Column, Issue, Phase, Project, Run, RunIssue, Status, TicketFlags } from "./types";
+import type { Column, Issue, Phase, Project, Run, RunIssue, RunTest, Status, TicketFlags } from "./types";
 
 export function classify(issue: Pick<Issue, "state" | "labels">, labels: Project["labels"], hasGrill: boolean): Column | "story" {
   if (issue.labels.includes(labels.story)) return "story";
@@ -214,6 +214,17 @@ export function normaliseFlags(f: TicketFlags, changed: keyof TicketFlags): Tick
   }
   if (changed === "testnote" && !next.testnote) next.video = false;
   return next;
+}
+
+const RUN_TESTS: readonly RunTest[] = ["none", "note", "instructions", "video"];
+
+/**
+ * The test-server choice „Neuer Lauf“ opens with: the remembered one, but „none“ when the project can't put up a
+ * test server there – a remembered choice never re-enables it. Without the fact (older hollr) the choice stands.
+ */
+export function runTestChoice(remembered: unknown, testServer: Project["testServer"]): RunTest {
+  if (testServer && !testServer.ok) return "none";
+  return RUN_TESTS.find((t) => t === remembered) ?? "none";
 }
 
 /** "vor 5 Min." style durations for start times. */

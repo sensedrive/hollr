@@ -33,6 +33,10 @@ export interface Project {
   queueSupported: boolean;
   /** where the loop comes from (`lul-workr project check` mode); missing with an older hollr */
   lulWorkr?: { required: string | null; configVersion: number | null; mode: "bundle" | "forked" | "none"; satisfied: boolean | null };
+  /** a run can put up a test server (workr keys and deploy script on that machine); missing with an older hollr */
+  testServer?: { ok: boolean; reason: string | null };
+  /** the repo commits through hooks; false: the run checks the format by hand (`--ohne-haken`); missing with an older hollr */
+  commitHooks?: boolean;
   error?: string;
 }
 

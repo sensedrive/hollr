@@ -16,8 +16,11 @@ import { BATCH_STAGES, type Flow, flowPr, foldFlow } from "../src/flows";
 import type { Grill } from "../src/grills";
 import type { Agent } from "../src/herdr";
 import {
+  commitHooksAt,
   type Deps,
   effectiveOrder,
+  hooksPathIn,
+  testServerOf,
   type LoopProc,
   flowPhase,
   lastErrorLine,
@@ -114,6 +117,13 @@ beforeAll(async () => {
         },
       },
       github: { queue: "Warteschlange", story: "epic", grillTicket: "grill", nogo: "nogo" },
+      workr: {
+        host: "workr.example",
+        sshUser: "ubuntu",
+        scriptsPath: ".",
+        deploy: "yarn workr:deploy --pr {pr}",
+        list: "yarn workr:list",
+      },
       engine: {
         kind: "sandcastle",
         sandcastle: {
@@ -131,6 +141,10 @@ beforeAll(async () => {
     }),
   );
   writeFileSync(join(shop, ".sandcastle", "queue.mts"), "// hollr-sandcastle\n");
+  mkdirSync(join(shop, "scripts"), { recursive: true });
+  writeFileSync(join(shop, "scripts", "workr-deploy.mjs"), "\n");
+  mkdirSync(join(shop, ".githooks"), { recursive: true });
+  writeFileSync(join(shop, ".githooks", "pre-commit"), "#!/bin/sh\n");
   git(shop, "init", "-q", "-b", "main");
   git(shop, "add", "-A");
   git(shop, "commit", "-q", "-m", "init");
@@ -299,13 +313,83 @@ describe("projects", () => {
     const deps: Deps = { ...base, queuedIssues: async () => [4] };
     const req = { op: "preview", slug: "acme/bund", config: { agent: "opus-5.5", parallel: 1 } };
     expect(await sandcastle(req, deps)).toMatchObject({
-      prompt: "/skill:lul-workr-run-sandcastle bund opus-5.5 1 warteschlange --kein-testserver",
+      // bund has no hooks: the skill line settles the skill's question
+      prompt: "/skill:lul-workr-run-sandcastle bund opus-5.5 1 warteschlange --kein-testserver --ohne-haken",
       queueMode: true,
       scope: null,
     });
     await expect(sandcastle(req, { ...deps, lulWorkr: "1.0.0" })).rejects.toThrow(
       "lul-workr 1.0.0 erfüllt den Bereich „^1.1“ von bund nicht",
     );
+  });
+
+  test("test server and commit hooks per project, measured from the files", async () => {
+    const { projects } = (await sandcastle({ op: "projects" }, base)) as { projects: Project[] };
+    const by = (slug: string) => projects.find((p) => p.slug === slug);
+    expect(by(SLUG)).toMatchObject({ testServer: { ok: true, reason: null }, commitHooks: true });
+    expect(by("acme/bund")).toMatchObject({
+      testServer: {
+        ok: false,
+        reason: "bund hat keinen workr-Abschnitt mit Deploy-Skripten – /lul-workr-setup richtet ihn ein.",
+      },
+      commitHooks: false,
+    });
+    // the start refuses a test server the project can't put up, with the same reason
+    const deps: Deps = { ...base, queuedIssues: async () => [4] };
+    const config = { agent: "opus-5.5", parallel: 1, test: "instructions" };
+    await expect(sandcastle({ op: "preview", slug: "acme/bund", config }, deps)).rejects.toThrow(
+      "bund hat keinen workr-Abschnitt mit Deploy-Skripten",
+    );
+    // queue.json asking for a stack doesn't drop „no test server“ then
+    const bund = projects.find((p) => p.slug === "acme/bund") as Project;
+    mkdirSync(join(bund.gitCommonDir, "hollr-sandcastle"), { recursive: true });
+    writeFileSync(
+      join(bund.gitCommonDir, "hollr-sandcastle", "queue.json"),
+      JSON.stringify({ version: 1, order: [4], tickets: { "4": { deploy: true } } }),
+    );
+    expect(
+      await sandcastle({ op: "preview", slug: "acme/bund", config: { ...config, test: "none" } }, deps),
+    ).toMatchObject({ prompt: expect.stringContaining(" --kein-testserver --ohne-haken") });
+    rmSync(join(bund.gitCommonDir, "hollr-sandcastle"), { recursive: true, force: true });
+  });
+
+  test("testServerOf: the workr keys of /lul-deploy-workr and its deploy script", () => {
+    const dir = join(root, "code", "ts");
+    mkdirSync(dir, { recursive: true });
+    // ilims: only host and sshUser
+    expect(testServerOf({ project: "ilims", workr: { host: "h", sshUser: "u" } }, dir)).toEqual({
+      ok: false,
+      reason:
+        "ilims hat keinen workr-Abschnitt mit Deploy-Skripten (es fehlt workr.scriptsPath, workr.deploy, workr.list) – /lul-workr-setup richtet ihn ein.",
+    });
+    const workr = { host: "h", sshUser: "u", scriptsPath: "../elsewhere", deploy: "d", list: "l" };
+    expect(testServerOf({ workr }, dir).reason).toBe(
+      `workr.scriptsPath von ts zeigt ins Leere: ${join(root, "code", "elsewhere", "scripts", "workr-deploy.mjs")} fehlt – /lul-workr-setup richtet ihn ein.`,
+    );
+    mkdirSync(join(root, "code", "elsewhere", "scripts"), { recursive: true });
+    writeFileSync(join(root, "code", "elsewhere", "scripts", "workr-deploy.mjs"), "\n");
+    expect(testServerOf({ workr }, dir)).toEqual({ ok: true, reason: null });
+  });
+
+  test("commitHooksAt: active hooks at core.hooksPath, or what the skill's repair sets up", () => {
+    expect(hooksPathIn('[core]\n\tbare = false\n[remote "origin"]\n\thooksPath = x\n')).toBeNull();
+    expect(hooksPathIn("[core]\n\thooksPath = .husky/_ # husky\n")).toBe(".husky/_");
+    expect(hooksPathIn('[Core]\n  HooksPath = "/abs/hooks"\n')).toBe("/abs/hooks");
+    const dir = join(root, "code", "hooks");
+    const gitDir = join(dir, ".git");
+    mkdirSync(gitDir, { recursive: true });
+    writeFileSync(join(gitDir, "config"), "[core]\n\tbare = false\n");
+    expect(commitHooksAt(dir, gitDir)).toBe(false);
+    // husky checked in, hooks not installed yet: `yarn husky` sets them up
+    mkdirSync(join(dir, ".husky"));
+    expect(commitHooksAt(dir, gitDir)).toBe(true);
+    rmSync(join(dir, ".husky"), { recursive: true });
+    // hooks of their own, absolute in the shared config (tendr's worktrees)
+    const shared = join(root, "code", "shared-hooks");
+    mkdirSync(shared, { recursive: true });
+    writeFileSync(join(shared, "commit-msg"), "#!/bin/sh\n");
+    writeFileSync(join(gitDir, "config"), `[core]\n\thooksPath = ${shared}\n`);
+    expect(commitHooksAt(dir, gitDir)).toBe(true);
   });
 });
 

@@ -789,6 +789,11 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .new-run__note { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--muted); font-size: 12px; }
 .new-run__note[data-tone="warn"] { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--orange) 12%, var(--side)); color: var(--orange); font-weight: 500; }
 .new-run__note-icon { margin-top: 2px; }
+.new-run__note[data-tone="info"] { padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--blue) 10%, var(--side)); }
+.new-run__note[data-tone="info"] .new-run__note-icon { color: var(--blue); }
+.new-run__foot .new-run__note[data-tone="info"] { background: color-mix(in srgb, var(--blue) 10%, var(--card)); }
+.new-run__card[data-disabled="true"] { border-style: dashed; background: transparent; color: var(--muted); cursor: not-allowed; }
+.new-run__card[data-disabled="true"] .new-run__radio { opacity: 0.5; cursor: not-allowed; }
 .new-run__chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .new-run__chip { position: relative; display: inline-flex; }
 .new-run__chip-input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
@@ -807,7 +812,7 @@ select.new-run__input { height: 34px; }
 .new-run__actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (hover: hover) and (pointer: fine) {
   .new-run__close:hover, .new-run__option:not([data-disabled="true"]):hover { background: var(--card); }
-  .new-run__card:hover { border-color: var(--muted); }
+  .new-run__card:not([data-disabled="true"]):hover { border-color: var(--muted); }
 }
 @media (max-width: 767px) {
   .new-run { align-items: flex-end; padding: 32px 0 0; }

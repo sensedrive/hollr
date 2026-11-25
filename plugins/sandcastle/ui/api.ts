@@ -225,8 +225,9 @@ async function detect(): Promise<Server[]> {
     }
   }
   if (!list) {
-    mode = "local";
+    // mode only once `known` follows: a gate call in between would otherwise find no machine („Rechner unbekannt“)
     list = (await api<{ servers: Server[] }>("/api/host/servers")).servers;
+    mode = "local";
   }
   known = new Set(list.map((s) => s.id));
   return list;

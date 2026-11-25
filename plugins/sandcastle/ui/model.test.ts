@@ -8,6 +8,7 @@ import {
   effectiveOrder,
   laneSummary,
   normaliseFlags,
+  runTestChoice,
   placeBefore,
   segments,
   shortBranch,
@@ -180,4 +181,12 @@ test("flags imply each other", () => {
   expect(normaliseFlags({ ...none, video: true }, "video")).toEqual({ deploy: true, testnote: true, video: true });
   expect(normaliseFlags({ deploy: false, testnote: true, video: true }, "deploy")).toEqual(none);
   expect(normaliseFlags({ deploy: true, testnote: false, video: true }, "testnote")).toEqual({ deploy: true, testnote: false, video: false });
+});
+
+test("the dialog's test-server choice: remembered, never past a project without a test server", () => {
+  expect(runTestChoice("instructions", { ok: true, reason: null })).toBe("instructions");
+  expect(runTestChoice("instructions", { ok: false, reason: "ilims hat keinen workr-Abschnitt" })).toBe("none");
+  // an older hollr reports no fact: the remembered choice stands
+  expect(runTestChoice("video", undefined)).toBe("video");
+  expect(runTestChoice("yes", undefined)).toBe("none");
 });

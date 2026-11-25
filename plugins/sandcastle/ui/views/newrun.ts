@@ -10,6 +10,7 @@ import { hasHost, openSession, sc } from "../api";
 import { derive } from "../derive";
 import { fill, h, icon } from "../dom";
 import { ICON } from "../icons";
+import { runTestChoice } from "../model";
 import { errorText, hooks, prefGet, prefSet, projectOn, state, toast } from "../state";
 import { openChildren } from "../tickets";
 import type { JiraTicket, Project, RunConfig, RunPreview, RunTest, Server } from "../types";
@@ -89,6 +90,7 @@ export function newRunModal(preselect: string | null): void {
     input.addEventListener("change", () => {
       server = s.id;
       renderAgents();
+      renderFacts();
       sync();
     });
     return h(
@@ -200,14 +202,45 @@ export function newRunModal(preselect: string | null): void {
   const branch = h("input", { class: "new-run__input", id: ids.branch, type: "text", value: project.defaultBranch, autocomplete: "off", spellcheck: false });
   const branchHint = h("p", { class: "new-run__hint" });
 
-  // ---- 5 test server
-  let test: RunTest = TEST_OPTIONS.some((o) => o.id === last?.test) ? (last?.test ?? "none") : "none";
-  const testCards = TEST_OPTIONS.map((o) =>
-    card(ids.test, o.title, o.text, test === o.id, () => {
+  // ---- 5 test server: only where the project has its deploy scripts on the chosen machine (gate `testServer`)
+  let test: RunTest = runTestChoice(last?.test, projectHere().testServer);
+  const reasonId = uid();
+  const testRows = TEST_OPTIONS.map((o) => {
+    const el = card(ids.test, o.title, o.text, test === o.id, () => {
       test = o.id;
       sync();
-    }),
+    });
+    const lock = h("span", { class: "new-run__busy" }, icon(ICON.lock, "new-run__busy-icon"), h("span", {}));
+    el.querySelector(".new-run__card-body")?.append(lock);
+    return { id: o.id, el, input: el.querySelector("input") as HTMLInputElement, lock };
+  });
+  const testReason = h("p", { class: "new-run__note", "data-tone": "info", id: reasonId }, icon(ICON.info, "new-run__note-icon"), h("span", {}));
+  const hooksNote = h(
+    "p",
+    { class: "new-run__note", "data-tone": "info" },
+    icon(ICON.info, "new-run__note-icon"),
+    h("span", {}, h("strong", {}, "Keine Commit-Haken"), " – der Agent prüft das Format vor jedem Push von Hand."),
   );
+  /** the chosen machine's facts of the project: no test server forces „none“, a remembered choice can't undo it */
+  const renderFacts = () => {
+    const p = projectHere();
+    const locked = p.testServer?.ok === false;
+    if (locked) test = "none";
+    for (const r of testRows) {
+      const off = locked && r.id !== "none";
+      r.input.disabled = off;
+      r.input.checked = test === r.id;
+      if (off) r.input.setAttribute("aria-describedby", reasonId);
+      else r.input.removeAttribute("aria-describedby");
+      r.el.dataset.disabled = off ? "true" : "";
+      r.lock.hidden = !off;
+      (r.lock.lastChild as HTMLElement).textContent = `nicht wählbar – kein Testserver für ${p.name}`;
+    }
+    (testReason.lastChild as HTMLElement).textContent = p.testServer?.reason ?? "";
+    testReason.hidden = !locked;
+    hooksNote.hidden = p.commitHooks !== false;
+  };
+  renderFacts();
 
   // ---- footer: the real command
   const code = h("code", { class: "new-run__code" }, "…");
@@ -378,11 +411,18 @@ export function newRunModal(preselect: string | null): void {
         h("div", { class: "new-run__legend" }, ...heading(4, "Ziel-Branch", uid())),
         h("div", { class: "new-run__field" }, h("label", { class: "new-run__label", for: ids.branch }, "Branch, in den der Lauf mergt"), branch, branchHint),
       ),
-      h("fieldset", { class: "new-run__group" }, h("legend", { class: "new-run__legend" }, ...heading(5, "Testserver und Abnahme", uid())), ...testCards),
+      h(
+        "fieldset",
+        { class: "new-run__group" },
+        h("legend", { class: "new-run__legend" }, ...heading(5, "Testserver und Abnahme", uid())),
+        testReason,
+        ...testRows.map((r) => r.el),
+      ),
     ),
     h(
       "footer",
       { class: "new-run__foot" },
+      hooksNote,
       command,
       reason,
       error,
