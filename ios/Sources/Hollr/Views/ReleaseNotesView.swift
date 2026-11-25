@@ -10,6 +10,9 @@ struct ReleaseNote: Identifiable {
 
 enum ReleaseNotes {
     static let all: [ReleaseNote] = [
+        ReleaseNote(build: 76, date: "25.11.2026", items: [
+            ("shippingbox", String(localized: "Werkzeuge: neues Werkzeug „lul-workr“ – Skills und Sandcastle als ein versioniertes Paket je Rechner, Installieren und Aktualisieren per Knopf")),
+        ]),
         ReleaseNote(build: 75, date: "24.11.2026", items: [
             ("square.stack", String(localized: "Spaces: was Hollr für Sandcastle-Läufe und Grills öffnet, steht in einer eigenen Gruppe „Sandcastle & Grills“")),
         ]),

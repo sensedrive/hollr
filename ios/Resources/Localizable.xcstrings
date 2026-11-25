@@ -7583,6 +7583,16 @@
         }
       }
     },
+    "Werkzeuge: neues Werkzeug „lul-workr“ – Skills und Sandcastle als ein versioniertes Paket je Rechner, Installieren und Aktualisieren per Knopf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools: new tool “lul-workr” – skills and Sandcastle as one versioned package per computer, install and update at a tap"
+          }
+        }
+      }
+    },
     "Whisper-Modell noch nicht geladen (Einstellungen › Sprache).": {
       "localizations": {
         "en": {

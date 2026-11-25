@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 80,
+    version: "0.58.0",
+    date: "25.11.2026",
+    items: [
+      { icon: "🧰", text: "Werkzeuge: neues Werkzeug „lul-workr“ – Skills und Sandcastle als ein versioniertes Paket je Rechner; Installieren und Aktualisieren per Knopf, jeder Skill liegt danach genau einmal vor." },
+    ],
+  },
+  {
     build: 79,
     version: "0.57.8",
     date: "25.11.2026",

@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Werkzeuge: neues Werkzeug „lul-workr“ – Skills und Sandcastle als ein versioniertes Paket je Rechner; Installieren und Aktualisieren per Knopf, jeder Skill liegt danach genau einmal vor.":
+    "Tools: new tool “lul-workr” – skills and Sandcastle as one versioned package per computer; install and update at a tap, afterwards every skill exists exactly once.",
   "Sandcastle einrichten: geklont wird so, wie der Rechner GitHub erreicht (SSH, wenn seine Projekte SSH nutzen) – sonst scheiterte später jedes Holen am Passwort.":
     "Sandcastle setup: clones the way the computer reaches GitHub (SSH when its projects use SSH) – otherwise every later fetch failed asking for a password.",
   "Sandcastle: „Maschine wechseln“ im Lauf-Panel – die Warteschlange zieht auf einen anderen Rechner um; fehlt dort das Projekt, richtet das Board es ein (klonen, lokale Dateien nach Bestätigung kopieren, Abhängigkeiten, Prüfliste).":
