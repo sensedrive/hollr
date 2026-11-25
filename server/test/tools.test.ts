@@ -6,6 +6,7 @@ import { lulWorkrLatest, startTool, toolStates } from "../src/tools";
 
 let home: string;
 let oldHome: string | undefined;
+let oldPath: string | undefined;
 const bin = () => join(home, ".local", "bin");
 const lulState = () =>
   toolStates("1.0.0", {}, "de", () => ({})).find((t) => t.name === "lul-workr");
@@ -17,12 +18,16 @@ function script(path: string, body: string) {
 
 beforeAll(() => {
   oldHome = process.env.HOME;
+  oldPath = process.env.PATH;
   home = mkdtempSync(join(tmpdir(), "hollr-lul-"));
   mkdirSync(bin(), { recursive: true });
   process.env.HOME = home;
+  // the machine's own ~/.local/bin (a real lul-workr) must not answer for the temp HOME
+  process.env.PATH = "/usr/bin:/bin";
 });
 afterAll(() => {
   process.env.HOME = oldHome;
+  process.env.PATH = oldPath;
   rmSync(home, { recursive: true, force: true });
 });
 
