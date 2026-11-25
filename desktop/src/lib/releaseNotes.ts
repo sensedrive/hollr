@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 81,
+    version: "0.58.1",
+    date: "25.11.2026",
+    items: [
+      { icon: "🧮", text: "Sandcastle: Ansicht „Versionen“ – welches Projekt auf welchem Rechner mit welcher lul-workr-Version läuft, ob der Bereich passt oder die Schleife noch abgezweigt ist; Aktualisieren je Rechner." },
+      { icon: "🧭", text: "Sandcastle: Jedes eingereihte Ticket gehört genau einem Rechner – Läufe auf Mac und workr ziehen nie dieselben Tickets." },
+    ],
+  },
+  {
     build: 80,
     version: "0.58.0",
     date: "25.11.2026",
