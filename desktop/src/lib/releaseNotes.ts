@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 79,
+    version: "0.57.8",
+    date: "25.11.2026",
+    items: [
+      { icon: "🔑", text: "Sandcastle einrichten: geklont wird so, wie der Rechner GitHub erreicht (SSH, wenn seine Projekte SSH nutzen) – sonst scheiterte später jedes Holen am Passwort." },
+    ],
+  },
+  {
     build: 78,
     version: "0.57.7",
     date: "25.11.2026",
