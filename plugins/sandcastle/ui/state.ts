@@ -46,6 +46,8 @@ export const state = {
   jiraMissing: false,
   /** the last JIRA board load failed (no project key, JIRA down …) */
   jiraError: null as string | null,
+  /** this machine's project list was answered in this page's life (the cached one may be stale) */
+  localFresh: false,
 };
 
 /** All known projects by slug: the own machine's first, then what other machines add. */

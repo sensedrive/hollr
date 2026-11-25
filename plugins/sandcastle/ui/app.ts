@@ -293,6 +293,7 @@ async function loadProjects(refresh = false): Promise<void> {
   const local = once("localProjects", async () => {
     const { projects: list } = await api<{ projects: Project[] }>(`/api/projects${refresh ? "?refresh=1" : ""}`);
     state.localProjects = list;
+    state.localFresh = true;
     cacheSet("localProjects", list);
     pickSlug();
     hooks.render();
@@ -481,7 +482,6 @@ function tryOpen(): void {
   if (!openSwitched) {
     const list = projects();
     if (!list.length) return;
-    openSwitched = true;
     const key = t.key;
     const repo = t.repo?.toLowerCase();
     const target = repo
@@ -490,10 +490,13 @@ function tryOpen(): void {
         ? list.find((p) => p.jira.projectKey === keyProject(key))
         : undefined;
     if (repo && !target) {
+      // the cached list may predate a checkout (or be an empty scan): only this machine's fresh answer may say no
+      if (!state.localFresh) return;
       pendingOpen = null;
       toast(`Projekt ${t.repo} gibt es auf diesem Rechner nicht.`);
       return;
     }
+    openSwitched = true;
     if (target && target.slug !== state.slug) {
       closeSidebar();
       useSlug(target.slug);
