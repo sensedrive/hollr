@@ -1,21 +1,17 @@
 /**
  * Grills on this machine for the Sandcastle board: `lul-workr-grill-jira-ticket` / `-auto-grill-` sessions.
  * A grill is a normal omp session in herdr; the board finds it three ways – a herdr pane labelled
- * `Grill <KEY> · #<n>`, a recent `.scratch/<KEY>/STATUS.md` in a project folder, or `<state>/grills.json`
+ * `Grill <KEY> · #<n>`, a skill flow `skill: grill|auto-grill` in the Ablauf-Log, or `<state>/grills.json`
  * (grills started from the board) – and merges them into one entry per ticket.
  *
- * Pure apart from reading STATUS.md files and grills.json; the caller passes folders, panes and labels.
+ * Progress comes from the Ablauf-Log only: its stages are the 7 steps. Without a flow the steps are unknown
+ * (`steps: null`) – never guessed. STATUS.md is the agent's own re-entry note and is not read.
+ *
+ * Pure apart from reading grills.json; the caller passes flows, panes and labels.
  */
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  type Stats,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { type Flow, GRILL_STAGES, type StageState } from "./flows";
 import type { Agent } from "./herdr";
 
 export type GrillMode = "interactive" | "auto";
@@ -23,8 +19,14 @@ export type GrillStatus = "running" | "waiting" | "idle" | "done" | "ended";
 
 export interface GrillStep {
   n: number;
+  /** the flow stage (read, grill, jira-comment, spec, design, story, report) */
+  stage: string;
   label: string;
+  state: StageState;
+  /** ok or skipped */
   done: boolean;
+  /** `stage.ended` reason (a skipped design: why) */
+  reason: string | null;
 }
 
 export interface Grill {
@@ -38,10 +40,14 @@ export interface Grill {
   source: "hollr" | "manual";
   pane: string | null;
   status: GrillStatus;
-  steps: GrillStep[];
-  /** the step after the last done one (how far the grill got – a stale „open“ mark further up doesn't hold it back); 8 when step 7 is done */
-  step: number;
-  notes: string[];
+  /** the 7 steps from the Ablauf-Log; null = no flow for this grill (progress unknown) */
+  steps: GrillStep[] | null;
+  /** the first step not done, 1–7; 8 when all are done; null without a flow */
+  step: number | null;
+  /** `flow.paused` reason while the flow waits (e.g. „wartet auf Antworten an #247“) */
+  paused: string | null;
+  /** id of the grill's flow in the Ablauf-Log */
+  flow: string | null;
   cwd: string | null;
   startedAt: string | null;
   updatedAt: string | null;
@@ -69,12 +75,10 @@ export const STEP_LABELS = [
 ];
 
 const DAY = 24 * 3600_000;
-const STATUS_WINDOW = 7 * DAY;
+const FLOW_WINDOW = 7 * DAY;
 const RECORD_WINDOW = 2 * DAY;
 const RECORD_KEEP = 14 * DAY;
 const RECORD_MAX = 200;
-const NOTES_MAX = 30;
-const NOTE_LEN = 300;
 
 export const KEY_RE = /^[A-Z][A-Z0-9]+-\d+$/;
 const ADVISOR_RE = /^[\w.:/-]{1,60}$/;
@@ -137,64 +141,23 @@ export function validateGrillRequest(raw: {
   return { n, key, mode: raw.mode, advisor };
 }
 
-// ── STATUS.md ──────────────────────────────────────────────────────────────────────────────────────
+// ── flow steps ─────────────────────────────────────────────────────────────────────────────────────
 
-/** A top-level bullet naming a step: `- [x] 5 …`, `- 4. …`, `- Schritt 3: …`, `- Schritt 1/2: …` (not `5a.`). */
-const STEP_LINE =
-  /^[-*]\s+(?:\[([ xX])\]\s+)?(?:Schritte?\s+)?([1-7])(?:\/([1-7]))?(?:\.|:|\)|(?=\s)|$)\s*(.*)$/;
-/** a plain bullet saying the step has only begun */
-const UNDERWAY = /\b(läuft|gestartet|beginnt|begonnen|offen)\b/i;
-/** a section heading (`## Offen`) or a bare `Offen:` line */
-const SECTION = /^(?:#{2,}\s*(.+?)|([\p{L} ]+):)\s*$/u;
-const ISSUE_REF = /(?:#|\/issues\/)(\d+)/;
-
-/**
- * Steps, ticket and notes of a grill's STATUS.md. Checkbox lines say done or not; plain step bullets count
- * as done, except under an „Offen“ section or when they say the step only started. A later line for the
- * same step wins.
- */
-export function parseStatusMd(text: string): {
-  steps: GrillStep[];
-  step: number;
-  n: number | null;
-  notes: string[];
-} {
-  // step → done as the file says; a step the file never mentions has no entry
-  const done: (boolean | undefined)[] = new Array(8).fill(undefined);
-  const notes: string[] = [];
-  let n: number | null = null;
-  let open = false;
-  for (const raw of text.split("\n")) {
-    const line = raw.trimEnd();
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (/^#\s/.test(trimmed)) continue;
-    const ticket = trimmed.match(/^Grill-Ticket:\s*(.*)$/i);
-    if (ticket) {
-      const ref = ticket[1]?.match(ISSUE_REF);
-      if (ref && n === null) n = Number(ref[1]);
-    }
-    const section = line.match(SECTION);
-    if (section) {
-      open = /\boffen\b/i.test(section[1] ?? section[2] ?? "");
-      if (line.startsWith("#")) continue;
-    }
-    const step = line.match(STEP_LINE);
-    if (step) {
-      const box = step[1];
-      const isDone =
-        box !== undefined ? box.toLowerCase() === "x" : !open && !UNDERWAY.test(step[4] ?? "");
-      for (const s of [step[2], step[3]]) if (s) done[Number(s)] = isDone;
-      continue;
-    }
-    notes.push(trimmed.length > NOTE_LEN ? `${trimmed.slice(0, NOTE_LEN - 1)}…` : trimmed);
-  }
-  // the grill runs its steps in order: an earlier step the file never mentions is done when a later one is
-  // (older STATUS.md files skip „Ticket gelesen“/„Grill“ and would read as „Schritt 1/7“); a step it lists as
-  // open or started stays open
-  const lastDone = Math.max(0, ...Object.entries(done).filter(([, v]) => v).map(([k]) => Number(k)));
-  const steps = STEP_LABELS.map((label, i) => ({ n: i + 1, label, done: done[i + 1] ?? i + 1 <= lastDone }));
-  return { steps, step: lastDone + 1, n, notes: notes.slice(-NOTES_MAX) };
+/** The 7 steps of a grill flow and the first one not done (8 when all are). */
+export function flowSteps(f: Flow): { steps: GrillStep[]; step: number } {
+  const steps = GRILL_STAGES.map((stage, i) => {
+    const s = f.stages.find((x) => x.stage === stage);
+    const state = s?.state ?? "pending";
+    return {
+      n: i + 1,
+      stage,
+      label: STEP_LABELS[i] ?? stage,
+      state,
+      done: state === "ok" || state === "skipped",
+      reason: s?.reason ?? null,
+    };
+  });
+  return { steps, step: steps.find((s) => !s.done)?.n ?? 8 };
 }
 
 // ── grills.json ────────────────────────────────────────────────────────────────────────────────────
@@ -220,9 +183,18 @@ export function recordGrill(file: string, rec: GrillRecord, now = Date.now()): v
 
 // ── discovery ──────────────────────────────────────────────────────────────────────────────────────
 
+export interface GrillFlow {
+  /** slug and project name of the flow's repo */
+  slug: string;
+  name: string;
+  /** the repo's main checkout */
+  root: string;
+  flow: Flow;
+}
+
 export interface CollectInput {
-  /** candidate working folders (project roots, worktrees) */
-  dirs: Iterable<string>;
+  /** skill flows of the projects' repos (non-grill skills are skipped) */
+  flows: GrillFlow[];
   /** herdr's agents; null = herdr unreachable */
   agents: Agent[] | null;
   /** pane → its tab and workspace labels */
@@ -238,21 +210,13 @@ export interface CollectInput {
 }
 
 interface Entry extends Grill {
-  /** STATUS.md was found */
-  hasStatus: boolean;
+  /** the grill's flow (the newest when it has several) */
+  f: Flow | null;
 }
 
 const iso = (ms: number) => new Date(ms).toISOString();
-const listDir = (dir: string) => {
-  try {
-    return readdirSync(dir);
-  } catch {
-    return [];
-  }
-};
 
 function blank(over: Partial<Entry>): Entry {
-  const steps = STEP_LABELS.map((label, i) => ({ n: i + 1, label, done: false }));
   return {
     id: "",
     slug: null,
@@ -263,62 +227,20 @@ function blank(over: Partial<Entry>): Entry {
     source: "manual",
     pane: null,
     status: "ended",
-    steps,
-    step: 1,
-    notes: [],
+    steps: null,
+    step: null,
+    paused: null,
+    flow: null,
     cwd: null,
     startedAt: null,
     updatedAt: null,
-    hasStatus: false,
+    f: null,
     ...over,
   };
 }
 
-/** `.scratch/<KEY>/STATUS.md` written in the last 7 days that are about a grill. */
-function statusEntries(a: CollectInput): Entry[] {
-  const found = new Map<string, Entry>();
-  for (const cwd of a.dirs) {
-    const scratch = join(cwd, ".scratch");
-    for (const key of listDir(scratch)) {
-      if (!KEY_RE.test(key)) continue;
-      const file = join(scratch, key, "STATUS.md");
-      let st: Stats;
-      try {
-        st = statSync(file);
-      } catch {
-        continue;
-      }
-      if (a.now - st.mtimeMs > STATUS_WINDOW) continue;
-      let text: string;
-      try {
-        text = readFileSync(file, "utf8");
-      } catch {
-        continue;
-      }
-      if (!/grill/i.test(text)) continue;
-      const parsed = parseStatusMd(text);
-      const proj = a.projectOf(cwd);
-      const entry = blank({
-        slug: proj?.slug ?? null,
-        project: proj?.name ?? null,
-        n: parsed.n,
-        key,
-        steps: parsed.steps,
-        step: parsed.step,
-        notes: parsed.notes,
-        cwd,
-        startedAt: iso(st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs),
-        updatedAt: iso(st.mtimeMs),
-        hasStatus: true,
-      });
-      // the same ticket's file in two checkouts: the one written last counts
-      const id = `${entry.slug ?? ""}|${key}`;
-      const seen = found.get(id);
-      if (!seen || (seen.updatedAt ?? "") < (entry.updatedAt ?? "")) found.set(id, entry);
-    }
-  }
-  return [...found.values()];
-}
+const isGrillFlow = (f: Flow) =>
+  f.kind === "skill" && (f.skill === "grill" || f.skill === "auto-grill");
 
 function matches(e: Entry, g: { slug: string | null; n: number | null; key: string | null }) {
   if (e.slug && g.slug && e.slug !== g.slug) return false;
@@ -328,7 +250,7 @@ function matches(e: Entry, g: { slug: string | null; n: number | null; key: stri
 
 /** Everything known about grills on this machine, one entry per ticket, live ones first. */
 export function collectGrills(a: CollectInput): Grill[] {
-  const entries = statusEntries(a);
+  const entries: Entry[] = [];
   const agents = a.agents ?? [];
   const alive = new Map(agents.map((x) => [x.pane, x]));
   const find = (g: { slug: string | null; n: number | null; key: string | null }) =>
@@ -339,6 +261,28 @@ export function collectGrills(a: CollectInput): Grill[] {
     e.key ??= g.key;
     if (e.slug) e.project ??= a.nameOf(e.slug);
   };
+
+  // grill flows of the last 7 days, oldest first: a ticket grilled twice shows its newer flow
+  const flows = a.flows
+    .filter((x) => isGrillFlow(x.flow) && a.now - Date.parse(x.flow.updatedAt) <= FLOW_WINDOW)
+    .sort((x, y) => x.flow.startedAt.localeCompare(y.flow.startedAt));
+  for (const { slug, name, root, flow } of flows) {
+    const g = {
+      slug,
+      n: flow.issue,
+      key: flow.ticket && KEY_RE.test(flow.ticket) ? flow.ticket : null,
+    };
+    if (g.n === null && g.key === null) continue;
+    let e = find(g);
+    if (!e) {
+      e = blank({ project: name, cwd: root });
+      entries.push(e);
+    }
+    fill(e, g);
+    e.f = flow;
+    e.mode = flow.skill === "auto-grill" ? "auto" : "interactive";
+    e.cwd ??= root;
+  }
 
   // started from the board
   for (const r of a.records) {
@@ -365,7 +309,7 @@ export function collectGrills(a: CollectInput): Grill[] {
     const g = { slug: proj?.slug ?? null, n: label.n, key: label.key };
     let e =
       find(g) ??
-      // a label without the other half: the STATUS.md in the pane's folder
+      // a label without the other half: the flow of the pane's repo
       entries.find(
         (x) =>
           x.cwd === agent.cwd &&
@@ -381,7 +325,7 @@ export function collectGrills(a: CollectInput): Grill[] {
     e.pane = agent.pane;
   }
 
-  // hand-started without a grill label: an agent in the STATUS folder whose label names the ticket
+  // hand-started without a grill label: an agent in the flow's main checkout whose label names the ticket
   for (const e of entries) {
     if (e.pane || !e.cwd || !e.key) continue;
     const key = e.key.toLowerCase();
@@ -398,17 +342,28 @@ export function collectGrills(a: CollectInput): Grill[] {
   const out: Grill[] = [];
   for (const e of entries) {
     const agent = e.pane ? alive.get(e.pane) : undefined;
-    const allDone = e.step === 8;
+    const f = e.f;
+    if (f) {
+      const { steps, step } = flowSteps(f);
+      e.steps = steps;
+      e.step = step;
+      e.flow = f.id || null;
+      e.paused = f.closed ? null : f.paused;
+      e.startedAt ??= f.startedAt || null;
+      if (f.updatedAt && (!e.updatedAt || f.updatedAt > e.updatedAt)) e.updatedAt = f.updatedAt;
+    }
     e.status =
       agent?.status === "working"
         ? "running"
-        : agent?.status === "blocked"
+        : agent?.status === "blocked" || e.paused
           ? "waiting"
-          : allDone
+          : f?.outcome === "ok"
             ? "done"
-            : agent
-              ? "idle"
-              : "ended";
+            : f?.outcome === "aborted"
+              ? "ended"
+              : agent
+                ? "idle"
+                : "ended";
     if (!agent) e.pane = null;
     if (agent?.sessionFile) {
       try {
@@ -419,7 +374,7 @@ export function collectGrills(a: CollectInput): Grill[] {
     if (e.status === "done" && a.now - Date.parse(e.updatedAt ?? e.startedAt ?? "") > ttl) continue;
     e.id =
       e.slug && e.n !== null ? `${e.slug}#${e.n}` : `${e.cwd ?? ""}|${e.key ?? `#${e.n ?? ""}`}`;
-    const { hasStatus: _, ...grill } = e;
+    const { f: _, ...grill } = e;
     out.push(grill);
   }
   const live = (g: Grill) => (g.status === "running" || g.status === "waiting" ? 0 : 1);

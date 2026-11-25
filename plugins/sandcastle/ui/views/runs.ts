@@ -10,13 +10,13 @@
 import { hasHost, openExternal, openSession, sc } from "../api";
 import { derive, openBlockers } from "../derive";
 import { copyText, fill, fmtDate, h, icon, reconcile } from "../dom";
-import { isLiveGrill, modeText, stepText as grillStepText } from "../grill";
+import { grillFamilies, grillView, isLiveGrill, modeText } from "../grill";
 import { ICON } from "../icons";
 import { since } from "../model";
 import { errorText, hooks, projectOn, serverLabel, state, toast } from "../state";
 import { blindRun, clearText, currentStation, finishedCount, loopPosition, PHASE_PILL, type Station, stepText, timeline } from "../timeline";
 import type { Grill, LogFile, Run, RunStatus, Server } from "../types";
-import { grillBar, grillLog, grillPill } from "./grilling";
+import { familyOf, grillBar, grillLog, grillPill, grillReason } from "./grilling";
 import { newRunModal } from "./newrun";
 
 export const STATUS_TEXT: Record<RunStatus, string> = {
@@ -371,7 +371,13 @@ function earlierEl(s: Server, runs: Run[]): HTMLElement {
 // ---- left: grills of all machines, folded
 
 function renderGrills(): void {
-  const all = state.servers.flatMap((s) => (state.statuses.get(s.id)?.grills ?? []).map((g) => ({ server: s.id, g })));
+  const families = { families: grillFamilies(state.jira?.tickets ?? []) };
+  const all = state.servers.flatMap((s) =>
+    (state.statuses.get(s.id)?.grills ?? []).flatMap((g) => {
+      const v = grillView(g, familyOf(families, g));
+      return v ? [{ server: s.id, g, v }] : [];
+    }),
+  );
   if (state.grillSel) grillsOpen = true;
   const sig = JSON.stringify([all, grillsOpen, state.grillSel, state.board?.etag, state.slug]);
   if (sig === grillsSig) return;
@@ -410,7 +416,7 @@ function renderGrills(): void {
         ? h(
             "ul",
             { class: "rt-tickets", id: "rt-grill-list" },
-            ...sorted.map(({ server, g }) => {
+            ...sorted.map(({ server, g, v }) => {
               const sel = state.grillSel?.server === server && state.grillSel.id === g.id;
               const title = g.slug === state.slug && g.n !== null ? state.board?.issues.find((i) => i.number === g.n)?.title : undefined;
               return h(
@@ -429,8 +435,9 @@ function renderGrills(): void {
                     },
                   },
                   h("span", { class: "grill-row-title" }, h("span", { class: "rt-nr" }, [g.key, g.n !== null ? `#${g.n}` : null].filter(Boolean).join(" · ")), h("span", { class: "t" }, title ?? g.project ?? "")),
-                  h("span", { class: "grill-row-meta small" }, h("span", { class: "muted" }, `${modeText(g.mode)} auf ${serverLabel(server)}`), grillPill(g), h("span", { class: "muted" }, grillStepText(g))),
-                  grillBar(g),
+                  h("span", { class: "grill-row-meta small" }, h("span", { class: "muted" }, `${modeText(g.mode)} auf ${serverLabel(server)}`), grillPill(v), h("span", { class: "muted" }, v.text)),
+                  grillReason(v),
+                  grillBar(v),
                 ),
               );
             }),
@@ -715,10 +722,11 @@ function renderGrillPane(): boolean {
   grillPane.hidden = !sel;
   if (!sel) return false;
   const g = state.statuses.get(sel.server)?.grills?.find((x) => x.id === sel.id);
-  const sig = JSON.stringify([sel, g, state.board?.etag, hasHost()]);
+  const family = g ? familyOf({ families: grillFamilies(state.jira?.tickets ?? []) }, g) : undefined;
+  const sig = JSON.stringify([sel, g, family, state.board?.etag, hasHost()]);
   if (sig !== grillPaneSig) {
     grillPaneSig = sig;
-    grillLog(grillPane, sel.server, g, () => root?.classList.remove("log-open"));
+    grillLog(grillPane, sel.server, g, family, () => root?.classList.remove("log-open"));
   }
   return true;
 }

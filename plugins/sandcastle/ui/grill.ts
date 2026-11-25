@@ -1,11 +1,15 @@
 /**
  * Pure grill logic: which grill belongs to a ticket, how its 7 steps read, the deep link `open=` and the queue
  * behind „Alle auto-grillen“ (at most two running grills per machine).
+ *
+ * What a grill shows comes from three sources in a fixed order (`grillView`): the GitHub artifacts of the JIRA
+ * ticket's family first (story with ≥ 1 child = finished, whatever log or pane say), then the steps of the grill's
+ * Ablauf-Log flow, else „Stand unbekannt“ – never a guessed step.
  */
-import type { Grill, GrillMode, GrillStatus, JiraTicket, Status } from "./types";
+import type { Family, Grill, GrillMode, GrillStatus, JiraTicket, Status } from "./types";
 
 export const GRILL_STEP_COUNT = 7;
-/** step names as the server reports them; used when a grill has no steps (never seen) */
+/** step names as the server reports them; used when a grill has no steps (no flow) */
 export const GRILL_STEP_LABELS = ["Ticket gelesen", "Grill", "JIRA-Kommentar", "Spec/ADR-PR", "Entwürfe", "Story & Kinder", "Bericht"];
 
 /** A grill that still has a session working, waiting or paused on it – the board must not start another one. */
@@ -25,36 +29,95 @@ export function modeText(mode: GrillMode | null): string {
   return mode === "auto" ? "Auto-Grillen" : mode === "interactive" ? "Grillen" : "Grill";
 }
 
-/** Current step, 1–7 (a finished grill stays on 7). */
-export const currentStep = (g: Pick<Grill, "step">) => Math.min(Math.max(g.step, 1), GRILL_STEP_COUNT);
-
-/** „Schritt 4/7 · Spec/ADR-PR“; finished: „Alle 7 Schritte erledigt“. */
-export function stepText(g: Pick<Grill, "step" | "steps">): string {
-  if (g.step > GRILL_STEP_COUNT) return `Alle ${GRILL_STEP_COUNT} Schritte erledigt`;
-  const n = currentStep(g);
-  const label = g.steps.find((s) => s.n === n)?.label ?? GRILL_STEP_LABELS[n - 1] ?? "";
-  return `Schritt ${n}/${GRILL_STEP_COUNT} · ${label}`;
-}
-
-export type StepState = "done" | "active" | "waiting" | "todo";
-
-/** Per step: done, the current one (active, or waiting for the human), or still open. */
-export function stepStates(g: Pick<Grill, "step" | "steps" | "status">): StepState[] {
-  const out: StepState[] = [];
-  for (let n = 1; n <= GRILL_STEP_COUNT; n++) {
-    const done = g.steps.find((s) => s.n === n)?.done ?? false;
-    if (done) out.push("done");
-    else if (n === g.step && isLiveGrill(g)) out.push(g.status === "waiting" ? "waiting" : "active");
-    else out.push("todo");
-  }
+/** n of the grill issue → the family of its JIRA ticket (grill ticket, story, children). */
+export function grillFamilies(tickets: readonly Pick<JiraTicket, "family">[]): Map<number, Family> {
+  const out = new Map<number, Family>();
+  for (const t of tickets) if (t.family.grill) out.set(t.family.grill.n, t.family);
   return out;
 }
 
-/** Card badge: „wartet auf dich“ beats the progress; null = nothing worth a badge (ended). */
-export function badgeText(g: Pick<Grill, "status" | "step">): string | null {
-  if (g.status === "waiting") return "wartet auf dich";
-  if (g.status === "ended") return null;
-  return `gegrillt ${g.status === "done" ? GRILL_STEP_COUNT : currentStep(g)}/${GRILL_STEP_COUNT}`;
+/** Finished by its artifacts: the story exists with at least one child. */
+export const grilledByArtifacts = (f: Family | undefined): f is Family & { story: NonNullable<Family["story"]> } => !!f?.story && f.children.length > 0;
+
+export type StepState = "done" | "skipped" | "active" | "waiting" | "todo" | "unknown";
+
+export interface GrillView {
+  /** where the state comes from: GitHub artifacts, the Ablauf-Log, or nothing */
+  source: "artifacts" | "log" | "unknown";
+  /** the pill: `done` when the artifacts say finished, else the session's status */
+  status: GrillStatus;
+  /** card badge; null = nothing worth a badge (ended) */
+  badge: string | null;
+  tone: "done" | "waiting" | "running" | "unknown";
+  /** „Fertig gegrillt · Story #254 mit 3 Kindern“, „Schritt 4/7 · Spec/ADR-PR“, „Stand unbekannt“ */
+  text: string;
+  /** the grill part of a ticket's build line while the grill lives („Grill 4/7“); null when finished or ended */
+  progress: string | null;
+  /** why the flow waits (`flow.paused` reason) */
+  reason: string | null;
+  /** per step 1–7 */
+  steps: StepState[];
+}
+
+const kids = (n: number) => (n === 1 ? "1 Kind" : `${n} Kindern`);
+
+/**
+ * The state to show for a grill (null = none known) and/or the family of its ticket. Artifacts beat the log, the
+ * log beats „Stand unbekannt“. The artifacts also mark single steps, with or without a log: 2 when the grill
+ * ticket is closed; 6 (story and children) already means finished.
+ */
+export function grillView(g: Grill | null, family?: Family): GrillView | null {
+  if (grilledByArtifacts(family))
+    return {
+      source: "artifacts",
+      status: "done",
+      badge: "gegrillt ✓",
+      tone: "done",
+      text: `Fertig gegrillt · Story #${family.story.n} mit ${kids(family.children.length)}`,
+      progress: null,
+      reason: null,
+      steps: GRILL_STEP_LABELS.map(() => "done"),
+    };
+  if (!g) return null;
+  const live = isLiveGrill(g);
+  const waiting = g.status === "waiting";
+  const reason = g.paused;
+  // step 6 (story and children) is the finished rule above; what is left of the artifacts is step 2
+  const factDone = (n: number) => n === 2 && family?.grill?.state === "closed";
+  if (g.steps && g.step !== null) {
+    const step = g.step;
+    const steps = GRILL_STEP_LABELS.map((_, i): StepState => {
+      const n = i + 1;
+      const s = g.steps?.find((x) => x.n === n);
+      if (s?.state === "skipped") return "skipped";
+      if (s?.done || factDone(n)) return "done";
+      if (n === step && live) return waiting ? "waiting" : "active";
+      return "todo";
+    });
+    const n = Math.min(Math.max(step, 1), GRILL_STEP_COUNT);
+    const finished = step > GRILL_STEP_COUNT || g.status === "done";
+    const label = g.steps.find((s) => s.n === n)?.label ?? GRILL_STEP_LABELS[n - 1] ?? "";
+    return {
+      source: "log",
+      status: g.status,
+      badge: waiting ? "wartet auf dich" : g.status === "ended" ? null : `gegrillt ${finished ? GRILL_STEP_COUNT : n}/${GRILL_STEP_COUNT}`,
+      tone: waiting ? "waiting" : finished ? "done" : "running",
+      text: step > GRILL_STEP_COUNT ? `Alle ${GRILL_STEP_COUNT} Schritte erledigt` : `Schritt ${n}/${GRILL_STEP_COUNT} · ${label}`,
+      progress: live && !finished ? `Grill ${n}/${GRILL_STEP_COUNT}` : null,
+      reason,
+      steps,
+    };
+  }
+  return {
+    source: "unknown",
+    status: g.status,
+    badge: waiting ? "wartet auf dich" : g.status === "ended" ? null : "Stand unbekannt",
+    tone: waiting ? "waiting" : "unknown",
+    text: "Stand unbekannt",
+    progress: live ? "Grill: Stand unbekannt" : null,
+    reason,
+    steps: GRILL_STEP_LABELS.map((_, i) => (factDone(i + 1) ? "done" : "unknown")),
+  };
 }
 
 export interface TicketGrill {

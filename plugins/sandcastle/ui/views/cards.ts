@@ -23,8 +23,8 @@ export interface CardInfo {
   /** „Blockiert von“ entries without #N: the loop skips the issue until they are done and removed */
   notes: string[];
   locked: boolean;
-  /** grill of the ticket: badge text (`gegrillt 4/7`, `wartet auf dich`, `wartet auf Start`), tone and where */
-  grill?: { badge: string | null; tone: "waiting" | "running" | "done" | "queued"; where: string };
+  /** grill of the ticket: badge text (`gegrillt ✓`, `gegrillt 4/7`, `wartet auf dich`, `Stand unbekannt`, `wartet auf Start`), tone, where ("" = no line) and why it waits */
+  grill?: { badge: string | null; tone: "waiting" | "running" | "done" | "queued" | "unknown"; where: string; reason?: string | null };
   /** the JIRA ticket the issue belongs to: key (null = none), its product labels, drift on this issue */
   ticket: { key: string | null; labels: string[]; drift: DriftItem[] };
   /** the main PR closing the issue, as a link („PR #3550 gemergt“) */
@@ -105,7 +105,8 @@ function build(c: CardInfo): HTMLElement {
     driftEl(c.ticket.drift, null),
     c.pr ? h("div", { class: "card-pr" }, prLinkEl(c.pr)) : null,
     footer,
-    c.grill ? h("div", { class: "card-grill" }, c.grill.where) : null,
+    c.grill?.reason ? h("div", { class: "card-grill reason" }, c.grill.reason) : null,
+    c.grill?.where ? h("div", { class: "card-grill" }, c.grill.where) : null,
   );
 }
 

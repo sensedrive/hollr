@@ -1,25 +1,28 @@
 import { describe, expect, test } from "bun:test";
 import {
   advisorOptions,
-  badgeText,
   dropOpen,
+  grillFamilies,
+  grillView,
   keyProject,
   nextGrills,
   parseOpen,
   type QueuedGrill,
   readOpen,
   rememberAdvisor,
-  stepStates,
-  stepText,
   ticketGrills,
   ticketOfIssue,
 } from "./grill";
-import type { Grill } from "./types";
+import type { Family, Grill } from "./types";
 
 const LABELS = ["Ticket gelesen", "Grill", "JIRA-Kommentar", "Spec/ADR-PR", "Entwürfe", "Story & Kinder", "Bericht"];
 
-function grill(p: Partial<Grill> & { doneUpTo?: number } = {}): Grill {
-  const doneUpTo = p.doneUpTo ?? 0;
+const STAGES = ["read", "grill", "jira-comment", "spec", "design", "story", "report"];
+
+/** A grill with a flow whose first `doneUpTo` steps are done; `doneUpTo: null` = no flow (steps unknown). */
+function grill(p: Partial<Grill> & { doneUpTo?: number | null } = {}): Grill {
+  const { doneUpTo: upTo, ...rest } = p;
+  const doneUpTo = upTo === undefined ? 0 : upTo;
   return {
     id: `${p.slug ?? "o/r"}#${p.n ?? 1}`,
     slug: "o/r",
@@ -30,13 +33,14 @@ function grill(p: Partial<Grill> & { doneUpTo?: number } = {}): Grill {
     source: "hollr",
     pane: "w1:p1",
     status: "running",
-    steps: LABELS.map((label, i) => ({ n: i + 1, label, done: i < doneUpTo })),
-    step: doneUpTo + 1,
-    notes: [],
+    steps: doneUpTo === null ? null : LABELS.map((label, i) => ({ n: i + 1, stage: STAGES[i] ?? "", label, state: i < doneUpTo ? "ok" : "pending", done: i < doneUpTo, reason: null })),
+    step: doneUpTo === null ? null : doneUpTo + 1,
+    paused: null,
+    flow: doneUpTo === null ? null : "k-1-grill",
     cwd: null,
     startedAt: "2026-11-23T10:00:00Z",
     updatedAt: "2026-11-23T10:00:00Z",
-    ...p,
+    ...rest,
   };
 }
 
@@ -98,26 +102,64 @@ describe("deep link", () => {
   });
 });
 
-describe("steps", () => {
-  test("step text names the current step; done says so", () => {
-    expect(stepText(grill({ doneUpTo: 3 }))).toBe("Schritt 4/7 · Spec/ADR-PR");
-    expect(stepText(grill({ doneUpTo: 7, status: "done" }))).toBe("Alle 7 Schritte erledigt");
+const member = (n: number, state: "open" | "closed" = "open") => ({ n, title: `#${n}`, state, labels: [] });
+const family = (p: { grillClosed?: boolean; story?: number; children?: number } = {}): Family => ({
+  grill: member(1, p.grillClosed ? "closed" : "open"),
+  story: p.story ? member(p.story) : undefined,
+  children: Array.from({ length: p.children ?? 0 }, (_, i) => member(100 + i)),
+});
+
+describe("grill view", () => {
+  test("log: the current step, its badge and build-line part", () => {
+    const v = grillView(grill({ doneUpTo: 3 }));
+    expect(v).toMatchObject({ source: "log", text: "Schritt 4/7 · Spec/ADR-PR", badge: "gegrillt 4/7", tone: "running", progress: "Grill 4/7" });
+    expect(v?.steps).toEqual(["done", "done", "done", "active", "todo", "todo", "todo"]);
+    expect(grillView(grill({ doneUpTo: 7, status: "done" }))).toMatchObject({ text: "Alle 7 Schritte erledigt", badge: "gegrillt 7/7", tone: "done", progress: null });
   });
 
-  test("step states mark the current step active or waiting", () => {
-    expect(stepStates(grill({ doneUpTo: 1 }))).toEqual(["done", "active", "todo", "todo", "todo", "todo", "todo"]);
-    expect(stepStates(grill({ doneUpTo: 1, status: "waiting" }))[1]).toBe("waiting");
-    // an ended grill has no current step
-    expect(stepStates(grill({ doneUpTo: 1, status: "ended" }))[1]).toBe("todo");
+  test("log: waiting names the pause reason; ended shows no badge; skipped counts as done", () => {
+    const w = grillView(grill({ doneUpTo: 1, status: "waiting", paused: "wartet auf Antworten an #1" }));
+    expect(w).toMatchObject({ badge: "wartet auf dich", tone: "waiting", reason: "wartet auf Antworten an #1" });
+    expect(w?.steps[1]).toBe("waiting");
+    const ended = grillView(grill({ doneUpTo: 1, status: "ended" }));
+    expect(ended?.badge).toBeNull();
+    expect(ended?.steps[1]).toBe("todo");
+    const g = grill({ doneUpTo: 4 });
+    const design = g.steps?.[4];
+    if (design) Object.assign(design, { state: "skipped", done: true });
+    g.step = 6;
+    expect(grillView(g)?.steps.slice(3, 6)).toEqual(["done", "skipped", "active"]);
   });
 
-  test("badge: waiting beats progress, ended shows nothing", () => {
-    expect(badgeText(grill({ doneUpTo: 3 }))).toBe("gegrillt 4/7");
-    expect(badgeText(grill({ doneUpTo: 3, status: "waiting" }))).toBe("wartet auf dich");
-    expect(badgeText(grill({ doneUpTo: 7, status: "done" }))).toBe("gegrillt 7/7");
-    // done always reads complete, whatever step the record carries
-    expect(badgeText(grill({ doneUpTo: 3, status: "done" }))).toBe("gegrillt 7/7");
-    expect(badgeText(grill({ status: "ended" }))).toBeNull();
+  test("artifacts beat the log and the pane: story with a child is finished", () => {
+    for (const g of [grill({ doneUpTo: 0 }), grill({ doneUpTo: 3, status: "waiting" }), grill({ doneUpTo: null, status: "idle" }), null]) {
+      const v = grillView(g, family({ story: 254, children: 3 }));
+      expect(v).toMatchObject({ source: "artifacts", status: "done", badge: "gegrillt ✓", tone: "done", text: "Fertig gegrillt · Story #254 mit 3 Kindern", progress: null });
+      expect(v?.steps.every((s) => s === "done")).toBe(true);
+    }
+    expect(grillView(null, family({ story: 9, children: 1 }))?.text).toBe("Fertig gegrillt · Story #9 mit 1 Kind");
+    // a story without children is not finished: the log still counts
+    expect(grillView(grill({ doneUpTo: 5 }), family({ story: 9 }))?.source).toBe("log");
+    expect(grillView(null, family({ story: 9 }))).toBeNull();
+  });
+
+  test("log beats unknown; without either: „Stand unbekannt“, never a guessed step", () => {
+    expect(grillView(grill({ doneUpTo: 2 }), family())?.source).toBe("log");
+    const u = grillView(grill({ doneUpTo: null }));
+    expect(u).toMatchObject({ source: "unknown", text: "Stand unbekannt", badge: "Stand unbekannt", tone: "unknown", progress: "Grill: Stand unbekannt" });
+    expect(u?.steps).toEqual(Array(7).fill("unknown"));
+    expect(grillView(grill({ doneUpTo: null, status: "waiting" }))).toMatchObject({ badge: "wartet auf dich", tone: "waiting", text: "Stand unbekannt" });
+    expect(grillView(grill({ doneUpTo: null, status: "ended" }))).toMatchObject({ badge: null, progress: null });
+  });
+
+  test("a closed grill ticket marks step 2 done, with or without a log", () => {
+    expect(grillView(grill({ doneUpTo: null }), family({ grillClosed: true }))?.steps).toEqual(["unknown", "done", "unknown", "unknown", "unknown", "unknown", "unknown"]);
+    expect(grillView(grill({ doneUpTo: 1 }), family({ grillClosed: true }))?.steps.slice(0, 3)).toEqual(["done", "done", "todo"]);
+  });
+
+  test("families by grill issue", () => {
+    const f = family({ story: 5, children: 1 });
+    expect(grillFamilies([{ family: f }, { family: { children: [] } }])).toEqual(new Map([[1, f]]));
   });
 });
 

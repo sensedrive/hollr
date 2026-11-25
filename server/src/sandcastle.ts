@@ -33,7 +33,7 @@ import {
   recordGrill,
   validateGrillRequest,
 } from "./grills";
-import { type Flow, flowLive, flowPr, readBatchFlows } from "./flows";
+import { type Flow, flowLive, flowPr, readFlows } from "./flows";
 import { parseEntry } from "./sessionlog";
 import { type Agent, execHerdr, Herdr, newChat, promptWhenReady } from "./herdr";
 import { which } from "./tools";
@@ -1431,14 +1431,19 @@ const grillsFile = () => join(stateDir(), "grills.json");
 function grillsOf(a: {
   cache: ProjectCache;
   byCommon: Map<string, Project>;
-  dirs: Iterable<string>;
+  /** git common dir → its skill flows */
+  skillFlows: Map<string, Flow[]>;
   agents: Agent[] | null;
   labels: Map<string, string[]>;
   now: number;
 }): Grill[] {
   const known = new Map<string, { slug: string; name: string } | null>();
+  const flows = [...a.skillFlows].flatMap(([common, list]) => {
+    const p = a.byCommon.get(common);
+    return p ? list.map((flow) => ({ slug: p.slug, name: p.name, root: p.root, flow })) : [];
+  });
   return collectGrills({
-    dirs: a.dirs,
+    flows,
     agents: a.agents,
     labels: a.labels,
     records: readGrillRecords(grillsFile()),
@@ -1457,6 +1462,14 @@ function grillsOf(a: {
 
 const flowsCacheFile = () => join(stateDir(), "flows.json");
 
+/** Splits flows of several kinds by kind (a flow without a `flow.kind` counts as its file's). */
+function flowsOfKind(all: Map<string, Flow[]>, kind: "batch" | "skill"): Map<string, Flow[]> {
+  const kindOf = (f: Flow) => f.kind || (basename(f.file).startsWith("skill-") ? "skill" : "batch");
+  return new Map(
+    [...all].map(([common, flows]) => [common, flows.filter((f) => kindOf(f) === kind)]),
+  );
+}
+
 /** All runs on this machine: loop processes, the lock's run, folders with logs from the last 24 h, batch flows. */
 async function scan(
   deps: Deps,
@@ -1474,7 +1487,8 @@ async function scan(
     !opts.agents ? Promise.resolve(null) : (deps.labels ?? herdrLabels()),
   ]);
   const byCommon = projectsByCommon(cache);
-  const flowsOf = readBatchFlows(byCommon.keys(), flowsCacheFile(), now);
+  const allFlows = readFlows(byCommon.keys(), flowsCacheFile(), now, ["batch", "skill"]);
+  const flowsOf = flowsOfKind(allFlows, "batch");
   const host = hostname();
   const { lock, active } = opts.agents
     ? evaluateLock(cache, agents, flowsOf)
@@ -1554,7 +1568,9 @@ async function scan(
       Number(b.status !== "ended") - Number(a.status !== "ended") ||
       (b.startedAt ?? "").localeCompare(a.startedAt ?? ""),
   );
-  const grills = labels ? grillsOf({ cache, byCommon, dirs: roots, agents, labels, now }) : [];
+  const grills = labels
+    ? grillsOf({ cache, byCommon, skillFlows: flowsOfKind(allFlows, "skill"), agents, labels, now })
+    : [];
   return { runs, lock: lockActive ? lock : null, grills };
 }
 
@@ -1879,7 +1895,9 @@ async function startRun(req: SandcastleRequest, deps: Deps) {
   const release = takeStartLock();
   try {
     const agents = deps.agents !== undefined ? deps.agents : await herdrAgents();
-    const flowsOf = readBatchFlows(projectsByCommon(cache).keys(), flowsCacheFile(), Date.now());
+    const flowsOf = readFlows(projectsByCommon(cache).keys(), flowsCacheFile(), Date.now(), [
+      "batch",
+    ]);
     const current = evaluateLock(cache, agents, flowsOf);
     if (current.active && current.lock)
       throw new Error(`Auf diesem Rechner läuft schon ein Lauf (${current.lock.project}).`);
@@ -1954,8 +1972,8 @@ async function startGrill(
       deps.labels ?? herdrLabels(),
     ]);
     const byCommon = projectsByCommon(cache);
-    const dirs = candidateDirs(cache, byCommon);
-    const live = grillsOf({ cache, byCommon, dirs, agents, labels, now }).find(
+    const skillFlows = readFlows(byCommon.keys(), flowsCacheFile(), now, ["skill"]);
+    const live = grillsOf({ cache, byCommon, skillFlows, agents, labels, now }).find(
       (x) =>
         x.slug === project.slug &&
         x.n === g.n &&
@@ -1986,7 +2004,7 @@ async function startGrill(
     const grills = grillsOf({
       cache,
       byCommon,
-      dirs,
+      skillFlows,
       agents: [...(agents ?? []).filter((x) => x.pane !== pane), started],
       labels: new Map([...labels, [pane, [label]]]),
       now,

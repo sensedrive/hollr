@@ -10,7 +10,7 @@ import { openExternal } from "../api";
 import { derive, type Derived } from "../derive";
 import { dragging, enableDrag } from "../drag";
 import { fill, h, reconcile } from "../dom";
-import { currentStep, GRILL_STEP_COUNT, isLiveGrill } from "../grill";
+import { grillView } from "../grill";
 import { isBusy } from "../model";
 import { compileTerms } from "../query";
 import { hooks, prefGet, prefSet, serverLabel, state } from "../state";
@@ -171,14 +171,14 @@ function cardInfo(d: Derived, t: JiraTicket, places: Map<string, TicketPlace>): 
     return { n: c.n, seg: memberPhase(c, tr?.issue.phase) };
   });
   const tg = f.grill ? d.grills.get(f.grill.n) : undefined;
-  const grill = tg && isLiveGrill(tg.grill) ? `Grill ${currentStep(tg.grill)}/${GRILL_STEP_COUNT}` : null;
+  const grill = f.grill ? (grillView(tg?.grill ?? null, f)?.progress ?? null) : null;
   const busy = phases.some((p) => isBusy(p));
   const place = t.category === "done" ? undefined : places.get(t.key);
   return {
     t,
     build: buildLine({ story: f.story?.n ?? null, children, run: null, grill, pr }),
     phase: PHASE_RANK.find((p) => phases.includes(p)),
-    grill: f.grill ? cardGrill(d, f.grill.n) : undefined,
+    grill: f.grill ? cardGrill(d, f.grill.n, t.category !== "done") : undefined,
     busy,
     where: busy ? "wird gebaut" : place ? `${place.live ? "in Lauf" : "wartet"} auf ${place.label} · Platz ${place.pos}` : undefined,
   };

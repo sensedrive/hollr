@@ -166,6 +166,17 @@ export interface RunRecord {
 export type GrillMode = "interactive" | "auto";
 export type GrillStatus = "running" | "waiting" | "idle" | "done" | "ended";
 
+/** One step of a grill from its Ablauf-Log flow (server/src/grills.ts flowSteps). */
+export interface GrillStep {
+  n: number;
+  stage: string;
+  label: string;
+  state: "pending" | "running" | "ok" | "failed" | "skipped";
+  /** ok or skipped */
+  done: boolean;
+  reason: string | null;
+}
+
 /** A grill on one machine (gate `status.grills`, server/src/grills.ts). */
 export interface Grill {
   /** `${slug}#${n}`, or `${cwd}|${key}` when slug or n is unknown */
@@ -179,10 +190,14 @@ export interface Grill {
   source: "hollr" | "manual";
   pane: string | null;
   status: GrillStatus;
-  steps: { n: number; label: string; done: boolean }[];
-  /** first open step, 8 when all are done */
-  step: number;
-  notes: string[];
+  /** the 7 steps from the Ablauf-Log; null = no flow for this grill (progress unknown) */
+  steps: GrillStep[] | null;
+  /** first step not done, 1–7; 8 when all are done; null without a flow */
+  step: number | null;
+  /** `flow.paused` reason while the flow waits („wartet auf Antworten an #247“) */
+  paused: string | null;
+  /** id of the grill's flow in the Ablauf-Log */
+  flow: string | null;
   cwd: string | null;
   startedAt: string | null;
   updatedAt: string | null;

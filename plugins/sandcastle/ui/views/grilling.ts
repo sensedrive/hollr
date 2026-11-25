@@ -1,25 +1,25 @@
 /**
  * Grill pieces shared by board, details panel and Läufe: the „Grillen“ block (start or live state), card badges,
- * card-menu entries, the „Alle auto-grillen“ dialog and the STATUS protocol of one grill.
+ * card-menu entries, the „Alle auto-grillen“ dialog and the steps of one grill. What a grill shows is `grillView`
+ * (artifacts, then Ablauf-Log, else „Stand unbekannt“).
  */
 import { hasHost, openSession } from "../api";
 import type { Derived } from "../derive";
 import { fill, fmtDate, h } from "../dom";
 import {
   advisorOptions,
-  badgeText,
   GRILL_STATUS_TEXT,
   GRILL_STEP_COUNT,
   GRILL_STEP_LABELS,
+  type GrillView,
+  grillView,
   isLiveGrill,
   MAX_GRILLS_PER_MACHINE,
   modeText,
-  stepStates,
-  stepText,
 } from "../grill";
 import { dequeueGrill, enqueueAutoGrills, isStarting, queuedGrill, startGrill } from "../grillqueue";
 import { currentProject, laneServers, prefGet, prefSet, serverLabel, state } from "../state";
-import type { Grill, Issue, Server } from "../types";
+import type { Family, Grill, Issue, Server } from "../types";
 import type { CardInfo } from "./cards";
 import type { MenuItem } from "./menu";
 
@@ -36,13 +36,23 @@ function defaultServer(list: Server[]): string | null {
 
 const advisorChoices = () => advisorOptions(currentProject()?.agents ?? [], prefGet<string[]>("grillAdvisors") ?? []);
 
-/** The 7-step bar: done green, current blue (orange when it waits for the human), rest grey. */
-export function grillBar(g: Grill): HTMLElement {
-  const cls = { done: "merged", active: "building", waiting: "waiting", todo: "queued" } as const;
-  return h("span", { class: "segbar grill-bar", role: "img", "aria-label": stepText(g) }, ...stepStates(g).map((s) => h("span", { class: `seg ${cls[s]}` })));
+/** The 7-step bar: done/skipped green, current blue (orange when it waits for the human), rest grey; unknown hollow. */
+export function grillBar(v: GrillView): HTMLElement {
+  const cls = { done: "merged", skipped: "merged", active: "building", waiting: "waiting", todo: "queued", unknown: "empty" } as const;
+  return h("span", { class: "segbar grill-bar", role: "img", "aria-label": v.text }, ...v.steps.map((s) => h("span", { class: `seg ${cls[s]}` })));
 }
 
-export const grillPill = (g: Grill) => h("span", { class: `gpill ${g.status}` }, GRILL_STATUS_TEXT[g.status]);
+/** The status pill; a grill nobody can say anything about reads „Stand unbekannt“ unless it waits for the human. */
+export const grillPill = (v: GrillView) =>
+  v.source === "unknown" && v.status !== "waiting" ? h("span", { class: "gpill unknown" }, "Stand unbekannt") : h("span", { class: `gpill ${v.status}` }, GRILL_STATUS_TEXT[v.status]);
+
+/** The pause reason of a waiting grill, as its own line. */
+export const grillReason = (v: GrillView) => (v.status === "waiting" && v.reason ? h("p", { class: "grill-hint grill-reason" }, v.reason) : null);
+
+/** The grill issue's family for a grill of the shown project (other projects: no artifacts known here). */
+export function familyOf(d: Pick<Derived, "families">, g: Pick<Grill, "slug" | "n">): Family | undefined {
+  return g.slug === state.slug && g.n !== null ? d.families.get(g.n) : undefined;
+}
 
 function sessionButton(server: string, g: Grill, primary: boolean, small = false): HTMLElement {
   const can = !!g.pane && hasHost() && isLiveGrill(g);
@@ -60,18 +70,20 @@ function sessionButton(server: string, g: Grill, primary: boolean, small = false
 
 // ---- card badge and menu
 
-export function cardGrill(d: Derived, n: number): CardInfo["grill"] {
+/**
+ * Card badge of grill issue n. `artifactsOnly`: a ticket finished by its artifacts shows „gegrillt ✓“ even when no
+ * machine knows its grill (the Werkbank shows it only next to a known grill).
+ */
+export function cardGrill(d: Derived, n: number, artifactsOnly = false): CardInfo["grill"] {
   const q = queuedGrill(n);
   if (q) return { badge: "wartet auf Start", tone: "queued", where: `Auto-Grillen auf ${serverLabel(q.entry.server)} · Platz ${q.place}` };
   if (isStarting(n)) return { badge: "startet …", tone: "running", where: "Grill startet …" };
   const tg = d.grills.get(n);
-  if (!tg || tg.grill.status === "ended") return undefined;
-  const g = tg.grill;
-  return {
-    badge: badgeText(g),
-    tone: g.status === "waiting" ? "waiting" : g.status === "done" ? "done" : "running",
-    where: `${modeText(g.mode)} auf ${serverLabel(tg.server)}`,
-  };
+  if (!tg && !artifactsOnly) return undefined;
+  const v = grillView(tg?.grill ?? null, d.families.get(n));
+  if (!v?.badge) return undefined;
+  const where = tg ? `${modeText(tg.grill.mode)} auf ${serverLabel(tg.server)}` : "";
+  return { badge: v.badge, tone: v.tone, where, reason: v.status === "waiting" ? v.reason : null };
 }
 
 /** „Grillen auf <M>“ / „Auto-Grillen auf <M>“ for a ticket in „Zu grillen“ without a live grill. */
@@ -96,7 +108,7 @@ export function grillMenuItems(d: Derived, n: number): MenuItem[] {
 /** What the block shows; the panel rebuilds it only when this changes (choices live in `form`). */
 export function grillBlockSig(d: Derived, n: number, inGrillColumn: boolean): string {
   const tg = d.grills.get(n);
-  return JSON.stringify([inGrillColumn, tg, queuedGrill(n), isStarting(n), laneServers().map((s) => [s.id, s.online]), advisorChoices(), hasHost()]);
+  return JSON.stringify([inGrillColumn, tg, d.families.get(n), queuedGrill(n), isStarting(n), laneServers().map((s) => [s.id, s.online]), advisorChoices(), hasHost()]);
 }
 
 export function grillBlock(d: Derived, n: number, inGrillColumn: boolean): HTMLElement | null {
@@ -110,8 +122,9 @@ export function grillBlock(d: Derived, n: number, inGrillColumn: boolean): HTMLE
     { class: `grill-panel${waiting ? " waiting" : ""}`, "aria-label": "Grillen" },
     h("h3", { class: "grill-title" }, h("span", { class: "grill-icon", "aria-hidden": "true" }, "🔥"), "Grillen"),
   );
-  if (tg && (live || !inGrillColumn || tg.grill.status === "done")) {
-    el.append(...grillFacts(tg.server, tg.grill));
+  const view = tg ? grillView(tg.grill, d.families.get(n)) : null;
+  if (tg && view && (live || !inGrillColumn || view.status === "done")) {
+    el.append(...grillFacts(tg.server, tg.grill, view));
     return el;
   }
   if (queued) {
@@ -122,13 +135,13 @@ export function grillBlock(d: Derived, n: number, inGrillColumn: boolean): HTMLE
     );
     return el;
   }
-  if (tg) el.append(h("p", { class: "grill-hint" }, `Letzter Grill auf ${serverLabel(tg.server)}: ${GRILL_STATUS_TEXT[tg.grill.status]} · ${stepText(tg.grill)}`));
+  if (tg && view) el.append(h("p", { class: "grill-hint" }, `Letzter Grill auf ${serverLabel(tg.server)}: ${GRILL_STATUS_TEXT[view.status]} · ${view.text}`));
   el.append(...startPart(n));
   return el;
 }
 
-function grillFacts(server: string, g: Grill): HTMLElement[] {
-  const waiting = g.status === "waiting";
+function grillFacts(server: string, g: Grill, v: GrillView): HTMLElement[] {
+  const waiting = v.status === "waiting";
   return [
     h(
       "dl",
@@ -138,17 +151,22 @@ function grillFacts(server: string, g: Grill): HTMLElement[] {
       h("dt", {}, "Modus"),
       h("dd", {}, modeText(g.mode)),
       h("dt", {}, "Status"),
-      h("dd", {}, grillPill(g)),
+      h("dd", {}, grillPill(v)),
     ),
     h(
       "div",
       { class: "grill-progress" },
-      grillBar(g),
-      h("p", { class: "grill-step" }, stepText(g)),
-      waiting ? h("p", { class: "grill-hint" }, "Der Agent wartet im Hollr-Chat auf deine Antwort.") : null,
-      g.status === "idle" ? h("p", { class: "grill-hint" }, "Die Sitzung arbeitet gerade nicht – in der Sitzung nachsehen.") : null,
+      grillBar(v),
+      h("p", { class: "grill-step" }, v.text),
+      grillReason(v) ?? (waiting ? h("p", { class: "grill-hint" }, "Der Agent wartet im Hollr-Chat auf deine Antwort.") : null),
+      v.source === "artifacts" ? h("p", { class: "grill-hint" }, "Aus GitHub – gilt auch ohne Sitzung, auf jedem Rechner.") : null,
+      v.source === "unknown" && !waiting
+        ? h("p", { class: "grill-hint" }, `Die Sitzung schreibt kein Ablauf-Log.${v.steps[1] === "done" ? " Aus GitHub: Grill-Issue geschlossen." : ""}`)
+        : null,
+      v.status === "idle" && v.source === "log" ? h("p", { class: "grill-hint" }, "Die Sitzung arbeitet gerade nicht – in der Sitzung nachsehen.") : null,
     ),
-    h("div", { class: "btn-row" }, sessionButton(server, g, waiting)),
+    // finished by its artifacts: nothing left to do in the session
+    ...(v.source === "artifacts" ? [] : [h("div", { class: "btn-row" }, sessionButton(server, g, waiting))]),
   ];
 }
 
@@ -307,46 +325,53 @@ export function openGrillAllDialog(tickets: Issue[]): void {
   machine.focus();
 }
 
-// ---- Läufe: one grill's STATUS protocol
+// ---- Läufe: the steps of one grill
 
-const STEP_STATE_TEXT = { done: "erledigt", active: "läuft", waiting: "wartet auf dich", todo: "offen" } as const;
+const STEP_STATE_TEXT = { done: "erledigt", skipped: "übersprungen", active: "läuft", waiting: "wartet auf dich", todo: "offen", unknown: "ohne Angabe" } as const;
 
-/** Right side of „Läufe“ for a selected grill: summary, the 7 steps and the notes from STATUS.md. */
-export function grillLog(el: HTMLElement, server: string, g: Grill | undefined, onBack: () => void): void {
-  if (!g) {
+const SOURCE_TEXT: Record<GrillView["source"], string> = {
+  artifacts: "Aus GitHub: Story und Kinder angelegt",
+  log: "Aus dem Ablauf-Log",
+  unknown: "Kein Ablauf-Log – Stand unbekannt",
+};
+
+/** Right side of „Läufe“ for a selected grill: summary and the 7 steps. */
+export function grillLog(el: HTMLElement, server: string, g: Grill | undefined, family: Family | undefined, onBack: () => void): void {
+  const v = g ? grillView(g, family) : null;
+  if (!g || !v) {
     fill(el, h("button", { class: "btn small back", onclick: onBack }, "‹ Läufe"), h("p", { class: "muted pad" }, "Grill nicht mehr da."));
     return;
   }
   const issue = g.slug === state.slug && g.n !== null ? state.board?.issues.find((i) => i.number === g.n) : undefined;
   const title = [g.key, g.n !== null ? `#${g.n}` : null].filter(Boolean).join(" · ") + (issue ? ` ${issue.title}` : g.project ? ` · ${g.project}` : "");
-  const states = stepStates(g);
-  const waiting = g.status === "waiting";
+  const waiting = v.status === "waiting";
+  const stepOf = (n: number) => g.steps?.find((x) => x.n === n);
   fill(
     el,
     h("div", { class: "grill-log-head" }, h("button", { class: "btn small back", onclick: onBack }, "‹ Läufe"), h("h2", {}, title)),
     h(
       "div",
       { class: "grill-log-summary" },
-      grillPill(g),
-      h("span", { class: "muted grow" }, `${modeText(g.mode)} auf ${serverLabel(server)} · ${stepText(g)}${g.startedAt ? ` · seit ${fmtDate(g.startedAt)}` : ""}`),
+      grillPill(v),
+      h("span", { class: "muted grow" }, `${modeText(g.mode)} auf ${serverLabel(server)} · ${v.text}${g.startedAt ? ` · seit ${fmtDate(g.startedAt)}` : ""}`),
       sessionButton(server, g, waiting),
     ),
-    h("h3", {}, "STATUS-Protokoll"),
+    grillReason(v),
+    h("h3", {}, "Schritte"),
     h(
       "ol",
       { class: "grill-steps", "aria-label": `Die ${GRILL_STEP_COUNT} Schritte des Grills` },
-      ...states.map((s, i) =>
-        h(
+      ...v.steps.map((s, i) => {
+        const reason = v.source === "log" ? (stepOf(i + 1)?.reason ?? null) : null;
+        return h(
           "li",
           { class: `grill-step-row ${s}` },
-          h("span", { class: "mark", "aria-hidden": "true" }, s === "done" ? "✓" : "○"),
-          h("span", { class: "name" }, `${i + 1}. ${g.steps.find((x) => x.n === i + 1)?.label ?? GRILL_STEP_LABELS[i]}`),
-          h("span", { class: "st" }, STEP_STATE_TEXT[s]),
-        ),
-      ),
+          h("span", { class: "mark", "aria-hidden": "true" }, s === "done" ? "✓" : s === "skipped" ? "»" : "○"),
+          h("span", { class: "name" }, `${i + 1}. ${stepOf(i + 1)?.label ?? GRILL_STEP_LABELS[i]}`, reason ? h("span", { class: "muted small" }, ` · ${reason}`) : null),
+          h("span", { class: "st" }, s === "active" && v.status === "idle" ? "pausiert" : STEP_STATE_TEXT[s]),
+        );
+      }),
     ),
-    g.notes.length ? h("h3", {}, "Notizen") : null,
-    g.notes.length ? h("ul", { class: "grill-notes" }, ...g.notes.map((l) => h("li", {}, l))) : null,
-    h("p", { class: "muted small" }, g.cwd ? `Aus ${g.cwd}/.scratch/${g.key ?? "…"}/STATUS.md auf ${serverLabel(server)}.` : `Auf ${serverLabel(server)}.`),
+    h("p", { class: "muted small" }, `${SOURCE_TEXT[v.source]} · ${serverLabel(server)}`),
   );
 }

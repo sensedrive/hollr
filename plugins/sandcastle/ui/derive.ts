@@ -1,8 +1,8 @@
 /** Board facts derived from the state, shared by board, details panel and Läufe view. Cheap: recomputed per render. */
-import { type TicketGrill, ticketGrills } from "./grill";
+import { grillFamilies, type TicketGrill, ticketGrills } from "./grill";
 import { assignLanes, classify, laneRuns, type TicketRun, ticketRuns } from "./model";
 import { currentProject, laneServers, state } from "./state";
-import type { Column, Issue, Project, Run, Server, TicketFlags } from "./types";
+import type { Column, Family, Issue, Project, Run, Server, TicketFlags } from "./types";
 
 export interface Lane {
   server: Server;
@@ -25,6 +25,8 @@ export interface Derived {
   stories: Map<number, string>;
   /** n → the grill to show for it (any machine) */
   grills: Map<number, TicketGrill>;
+  /** grill issue n → the GitHub family of its JIRA ticket (the artifacts that say a grill is finished) */
+  families: Map<number, Family>;
 }
 
 export function derive(): Derived {
@@ -82,6 +84,7 @@ export function derive(): Derived {
     open,
     stories: new Map((board?.stories ?? []).map((s) => [s.number, s.title])),
     grills: ticketGrills(state.statuses, state.slug, new Map([...issues.values()].flatMap((i) => (i.jira ? [[i.jira, i.number] as const] : [])))),
+    families: grillFamilies(state.jira?.tickets ?? []),
   };
 }
 

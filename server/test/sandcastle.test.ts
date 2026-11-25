@@ -748,22 +748,41 @@ describe("batch flows (Ablauf-Log v1)", () => {
 });
 
 describe("grills", () => {
-  // the real STATUS.md of TENDR-1070, in the project root
-  const md = [
-    "# TENDR-1070 Grill-Status",
-    "",
-    "Grill-Ticket: #3533",
-    "",
-    "- [x] 1 Ticket gelesen (keine Kommentare)",
-    "- [x] 2 Grill (3 Runden, Ergebnis #3533 Kommentar 7096554391)",
-    "- [x] 3 Jira-Kommentar 42640, #3533 geschlossen",
-    "- [x] 4 Spec/ADR-PR #3539 gemergt (…)",
-    "- [ ] 5 Entwurf",
-    "- [ ] 6 Story/Kinder",
-    "- [ ] 7 Bericht",
-    "- [ ] 5 Entwurf läuft (Agent EntwurfBelegExport)",
-    "- Entwurf: Exporte v285, Dialog v286 abgenommen bis auf Kalender; …",
-  ].join("\n");
+  // the grill skill's Ablauf-Log: steps 1–4 done, step 5 started; a second, auto grill only knows its key
+  const ts = (m: number) => new Date(Date.now() - (60 - m) * 60_000).toISOString();
+  const line = (id: string, ticket: string, seq: number, type: string, data: object) =>
+    JSON.stringify({
+      v: 1,
+      id: `e${seq}`,
+      seq,
+      ts: ts(seq),
+      project: "shop",
+      flow: { kind: "skill", id },
+      ticket,
+      source: "skill:lul-workr-grill-jira-ticket",
+      type,
+      data,
+    });
+  const grillLog = [
+    line("tendr-1070-grill", "TENDR-1070", 1, "flow.started", {
+      kind: "skill",
+      skill: "grill",
+      issue: 3533,
+    }),
+    ...["read", "grill", "jira-comment", "spec"].map((stage, i) =>
+      line("tendr-1070-grill", "TENDR-1070", i + 2, "stage.ended", { stage, outcome: "ok" }),
+    ),
+    line("tendr-1070-grill", "TENDR-1070", 6, "stage.started", { stage: "design" }),
+  ];
+  const autoLog = [
+    line("shop-9-grill", "SHOP-9", 1, "flow.started", {
+      kind: "skill",
+      skill: "auto-grill",
+      issue: null,
+    }),
+    line("shop-9-grill", "SHOP-9", 2, "stage.ended", { stage: "read", outcome: "ok" }),
+    line("shop-9-grill", "SHOP-9", 3, "flow.paused", { reason: "wartet auf Antworten an #9" }),
+  ];
   const sessions: { cwd: string; label: string; prompt: string }[] = [];
   const deps: Deps = {
     ...base,
@@ -776,15 +795,23 @@ describe("grills", () => {
     fastForward: async () => null,
   };
 
-  test("status lists the STATUS.md grill with its labelled pane; the worktree's grill without one", async () => {
-    mkdirSync(join(shop, ".scratch", "TENDR-1070"), { recursive: true });
-    writeFileSync(join(shop, ".scratch", "TENDR-1070", "STATUS.md"), md);
-    mkdirSync(join(wt, ".scratch", "SHOP-9"), { recursive: true });
-    writeFileSync(join(wt, ".scratch", "SHOP-9", "STATUS.md"), "# Grill\n- [x] 1 gelesen\n");
-    const { grills } = await status(deps);
-    expect(grills.map((g) => [g.id, g.status, g.step, g.pane, g.mode])).toEqual([
-      ["acme/shop#3533", "waiting", 5, "w5:p1", "interactive"],
-      [`${wt}|SHOP-9`, "ended", 2, null, null],
+  test("status folds the grill flows of the Ablauf-Log and joins the labelled pane", async () => {
+    const dir = join(shop, ".git", "lul-workr", "flows");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "skill-tendr-1070-grill-2026-11-25-0900.ndjson"),
+      `${grillLog.join("\n")}\n`,
+    );
+    writeFileSync(
+      join(dir, "skill-shop-9-grill-2026-11-25-0910.ndjson"),
+      `${autoLog.join("\n")}\n`,
+    );
+    const { grills, runs } = await status(deps);
+    // skill flows are no runs
+    expect(runs.some((r) => r.flow?.kind === "skill")).toBe(false);
+    expect(grills.map((g) => [g.id, g.status, g.step, g.pane, g.mode, g.paused])).toEqual([
+      ["acme/shop#3533", "waiting", 5, "w5:p1", "interactive", null],
+      [`${shop}|SHOP-9`, "waiting", 2, null, "auto", "wartet auf Antworten an #9"],
     ]);
     expect(grills[0]).toMatchObject({
       slug: SLUG,
@@ -792,7 +819,18 @@ describe("grills", () => {
       key: "TENDR-1070",
       source: "manual",
       cwd: shop,
+      flow: "tendr-1070-grill",
     });
+    expect(grills[0]?.steps?.map((s) => s.state)).toEqual([
+      "ok",
+      "ok",
+      "ok",
+      "ok",
+      "running",
+      "pending",
+      "pending",
+    ]);
+    rmSync(join(dir, "skill-shop-9-grill-2026-11-25-0910.ndjson"));
   });
 
   test("grill-start: checks, refuses a live grill, opens the session and records it", async () => {
@@ -827,7 +865,8 @@ describe("grills", () => {
       source: "hollr",
       pane: "w6:p1",
       status: "running",
-      step: 1,
+      steps: null,
+      step: null,
       cwd: null,
     });
     const second = await start({ n: 42, key: null, mode: "interactive" });

@@ -1,8 +1,9 @@
 /**
- * Batch flows from skippr's event contract „Ablauf-Log v1“: one append-only NDJSON file per flow execution at
+ * Flows from skippr's event contract „Ablauf-Log v1“: one append-only NDJSON file per flow execution at
  * `<git-common-dir>/lul-workr/flows/<kind>-<flowId>.ndjson`, written by the lul-workr skills and the Sandcastle
  * loop (`main.mts`). The sandcastle gate folds each file into a `Flow` – stages, pass, iteration, roles and
- * assignments – for the board.
+ * assignments – for the board: `batch` flows are Sandcastle runs, `skill` flows with `skill: grill|auto-grill`
+ * are grills (stages = the grill's 7 steps).
  *
  * Every status poll is its own gate process, so the read offset and the folded state per file live in a cache
  * file in the state dir: a poll reads only the bytes appended since the last one.
@@ -18,7 +19,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 export type FlowRole = "planner" | "implementer" | "reviewer" | "merger";
 export type StageState = "pending" | "running" | "ok" | "failed" | "skipped";
@@ -33,6 +34,19 @@ export const BATCH_STAGES = [
   "deploy",
   "testplan",
 ] as const;
+
+/** The grill skills' stages, steps 1–7 in order (Ablauf-Log contract of lul-workr-grill-jira-ticket). */
+export const GRILL_STAGES = [
+  "read",
+  "grill",
+  "jira-comment",
+  "spec",
+  "design",
+  "story",
+  "report",
+] as const;
+/** `flow.started` data.skill of a grill */
+export const GRILL_SKILLS: readonly string[] = ["grill", "auto-grill"];
 
 export interface FlowStage {
   stage: string;
@@ -67,6 +81,10 @@ export interface Flow {
   file: string;
   project: string | null;
   ticket: string | null;
+  /** skill flows: `flow.started` data.skill (grill, auto-grill, …) */
+  skill: string | null;
+  /** skill flows: `flow.started` data.issue (a grill's GitHub issue) */
+  issue: number | null;
   branch: string | null;
   worktree: string | null;
   startedAt: string;
@@ -90,7 +108,7 @@ export interface Flow {
   /** roles running now; `since` = the `role.started` timestamp */
   active: { role: FlowRole; assignment: number | null; since: string }[];
   assignments: FlowAssignment[];
-  /** `flow.paused` reason (offline | sleep) until `flow.resumed` */
+  /** `flow.paused` reason (batch: offline | sleep; grill: „wartet auf Antworten an #N“) until `flow.resumed` */
   paused: string | null;
   /** last applied `seq`: lines at or below it are duplicates */
   seq: number;
@@ -117,28 +135,34 @@ const int = (v: unknown): number | null =>
 const count = (v: unknown): number =>
   Array.isArray(v) ? v.length : typeof v === "number" && v > 0 ? v : 0;
 
+const pending = (stage: string): FlowStage => ({
+  stage,
+  state: "pending",
+  startedAt: null,
+  endedAt: null,
+  reason: null,
+  data: {},
+});
+
+/** An unfolded flow; a `skill-…` file starts without stages (they come with `flow.started`), others as a batch. */
 export function emptyFlow(file: string): Flow {
+  const skill = basename(file).startsWith("skill-");
   return {
     kind: "",
     id: "",
     file,
     project: null,
     ticket: null,
+    skill: null,
+    issue: null,
     branch: null,
     worktree: null,
     startedAt: "",
     updatedAt: "",
     endedAt: null,
     outcome: null,
-    stages: BATCH_STAGES.map((stage) => ({
-      stage,
-      state: "pending",
-      startedAt: null,
-      endedAt: null,
-      reason: null,
-      data: {},
-    })),
-    current: "worktree",
+    stages: skill ? [] : BATCH_STAGES.map(pending),
+    current: skill ? null : "worktree",
     pass: null,
     iteration: null,
     active: [],
@@ -152,7 +176,7 @@ export function emptyFlow(file: string): Flow {
 function stageOf(f: Flow, stage: string): FlowStage {
   let s = f.stages.find((x) => x.stage === stage);
   if (!s) {
-    s = { stage, state: "pending", startedAt: null, endedAt: null, reason: null, data: {} };
+    s = pending(stage);
     f.stages.push(s);
   }
   return s;
@@ -200,6 +224,18 @@ export function applyEvent(f: Flow, e: unknown): void {
       f.startedAt = ts;
       f.branch = text(d.branch) ?? f.branch;
       f.worktree = text(d.worktree) ?? f.worktree;
+      if (f.kind === "skill") {
+        f.skill = text(d.skill) ?? f.skill;
+        f.issue = int(d.issue) ?? f.issue;
+        // a grill's stages are its 7 steps in order; a batch's pending seed does not belong to a skill
+        const order: readonly string[] =
+          f.skill && GRILL_SKILLS.includes(f.skill) ? GRILL_STAGES : [];
+        const seen = f.stages.filter((s) => s.state !== "pending" || order.includes(s.stage));
+        f.stages = [
+          ...order.map((stage) => seen.find((s) => s.stage === stage) ?? pending(stage)),
+          ...seen.filter((s) => !order.includes(s.stage)),
+        ];
+      }
       break;
     case "flow.ended":
       f.closed = true;
@@ -345,7 +381,13 @@ function settle(f: Flow, ts: string): void {
   if (!f.closed) {
     const running = f.stages.find((s) => s.state === "running");
     const failed = f.stages.find((s) => s.state === "failed");
-    const last = f.stages.find((s) => s.stage === "testplan");
+    const lastStage =
+      f.kind === "skill"
+        ? f.skill && GRILL_SKILLS.includes(f.skill)
+          ? "report"
+          : null
+        : "testplan";
+    const last = f.stages.find((s) => s.stage === lastStage);
     const outcome = running
       ? null
       : failed
@@ -424,7 +466,7 @@ interface FlowCache {
 }
 
 /** Bumped whenever Flow changes shape, so cached folds are redone. */
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MAX_AGE = 14 * 24 * 3600_000;
 
 export const flowsDir = (gitCommonDir: string) => join(gitCommonDir, "lul-workr", "flows");
@@ -446,13 +488,14 @@ function readFrom(file: string, offset: number, size: number): string {
 }
 
 /**
- * The batch flows of the given repos (git common dirs), newest first. Each file is read only from where the last
- * call stopped; `cacheFile` keeps offsets and folds between gate calls.
+ * The flows of the given kinds (`batch`, `skill`) in the given repos (git common dirs), newest first. Each file is
+ * read only from where the last call stopped; `cacheFile` keeps offsets and folds between gate calls.
  */
-export function readBatchFlows(
+export function readFlows(
   gitCommonDirs: Iterable<string>,
   cacheFile: string,
   now: number,
+  kinds: readonly string[],
 ): Map<string, Flow[]> {
   let cache: FlowCache | null = null;
   try {
@@ -471,7 +514,8 @@ export function readBatchFlows(
     } catch {}
     const flows: Flow[] = [];
     for (const name of names) {
-      if (!name.startsWith("batch-") || !name.endsWith(".ndjson")) continue;
+      const fileKind = kinds.find((k) => name.startsWith(`${k}-`));
+      if (!fileKind || !name.endsWith(".ndjson")) continue;
       const file = join(dir, name);
       let size: number;
       let mtime: number;
@@ -505,7 +549,7 @@ export function readBatchFlows(
         cache.files[file] = entry;
         changed = true;
       }
-      if (entry.flow.kind === "batch" || (!entry.flow.kind && entry.flow.startedAt))
+      if (entry.flow.kind ? kinds.includes(entry.flow.kind) : !!entry.flow.startedAt)
         flows.push(entry.flow);
     }
     flows.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
