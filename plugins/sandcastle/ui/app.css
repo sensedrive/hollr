@@ -693,6 +693,9 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .pill[data-tone="green"] { --tone: var(--green); }
 .pill[data-tone="red"] { --tone: var(--red); }
 .pill:not([data-tone="neutral"]) { --tone-text: color-mix(in srgb, var(--tone) 60%, var(--fg)); }
+/* on tinted running rows the pill blurred into the row and read as plain text (design v28): same shape, stronger tint */
+.run-kid[data-status="implementer"] .pill, .run-kid[data-status="review"] .pill {
+  background: color-mix(in srgb, var(--tone) 26%, var(--side)); --tone-text: color-mix(in srgb, var(--tone) 50%, var(--fg)); }
 .pill-ico { display: inline-flex; flex: none; width: 11px; height: 11px; }
 .pill-ico svg, .log-ico svg { width: 100%; height: 100%; }
 .run-fold { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; justify-self: start; min-height: 24px; font-size: 12px; color: var(--muted); }
