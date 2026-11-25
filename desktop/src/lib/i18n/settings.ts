@@ -185,6 +185,10 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle: Der Grill-Stand stimmt – fertig gegrillt, sobald Story und Kinder auf GitHub stehen; laufende Grills zeigen ihren Schritt aus dem Ablauf-Log, sonst „Stand unbekannt“ statt geratener Zahlen.":
+    "Sandcastle: the grill state is right – grilled as soon as the story and its children are on GitHub; running grills show their step from the flow log, otherwise “state unknown” instead of guessed numbers.",
+  "Sandcastle: Issues, die auf etwas anderes als ein Issue warten (etwa ein Release), gelten als blockiert und werden nicht mehr in Läufe genommen.":
+    "Sandcastle: issues waiting on something other than an issue (a release, say) count as blocked and are no longer taken into runs.",
   "Sandcastle: Lauf-Panel und Lauf-Leiste zeigen den Lauf je Kind-Issue – Runde mit Planer, Kinder bauen und Merge, „3/9 gemergt“ je Story und jedes Kind mit seinem Stand.":
     "Sandcastle: run panel and run dock show the run per child issue – the round with planner, building children and merge, “3/9 merged” per story and every child with its state.",
   "Sandcastle: sichtbar, was gerade läuft – „Implementer an #3605 · Code-Review an #3604“, mit „seit …“ an den laufenden Kindern.":

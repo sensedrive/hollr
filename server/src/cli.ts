@@ -124,7 +124,7 @@ import {
 import { usageHistory } from "./usagehistory";
 import { runWatch } from "./watch";
 
-export const VERSION = "0.57.5";
+export const VERSION = "0.57.6";
 
 const PANE_RE = /^[\w-]+:[\w-]+$/;
 

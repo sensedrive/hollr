@@ -12,6 +12,15 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 77,
+    version: "0.57.6",
+    date: "25.11.2026",
+    items: [
+      { icon: "🔥", text: "Sandcastle: Der Grill-Stand stimmt – fertig gegrillt, sobald Story und Kinder auf GitHub stehen; laufende Grills zeigen ihren Schritt aus dem Ablauf-Log, sonst „Stand unbekannt“ statt geratener Zahlen." },
+      { icon: "🔒", text: "Sandcastle: Issues, die auf etwas anderes als ein Issue warten (etwa ein Release), gelten als blockiert und werden nicht mehr in Läufe genommen." },
+    ],
+  },
+  {
     build: 76,
     version: "0.57.5",
     date: "24.11.2026",
