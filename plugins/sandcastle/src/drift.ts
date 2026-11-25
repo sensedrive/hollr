@@ -33,7 +33,10 @@ export interface FamilyMember {
 export interface Family {
   grill?: FamilyMember;
   story?: FamilyMember;
+  /** what the loop builds: the story's `## Parent` children (all keyed issues when there is no story) */
   children: FamilyMember[];
+  /** other issues naming the ticket but not the story as parent (spec/doc issues) – never counted as built */
+  related?: FamilyMember[];
 }
 
 export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "done-not-in-main" | "no-key";
@@ -93,6 +96,7 @@ export function families(issues: GhIssue[], labels: Project["labels"], live?: Li
   const isStory = (i: GhIssue) => i.labels.includes(labels.story);
   const byKey = new Map<string, Family>();
   const unlinked = new Map<number, FamilyMember>();
+  const parentOf = new Map<number, number | null>();
   for (const i of issues) {
     const parent = i.parent === null ? undefined : byNumber.get(i.parent);
     const storyParent = parent && isStory(parent) ? parent : undefined;
@@ -110,9 +114,23 @@ export function families(issues: GhIssue[], labels: Project["labels"], live?: Li
     }
     if (isStory(i)) f.story = better(f.story, member(i, live));
     else if (labels.grill && i.labels.includes(labels.grill)) f.grill = better(f.grill, member(i, live));
-    else f.children.push(member(i, live));
+    else {
+      f.children.push(member(i, live));
+      parentOf.set(i.number, i.parent);
+    }
   }
-  for (const f of byKey.values()) f.children.sort((a, b) => a.n - b.n);
+  for (const f of byKey.values()) {
+    // with a story, only its own children are built; a spec issue carrying the key would hold the count at 2/3
+    const story = f.story?.n;
+    if (story !== undefined) {
+      const related = f.children.filter((c) => parentOf.get(c.n) !== story);
+      if (related.length) {
+        f.children = f.children.filter((c) => parentOf.get(c.n) === story);
+        f.related = related.sort((a, b) => a.n - b.n);
+      }
+    }
+    f.children.sort((a, b) => a.n - b.n);
+  }
   return { byKey, unlinked: [...unlinked.values()].sort((a, b) => b.n - a.n) };
 }
 
@@ -138,7 +156,12 @@ export function deriveState(f: Family, labels: Project["labels"]): DerivedState 
   return queued || grilled ? "selected" : null;
 }
 
-const members = (f: Family) => [...(f.grill ? [f.grill] : []), ...(f.story ? [f.story] : []), ...f.children];
+const members = (f: Family) => [
+  ...(f.grill ? [f.grill] : []),
+  ...(f.story ? [f.story] : []),
+  ...f.children,
+  ...(f.related ?? []),
+];
 
 /** Labels every project keeps on GitHub: GitHub's defaults and the lul-workr process labels. */
 export const DEFAULT_WORKFLOW_LABELS = [

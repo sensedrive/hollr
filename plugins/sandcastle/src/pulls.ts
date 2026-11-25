@@ -132,7 +132,7 @@ export const comparePulls = (a: Pull, b: Pull) => RANK[a.state] - RANK[b.state] 
  */
 export function pullsByTicket(pulls: Pull[], known: ReadonlySet<string>, fam: ReadonlyMap<string, Family>): Map<string, PullOut[]> {
   const keyOf = new Map<number, string>();
-  for (const [key, f] of fam) for (const m of [f.grill, f.story, ...f.children]) if (m) keyOf.set(m.n, key);
+  for (const [key, f] of fam) for (const m of [f.grill, f.story, ...f.children, ...(f.related ?? [])]) if (m) keyOf.set(m.n, key);
   const byKey = new Map<string, Pull[]>();
   for (const p of [...pulls].sort(comparePulls)) {
     const own = [...new Set([...p.keys, ...p.codeKeys])].filter((k) => known.has(k));

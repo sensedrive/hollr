@@ -271,6 +271,7 @@ const members = (t: Pick<JiraTicket, "family">) => [
   ...(t.family.grill ? [t.family.grill] : []),
   ...(t.family.story ? [t.family.story] : []),
   ...t.family.children,
+  ...(t.family.related ?? []),
 ];
 
 /** A status name without its emoji: „✅ Done“ → „done“, „👀 Testing / Review“ → „testing / review“. */

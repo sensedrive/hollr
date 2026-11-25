@@ -79,6 +79,25 @@ describe("families", () => {
     expect(f.unlinked.map((m) => m.n)).toEqual([7, 5]);
   });
 
+  test("a spec issue naming the ticket is related, not a child: the count and Testing follow the story's children", () => {
+    const issues = [
+      gh(2, { jira: "R-1", labels: ["story"], state: "closed" }),
+      gh(3, { parent: 2, state: "closed" }),
+      gh(4, { parent: 2, state: "closed" }),
+      gh(5, { jira: "R-1", labels: ["documentation"] }),
+    ];
+    const f = familyOf(issues);
+    expect(f?.children.map((c) => c.n)).toEqual([3, 4]);
+    expect(f?.related?.map((c) => c.n)).toEqual([5]);
+    expect(f && deriveState(f, labels)).toBe("testing");
+  });
+
+  test("without a story every keyed issue is built, so none is related", () => {
+    const f = familyOf([gh(3, { jira: "R-1" }), gh(4, { jira: "R-1" })]);
+    expect(f?.children.map((c) => c.n)).toEqual([3, 4]);
+    expect(f?.related).toBeUndefined();
+  });
+
   test("of two stories the open one wins, else the newer", () => {
     expect(
       familyOf([gh(2, { jira: "R-1", labels: ["story"] }), gh(9, { jira: "R-1", labels: ["story"], state: "closed" })])

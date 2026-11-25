@@ -409,7 +409,10 @@ export interface FamilyMember {
 export interface Family {
   grill?: FamilyMember;
   story?: FamilyMember;
+  /** what the loop builds (src/drift.ts families) */
   children: FamilyMember[];
+  /** spec/doc issues naming the ticket, not built by the loop */
+  related?: FamilyMember[];
 }
 
 export type DriftKind = "label-on-gh" | "state-behind" | "done-candidate" | "done-not-in-main" | "no-key";

@@ -181,7 +181,7 @@ export function readOpen(hash: string): OpenTarget | null {
 export function ticketOfIssue(tickets: readonly Pick<JiraTicket, "key" | "family">[], n: number): string | null {
   for (const t of tickets) {
     const f = t.family;
-    if (f.grill?.n === n || f.story?.n === n || f.children.some((c) => c.n === n)) return t.key;
+    if (f.grill?.n === n || f.story?.n === n || [...f.children, ...(f.related ?? [])].some((c) => c.n === n)) return t.key;
   }
   return null;
 }
