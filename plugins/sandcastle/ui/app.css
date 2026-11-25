@@ -691,6 +691,17 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .run-ticket { display: grid; gap: 4px; padding: 8px 12px; margin: 0 0 8px; border-radius: 8px; background: var(--card); font-size: 13px; box-shadow: inset 3px 0 0 transparent; }
 .run-ticket[data-activity="working"] { box-shadow: inset 3px 0 0 var(--blue); }
 .run-ticket[data-activity="merging"], .run-ticket[data-activity="ready"] { box-shadow: inset 3px 0 0 var(--green); }
+/* a story this run finished (design v39): present, but toned down */
+.run-ticket.done { background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted); }
+.run-ticket.done .pos { color: var(--muted); }
+.run-ticket.done .kid-bar { opacity: .55; }
+.run-ticket-n.done { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 500; }
+.done-ico { display: inline-flex; flex: none; width: 12px; height: 12px; color: var(--green); }
+.done-ico svg { width: 100%; height: 100%; }
+.run-kid[data-status="merged"] .pill { opacity: .8; }
+.run-side-h-done { color: var(--muted); font-weight: 500; }
+.run-round-kids { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dock-chip.done { opacity: .8; }
 .dep-note { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .dep-ico, .fold-ico { display: inline-flex; width: 13px; height: 13px; flex: none; }
 .run-ticket-top { display: flex; align-items: flex-start; gap: 8px; }

@@ -1,10 +1,80 @@
 import { describe, expect, test } from "bun:test";
-import { type ChildInfo, childLabel, childProgress, childStatus, dependsOn, laneChips, moveChip, roundLine, shortReason, storySummary, ticketPhase, toFront, withoutKey } from "./dock";
+import {
+  type ChildInfo,
+  childLabel,
+  childProgress,
+  childStatus,
+  dependsOn,
+  laneChips,
+  moveChip,
+  roundKidsText,
+  roundLine,
+  runStories,
+  shortReason,
+  storySummary,
+  ticketPhase,
+  toFront,
+  withoutKey,
+} from "./dock";
 import type { Flow, Phase } from "./types";
 
 const tickets: Record<number, string> = { 11: "T-1", 12: "T-2", 13: "T-2", 14: "T-3", 15: "T-4" };
 const phases: Record<number, Phase> = { 11: "merged", 12: "merged", 13: "reviewing" };
 const chips = laneChips([11, 12, 14, 13, 15, 99], (n) => tickets[n], (n) => phases[n]);
+
+// the ilims run on workr (2026-11-25): 6 stories, 12 children; round 6 has #263 and #268 in review
+describe("whole-run stories", () => {
+  const family: Record<string, number[]> = {
+    "ILIMS-351": [244, 248],
+    "ILIMS-352": [245, 256],
+    "ILIMS-353": [261, 262, 263],
+    "ILIMS-354": [257, 258],
+    "ILIMS-355": [259, 267],
+    "ILIMS-356": [268, 269],
+  };
+  const ticketOf = (n: number) => Object.keys(family).find((k) => family[k]?.includes(n));
+  const runOrder = [244, 245, 248, 256, 257, 258, 259, 261, 262, 263, 267, 268];
+  const merged = new Set([244, 245, 248, 256, 257, 258, 259, 261, 262, 267]);
+  // the lane only has what is still open: #263, #268 (the run's) and #269 (queued, not picked yet)
+  const lane = laneChips([263, 268, 269], ticketOf, (n) => (n === 269 ? "queued" : "reviewing"));
+  const stories = runStories({ runOrder, chips: lane, ticketOf, familyOf: (k) => family[k], merged: (n) => merged.has(n) });
+
+  test("every story of the run in its order, the finished ones too, each with all its children", () => {
+    expect(stories.map((s) => [s.key, s.children, s.done])).toEqual([
+      ["ILIMS-351", [244, 248], true],
+      ["ILIMS-352", [245, 256], true],
+      ["ILIMS-354", [257, 258], true],
+      ["ILIMS-355", [259, 267], true],
+      ["ILIMS-353", [261, 262, 263], false],
+      ["ILIMS-356", [268, 269], false],
+    ]);
+    // only what still waits in the lane keeps its chip (reordering, taking out)
+    expect(stories.map((s) => s.chip?.children ?? null)).toEqual([null, null, null, null, [263], [268, 269]]);
+  });
+
+  test("counts span the whole story, like the board card: ILIMS-353 is 2/3, not 0/1", () => {
+    const kids = (key: string) =>
+      (stories.find((s) => s.key === key)?.children ?? []).map((n) =>
+        childStatus(n, { phase: merged.has(n) ? "merged" : n === 263 || n === 268 ? "reviewing" : undefined, flow: null, blind: false }),
+      );
+    expect(storySummary(kids("ILIMS-353"), "building")).toMatchObject({ count: "2/3", activity: "working" });
+    expect(storySummary(kids("ILIMS-351"), "building")).toMatchObject({ count: "2/2", activity: "done" });
+    const all = stories.flatMap((s) => kids(s.key));
+    expect(childProgress(all, false).short).toBe("10/13 gemergt");
+    // the round counts apart from the stories: the children this round works on
+    expect(roundKidsText(all)).toBe("Diese Runde: 0/2 Kindern gemergt · #263, #268");
+    expect(roundKidsText(all.filter((k) => k.status === "merged"))).toBeNull();
+  });
+
+  test("without a family the story is what the run and the lane know; a waiting story is not done", () => {
+    const s = runStories({ runOrder: [5], chips: laneChips([6], () => "X-1", () => "queued"), ticketOf: () => "X-1", familyOf: () => undefined, merged: (n) => n === 5 });
+    expect(s).toEqual([{ key: "X-1", children: [5, 6], chip: { key: "X-1", children: [6], phase: "queued" }, done: false }]);
+    // issues without ticket stand alone; nothing in the run: never „fertig in diesem Lauf“
+    expect(runStories({ runOrder: [], chips: laneChips([7], () => undefined, () => "merged"), ticketOf: () => undefined, familyOf: () => [1], merged: () => true })).toEqual([
+      { key: "#7", children: [7], chip: { key: "#7", children: [7], phase: "merged" }, done: false },
+    ]);
+  });
+});
 
 describe("dock", () => {
   test("one chip per ticket at its first issue; issues without ticket stand alone", () => {

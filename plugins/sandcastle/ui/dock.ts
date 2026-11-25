@@ -38,6 +38,45 @@ export function laneChips(order: readonly number[], ticketOf: (n: number) => str
   return [...byKey.values()].map((c) => ({ key: c.key, children: c.children, phase: ticketPhase(c.phases) }));
 }
 
+/** A story as the run panel and dock show it: all its children, its place in the lane (null = nothing left there). */
+export interface RunStory {
+  key: string;
+  /** every child of the story (ticket family; else what the run and the lane have of it), merged ones included */
+  children: number[];
+  /** its chip in the lane (reorder, take out); null when no issue of it waits there any more */
+  chip: DockChip | null;
+  /** the run worked on it and every child is merged now: „fertig in diesem Lauf“ */
+  done: boolean;
+}
+
+/**
+ * The stories of a run in its order (first issue of each in `runOrder`, the run's issues merged ones included), then
+ * the stories still waiting in the lane. A story's children are its ticket family (`familyOf`) – the same source as
+ * the board card – plus whatever the run or the lane has of it that the family doesn't know.
+ */
+export function runStories(a: {
+  runOrder: readonly number[];
+  chips: readonly DockChip[];
+  ticketOf: (n: number) => string | undefined;
+  familyOf: (key: string) => readonly number[] | undefined;
+  merged: (n: number) => boolean;
+}): RunStory[] {
+  const inRun = new Map<string, number[]>();
+  for (const n of a.runOrder) {
+    const key = a.ticketOf(n) ?? `#${n}`;
+    inRun.set(key, [...(inRun.get(key) ?? []), n]);
+  }
+  const chipOf = new Map(a.chips.map((c) => [c.key, c]));
+  const keys = [...new Set([...inRun.keys(), ...a.chips.map((c) => c.key)])];
+  return keys.map((key) => {
+    const chip = chipOf.get(key) ?? null;
+    const known = [...(inRun.get(key) ?? []), ...(chip?.children ?? [])];
+    const family = key.startsWith("#") ? undefined : a.familyOf(key);
+    const children = [...new Set([...(family ?? []), ...known])];
+    return { key, children, chip, done: inRun.has(key) && children.every((n) => a.merged(n)) };
+  });
+}
+
 // ---- children
 
 /** Where one child issue stands in the run; unknown = the run writes no flow log, its state would be a guess. */
@@ -221,6 +260,17 @@ export function childProgress(children: readonly ChildInfo[], blind: boolean): {
   return { text: `${merged} von ${total} ${total === 1 ? "Kind" : "Kindern"} gemergt`, short: `${merged}/${total} gemergt` };
 }
 
+/**
+ * The round's own counter, apart from the story counts: the children this round works on (implementer, code
+ * review, waiting for the merge) – „Diese Runde: 0/2 Kindern gemergt · #263, #268“; null when none is at work.
+ * They are all still unmerged: once the merger is through, the round is over.
+ */
+export function roundKidsText(children: readonly ChildInfo[]): string | null {
+  const list = children.filter((c) => isWorking(c) || c.status === "ready").map((c) => c.n);
+  if (!list.length) return null;
+  return `Diese Runde: 0/${list.length} ${list.length === 1 ? "Kind" : "Kindern"} gemergt · ${nums([...new Set(list)].sort((a, b) => a - b))}`;
+}
+
 // ---- round
 
 export type RoundStep = "planner" | "building" | "merge";
@@ -315,8 +365,8 @@ export function toFront(chips: readonly DockChip[], key: string): number[] | nul
   return next.flatMap((c) => c.children);
 }
 
-/** Tickets of the lane this one waits for: one of its issues is blocked by an issue of theirs. */
-export function dependsOn(chips: readonly DockChip[], chip: DockChip, blockedBy: (n: number) => readonly number[]): string[] {
+/** Stories of the lane this one waits for: one of its issues is blocked by an issue of theirs. */
+export function dependsOn<T extends { key: string; children: readonly number[] }>(chips: readonly T[], chip: T, blockedBy: (n: number) => readonly number[]): string[] {
   const blockers = new Set(chip.children.flatMap((n) => blockedBy(n)));
   return chips.filter((c) => c !== chip && c.children.some((n) => blockers.has(n))).map((c) => c.key);
 }
