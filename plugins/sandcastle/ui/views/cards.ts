@@ -3,7 +3,9 @@
  * (signature), so a poll that brings the same data touches no DOM. Clicks are handled by the board via `data-card`
  * and `data-jira` (the ticket link, into „Tickets“) – no per-card closures.
  */
-import { h } from "../dom";
+import { shortReason, withoutKey } from "../dock";
+import { h, icon } from "../dom";
+import { ICON } from "../icons";
 import { branchColour, isBusy, PHASE_TEXT, shortBranch } from "../model";
 import type { DriftItem, Issue, Phase, TicketFlags } from "../types";
 import { driftEl, prLinkEl } from "./ticketcard";
@@ -18,6 +20,8 @@ export interface CardInfo {
   siblings?: number[];
   flags: TicketFlags | null;
   blockers: number[];
+  /** „Blockiert von“ entries without #N: the loop skips the issue until they are done and removed */
+  notes: string[];
   locked: boolean;
   /** grill of the ticket: badge text (`gegrillt 4/7`, `wartet auf dich`, `wartet auf Start`), tone and where */
   grill?: { badge: string | null; tone: "waiting" | "running" | "done" | "queued"; where: string };
@@ -33,7 +37,7 @@ const initials = (login: string) => login.replace(/[^a-zA-Z0-9]/g, "").slice(0, 
 
 export function cardEl(c: CardInfo): HTMLElement {
   const i = c.issue;
-  const sig = JSON.stringify([i.title, i.state, i.labels, i.assignees, i.parent, c.labels, c.pos, c.phase, c.branch, c.siblings, c.flags, c.blockers, c.locked, c.grill, c.ticket, c.pr]);
+  const sig = JSON.stringify([i.title, i.state, i.labels, i.assignees, i.parent, c.labels, c.pos, c.phase, c.branch, c.siblings, c.flags, c.blockers, c.notes, c.locked, c.grill, c.ticket, c.pr]);
   const hit = cache.get(i.number);
   if (hit?.sig === sig) return hit.el;
   const el = build(c);
@@ -69,7 +73,7 @@ function build(c: CardInfo): HTMLElement {
   return h(
     "article",
     {
-      class: `card${busy ? " running" : ""}${c.locked ? " locked" : ""}${c.phase ? ` ph-${c.phase}` : ""}`,
+      class: `card${busy ? " running" : ""}${c.locked ? " locked" : ""}${c.phase ? ` ph-${c.phase}` : ""}${c.notes.length ? " note-blocked" : ""}`,
       "data-card": i.number,
       tabindex: 0,
     },
@@ -78,12 +82,14 @@ function build(c: CardInfo): HTMLElement {
       { class: "card-top" },
       c.pos ? h("span", { class: "pos" }, `${c.pos}.`) : null,
       h("span", { class: "num" }, `#${i.number}`),
-      c.blockers.length ? h("span", { class: "blocked", title: "Die Schleife überspringt es, bis die Blocker zu sind" }, `wartet auf ${c.blockers.map((b) => `#${b}`).join(", ")}`) : null,
       h("span", { class: "grow" }),
       c.phase && c.phase !== "queued" ? h("span", { class: `phase ${c.phase}` }, busy ? `🔒 ${PHASE_TEXT[c.phase]}` : PHASE_TEXT[c.phase]) : null,
       c.grill?.badge ? h("span", { class: `grill-badge ${c.grill.tone}` }, c.grill.badge) : null,
     ),
-    h("div", { class: "card-title" }, i.title),
+    c.blockers.length ? waitRow(c.blockers) : null,
+    c.notes.length ? noteRow(c.notes) : null,
+    // the key is on the chip right below
+    h("div", { class: "card-title" }, withoutKey(i.title, c.ticket.key ?? i.jira)),
     h(
       "div",
       { class: "chips" },
@@ -100,6 +106,30 @@ function build(c: CardInfo): HTMLElement {
     c.pr ? h("div", { class: "card-pr" }, prLinkEl(c.pr)) : null,
     footer,
     c.grill ? h("div", { class: "card-grill" }, c.grill.where) : null,
+  );
+}
+
+/** „🔒 blockiert“ + the free-text blocker, shortened; the full text and what it means in the tooltip. */
+function noteRow(notes: string[]): HTMLElement {
+  const text = notes.join(" · ");
+  return h(
+    "div",
+    {
+      class: "card-note",
+      title: `Blockiert von: ${text}. Ohne #N zählt der Eintrag als offen – die Schleife überspringt dieses Issue, bis der Eintrag unter „Blockiert von“ erledigt oder entfernt ist.`,
+    },
+    h("span", { class: "pill", "data-tone": "neutral" }, icon(ICON.lock, "pill-ico"), h("span", { class: "pill-text" }, "blockiert")),
+    h("span", { class: "card-note-text" }, shortReason(text)),
+  );
+}
+
+/** „⛓ wartet auf #3544, #3543“: the same neutral pill as „blockiert“, the chain says it waits for issues. */
+function waitRow(blockers: number[]): HTMLElement {
+  const text = `wartet auf ${blockers.map((b) => `#${b}`).join(", ")}`;
+  return h(
+    "div",
+    { class: "card-note", title: "Die Schleife überspringt es, bis die Blocker zu sind" },
+    h("span", { class: "pill", "data-tone": "neutral" }, icon(ICON.link2, "pill-ico"), h("span", { class: "pill-text" }, text)),
   );
 }
 

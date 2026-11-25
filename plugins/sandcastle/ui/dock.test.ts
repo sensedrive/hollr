@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type ChildInfo, childLabel, childProgress, childStatus, childTitle, dependsOn, laneChips, moveChip, roundLine, storySummary, ticketPhase, toFront } from "./dock";
+import { type ChildInfo, childLabel, childProgress, childStatus, dependsOn, laneChips, moveChip, roundLine, shortReason, storySummary, ticketPhase, toFront, withoutKey } from "./dock";
 import type { Flow, Phase } from "./types";
 
 const tickets: Record<number, string> = { 11: "T-1", 12: "T-2", 13: "T-2", 14: "T-3", 15: "T-4" };
@@ -77,19 +77,27 @@ const flow = (more: Partial<Flow>): Flow => ({
   paused: null,
   ...more,
 });
-const kid = (n: number, status: ChildInfo["status"], more: Partial<ChildInfo> = {}): ChildInfo => ({ n, status, blockedBy: null, reason: null, since: null, ...more });
+const kid = (n: number, status: ChildInfo["status"], more: Partial<ChildInfo> = {}): ChildInfo => ({ n, status, blockedBy: null, note: null, reason: null, since: null, ...more });
 
-describe("child title", () => {
-  test("drops the story's key, keeps everything else", () => {
-    expect(childTitle("Tabelle invoice_sequences anlegen (TENDR-1091)", "TENDR-1091")).toBe("Tabelle invoice_sequences anlegen");
-    expect(childTitle("shop_id wird NOT NULL (Folgerelease) (TENDR-817)", "TENDR-817")).toBe("shop_id wird NOT NULL (Folgerelease)");
-    expect(childTitle("TENDR-1091: Nummernkreis je Mandant", "TENDR-1091")).toBe("Nummernkreis je Mandant");
-    expect(childTitle("Export [TENDR-1091] als CSV", "TENDR-1091")).toBe("Export als CSV");
-    // another ticket's key, a longer key with the same prefix and issues without ticket stay
-    expect(childTitle("Folgt auf (TENDR-1075)", "TENDR-1091")).toBe("Folgt auf (TENDR-1075)");
-    expect(childTitle("Rest (TENDR-10910)", "TENDR-1091")).toBe("Rest (TENDR-10910)");
-    expect(childTitle("Nur (#12)", "#12")).toBe("Nur (#12)");
-    expect(childTitle("(TENDR-1091)", "TENDR-1091")).toBe("(TENDR-1091)");
+describe("title without key", () => {
+  test("drops the key a chip or story already shows, keeps everything else", () => {
+    expect(withoutKey("Tabelle invoice_sequences anlegen (TENDR-1091)", "TENDR-1091")).toBe("Tabelle invoice_sequences anlegen");
+    expect(withoutKey("shop_id wird NOT NULL (Folgerelease) (TENDR-817)", "TENDR-817")).toBe("shop_id wird NOT NULL (Folgerelease)");
+    expect(withoutKey("TENDR-1091: Nummernkreis je Mandant", "TENDR-1091")).toBe("Nummernkreis je Mandant");
+    expect(withoutKey("Export [TENDR-1091] als CSV", "TENDR-1091")).toBe("Export als CSV");
+    // another ticket's key, a longer key with the same prefix, issues without ticket and no key stay
+    expect(withoutKey("Folgt auf (TENDR-1075)", "TENDR-1091")).toBe("Folgt auf (TENDR-1075)");
+    expect(withoutKey("Rest (TENDR-10910)", "TENDR-1091")).toBe("Rest (TENDR-10910)");
+    expect(withoutKey("Nur (#12)", "#12")).toBe("Nur (#12)");
+    expect(withoutKey("Titel (TENDR-1)", null)).toBe("Titel (TENDR-1)");
+    expect(withoutKey("(TENDR-1091)", "TENDR-1091")).toBe("(TENDR-1091)");
+  });
+
+  test("reasons are cut at a word boundary", () => {
+    expect(shortReason("kurz")).toBe("kurz");
+    const long = "Release v2.3.0 — erst danach löschen, wenn alle Mandanten auf v2.3.0 laufen";
+    expect(shortReason(long)).toBe("Release v2.3.0 — erst danach löschen, wenn alle …");
+    expect(shortReason(long, 20)).toBe("Release v2.3.0 …");
   });
 });
 
@@ -108,8 +116,8 @@ describe("child pill", () => {
       assignment(6, { commits: 2 }),
     ],
   });
-  const pill = (n: number, phase?: Phase, more: { blocker?: number; blind?: boolean; reason?: string } = {}) =>
-    childLabel(childStatus(n, { phase, flow: f, blind: more.blind ?? false, blocker: more.blocker ?? null, reason: more.reason ?? null }));
+  const pill = (n: number, phase?: Phase, more: { blocker?: number; note?: string; blind?: boolean; reason?: string } = {}) =>
+    childLabel(childStatus(n, { phase, flow: f, blind: more.blind ?? false, blocker: more.blocker ?? null, note: more.note ?? null, reason: more.reason ?? null }));
 
   test("from the flow: role at work, built and reviewed waits for the round's merge", () => {
     expect([1, 2, 3, 4, 5, 6].map((n) => pill(n, "building"))).toEqual(["Implementer", "Code-Review", "wartet auf Merge", "gemergt", "fehlgeschlagen", "Code-Review"]);
@@ -124,6 +132,12 @@ describe("child pill", () => {
   test("without an assignment: the phase, a waiting child names its open blocker", () => {
     expect(pill(20, undefined)).toBe("wartet");
     expect(pill(20, "queued", { blocker: 3605 })).toBe("wartet auf #3605");
+    // „Blockiert von“ text without #N blocks too; an open #N wins the pill
+    expect(pill(20, "queued", { note: "Release v2.3.0" })).toBe("blockiert");
+    expect(childStatus(20, { phase: "queued", flow: null, blind: false, note: "Release v2.3.0" })).toMatchObject({ status: "blocked", blockedBy: null, note: "Release v2.3.0" });
+    expect(childStatus(20, { phase: "queued", flow: null, blind: false, blocker: 7, note: "Release v2.3.0" })).toMatchObject({ blockedBy: 7, note: null });
+    // a child the loop works on anyway is shown as what it is
+    expect(pill(1, "building", { note: "Release v2.3.0" })).toBe("Implementer");
     expect(pill(21, "no-commits")).toBe("ohne Commits");
     expect(pill(22, "failed", { reason: "kaputt" })).toBe("fehlgeschlagen");
     expect(childStatus(22, { phase: "failed", flow: null, blind: false, reason: "kaputt" }).reason).toBe("kaputt");

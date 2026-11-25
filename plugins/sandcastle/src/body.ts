@@ -20,9 +20,60 @@ export function jiraKeyOf(body: string): string | undefined {
   return section(body, "JIRA").match(/\b[A-Z][A-Z0-9]+-\d+\b/)?.[0];
 }
 
-/** Every #N under "## Blockiert von" – the same rule as the loop's queue.mts `blockedBy`. */
+/**
+ * The entries under "## Blockiert von" – the loop's queue.mts `blockerEntries`, rule for rule: HTML comments
+ * dropped; a list item (`-`, `*`, `+`, `1.`, `1)`) is one entry, indented lines continue it, a blank line ends it;
+ * any other non-empty line is an entry of its own; placeholders („keine …“, „none“, „n/a“, „—“) are no entries.
+ */
+export function blockerEntries(body: string): string[] {
+  const entries: string[] = [];
+  let inSection = false;
+  let current: string | null = null;
+  const flush = () => {
+    if (current !== null && !isPlaceholder(current)) entries.push(current);
+    current = null;
+  };
+  for (const raw of (body ?? "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/)) {
+    if (/^##\s/.test(raw)) {
+      flush();
+      inSection = /^##\s*Blockiert von\b/i.test(raw);
+      continue;
+    }
+    if (!inSection) continue;
+    const line = raw.trim();
+    if (!line) {
+      flush();
+      continue;
+    }
+    const item = /^(?:[-*+]|\d+[.)])(?:\s+|$)(.*)$/.exec(line);
+    if (item) {
+      flush();
+      current = (item[1] ?? "").trim();
+    } else if (current !== null && /^\s/.test(raw)) current = `${current} ${line}`;
+    else {
+      flush();
+      current = line;
+    }
+  }
+  flush();
+  return entries;
+}
+
+function isPlaceholder(entry: string): boolean {
+  const text = entry.replace(/^[*_`\s]+/, "").trim();
+  return text === "" || /^[—–-]+\.?$/.test(text) || /^(?:keine|none|n\/a)\b/i.test(text);
+}
+
+const refsOf = (entry: string) => [...entry.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
+
+/** Every #N of the "## Blockiert von" entries – the loop's `blockedBy`; it waits until they are closed. */
 export function blockedByOf(body: string): number[] {
-  return [...section(body, "Blockiert von").matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
+  return blockerEntries(body).flatMap(refsOf);
+}
+
+/** Entries without any #N („Release v2.3.0 — erst danach …“): the loop treats the issue as blocked by them. */
+export function blockedNotesOf(body: string): string[] {
+  return blockerEntries(body).filter((e) => refsOf(e).length === 0);
 }
 
 // Bun ≥1.3 has Bun.markdown; the pinned @types/bun (1.2.22, same as server/) doesn't declare it yet

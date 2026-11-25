@@ -257,8 +257,18 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .card.ph-failed, .card.ph-no-commits { border-color: color-mix(in srgb, var(--red) 60%, var(--border)); }
 .card-top { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); }
 .card .pos { color: var(--purple); font-weight: 700; }
-.card .blocked { color: var(--orange); }
 .card-title { margin-top: 2px; overflow-wrap: anywhere; }
+/* blocked by „Blockiert von“ text without #N (design v29): dashed, dimmed title, „🔒 blockiert“ + the reason */
+.card.note-blocked { border-style: dashed; border-color: var(--grey); }
+.card.note-blocked .card-title { color: var(--muted); }
+.card-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 4px; font-size: 12px; cursor: help; }
+.card-note .pill { box-shadow: inset 0 0 0 1px var(--grey); color: var(--fg); font-weight: 700; }
+.card-note-text { min-width: 0; color: var(--dim); overflow-wrap: anywhere; }
+.side-blocker-note { margin: 0 0 8px; }
+.side-blocker-text { display: flex; align-items: flex-start; gap: 8px; margin: 0; overflow-wrap: anywhere; }
+.side-blocker-ico { display: inline-flex; flex: none; width: 14px; height: 14px; margin-top: 3px; color: var(--muted); }
+.side-blocker-ico svg { width: 100%; height: 100%; }
+.side-blocker-note .small { margin: 2px 0 0; font-size: 12px; }
 .phase { border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 600; white-space: nowrap;
   background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--muted); }
 .phase.building { background: var(--blue); color: var(--on-accent); }
@@ -718,6 +728,7 @@ pre.log mark { background: color-mix(in srgb, var(--yellow) 45%, transparent); c
 .run-kid-log:focus-visible { outline: 2px solid var(--accent); }
 .log-ico { display: inline-flex; width: 13px; height: 13px; }
 .run-kid-reason { grid-column: 2 / -1; margin: 4px 0 0; color: var(--red); overflow-wrap: anywhere; }
+.run-kid-reason.note { color: var(--muted); }
 .dock-wait, .run-wait { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--orange); font-size: 12px; }
 .dock-wait { grid-column: 1 / -1; }
 .run-wait { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--orange) 14%, transparent); font-size: 13px; }

@@ -16,7 +16,6 @@ import {
   childProgress,
   childSegment,
   childStatus,
-  childTitle,
   type DockChip,
   dependsOn,
   isWorking,
@@ -27,8 +26,10 @@ import {
   type RoleGroup,
   type RoundStep,
   roundLine,
+  shortReason,
   type StoryActivity,
   storySummary,
+  withoutKey,
 } from "../dock";
 import { fill, h, icon, reconcile } from "../dom";
 import { ICON } from "../icons";
@@ -152,6 +153,8 @@ function laneView(d: Derived, lane: Lane, keys: Map<number, string>): LaneView {
           blind,
           // an open blocker the run hasn't merged yet
           blocker: d.issues.get(n)?.blockedBy.find((b) => b !== n && d.open.has(b) && phase(b) !== "merged") ?? null,
+          // „Blockiert von“ text without #N: the loop skips it like an open blocker
+          note: d.issues.get(n)?.blockedNotes?.join(" · ") || null,
           reason: run?.issues.find((i) => i.n === n)?.reason ?? null,
         }),
       ),
@@ -439,12 +442,13 @@ const ACTIVITY_PILL: Readonly<Record<Exclude<StoryActivity, "working">, [Tone, s
   unknown: ["neutral", ICON.circleHelp],
 };
 
-/** A child's pill; a blocked one shows the chain and „#3592“ (screen readers hear „wartet auf #3592“). */
+/** A child's pill; a blocked one shows the chain and „#3592“ (screen readers hear „wartet auf #3592“), or the lock
+ *  and „blockiert“ for a free-text blocker (its text as tooltip and as the line below). */
 function childPill(k: ChildInfo): HTMLElement {
   const [tone, ico] = CHILD_PILL[k.status];
   if (k.status !== "blocked") return pill(tone, ico, childLabel(k));
-  const label = childLabel(k);
-  return pill(tone, ico, h("span", {}, h("span", { class: "sr" }, "wartet auf "), `#${k.blockedBy ?? "?"}`), label);
+  if (k.blockedBy === null && k.note) return pill("neutral", ICON.lock, "blockiert", `Blockiert von: ${k.note}`);
+  return pill(tone, ico, h("span", {}, h("span", { class: "sr" }, "wartet auf "), `#${k.blockedBy ?? "?"}`), childLabel(k));
 }
 
 /** Roles as pills: „🔨 Implementer #3605“, or „🔨 #3605“ + „🔍 #3604“ when several roles run. */
@@ -457,7 +461,7 @@ function rolePills(roles: readonly RoleGroup[]): HTMLElement[] {
 
 function childRow(server: string, run: Run | undefined, storyKey: string, k: ChildInfo): HTMLElement {
   const d = lastDerived;
-  const title = childTitle(run?.issues.find((i) => i.n === k.n)?.title ?? d?.issues.get(k.n)?.title ?? "", storyKey);
+  const title = withoutKey(run?.issues.find((i) => i.n === k.n)?.title ?? d?.issues.get(k.n)?.title ?? "", storyKey);
   const working = isWorking(k);
   return h(
     "li",
@@ -476,6 +480,7 @@ function childRow(server: string, run: Run | undefined, storyKey: string, k: Chi
           : null,
       ),
       k.status === "failed" && k.reason ? h("p", { class: "run-kid-reason", title: k.reason }, k.reason) : null,
+      k.note ? h("p", { class: "run-kid-reason note", title: k.note }, shortReason(k.note, 72)) : null,
     ),
   );
 }

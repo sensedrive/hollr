@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { blockedByOf, jiraKeyOf, parentOf, renderMarkdown } from "../src/body";
+import { blockedByOf, blockedNotesOf, blockerEntries, jiraKeyOf, parentOf, renderMarkdown } from "../src/body";
 
 const BODY = `## Parent
 #601
@@ -28,6 +28,22 @@ describe("issue body sections", () => {
     expect(parentOf("## Was gebaut wird\n#5")).toBeUndefined();
     expect(jiraKeyOf("Kein JIRA: ABC-1")).toBeUndefined();
     expect(blockedByOf("## Blockiert von\n- keine")).toEqual([]);
+  });
+
+  // the rule of the loop's queue.mts blockerEntries/blockedBy, with the bodies seen in tendr
+  test("blocker entries: placeholders drop out, free text stays as a note, #N anywhere in an entry counts", () => {
+    const of = (s: string) => `## Was gebaut wird\nx\n\n## Blockiert von\n${s}\n\n## Notizen\n- Release v9`;
+    for (const placeholder of ["- keine — kann sofort starten", "keine — kann sofort starten", "—", "Keine", "- keine — kann sofort starten (#612 ist zusammengeführt)", "- n/a", "- **keine**"]) {
+      expect([placeholder, blockerEntries(of(placeholder))]).toEqual([placeholder, []]);
+    }
+    expect(blockedByOf(of("- keine — #612 ist zusammengeführt"))).toEqual([]);
+    const body = of("- Release v2.3.0 — erst danach\n  die Spalte löschen\n- #612 — Migration\n#615\n- #12 und Release v2.4.0\n<!-- - #99 -->");
+    expect(blockerEntries(body)).toEqual(["Release v2.3.0 — erst danach die Spalte löschen", "#612 — Migration", "#615", "#12 und Release v2.4.0"]);
+    expect(blockedByOf(body)).toEqual([612, 615, 12]);
+    expect(blockedNotesOf(body)).toEqual(["Release v2.3.0 — erst danach die Spalte löschen"]);
+    // the heading matches case-insensitively and with more after it; a blank line ends an entry
+    expect(blockedNotesOf("## blockiert von (extern)\n- Release v2.3.0\n\n  danach")).toEqual(["Release v2.3.0", "danach"]);
+    expect(blockedNotesOf(BODY)).toEqual([]);
   });
 });
 

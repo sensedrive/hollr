@@ -262,6 +262,7 @@ function cardsFor(d: Derived, issues: Issue[], test: (i: Issue) => boolean, lane
         siblings: tr ? tr.run.issues.map((x) => x.n).filter((x) => x !== issue.number) : undefined,
         flags: flagsOf(d, issue.number),
         blockers: issue.state === "open" ? openBlockers(d, issue) : [],
+        notes: issue.state === "open" ? (issue.blockedNotes ?? []) : [],
         locked: isBusy(tr?.issue.phase),
         grill: cardGrill(d, issue.number),
         ticket: { key, labels: ticket?.labels ?? [], drift: ticket?.drift ?? [] },

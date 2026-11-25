@@ -230,6 +230,8 @@ export interface Issue {
   parent: number | null;
   jira: string | null;
   blockedBy: number[];
+  /** „Blockiert von“ entries without #N; absent in board copies cached before (the next full fetch fills it) */
+  blockedNotes?: string[];
   updatedAt: string;
   closedAt: string | null;
   url: string;

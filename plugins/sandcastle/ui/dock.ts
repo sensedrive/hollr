@@ -46,8 +46,10 @@ export type ChildStatus = "waiting" | "blocked" | "implementer" | "review" | "re
 export interface ChildInfo {
   n: number;
   status: ChildStatus;
-  /** blocked: the open issue it waits for */
+  /** blocked: the open issue it waits for (null: blocked by a free-text entry, see `note`) */
   blockedBy: number | null;
+  /** blocked by „Blockiert von“ text without #N („Release v2.3.0 — …“) */
+  note: string | null;
   /** failed: why */
   reason: string | null;
   /** implementer/review: when that role started on it (flow), for „seit 12 Min.“ */
@@ -65,24 +67,36 @@ const CHILD_LABEL: Readonly<Record<Exclude<ChildStatus, "blocked">, string>> = {
   unknown: "ohne Angabe",
 };
 
-/** The child's pill: „Implementer“, „wartet auf #3605“, „ohne Angabe“ … */
-export const childLabel = (c: ChildInfo): string => (c.status === "blocked" ? `wartet auf #${c.blockedBy ?? "?"}` : CHILD_LABEL[c.status]);
+/** The child's pill: „Implementer“, „wartet auf #3605“, „blockiert“ (free-text blocker), „ohne Angabe“ … */
+export function childLabel(c: ChildInfo): string {
+  if (c.status !== "blocked") return CHILD_LABEL[c.status];
+  return c.blockedBy === null && c.note ? "blockiert" : `wartet auf #${c.blockedBy ?? "?"}`;
+}
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * A child's title under its story without the story's key – „… (TENDR-1091)“, „… [TENDR-1091]“ or
- * „TENDR-1091: …“ is noise there. Other text stays; a title that is only the key stays as it is.
+ * A title without the key a chip or story next to it already shows – „… (TENDR-1091)“, „… [TENDR-1091]“ or
+ * „TENDR-1091: …“ is noise there. Other text stays; a title that is only the key stays as it is; `#N` keys
+ * (issues without ticket) change nothing.
  */
-export function childTitle(title: string, storyKey: string): string {
-  if (storyKey.startsWith("#")) return title;
-  const key = escapeRe(storyKey);
+export function withoutKey(title: string, key: string | null | undefined): string {
+  if (!key || key.startsWith("#")) return title;
+  const k = escapeRe(key);
   const cleaned = title
-    .replace(new RegExp(`\\s*[([]${key}[)\\]]`, "g"), "")
-    .replace(new RegExp(`^${key}\\s*[:–-]\\s*`), "")
+    .replace(new RegExp(`\\s*[([]${k}[)\\]]`, "g"), "")
+    .replace(new RegExp(`^${k}\\s*[:–-]\\s*`), "")
     .replace(/\s{2,}/g, " ")
     .trim();
   return cleaned || title;
+}
+
+/** A reason cut to about `max` characters at a word boundary („… “); the full text goes into the tooltip. */
+export function shortReason(text: string, max = 56): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const at = cut.lastIndexOf(" ");
+  return `${(at > max / 2 ? cut.slice(0, at) : cut).replace(/[\s,;:—–-]+$/, "")} …`;
 }
 
 /** An implementer or reviewer works on it now (row highlighted, „Log“ link). */
@@ -126,16 +140,18 @@ export const childSegment = (c: ChildInfo): string => SEGMENT[c.status];
 /**
  * A child's state: from its assignment in the run's flow (role at work, merged, failed or rejected; built and
  * reviewed without a role = waiting for the round's merge), else from its phase. `blocker` = an open issue it waits
- * for (only matters while it waits); `blind` = nothing reports the run's state.
+ * for, `note` = a „Blockiert von“ entry without #N (both only matter while it waits; the #N wins the pill);
+ * `blind` = nothing reports the run's state.
  */
 export function childStatus(
   n: number,
-  a: { phase: Phase | undefined; flow: Flow | null | undefined; blind: boolean; blocker?: number | null; reason?: string | null },
+  a: { phase: Phase | undefined; flow: Flow | null | undefined; blind: boolean; blocker?: number | null; note?: string | null; reason?: string | null },
 ): ChildInfo {
   const out = (status: ChildStatus, reason: string | null = null): ChildInfo => {
     const role = status === "implementer" ? "implementer" : status === "review" ? "reviewer" : null;
     const since = role ? (a.flow?.active.find((r) => r.role === role && r.assignment === n)?.since ?? null) : null;
-    return { n, status, blockedBy: status === "blocked" ? (a.blocker ?? null) : null, reason, since };
+    const blocked = status === "blocked";
+    return { n, status, blockedBy: blocked ? (a.blocker ?? null) : null, note: blocked && !a.blocker ? (a.note ?? null) : null, reason, since };
   };
   if (a.blind) return out("unknown");
   if (a.phase === "merged") return out("merged");
@@ -159,7 +175,7 @@ export function childStatus(
     case "reviewing":
       return out("review");
     default:
-      return out(a.blocker ? "blocked" : "waiting");
+      return out(a.blocker || a.note ? "blocked" : "waiting");
   }
 }
 

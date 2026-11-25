@@ -12,6 +12,7 @@ const issue = (n: number, extra: Partial<Issue> = {}): Issue => ({
   parent: null,
   jira: null,
   blockedBy: [],
+  blockedNotes: [],
   updatedAt: "2026-11-20T10:00:00Z",
   closedAt: null,
   url: `https://github.com/o/r/issues/${n}`,

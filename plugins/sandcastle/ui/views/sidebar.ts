@@ -6,7 +6,9 @@
 import { editLabels, moveTicket, setFlags } from "../actions";
 import { api, openExternal } from "../api";
 import { derive, type Derived, flagsOf } from "../derive";
-import { fill, fmtDate, h, html } from "../dom";
+import { fill, fmtDate, h, html, icon } from "../dom";
+import { ICON } from "../icons";
+import { withoutKey } from "../dock";
 import { branchColour, classify, isBusy, normaliseFlags, PHASE_TEXT } from "../model";
 import { errorText, hooks, prefGet, prefSet, serverLabel, state, toast } from "../state";
 import { CI_TEXT, PR_STATE_TEXT } from "../tickets";
@@ -189,14 +191,15 @@ function render(n: number): void {
     h(
       "div",
       { class: "side-body" },
-      h("h2", { class: "side-title" }, title),
+      // the key stands in the JIRA row below; title and story link would repeat it
+      h("h2", { class: "side-title" }, withoutKey(title, jira)),
       h(
         "dl",
         { class: "side-meta" },
         h("dt", {}, "Zustand"),
         h("dd", { class: "side-state" }),
         parent ? h("dt", {}, "Story") : null,
-        parent ? h("dd", {}, h("button", { class: "link", onclick: () => openIssue(parent) }, `#${parent} ${d.stories.get(parent) ?? ""}`)) : null,
+        parent ? h("dd", {}, h("button", { class: "link", onclick: () => openIssue(parent) }, `#${parent} ${withoutKey(d.stories.get(parent) ?? "", jira)}`)) : null,
         jira ? h("dt", {}, "JIRA") : null,
         jira
           ? h(
@@ -243,11 +246,29 @@ function staticPart(n: number): (HTMLElement | null)[] {
   });
   return [
     h("details", { class: "side-desc", open: d.bodyHtml.length < 1500 }, h("summary", {}, "Beschreibung"), externalLinks(html("markdown", d.bodyHtml || '<p class="muted">Kein Text.</p>'))),
-    d.blockedBy.length
-      ? h("section", {}, h("h3", {}, "Blockiert von"), h("div", { class: "btn-row" }, ...d.blockedBy.map((b) => h("button", { class: "link", onclick: () => openIssue(b) }, `#${b}`))))
-      : null,
+    blockersSection(d),
     h("section", {}, heading, comments, h("div", { class: "comment-form" }, text, send)),
   ];
+}
+
+/** „Blockiert von“: free-text entries (no #N – they keep the issue blocked for the loop) and the #N links. */
+function blockersSection(d: IssueDetail): HTMLElement | null {
+  const notes = d.blockedNotes ?? [];
+  if (!d.blockedBy.length && !notes.length) return null;
+  return h(
+    "section",
+    { class: "side-blockers" },
+    h("h3", {}, "Blockiert von"),
+    ...notes.map((note) =>
+      h(
+        "div",
+        { class: "side-blocker-note" },
+        h("p", { class: "side-blocker-text" }, icon(ICON.lock, "side-blocker-ico"), h("span", {}, note)),
+        h("p", { class: "muted small" }, "Eintrag ohne #N – zählt als offen. Der Agent startet erst, wenn du ihn erledigt und entfernt hast."),
+      ),
+    ),
+    d.blockedBy.length ? h("div", { class: "btn-row" }, ...d.blockedBy.map((b) => h("button", { class: "link", onclick: () => openIssue(b) }, `#${b}`))) : null,
+  );
 }
 
 /** „vor 5 Min.“ … „vor 3 Wochen“; older ones as a date. The exact time sits in the title. */
@@ -380,7 +401,13 @@ function runBlock(n: number, d: Derived): HTMLElement | null {
     "section",
     { class: "side-run" },
     h("h3", {}, "Im Lauf"),
-    h("div", { class: "btn-row" }, h("span", { class: `phase ${i.phase}` }, PHASE_TEXT[i.phase]), h("span", { class: "muted small" }, `auf ${serverLabel(tr.server)} · ${tr.run.project}`)),
+    h(
+      "div",
+      { class: "btn-row" },
+      // waiting with a free-text blocker: the loop won't pick it, so it doesn't just wait
+      i.phase === "queued" && d.issues.get(n)?.blockedNotes?.length ? h("span", { class: "phase queued" }, "blockiert") : h("span", { class: `phase ${i.phase}` }, PHASE_TEXT[i.phase]),
+      h("span", { class: "muted small" }, `auf ${serverLabel(tr.server)} · ${tr.run.project}`),
+    ),
     i.reason ? h("p", { class: "error small" }, i.reason) : null,
     i.logs.length
       ? h("div", { class: "btn-row" }, ...i.logs.map((l) => h("button", { class: "btn small", onclick: () => jumpToLog(tr.server, tr.run.id, n, l.path) }, `Log ${l.role === "other" ? l.name : l.role}${l.active ? " ●" : ""}`)))

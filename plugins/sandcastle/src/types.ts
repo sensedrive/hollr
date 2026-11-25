@@ -53,6 +53,8 @@ export interface Issue {
   parent: number | null;
   jira: string | null;
   blockedBy: number[];
+  /** „Blockiert von“ entries without #N (free text such as a release): the loop keeps the issue blocked */
+  blockedNotes: string[];
   updatedAt: string;
   closedAt: string | null;
   url: string;

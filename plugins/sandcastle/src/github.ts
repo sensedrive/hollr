@@ -4,7 +4,7 @@
  * or closed in the last 30 days); every write is one mutation that answers the changed issue, so the cache can
  * take it as is.
  */
-import { blockedByOf, jiraKeyOf, parentOf } from "./body";
+import { blockedByOf, blockedNotesOf, jiraKeyOf, parentOf } from "./body";
 import { firstLine, HttpError, run } from "./env";
 import { type PullNode, toPull } from "./pulls";
 import { codeKeys, compareVersions, isVersionTag, type RangeCommit } from "./releases";
@@ -69,6 +69,7 @@ export function toIssue(n: IssueNode): Issue {
     parent: parentOf(body) ?? null,
     jira: jiraKeyOf(body) ?? null,
     blockedBy: blockedByOf(body),
+    blockedNotes: blockedNotesOf(body),
     updatedAt: n.updatedAt,
     closedAt: n.closedAt,
     url: n.url,

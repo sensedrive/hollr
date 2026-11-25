@@ -190,6 +190,7 @@ describe("toIssue", () => {
       parent: 3,
       jira: "GHACCP-7",
       blockedBy: [4, 5],
+      blockedNotes: [],
       updatedAt: "2026-11-20T10:00:00Z",
       closedAt: "2026-11-21T10:00:00Z",
       url: "u",
