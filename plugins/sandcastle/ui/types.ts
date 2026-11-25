@@ -222,6 +222,51 @@ export interface LogChunk {
   size: number;
 }
 
+// ---- A: setup ops (Maschine wechseln) – gate sandcastle setup-*
+
+/** The only files setup copies between machines. */
+export type SetupFilePath = ".lul-workr.json" | ".env" | ".sandcastle/.env";
+
+export interface SetupFileInfo {
+  path: SetupFilePath;
+  exists: boolean;
+  size: number;
+  secret: boolean;
+  /** names of secret-looking keys, never values */
+  keys: string[];
+}
+
+export interface SetupJob {
+  kind: "clone" | "install";
+  running: boolean;
+  exit: number | null;
+  log: string | null;
+  startedAt: string | null;
+}
+
+export interface CheckItem {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail: string;
+  fix: "clone" | "files" | "install" | null;
+  /** only a hint, never stops the move (the central sandcastle.env) */
+  hint: boolean;
+}
+
+export interface SetupCheck {
+  host: string;
+  slug: string;
+  /** the checkout, or where the clone goes */
+  path: string;
+  cloned: boolean;
+  /** the machine's project scan lists it */
+  known: boolean;
+  pm: { name: string; lockfile: string | null; version: string | null } | null;
+  items: CheckItem[];
+  jobs: { clone: SetupJob | null; install: SetupJob | null };
+}
+
 // ---- B: host relay
 
 export interface Server {

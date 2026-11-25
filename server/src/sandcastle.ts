@@ -219,6 +219,14 @@ export interface SandcastleRequest {
   key?: unknown;
   mode?: unknown;
   advisor?: unknown;
+  /** setup-check: the files the source machine has (only those are checked) */
+  expect?: unknown;
+  /** setup-files-read: whitelisted files to read */
+  paths?: unknown;
+  /** setup-files-write: [{path, content}] – never logged */
+  files?: unknown;
+  /** setup-files-write: replace existing files */
+  overwrite?: unknown;
 }
 
 /** What a call may replace – tests inject processes and herdr's agents and keep gh out. */
@@ -298,7 +306,7 @@ function listDir(dir: string): string[] {
   }
 }
 
-async function run(
+export async function run(
   cmd: string[],
   opts: { cwd?: string; timeoutMs?: number; env?: Record<string, string | undefined> } = {},
 ): Promise<{ ok: boolean; out: string; err: string }> {
@@ -460,7 +468,7 @@ interface Checkout {
   gitCommonDir: string;
 }
 
-interface ProjectCache {
+export interface ProjectCache {
   /** PROJECTS_VERSION the cache was written with; an older shape is rescanned */
   version?: number;
   at: number;
@@ -570,7 +578,7 @@ async function rescan(): Promise<ProjectCache> {
  * The cached projects: a missing cache is built now (the search takes seconds), an outdated one is
  * returned as is and refreshed by a detached `hollr gate sandcastle {"op":"projects","refresh":true}`.
  */
-async function projectCache(deps: Deps, refresh = false): Promise<ProjectCache> {
+export async function projectCache(deps: Deps, refresh = false): Promise<ProjectCache> {
   if (refresh) return rescan();
   const cache = readJson<ProjectCache>(projectsFile());
   if (!cache?.projects || cache.version !== PROJECTS_VERSION) return rescan();

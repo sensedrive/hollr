@@ -147,7 +147,7 @@ function alive(pidFile: string): boolean {
   }
 }
 
-function tail(file: string, lines = 30): string | undefined {
+export function tail(file: string, lines = 30): string | undefined {
   try {
     const text = readFileSync(file, "utf8")
       .replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, "g"), "")

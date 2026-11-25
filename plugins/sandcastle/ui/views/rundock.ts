@@ -38,6 +38,8 @@ import { errorText, hooks, prefGet, prefSet, state, toast } from "../state";
 import { LANE_PREFIX } from "../tickets";
 import { blindRun, timeline } from "../timeline";
 import type { Phase, Run } from "../types";
+import { switchBlocked } from "../machine";
+import { machineSwitchModal } from "./machineswitch";
 import { newRunModal } from "./newrun";
 import { claimPanel, closeSidebar } from "./sidebar";
 
@@ -572,7 +574,8 @@ function renderRunSide(d: Derived): void {
   const v: LaneView = lane ? laneView(d, lane, ticketKeys()) : { run: undefined, blind: false, chips: [], kids: new Map(), all: [], step: null, round: "", steps: false };
   const { run, chips } = v;
   const titles = v.all.map((k) => run?.issues.find((i) => i.n === k.n)?.title ?? d.issues.get(k.n)?.title);
-  const sig = JSON.stringify([server, run, chips, [...v.kids], titles, [...folds], chips.map((c) => summaryOf(c.key)), Math.floor(Date.now() / 60_000)]);
+  const blocked = switchBlocked(state.statuses.get(server), chips.length);
+  const sig = JSON.stringify([server, run, chips, [...v.kids], titles, [...folds], chips.map((c) => summaryOf(c.key)), blocked, Math.floor(Date.now() / 60_000)]);
   if (sig === sideSig) return;
   sideSig = sig;
   const label = lane?.server.label ?? server;
@@ -601,10 +604,20 @@ function renderRunSide(d: Derived): void {
       run ? roundBox(v) : null,
       run ? waitingNote(server, run, "run-wait") : null,
       run
-        ? h("div", { class: "btn-row" }, h("button", { class: "btn", onclick: () => openLog(server, run, null) }, "Protokoll öffnen"), stopButton(server, run))
-        : h("div", { class: "btn-row" }, h("button", { class: "btn primary", onclick: () => newRunModal(server) }, "Lauf starten")),
+        ? h("div", { class: "btn-row" }, h("button", { class: "btn", onclick: () => openLog(server, run, null) }, "Protokoll öffnen"), stopButton(server, run), switchButton(server, chips.length, blocked))
+        : h("div", { class: "btn-row" }, h("button", { class: "btn primary", onclick: () => newRunModal(server) }, "Lauf starten"), switchButton(server, chips.length, blocked)),
+      blocked ? h("p", { class: "ms-blocked muted small" }, icon(ICON.lock, "ms-blocked-ico"), blocked) : null,
       h("h3", { class: "run-side-h" }, `${run ? "Stories in Reihenfolge" : "Warteschlange"} (${chips.length})`),
       ...chips.map((c, i) => ticketBlock(server, v, c, i)),
     ),
+  );
+}
+
+/** „Maschine wechseln“: the lane's queue to another machine; locked (with the reason below) while a run is live. */
+function switchButton(server: string, tickets: number, blocked: string | null): HTMLElement {
+  return h(
+    "button",
+    { class: "btn", disabled: !!blocked, title: blocked ?? undefined, onclick: () => machineSwitchModal(server, { tickets, openPanel: openRunSide }) },
+    "Maschine wechseln",
   );
 }

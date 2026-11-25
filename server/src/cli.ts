@@ -105,6 +105,7 @@ import {
   usageLimits,
 } from "./spaces";
 import { type SandcastleRequest, sandcastle } from "./sandcastle";
+import { SETUP_OPS, sandcastleSetup } from "./sandcastlesetup";
 import { type SecretsRequest, secrets } from "./secrets";
 import { type SummarizeRequest, summarize } from "./summarize";
 import { restartWatcher, sysinfo } from "./sysinfo";
@@ -610,15 +611,29 @@ async function gate(): Promise<number> {
       return 0;
     }
     case "sandcastle": {
-      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|preview|start|release|stop|grill-start}
+      // Sandcastle runs on this machine for the board plugin: {"op": projects|status|log|queue|queue-set|preview|start|release|stop|grill-start|setup-*}
       try {
         const req = JSON.parse((await readStdinLine(256 * 1024)) || "{}") as SandcastleRequest;
-        if (["start", "release", "stop", "queue-set", "grill-start"].includes(req.op ?? ""))
+        // op and slug only: setup-files-read answers and setup-files-write carries file contents (env secrets)
+        if (
+          [
+            "start",
+            "release",
+            "stop",
+            "queue-set",
+            "grill-start",
+            "setup-clone",
+            "setup-files-read",
+            "setup-files-write",
+            "setup-install",
+          ].includes(req.op ?? "")
+        )
           log(
             "gate",
             `sandcastle ${req.op}${req.slug ? ` ${req.slug}` : ""}${req.op === "grill-start" ? ` #${String(req.n)}` : ""}`,
           );
-        json(await sandcastle(req, { cli: hollrCli() }));
+        const isSetup = (SETUP_OPS as readonly string[]).includes(req.op ?? "");
+        json(await (isSetup ? sandcastleSetup : sandcastle)(req, { cli: hollrCli() }));
       } catch (err) {
         json({ error: err instanceof Error ? err.message : String(err) });
       }

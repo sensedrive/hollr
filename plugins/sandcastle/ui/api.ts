@@ -4,7 +4,22 @@
  * the relay falls back to /api/host/* of this plugin's own machine.
  */
 import { reconnectPolicy } from "./reconnect";
-import type { Grill, GrillMode, LogChunk, Project, QueueState, RunConfig, RunPreview, Server, Status, TicketFlags } from "./types";
+import type {
+  Grill,
+  GrillMode,
+  LogChunk,
+  Project,
+  QueueState,
+  RunConfig,
+  RunPreview,
+  Server,
+  SetupCheck,
+  SetupFileInfo,
+  SetupFilePath,
+  SetupJob,
+  Status,
+  TicketFlags,
+} from "./types";
 
 const KEY = "sc.token";
 let token = "";
@@ -243,7 +258,8 @@ export const sc = {
   log: (server: string, path: string, offset?: number) =>
     gate<LogChunk>(server, offset === undefined ? { op: "log", path } : { op: "log", path, offset }),
   queue: (server: string, slug: string) => gate<QueueState>(server, { op: "queue", slug }),
-  queueSet: (server: string, slug: string, patch: { order?: number[]; tickets?: Record<string, TicketFlags> }) =>
+  /** `tickets`: flags per issue; null removes an issue's flags */
+  queueSet: (server: string, slug: string, patch: { order?: number[]; tickets?: Record<string, TicketFlags | null> }) =>
     gate<QueueState>(server, { op: "queue-set", slug, ...patch }),
   /** `tickets`: issue numbers put at the front of the queue before the run starts */
   start: (server: string, slug: string, config: RunConfig, tickets: number[] = []) =>
@@ -257,6 +273,19 @@ export const sc = {
   /** `note`: why the main checkout stayed behind its upstream (the grill reads the old state) */
   grillStart: (server: string, slug: string, g: { n: number; key: string | null; mode: GrillMode; advisor: string | null }) =>
     gate<{ grill: Grill; note?: string }>(server, { op: "grill-start", slug, ...g }, 120_000),
+  // ---- setup of a project on another machine („Maschine wechseln“); file contents only pass through, never kept
+  /** checklist of the machine; `expect`: the files the source has (only those are checked) */
+  setupCheck: (server: string, slug: string, expect: SetupFilePath[]) => gate<SetupCheck>(server, { op: "setup-check", slug, expect }, 60_000),
+  /** starts `gh repo clone` detached; `setupCheck` reports the job */
+  setupClone: (server: string, slug: string) => gate<{ path: string; job: SetupJob }>(server, { op: "setup-clone", slug }),
+  /** the whitelisted files of the checkout: size and secret key names, no contents */
+  setupFiles: (server: string, slug: string) =>
+    gate<{ root: string | null; files: SetupFileInfo[] }>(server, { op: "setup-files", slug }).then((r) => r.files),
+  setupFilesRead: (server: string, slug: string, paths: SetupFilePath[]) =>
+    gate<{ files: { path: SetupFilePath; content: string }[] }>(server, { op: "setup-files-read", slug, paths }).then((r) => r.files),
+  setupFilesWrite: (server: string, slug: string, files: { path: SetupFilePath; content: string }[], overwrite: boolean) =>
+    gate<{ written: { path: SetupFilePath; size: number; mode: string }[] }>(server, { op: "setup-files-write", slug, files, overwrite }),
+  setupInstall: (server: string, slug: string) => gate<{ job: SetupJob }>(server, { op: "setup-install", slug }),
 };
 
 /** Opens the run's omp session in Hollr. */
