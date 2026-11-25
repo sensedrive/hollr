@@ -425,6 +425,10 @@ export async function focusCreated(
   if (tab) await exec(["tab", "focus", tab]).catch(() => {});
 }
 
+/** How often `agent start` is asked again while the new pane's shell is still starting up (≈ 2 s apart with
+ *  herdr's own wait); together with the first prompt this stays inside the board's 60 s start budget. */
+const PANE_BUSY_ATTEMPTS = 12;
+
 export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Promise<string> {
   if (req.kind !== "shell" && !AGENT_KINDS.includes(req.kind))
     throw new HerdrError("bad_kind", `Unbekannter Agent ${req.kind}`);
@@ -459,20 +463,35 @@ export async function newChat(herdr: Herdr, exec: Exec, req: NewChatRequest): Pr
   await Bun.sleep(400); // let the shell come up
   if (req.focus !== false) await focusCreated(exec, pane, created);
   if (req.kind === "shell") return pane;
+  const startArgv = [
+    "agent",
+    "start",
+    `${req.kind}-${Date.now().toString(36)}`,
+    "--kind",
+    req.kind,
+    "--pane",
+    pane,
+    ...((): string[] => {
+      const extra = startArgs(req.kind, req.model, req.level);
+      return extra.length ? ["--", ...extra] : [];
+    })(),
+  ];
   try {
-    await exec([
-      "agent",
-      "start",
-      `${req.kind}-${Date.now().toString(36)}`,
-      "--kind",
-      req.kind,
-      "--pane",
-      pane,
-      ...((): string[] => {
-        const extra = startArgs(req.kind, req.model, req.level);
-        return extra.length ? ["--", ...extra] : [];
-      })(),
-    ]);
+    // a fresh shell may still run its rc files (nvm, compinit …): herdr refuses with agent_pane_busy until the
+    // prompt is up, and gives up after about a second itself – so ask again for a while
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await exec(startArgv);
+        break;
+      } catch (err) {
+        if (
+          !(err instanceof HerdrError && err.code === "agent_pane_busy") ||
+          attempt >= PANE_BUSY_ATTEMPTS
+        )
+          throw err;
+        await Bun.sleep(1000);
+      }
+    }
   } catch (err) {
     // e.g. Claude asks "trust this folder?" on first start – the chat exists and waits for the user
     if (!(err instanceof HerdrError && err.code === "agent_not_ready")) {

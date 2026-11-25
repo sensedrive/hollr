@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 82,
+    version: "0.58.2",
+    date: "25.11.2026",
+    items: [
+      { icon: "🐚", text: "Behoben: Lauf- und Grill-Start scheiterte mit „pane is not an available shell“, wenn die neue Shell beim Start etwas länger brauchte – Hollr wartet jetzt bis zu ~25 s auf sie." },
+    ],
+  },
+  {
     build: 81,
     version: "0.58.1",
     date: "25.11.2026",
