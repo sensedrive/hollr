@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle: „Maschine wechseln“ im Lauf-Panel – die Warteschlange zieht auf einen anderen Rechner um; fehlt dort das Projekt, richtet das Board es ein (klonen, lokale Dateien nach Bestätigung kopieren, Abhängigkeiten, Prüfliste).":
+    "Sandcastle: “Switch machine” in the run panel – the queue moves to another computer; if the project is missing there, the board sets it up (clone, copy local files after you confirm, dependencies, checklist).",
   "Sandcastle: Der Grill-Stand stimmt – fertig gegrillt, sobald Story und Kinder auf GitHub stehen; laufende Grills zeigen ihren Schritt aus dem Ablauf-Log, sonst „Stand unbekannt“ statt geratener Zahlen.":
     "Sandcastle: the grill state is right – grilled as soon as the story and its children are on GitHub; running grills show their step from the flow log, otherwise “state unknown” instead of guessed numbers.",
   "Sandcastle: Issues, die auf etwas anderes als ein Issue warten (etwa ein Release), gelten als blockiert und werden nicht mehr in Läufe genommen.":

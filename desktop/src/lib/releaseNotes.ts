@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 78,
+    version: "0.57.7",
+    date: "25.11.2026",
+    items: [
+      { icon: "🖥️", text: "Sandcastle: „Maschine wechseln“ im Lauf-Panel – die Warteschlange zieht auf einen anderen Rechner um; fehlt dort das Projekt, richtet das Board es ein (klonen, lokale Dateien nach Bestätigung kopieren, Abhängigkeiten, Prüfliste)." },
+    ],
+  },
+  {
     build: 77,
     version: "0.57.6",
     date: "25.11.2026",
