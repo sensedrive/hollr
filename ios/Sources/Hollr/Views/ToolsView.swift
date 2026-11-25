@@ -6,6 +6,7 @@ struct ServerTool: Decodable, Identifiable, Hashable {
     let version: String?
     let latest: String?
     let updateAvailable: Bool?
+    let latestError: String?
     let installed: Bool
     let running: Bool
     let exit: Int?
@@ -147,6 +148,9 @@ struct ToolsView: View {
             }
         }
         .font(Typo.monoSmall).foregroundStyle(Theme.muted)
+        if let latestError = tool.latestError {
+            Text(latestError).font(Typo.xs).foregroundStyle(Theme.muted)
+        }
     }
 
     private func load() async {

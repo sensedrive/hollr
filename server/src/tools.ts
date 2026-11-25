@@ -1,5 +1,5 @@
 /**
- * Install / update the tools Hollr builds on (herdr, omp, Claude Code, Codex, hollr itself)
+ * Install / update the tools Hollr builds on (herdr, omp, Claude Code, Codex, lul-workr, hollr itself)
  * from the app. Fixed commands only; each runs detached with a log the app polls.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -7,22 +7,30 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Lang, tr } from "./i18n";
 
-export const TOOL_NAMES = ["herdr", "omp", "claude", "codex", "hollr"] as const;
+export const TOOL_NAMES = ["herdr", "omp", "claude", "codex", "lul-workr", "hollr"] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 const STATE = () => join(Bun.env.HOME ?? homedir(), ".local", "state", "hollr", "tools");
 const BIN = () => join(Bun.env.HOME ?? homedir(), ".local", "bin");
-const PATH_DIRS = ["$HOME/.local/bin", "$HOME/.bun/bin", "$HOME/.claude/local", "/opt/homebrew/bin", "/usr/local/bin"];
+const PATH_DIRS = [
+  "$HOME/.local/bin",
+  "$HOME/.bun/bin",
+  "$HOME/.claude/local",
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+];
 const PATH_PREFIX = `export PATH="${PATH_DIRS.join(":")}:$PATH";`;
 
 /** The directories installers use (what PATH_PREFIX puts in front), with $HOME resolved. */
-export const toolPathDirs = () => PATH_DIRS.map((d) => d.replace("$HOME", Bun.env.HOME ?? homedir()));
+export const toolPathDirs = () =>
+  PATH_DIRS.map((d) => d.replace("$HOME", Bun.env.HOME ?? homedir()));
 
 const TITLES: Record<ToolName, string> = {
   herdr: "herdr",
   omp: "omp (Oh My Pi)",
   claude: "Claude Code",
   codex: "Codex (ChatGPT)",
+  "lul-workr": "lul-workr",
   hollr: "Hollr-Server",
 };
 
@@ -63,7 +71,10 @@ function version(name: ToolName, current: string): string | undefined {
  */
 function integrations(agents: string[]): string {
   return agents
-    .map((a) => `command -v herdr >/dev/null && command -v ${a} >/dev/null && herdr integration install ${a} || true`)
+    .map(
+      (a) =>
+        `command -v herdr >/dev/null && command -v ${a} >/dev/null && herdr integration install ${a} || true`,
+    )
     .join("\n");
 }
 
@@ -103,6 +114,20 @@ export function toolCommand(name: ToolName, installed: boolean, repo = "sensedri
         "codex --version",
         integrations(["codex"]),
       ].join("\n");
+    case "lul-workr":
+      // private repo: download via the machine's gh login; `skills link --fix` only moves into a backup
+      return [
+        "set -e",
+        `TAG="$(gh api repos/${LUL_WORKR_REPO}/releases/latest --jq .tag_name)"`,
+        `V="$(echo "$TAG" | sed 's/^v//')"`,
+        'TMP="$(mktemp -d)"',
+        `gh release download "$TAG" --repo ${LUL_WORKR_REPO} -p 'lul-workr-*.tar.gz' -D "$TMP"`,
+        'tar -xzf "$TMP/lul-workr-$V.tar.gz" -C "$TMP"',
+        'node "$TMP/lul-workr-$V/bin/lul-workr.mjs" install --from "$TMP/lul-workr-$V"',
+        'rm -rf "$TMP"',
+        '"$HOME/.local/bin/lul-workr" skills link --fix',
+        '"$HOME/.local/bin/lul-workr" doctor',
+      ].join("\n");
     case "hollr":
       return [
         "set -e",
@@ -125,6 +150,8 @@ export interface ToolState {
   running: boolean;
   exit?: number;
   log?: string;
+  /** why latest is unknown (lul-workr: gh missing / not logged in) */
+  latestError?: string;
 }
 
 function files(name: ToolName) {
@@ -187,6 +214,36 @@ async function fetchText(url: string): Promise<string | undefined> {
 
 const clean = (v?: string) => v?.match(/\d+(\.\d+)+/)?.[0];
 
+export const LUL_WORKR_REPO = "leicht-luftig/lul-workr-init";
+
+/** Latest lul-workr release via gh (the repo is private); error says why it is unknown. */
+export function lulWorkrLatest(gh: string | undefined): { latest?: string; error?: string } {
+  if (!gh) return { error: "gh fehlt – neueste lul-workr-Version unbekannt" };
+  try {
+    const res = Bun.spawnSync(
+      [gh, "api", `repos/${LUL_WORKR_REPO}/releases/latest`, "--jq", ".tag_name"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 15000,
+      },
+    );
+    const latest = clean(res.stdout.toString());
+    if (res.exitCode === 0 && latest) return { latest };
+  } catch {}
+  const auth = Bun.spawnSync([gh, "auth", "status"], {
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: 10000,
+  });
+  return {
+    error:
+      auth.exitCode === 0
+        ? `Kein Release von ${LUL_WORKR_REPO} erreichbar – neueste Version unbekannt`
+        : "gh ist nicht angemeldet (gh auth login) – neueste lul-workr-Version unbekannt",
+  };
+}
+
 async function lookupLatest(name: ToolName, repo: string): Promise<string | undefined> {
   switch (name) {
     case "herdr":
@@ -222,6 +279,8 @@ async function lookupLatest(name: ToolName, repo: string): Promise<string | unde
           /"tag_name"\s*:\s*"([^"]+)"/,
         )?.[1],
       );
+    case "lul-workr":
+      return lulWorkrLatest(which("gh")).latest;
     case "hollr": {
       return clean(
         (await fetchText(`https://api.github.com/repos/${repo}/releases/latest`))?.match(
@@ -260,6 +319,7 @@ export function toolStates(
   currentHollr: string,
   latest: Partial<Record<ToolName, string>> = {},
   lang: Lang = "de",
+  latestErrorFor?: () => { error?: string },
 ): ToolState[] {
   return TOOL_NAMES.map((name) => {
     const f = files(name);
@@ -270,12 +330,17 @@ export function toolStates(
       exit = Number(readFileSync(f.exit, "utf8").trim());
     } catch {}
     const target = latest[name];
+    const latestError =
+      name === "lul-workr" && !target
+        ? (latestErrorFor ?? (() => lulWorkrLatest(which("gh"))))().error
+        : undefined;
     return {
       name,
       title: tr(lang, TITLES[name]),
       version: v,
       latest: target,
       updateAvailable: Boolean(v && target && newer(target, v)),
+      ...(latestError ? { latestError } : {}),
       installed: v !== undefined,
       running,
       exit: running ? undefined : exit,
@@ -301,6 +366,7 @@ export function startTool(name: ToolName, currentHollr: string): ToolState {
     ? ["setsid"]
     : ["perl", "-MPOSIX", "-e", "POSIX::setsid(); exec @ARGV"];
   const proc = Bun.spawn([...detach, "sh", "-c", script], {
+    env: process.env,
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",

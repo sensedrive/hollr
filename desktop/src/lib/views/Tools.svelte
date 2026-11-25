@@ -120,6 +120,7 @@
                   <span>→</span><span class="target">{tool.latest}</span>
                 {/if}
               </div>
+              {#if tool.latestError}<div class="small muted">{tool.latestError}</div>{/if}
             </div>
             {#if tool.running || starting[tool.name]}
               <span class="pill running">{tool.installed ? t("Aktualisiere …") : t("Installiere …")}</span>

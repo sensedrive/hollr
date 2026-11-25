@@ -47,6 +47,8 @@ export interface ServerTool {
   version?: string;
   latest?: string;
   updateAvailable?: boolean;
+  /** why latest is unknown (lul-workr: gh missing / not logged in) */
+  latestError?: string;
   installed: boolean;
   running: boolean;
   exit?: number;
