@@ -185,6 +185,8 @@ export default {
     "Chat in terminal colours (bold, code, table heads). The prompt snippets above the input field are off – switch them back on in Settings › General.",
   "Behoben: Schließen-Dialog hing, Zahlen der Änderungen im Schließen-Dialog und Git-Panel, verwaiste Worktrees samt Branch löschen, Rückfragen erscheinen wieder (statt stumm „Nein“).":
     "Fixed: the close dialog hung, change counts in the close dialog and git panel, orphaned worktrees can be deleted with their branch, confirmations show again (instead of a silent “no”).",
+  "Sandcastle „Neuer Lauf“: Testserver-Optionen sind gesperrt (mit Grund), wenn das Projekt keine workr-Deploy-Skripte hat; fehlende Commit-Haken stehen vorab im Dialog – der Agent fragt danach nicht mehr.":
+    "Sandcastle “New run”: test-server options are locked (with the reason) when the project has no workr deploy scripts; missing commit hooks show in the dialog up front – the agent no longer asks afterwards.",
   "Behoben: Lauf- und Grill-Start scheiterte mit „pane is not an available shell“, wenn die neue Shell beim Start etwas länger brauchte – Hollr wartet jetzt bis zu ~25 s auf sie.":
     "Fixed: starting a run or grill failed with “pane is not an available shell” when the new shell took a little longer to start – Hollr now waits up to ~25 s for it.",
   "Sandcastle: Ansicht „Versionen“ – welches Projekt auf welchem Rechner mit welcher lul-workr-Version läuft, ob der Bereich passt oder die Schleife noch abgezweigt ist; Aktualisieren je Rechner.":

@@ -12,6 +12,14 @@ export interface ReleaseNote {
 
 export const NOTES: ReleaseNote[] = [
   {
+    build: 83,
+    version: "0.58.3",
+    date: "25.11.2026",
+    items: [
+      { icon: "🧪", text: "Sandcastle „Neuer Lauf“: Testserver-Optionen sind gesperrt (mit Grund), wenn das Projekt keine workr-Deploy-Skripte hat; fehlende Commit-Haken stehen vorab im Dialog – der Agent fragt danach nicht mehr." },
+    ],
+  },
+  {
     build: 82,
     version: "0.58.2",
     date: "25.11.2026",
