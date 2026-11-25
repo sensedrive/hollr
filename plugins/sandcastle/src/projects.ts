@@ -1,7 +1,9 @@
 /**
  * This machine's lul-workr projects, from `hollr gate sandcastle {"op":"projects"}` (the gate scans and caches
  * for 6 h). The gate is a process start: the answer is kept in memory and in the state dir, so a board request
- * of a fresh plugin process never waits for it; older than 10 min it is asked again in the background.
+ * of a fresh plugin process never waits for it; older than 10 min it is asked again in the background. An empty
+ * list is never trusted for long: the gate keeps an empty scan for 6 h too, so it is re-scanned (and awaited) at
+ * most once a minute until projects show up.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,6 +11,7 @@ import { HttpError } from "./env";
 import type { Project } from "./types";
 
 const REFRESH_MS = 10 * 60_000;
+const EMPTY_RETRY_MS = 60_000;
 
 export type Gate = (command: string, stdin: unknown) => Promise<unknown>;
 
@@ -30,6 +33,7 @@ export class Projects {
       } catch {}
     }
     if (refresh || !this.memo) return this.ask(refresh);
+    if (!this.memo.projects.length) return this.now() - this.memo.at > EMPTY_RETRY_MS ? (this.pending ?? this.ask(true)) : [];
     if (this.now() - this.memo.at > REFRESH_MS) void this.ask(false).catch(() => {});
     return this.memo.projects;
   }
