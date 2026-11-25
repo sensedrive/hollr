@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { blockedByOf, blockedNotesOf, blockerEntries, jiraKeyOf, parentOf, renderMarkdown } from "../src/body";
 
@@ -44,6 +45,28 @@ describe("issue body sections", () => {
     // the heading matches case-insensitively and with more after it; a blank line ends an entry
     expect(blockedNotesOf("## blockiert von (extern)\n- Release v2.3.0\n\n  danach")).toEqual(["Release v2.3.0", "danach"]);
     expect(blockedNotesOf(BODY)).toEqual([]);
+  });
+
+  test("HTML blocks, fenced code, blockquotes and rules are no entries", () => {
+    const of = (...lines: string[]) => `## Blockiert von\n${lines.join("\n")}\n\n## Notizen\n- Release v9`;
+    const details = ["<details><summary>Roter Test <code>a.test.ts</code></summary>", "", "```ts", "## kein Abschnitt", "expect(x) // #9", "```", "", "</details>"];
+    expect(blockerEntries(of("keine — kann sofort starten", "", ...details))).toEqual([]);
+    expect(blockerEntries(of("<details>", "<summary>Mehr</summary>", "", "Erst nach dem Umzug", "- #9", "</details>"))).toEqual([]);
+    expect(blockerEntries(of("<details>", "<details>", "innen", "</details>", "Prosa", "</details>"))).toEqual([]);
+    expect(blockerEntries(of("~~~", "Release v2.3.0", "~~~"))).toEqual([]);
+    expect(blockerEntries(of("````md", "```", "#9", "```", "````"))).toEqual([]);
+    expect(blockerEntries(of("> Release v2.3.0 — nur ein Zitat"))).toEqual([]);
+    expect(blockerEntries(of("---", "***", "_ _ _"))).toEqual([]);
+    expect(blockerEntries(of("<p>Hinweis</p>", "<br/>"))).toEqual([]);
+    expect(blockedByOf(of("- #7", "", ...details, "", "- #9"))).toEqual([7, 9]);
+    expect(blockedNotesOf(of("```", "x", "```", "Freigabe durch den Kunden"))).toEqual(["Freigabe durch den Kunden"]);
+  });
+
+  test("an issue with a red diagnostic test in a <details> block after „keine“ is free", () => {
+    const body = readFileSync(new URL("testdata/blockiert-von-details.md", import.meta.url), "utf8");
+    expect(blockerEntries(body)).toEqual([]);
+    expect(blockedByOf(body)).toEqual([]);
+    expect(parentOf(body)).toBe(266);
   });
 });
 

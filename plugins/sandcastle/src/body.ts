@@ -24,23 +24,45 @@ export function jiraKeyOf(body: string): string | undefined {
  * The entries under "## Blockiert von" – the loop's queue.mts `blockerEntries`, rule for rule: HTML comments
  * dropped; a list item (`-`, `*`, `+`, `1.`, `1)`) is one entry, indented lines continue it, a blank line ends it;
  * any other non-empty line is an entry of its own; placeholders („keine …“, „none“, „n/a“, „—“) are no entries.
+ * No entries either: HTML blocks (`<details>` … `</details>` with their content, any line starting with an HTML
+ * tag), fenced code blocks (``` or ~~~ up to the closing fence, with their content), blockquotes (`>`) and
+ * horizontal rules. A `## ` line inside a fenced code block is no heading.
  */
 export function blockerEntries(body: string): string[] {
   const entries: string[] = [];
   let inSection = false;
   let current: string | null = null;
+  let fence: string | null = null;
+  let details = 0;
   const flush = () => {
     if (current !== null && !isPlaceholder(current)) entries.push(current);
     current = null;
   };
   for (const raw of (body ?? "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (fence !== null) {
+      if (line.startsWith(fence) && new RegExp(`^${fence[0]}+$`).test(line)) fence = null;
+      continue;
+    }
+    const open = /^(?:`{3,}|~{3,})/.exec(line);
+    if (open) {
+      flush();
+      fence = open[0];
+      continue;
+    }
     if (/^##\s/.test(raw)) {
       flush();
       inSection = /^##\s*Blockiert von\b/i.test(raw);
+      details = 0;
       continue;
     }
     if (!inSection) continue;
-    const line = raw.trim();
+    const tags = (line.match(/<details\b/gi) ?? []).length - (line.match(/<\/details\s*>/gi) ?? []).length;
+    if (details > 0 || tags !== 0 || HTML_TAG_LINE.test(line) || line.startsWith(">") || RULE_LINE.test(line)) {
+      flush();
+      details = Math.max(0, details + tags);
+      continue;
+    }
     if (!line) {
       flush();
       continue;
@@ -58,6 +80,12 @@ export function blockerEntries(body: string): string[] {
   flush();
   return entries;
 }
+
+/** A line starting with an HTML tag (`<summary>`, `</div>`, `<br/>`), not an autolink. */
+const HTML_TAG_LINE = /^<\/?[A-Za-z][\w-]*(?:\s[^>]*)?\/?>/;
+
+/** Horizontal rule: three or more `-`, `*` or `_`, optionally spaced. */
+const RULE_LINE = /^([-*_])(?:\s*\1){2,}$/;
 
 function isPlaceholder(entry: string): boolean {
   const text = entry.replace(/^[*_`\s]+/, "").trim();
